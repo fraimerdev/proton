@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Proton service (Bun runtime)",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "types": ["bun"]
+  }
+}

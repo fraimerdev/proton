@@ -1,0 +1,43 @@
+{
+  "t": "GUILD_CREATE",
+  "s": 4,
+  "op": 0,
+  "_comment": "Channel obfuscation, mandatory 16 Nov 2026. The bot cannot VIEW_CHANNEL 500000000000000002, so its name and topic arrive as ___hidden___ and CHANNEL_OBFUSCATED (1<<17 = 131072) is set in flags. id, type, position and parent_id are never obfuscated. Detection must test the flag, never the name.",
+  "d": {
+    "id": "900000000000000001",
+    "name": "Proton Test Guild",
+    "owner_id": "200000000000000001",
+    "preferred_locale": "en-US",
+    "unavailable": false,
+    "member_count": 3,
+    "roles": [],
+    "channels": [
+      {
+        "id": "500000000000000001",
+        "type": 0,
+        "name": "general",
+        "position": 0,
+        "parent_id": null,
+        "flags": 0,
+        "permission_overwrites": []
+      },
+      {
+        "id": "500000000000000002",
+        "type": 0,
+        "name": "___hidden___",
+        "topic": "___hidden___",
+        "position": 1,
+        "parent_id": null,
+        "flags": 131072,
+        "permission_overwrites": [
+          {
+            "id": "900000000000000001",
+            "type": 0,
+            "allow": "0",
+            "deny": "1024"
+          }
+        ]
+      }
+    ]
+  }
+}

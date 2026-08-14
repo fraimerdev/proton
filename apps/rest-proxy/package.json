@@ -1,0 +1,19 @@
+{
+  "name": "@proton/rest-proxy",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.6.3",
+    "@proton/core": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "hono": "^4.13.2",
+    "zod": "^4.4.3"
+  }
+}

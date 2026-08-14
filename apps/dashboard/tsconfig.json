@@ -1,0 +1,8 @@
+{
+  "extends": "../../tooling/tsconfig/react.json",
+  "compilerOptions": {
+    // vite/client provides the `?url` and `?raw` import declarations.
+    "types": ["bun", "vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx", "vite.config.ts"]
+}

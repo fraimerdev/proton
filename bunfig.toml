@@ -1,0 +1,5 @@
+# Windows cannot use Bun's default hardlink install backend here — it fails with
+# `EPERM: Operation not permitted (NtSetInformationFile())` partway through
+# extracting packages. copyfile is slower but reliable on this filesystem.
+[install]
+backend = "copyfile"

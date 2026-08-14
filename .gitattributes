@@ -1,0 +1,10 @@
+# The repo is edited on Windows but built and tested on Linux (CI, and the
+# containers Proton ships as). Normalising to LF in the index keeps shell
+# scripts executable and stops every file showing as modified after a checkout
+# on a different platform.
+* text=auto eol=lf
+
+# Generated — keep out of diffs and reviews.
+apps/dashboard/src/routeTree.gen.ts linguist-generated=true
+bun.lock                            linguist-generated=true
+packages/db/drizzle/*.sql           linguist-generated=true

@@ -1,0 +1,113 @@
+:root {
+  --bg: #0b0d12;
+  --panel: #141821;
+  --text: #e6e9ef;
+  --muted: #98a2b3;
+  --accent: #5865f2;
+  --border: #232a37;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    15px / 1.55 ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+.app-header {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 1.25rem;
+}
+
+.field {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.field-label {
+  display: flex;
+  flex-direction: column;
+}
+
+.field-description {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.field-unsupported {
+  color: #ffb4b4;
+  padding: 0.9rem 0;
+}
+
+input[type="text"],
+select {
+  background: #0f131b;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  min-width: 16rem;
+}
+
+.button {
+  display: inline-block;
+  margin-top: 1.25rem;
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.guild-list {
+  list-style: none;
+  padding: 0;
+}
+
+.guild-list li {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+a {
+  color: var(--accent);
+}
+
+.status {
+  color: var(--muted);
+}

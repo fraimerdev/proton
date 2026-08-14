@@ -1,0 +1,48 @@
+{
+  "t": "GUILD_CREATE",
+  "s": 3,
+  "op": 0,
+  "d": {
+    "id": "900000000000000001",
+    "name": "Proton Test Guild",
+    "owner_id": "200000000000000001",
+    "preferred_locale": "en-US",
+    "unavailable": false,
+    "member_count": 3,
+    "roles": [
+      {
+        "id": "900000000000000001",
+        "name": "@everyone",
+        "permissions": "3072",
+        "position": 0,
+        "managed": false,
+        "hoist": false,
+        "mentionable": false,
+        "color": 0,
+        "flags": 0
+      },
+      {
+        "id": "400000000000000001",
+        "name": "Member",
+        "permissions": "3072",
+        "position": 1,
+        "managed": false,
+        "hoist": false,
+        "mentionable": false,
+        "color": 0,
+        "flags": 0
+      }
+    ],
+    "channels": [
+      {
+        "id": "500000000000000001",
+        "type": 0,
+        "name": "general",
+        "position": 0,
+        "parent_id": null,
+        "flags": 0,
+        "permission_overwrites": []
+      }
+    ]
+  }
+}

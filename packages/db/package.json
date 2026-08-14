@@ -1,0 +1,25 @@
+{
+  "name": "@proton/db",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "generate": "drizzle-kit generate",
+    "migrate": "bun run src/migrate.ts"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10"
+  }
+}

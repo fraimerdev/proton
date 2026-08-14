@@ -1,0 +1,22 @@
+{
+  "t": "GUILD_MEMBER_ADD",
+  "s": 7,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "user": {
+      "id": "100000000000000002",
+      "username": "newcomer",
+      "discriminator": "0",
+      "global_name": "Newcomer",
+      "avatar": null,
+      "bot": false
+    },
+    "roles": [],
+    "joined_at": "2026-08-14T09:00:00.000000+00:00",
+    "deaf": false,
+    "mute": false,
+    "flags": 0,
+    "communication_disabled_until": null
+  }
+}

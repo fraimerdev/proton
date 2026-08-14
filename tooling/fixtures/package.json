@@ -1,0 +1,16 @@
+{
+  "name": "@proton/fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "discord-api-types": "^0.38.53"
+  }
+}

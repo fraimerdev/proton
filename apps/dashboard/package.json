@@ -1,0 +1,34 @@
+{
+  "name": "@proton/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev --port 3000",
+    "build": "vite build",
+    "start": "bun .output/server/index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.6.28",
+    "@proton/core": "workspace:*",
+    "@proton/db": "workspace:*",
+    "@proton/module-ping": "workspace:*",
+    "@tanstack/react-form": "1.33.5",
+    "@tanstack/react-query": "5.101.4",
+    "@tanstack/react-router": "1.170.28",
+    "@tanstack/react-start": "1.168.45",
+    "better-auth": "^1.6.28",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "1.168.31",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "vite": "^8.2.1"
+  }
+}

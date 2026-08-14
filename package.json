@@ -1,0 +1,37 @@
+{
+  "name": "proton",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/modules/*",
+    "tooling/*"
+  ],
+  "engines": {
+    "bun": ">=1.3.14"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "bun test",
+    "db:migrate": "bun run --filter @proton/db migrate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "@testcontainers/postgresql": "^12.1.0",
+    "@testcontainers/redis": "^12.1.0",
+    "@types/bun": "^1.3.14",
+    "fast-check": "^4.9.0",
+    "testcontainers": "^12.1.0",
+    "turbo": "^2.10.9",
+    "typescript": "^7.0.2"
+  }
+}

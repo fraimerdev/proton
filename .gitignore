@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.output/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# Secrets. PLAN.md I10: the real bot token never appears in a committed file.
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

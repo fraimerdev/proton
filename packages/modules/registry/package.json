@@ -1,0 +1,17 @@
+{
+  "name": "@proton/modules",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "@proton/module-ping": "workspace:*"
+  }
+}
