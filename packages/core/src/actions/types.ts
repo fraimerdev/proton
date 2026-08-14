@@ -45,6 +45,18 @@ export interface ActionExecutor {
   execute(request: ActionRequest): Promise<ActionResult>;
 }
 
+/**
+ * An executor that can bind per-invocation context (an interaction's
+ * `app_permissions`, its resolved members) without modules ever seeing it.
+ */
+export interface ScopedActionExecutor extends ActionExecutor {
+  scoped(hints: unknown): ActionExecutor;
+}
+
+export function isScopedActionExecutor(executor: ActionExecutor): executor is ScopedActionExecutor {
+  return typeof (executor as Partial<ScopedActionExecutor>).scoped === 'function';
+}
+
 export const actionRequestSchema = z.object({
   guildId: z.string().min(1),
   moduleId: z.string().min(1),

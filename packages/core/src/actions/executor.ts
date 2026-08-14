@@ -5,6 +5,7 @@ import { type PrecheckInput, runPrechecks } from './prechecks.ts';
 import type { RestProxyClient } from './rest-client.ts';
 import {
   type ActionExecutor,
+  type ActionFailure,
   type ActionRequest,
   type ActionResult,
   actionRequestSchema,
@@ -21,8 +22,16 @@ export interface ActionExecutorDeps {
   /**
    * Fetch the guild/bot/channel state the prechecks need. Injected so the
    * executor performs no lookups of its own and stays testable without Discord.
+   *
+   * May return `{ failure }` to mean "I could not establish whether this is
+   * safe". That is a precheck failure, not an error — the alternative is
+   * inventing permissive defaults, which is precisely how the Gate 0 stub
+   * disabled the owner and hierarchy checks.
    */
-  resolveContext(request: ActionRequest): Promise<PrecheckInput>;
+  resolveContext(
+    request: ActionRequest,
+    hints?: unknown,
+  ): Promise<PrecheckInput | { failure: ActionFailure }>;
   /** How long an idempotency claim is held. Should exceed the retry window. */
   dedupeTtlMs?: number;
 }
@@ -40,10 +49,25 @@ export interface ActionExecutorDeps {
 export class DefaultActionExecutor implements ActionExecutor {
   readonly #deps: ActionExecutorDeps;
   readonly #ttl: number;
+  readonly #hints: unknown;
 
-  constructor(deps: ActionExecutorDeps) {
+  constructor(deps: ActionExecutorDeps, hints?: unknown) {
     this.#deps = deps;
     this.#ttl = deps.dedupeTtlMs ?? 24 * 60 * 60 * 1000;
+    this.#hints = hints;
+  }
+
+  /**
+   * A view of this executor bound to per-invocation context — for an interaction,
+   * its `app_permissions` and resolved members.
+   *
+   * Modules receive the scoped executor and never see `hints`, so a module author
+   * cannot forget to pass them and silently degrade the prechecks. The hints are
+   * `unknown` here because what they contain is the concern of whichever
+   * `resolveContext` the host wired in.
+   */
+  scoped(hints: unknown): ActionExecutor {
+    return new DefaultActionExecutor(this.#deps, hints);
   }
 
   async execute(request: ActionRequest): Promise<ActionResult> {
@@ -80,8 +104,12 @@ export class DefaultActionExecutor implements ActionExecutor {
       };
     }
 
-    const context = await this.#deps.resolveContext(request);
-    const failure = runPrechecks(context);
+    const resolved = await this.#deps.resolveContext(request, this.#hints);
+    if ('failure' in resolved) {
+      return { status: 'failed_precheck', failure: resolved.failure };
+    }
+
+    const failure = runPrechecks(resolved);
     if (failure) {
       return { status: 'failed_precheck', failure };
     }

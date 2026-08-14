@@ -65,7 +65,7 @@ describe('permission math properties', () => {
         const result = computeBasePermissions(
           baseCtx({
             memberId: OWNER,
-            roles: new Map([[EVERYONE, { id: EVERYONE, permissions: everyonePerms }]]),
+            roles: new Map([[EVERYONE, { id: EVERYONE, permissions: everyonePerms, position: 0 }]]),
           }),
         );
         return result === ALL_PERMISSIONS;

@@ -3,6 +3,18 @@ export { DEDUPE_PREFIX, type DedupeStore, RedisDedupeStore } from './actions/ded
 export { type ActionExecutorDeps, DefaultActionExecutor } from './actions/executor.ts';
 export { type PrecheckInput, runPrechecks } from './actions/prechecks.ts';
 export {
+  REQUIRED_PERMISSIONS,
+  requiredPermissionsFor,
+  TARGETS_MEMBER,
+  targetsMember,
+} from './actions/required-permissions.ts';
+export {
+  type ResolveContextDeps,
+  type ResolveContextHints,
+  type ResolveContextResult,
+  resolvePrecheckContext,
+} from './actions/resolve-context.ts';
+export {
   HttpRestProxyClient,
   type RestProxyClient,
   type RestResponse,
@@ -16,6 +28,8 @@ export {
   type ActionResult,
   type ActionStatus,
   actionRequestSchema,
+  isScopedActionExecutor,
+  type ScopedActionExecutor,
   type SendPayload,
   sendPayloadSchema,
 } from './actions/types.ts';
@@ -41,6 +55,20 @@ export {
   streamKey,
 } from './events/redis-streams.ts';
 export { EVENT_TYPES, type EventType, isEventType, type ProtonEvent } from './events/types.ts';
+export {
+  buildGuildState,
+  parseChannel,
+  parseOverwrites,
+  parseRole,
+} from './guild-state/build.ts';
+export { GUILD_STATE_PREFIX, RedisGuildStateStore } from './guild-state/redis.ts';
+export {
+  type ChannelState,
+  type GuildState,
+  type GuildStatePatch,
+  type GuildStateStore,
+  highestRolePosition,
+} from './guild-state/types.ts';
 export { newId } from './ids.ts';
 export type {
   CommandContext,

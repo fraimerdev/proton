@@ -3,6 +3,7 @@ import {
   createCommandOptions,
   type EventBus,
   type EventType,
+  isScopedActionExecutor,
   type Logger,
   type ModuleRegistry,
   type ProtonEvent,
@@ -46,6 +47,17 @@ function nested(value: unknown, key: string): unknown {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)[key]
     : undefined;
+}
+
+/** Discord sends this as a decimal string; it must not touch Number. */
+function appPermissionsOf(d: Record<string, unknown>): bigint | undefined {
+  const raw = str(d.app_permissions);
+  if (!raw) return undefined;
+  try {
+    return BigInt(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -114,13 +126,22 @@ export class ModuleRuntime {
       return;
     }
 
+    // Bind this interaction's context to the executor the module receives.
+    // `app_permissions` is Discord's own computation of what the bot may do in
+    // this channel (§10.5) — authoritative, free, and immune to a stale cache.
+    // `resolved.members` gives target role ids without a REST round trip.
+    const base = this.#deps.executor;
+    const executor = isScopedActionExecutor(base)
+      ? base.scoped({ channelId, appPermissions: appPermissionsOf(d) })
+      : base;
+
     await command.handler({
       guildId,
       channelId,
       userId,
       options: createCommandOptions((nested(d.data, 'options') as RawOption[] | undefined) ?? []),
       config: parsed.data,
-      executor: this.#deps.executor,
+      executor,
       logger: this.#deps.logger,
       interaction: { id: interactionId, token: interactionToken },
       // The event id is derived deterministically from the dispatch, so a

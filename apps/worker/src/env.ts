@@ -10,6 +10,8 @@ export const envSchema = z.object({
   REDIS_URL: z.string().min(1),
   REDIS_DB_BUS: z.coerce.number().int().min(0).max(15).default(0),
   REDIS_DB_DEDUPE: z.coerce.number().int().min(0).max(15).default(1),
+  /** Guild role/channel snapshots backing the I8 prechecks. */
+  REDIS_DB_STATE: z.coerce.number().int().min(0).max(15).default(5),
   DATABASE_URL: z.url(),
   REST_PROXY_URL: z.string().min(1).default('http://localhost:3001'),
   API_URL: z.string().min(1).default('http://localhost:3002'),

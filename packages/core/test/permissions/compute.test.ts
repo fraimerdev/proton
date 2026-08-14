@@ -16,7 +16,11 @@ const ROLE_A = '400000000000000001';
 const ROLE_B = '400000000000000002';
 
 function roles(...entries: Array<[string, bigint]>): Map<string, GuildRole> {
-  return new Map(entries.map(([id, permissions]) => [id, { id, permissions }]));
+  // Position is irrelevant to permission computation; hierarchy is tested
+  // separately in the precheck suite.
+  return new Map(
+    entries.map(([id, permissions], index) => [id, { id, permissions, position: index }]),
+  );
 }
 
 function ctx(overrides: Partial<PermissionContext> = {}): PermissionContext {

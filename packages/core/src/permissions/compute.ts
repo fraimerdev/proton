@@ -11,6 +11,12 @@ export interface Overwrite {
 export interface GuildRole {
   id: string;
   permissions: bigint;
+  /**
+   * Vertical position in the role list. Permission computation ignores it, but
+   * hierarchy prechecks (I8) cannot work without it — a bot may only act on
+   * members whose highest role sits strictly below its own.
+   */
+  position: number;
 }
 
 export interface PermissionContext {
