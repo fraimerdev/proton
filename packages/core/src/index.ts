@@ -1,13 +1,20 @@
 export type { CaseInput, CaseRecorder } from './actions/case-recorder.ts';
 export { DEDUPE_PREFIX, type DedupeStore, RedisDedupeStore } from './actions/dedupe.ts';
 export { type ActionExecutorDeps, DefaultActionExecutor } from './actions/executor.ts';
-export { type PrecheckInput, runPrechecks } from './actions/prechecks.ts';
 export {
+  ACTION_KINDS,
+  type ActionKind,
+  DESTRUCTIVE_KINDS,
+  isDestructive,
   REQUIRED_PERMISSIONS,
+  REVERSAL_OF,
   requiredPermissionsFor,
+  reversalOf,
   TARGETS_MEMBER,
   targetsMember,
-} from './actions/required-permissions.ts';
+} from './actions/kinds.ts';
+export * from './actions/payloads.ts';
+export { type PrecheckInput, runPrechecks } from './actions/prechecks.ts';
 export {
   type ResolveContextDeps,
   type ResolveContextHints,
@@ -17,21 +24,19 @@ export {
 export {
   HttpRestProxyClient,
   type RestProxyClient,
+  type RestRequestOptions,
   type RestResponse,
 } from './actions/rest-client.ts';
+export { type PayloadResult, type RestCall, toRestCall } from './actions/rest-mapping.ts';
 export {
-  ACTION_KINDS,
   type ActionExecutor,
   type ActionFailure,
-  type ActionKind,
   type ActionRequest,
   type ActionResult,
   type ActionStatus,
   actionRequestSchema,
   isScopedActionExecutor,
   type ScopedActionExecutor,
-  type SendPayload,
-  sendPayloadSchema,
 } from './actions/types.ts';
 export {
   type BooleanField,
@@ -44,6 +49,12 @@ export {
   UnsupportedSchemaError,
   zodToDescriptors,
 } from './config/descriptor.ts';
+export {
+  formatDuration,
+  InvalidDurationError,
+  parseDuration,
+  tryParseDuration,
+} from './config/duration.ts';
 export { createEnv, EnvValidationError } from './env.ts';
 export type { EventBus, Subscription } from './events/bus.ts';
 export {
@@ -55,12 +66,7 @@ export {
   streamKey,
 } from './events/redis-streams.ts';
 export { EVENT_TYPES, type EventType, isEventType, type ProtonEvent } from './events/types.ts';
-export {
-  buildGuildState,
-  parseChannel,
-  parseOverwrites,
-  parseRole,
-} from './guild-state/build.ts';
+export { buildGuildState, parseChannel, parseOverwrites, parseRole } from './guild-state/build.ts';
 export { GUILD_STATE_PREFIX, RedisGuildStateStore } from './guild-state/redis.ts';
 export {
   type ChannelState,

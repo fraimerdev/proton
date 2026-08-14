@@ -8,10 +8,26 @@
 export const EVENT_TYPES = [
   'guild.available',
   'guild.unavailable',
+
   'member.joined',
   'member.left',
+  'member.updated',
+  'member.banned',
+  'member.unbanned',
+
   'message.created',
+  'message.updated',
+  'message.deleted',
+  'message.bulk_deleted',
+
   'interaction.command',
+
+  /**
+   * Internal, not from Discord. Emitted when a warn case is recorded, so the
+   * warn-escalation ladder is an ordinary rule (§4-P2) rather than logic
+   * hardcoded inside the cases module.
+   */
+  'moderation.warned',
 ] as const;
 
 export type EventType = (typeof EVENT_TYPES)[number];

@@ -1,7 +1,7 @@
 import { type GuildStateStore, highestRolePosition } from '../guild-state/types.ts';
 import { computeChannelPermissions } from '../permissions/compute.ts';
+import { requiredPermissionsFor, targetsMember } from './kinds.ts';
 import type { PrecheckInput } from './prechecks.ts';
-import { requiredPermissionsFor, targetsMember } from './required-permissions.ts';
 import type { ActionFailure, ActionRequest } from './types.ts';
 
 export interface ResolveContextDeps {
