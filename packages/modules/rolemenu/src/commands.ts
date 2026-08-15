@@ -15,20 +15,6 @@ type Command = CommandDefinition<RolemenuConfig>;
 
 type Ctx = CommandContext<RolemenuConfig>;
 
-/**
- * `/rolemenu` — put a configured menu into the channel, or bring it up to date.
- *
- * Menus are configured in the dashboard, not here. This command exists because
- * the *message* is not config: it lives in a channel, it can be deleted by
- * anybody with Manage Messages, and after an admin edits the bindings the buttons
- * still say what they said yesterday. So the one thing a command is needed for is
- * reconciling the message with the config, which is what this does.
- *
- * MANAGE_ROLES rather than a message permission, because that is the permission
- * the operation actually confers: posting this message is handing every member
- * who can see it the roles it names. Presentation only — the executor still runs
- * every I8 precheck.
- */
 export function rolemenuCommand(): Command {
   return {
     name: 'rolemenu',
@@ -87,14 +73,6 @@ async function runRolemenu(ctx: Ctx): Promise<void> {
   return menu.kind === 'reaction' ? seedReactions(ctx, menu) : postComponents(ctx, menu);
 }
 
-/**
- * Post the menu, or edit the message that is already carrying it.
- *
- * Which of the two is decided by whether the menu names a message. Editing keeps
- * the menu where members already know to find it, and — because a PATCH leaves
- * fields it does not mention alone — a refresh with no `message` option keeps
- * whatever text is above the buttons rather than blanking it.
- */
 async function postComponents(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   const content = ctx.options.getString('message') ?? undefined;
   const components = buildComponents(menu);
@@ -134,17 +112,6 @@ async function postComponents(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   );
 }
 
-/**
- * Seed a reaction menu by reacting to its message.
- *
- * Only standard emoji. A reaction menu binds a custom emoji by its **id**,
- * because that is all the reaction dispatch reliably carries and two custom emoji
- * can share a name — but Discord's reaction endpoint wants `name:id`, and the id
- * alone cannot be turned back into a name without a lookup this module has no
- * port for. Rather than guess, the refusal says exactly what to do instead: add
- * that one reaction by hand, once. Every member's reaction after that works
- * normally, because matching only ever uses the id.
- */
 async function seedReactions(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   const seeded: string[] = [];
   const manual: string[] = [];
@@ -188,14 +155,6 @@ async function seedReactions(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   return reply(ctx, lines.join(' '));
 }
 
-/**
- * Answer the invoker, always and always ephemerally.
- *
- * An unanswered interaction shows "This interaction failed", which reads as an
- * outage and teaches nobody anything (§1, I9). Ephemeral because the menu itself
- * is the public artefact — a second, public "posted it" message beneath it is
- * noise.
- */
 async function reply(ctx: Ctx, content: string): Promise<void> {
   await replyEphemeral(ctx, ctx.interaction, ctx.userId, ctx.idempotencyKey, content);
 }

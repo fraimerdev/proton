@@ -11,15 +11,8 @@ export const OTHER_CHANNEL = '500000000000000002';
 export const AUTHOR = '400000000000000001';
 export const MESSAGE = '600000000000000001';
 
-/** 2026-08-14T13:45:12Z — a fixed instant, so partition names are assertable. */
 export const OCCURRED_AT = Date.parse('2026-08-14T13:45:12.000Z');
 
-/**
- * An in-memory store with the same dedupe rule as the Postgres one: a second
- * write of the same entry id is ignored, exactly as `ON CONFLICT DO NOTHING`
- * would ignore it. A memory store that happily accepted duplicates would let a
- * redelivery test pass here and fail in production.
- */
 export class MemoryMessageLogStore implements MessageLogStore {
   readonly appended: MessageLogEntry[] = [];
   readonly partitions = new Set<string>();
@@ -56,14 +49,6 @@ export interface CapturedLog {
   message: string;
 }
 
-/**
- * An executor that fails the test if it is touched.
- *
- * Logging changes nothing in Discord, so it has no business building an
- * `ActionRequest`. Making that an assertion rather than a comment means a future
- * "just post the log to a channel" edit has to be a deliberate decision about
- * I1, not an accident.
- */
 const forbiddenExecutor: ActionExecutor = {
   async execute() {
     throw new Error('the logging module must not call the ActionExecutor: it changes no state');
@@ -98,21 +83,6 @@ interface EventOverrides {
 
 export const EDITED_AT = '2026-08-14T13:45:12.000Z';
 
-/**
- * Build the event by running a raw dispatch through the **real** normaliser.
- *
- * These used to be hand-written, with ids like `message.updated:<messageId>` and
- * `message.bulk_deleted:<id>,<id>,<id>`. Production emits neither: an update's
- * key carries `edited_timestamp` so successive edits stay distinct, and a bulk
- * delete's is a hashed digest of the sorted id set. So every assertion about a
- * row id was pinning a shape nothing sends, and the whole module was tested
- * against a vocabulary of its own — which is how it shipped a listener wired to
- * three event types the gateway did not emit at all, with a green suite.
- *
- * Going through `normalise` costs a devDependency on `@proton/gateway` and buys
- * the guarantee that if the gateway changes shape, these tests fail rather than
- * quietly describing a past.
- */
 function event(
   raw: RawDispatch,
   payload: Record<string, unknown>,

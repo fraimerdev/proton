@@ -3,13 +3,6 @@ import { type CaseQueryInput, caseQuerySchema } from '@proton/core';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 
-/**
- * PLAN.md §9 requires that a filtered case view be shareable by URL. That is
- * only true if the filters survive being written into an address bar and read
- * back out, so these drive the router's *own* serialisers rather than a
- * hand-rolled `URLSearchParams` — the round trip under test is the one the
- * browser actually performs.
- */
 function roundTrip(input: CaseQueryInput) {
   return caseQuerySchema.parse(defaultParseSearch(defaultStringifySearch(input)));
 }
@@ -33,13 +26,11 @@ describe('case filters survive a URL round trip', () => {
     expect(roundTrip(filters)).toEqual(filters);
   });
 
-  /** Numbers must not come back as strings, or `page` would fail `z.number()`. */
   test('numeric filters keep their type through the URL', () => {
     const url = defaultStringifySearch({ page: 12, pageSize: 25 });
 
     expect(url).toContain('page=12');
-    // Not `'12'`: the router JSON-parses values, which is what lets the schema
-    // declare `z.number()` instead of coercing and losing its input types.
+
     expect((defaultParseSearch(url) as { page: unknown }).page).toBe(12);
     expect(roundTrip({ page: 12 }).page).toBe(12);
   });
@@ -53,11 +44,6 @@ describe('case filters survive a URL round trip', () => {
     });
   });
 
-  /**
-   * Absent must round-trip as absent. If a cleared filter came back as `null`
-   * or `''` it would reach the API as a filter on the empty string and quietly
-   * match nothing.
-   */
   test('a cleared filter stays absent rather than becoming empty', () => {
     const result = roundTrip({ type: undefined, targetId: undefined, page: 2 });
 
@@ -84,10 +70,6 @@ describe('the router adapter rejects what the API would reject', () => {
     expect(() => validator.parse(defaultParseSearch('?type=explode'))).toThrow();
   });
 
-  /**
-   * A reversed range would return an empty table, which reads as "this server
-   * has no cases" — §1 calls that class of silence a bug.
-   */
   test('a reversed date range is refused with a readable message', () => {
     expect(() => validator.parse(defaultParseSearch('?from=2026-05-01&to=2026-01-01'))).toThrow(
       /must not be after/,

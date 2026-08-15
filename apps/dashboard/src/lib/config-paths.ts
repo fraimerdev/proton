@@ -1,11 +1,5 @@
 import type { FieldDescriptor } from '@proton/core';
 
-/**
- * Descriptors address fields by dot path (`limits.strict`) because the form is
- * flat while the config object may nest one level. These convert between the
- * two shapes.
- */
-
 export function getAtPath(source: Record<string, unknown>, path: string): unknown {
   return path.split('.').reduce<unknown>((value, key) => {
     if (typeof value !== 'object' || value === null) return undefined;
@@ -35,7 +29,6 @@ export function setAtPath(
   return target;
 }
 
-/** Flat form state from a stored config, falling back to declared defaults. */
 export function toFormValues(
   descriptors: readonly FieldDescriptor[],
   config: Record<string, unknown>,
@@ -48,21 +41,6 @@ export function toFormValues(
   return values;
 }
 
-/**
- * Rebuild the nested config object from flat form state, over the config the
- * page loaded.
- *
- * The base matters: a module may legitimately store fields the generator does
- * not render — cases' escalation ladder, permissions' override map — and
- * building the object from descriptors alone would drop them, whereupon the
- * module's schema would fill them back in from `.default()` and an admin would
- * watch an unrelated setting reset itself because they toggled a checkbox.
- *
- * Reusing the loaded config as the base is safe precisely because it came from
- * `ModuleConfigService.get`, which returns the *parsed* object — Zod strips keys
- * the schema no longer declares, so a field removed from the schema cannot ride
- * along here and reappear (I5).
- */
 export function toConfig(
   descriptors: readonly FieldDescriptor[],
   values: Record<string, unknown>,

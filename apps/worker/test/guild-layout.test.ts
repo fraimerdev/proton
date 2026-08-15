@@ -21,8 +21,6 @@ class MemoryLayoutStore implements GuildLayoutStore {
   }
 
   async put(layout: StoredGuildLayout): Promise<void> {
-    // Round-tripped through JSON exactly as Redis would, so a field that does
-    // not survive serialisation fails here rather than in production.
     this.layouts.set(layout.guildId, JSON.parse(JSON.stringify(layout)) as StoredGuildLayout);
   }
 
@@ -71,19 +69,6 @@ describe('GuildLayoutConsumer', () => {
     expect(layout?.channels.length).toBeGreaterThan(0);
   });
 
-  /**
-   * The reason this consumer exists at all, asserted end to end.
-   *
-   * `GuildStateStore` looks like it should serve backups and must not: it reduces
-   * a guild to what the I8 prechecks decide on and throws away `flags`. A backup
-   * built from it would record every hidden channel as `obfuscated: false` under
-   * a `source: 'gateway'` claim — a lie the restore planner cannot detect,
-   * discovered only after a server has been nuked (§10.1).
-   *
-   * So this goes fixture → normaliser → consumer → store → snapshot, and asserts
-   * the flag is still there at the far end. Any future "keep only the fields we
-   * use" change to the consumer fails here.
-   */
   test('an obfuscated channel survives the round trip with its flag intact', async () => {
     const { consumer, store } = build();
     const event = normalise(dispatch('channelObfuscated'));
@@ -94,8 +79,7 @@ describe('GuildLayoutConsumer', () => {
 
     const hidden = captured.snapshot.channels.find((c) => c.id === HIDDEN_CHANNEL);
     expect(hidden?.obfuscated).toBe(true);
-    // Marked, not omitted: the channel is in the snapshot as a placeholder so the
-    // count is honest, with nothing truthful to put in its name.
+
     expect(hidden?.name).toBeNull();
 
     const visible = captured.snapshot.channels.find((c) => c.id === '500000000000000001');
@@ -103,7 +87,6 @@ describe('GuildLayoutConsumer', () => {
     expect(visible?.name).toBe('general');
   });
 
-  /** §10.1 requires the admin to be told at *backup* time, not at restore time. */
   test('the capture report names the hidden channels a human has to know about', async () => {
     const { consumer, store } = build();
 
@@ -112,8 +95,6 @@ describe('GuildLayoutConsumer', () => {
 
     expect(captured.report.obfuscatedChannelIds).toEqual([HIDDEN_CHANNEL]);
 
-    // The sentence an admin actually reads has to name the channel and the
-    // permission — "1 channel was skipped" would send them hunting.
     const said = describeCapture(captured.report).join('\n');
     expect(said).toContain(`<#${HIDDEN_CHANNEL}>`);
     expect(said).toContain('View Channel');
@@ -133,11 +114,6 @@ describe('GuildLayoutConsumer', () => {
     expect(await store.get(GUILD)).toBeNull();
   });
 
-  /**
-   * A GUILD_DELETE carrying `unavailable: true` is a Discord outage, not a
-   * removal — the bot is still a member and the guild is coming back. Dropping
-   * the layout would mean backups silently stop working until the next connect.
-   */
   test('an outage does not drop the layout', async () => {
     const { consumer, store } = build();
     await consumer.handle(normalise(dispatch('guildCreate')) as never);
@@ -152,10 +128,6 @@ describe('GuildLayoutConsumer', () => {
     expect(await store.get(GUILD)).not.toBeNull();
   });
 
-  /**
-   * An empty layout would produce a confidently empty backup — "0 channels" reads
-   * exactly like a healthy tiny server, so it has to be loud.
-   */
   test('a payload with no channels or roles is refused, loudly', async () => {
     const { consumer, store, logs } = build();
 
@@ -171,14 +143,6 @@ describe('GuildLayoutConsumer', () => {
     expect(logs[0]?.message).toContain('Backups taken now would be empty');
   });
 
-  /**
-   * There is one Redis stream per event type and XREADGROUP returns per-stream
-   * batches in key order, not in timestamp order — so on a first deploy, which
-   * replays the retained history of both streams at once, a removal from last
-   * week can arrive after this morning's GUILD_CREATE. Deleting on it would drop
-   * the layout of a server the bot is sitting in, and backups would quietly stop
-   * working until the next gateway reconnect.
-   */
   test('a removal older than the stored layout does not delete it', async () => {
     const { consumer, store, logs } = build();
     const created = normalise(dispatch('guildCreate')) as NonNullable<ReturnType<typeof normalise>>;
@@ -187,7 +151,7 @@ describe('GuildLayoutConsumer', () => {
     await consumer.handle({
       type: 'guild.unavailable',
       guildId: GUILD,
-      // A week before the layout we hold.
+
       occurredAt: created.occurredAt - 7 * 24 * 60 * 60 * 1000,
       payload: { id: GUILD },
     });

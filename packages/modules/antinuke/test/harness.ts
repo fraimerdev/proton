@@ -37,7 +37,6 @@ export const ADMIN = '100000000000000001';
 export const ALERT_CHANNEL = '500000000000000001';
 export const COMMAND_CHANNEL = '500000000000000002';
 
-/** The compromised admin in the Gate 2 fixture. */
 export const NUKER = '200000000000000009';
 
 export const EVERYONE_ROLE = GUILD;
@@ -45,7 +44,6 @@ export const NUKER_LOW_ROLE = '410000000000000002';
 export const NUKER_HIGH_ROLE = '410000000000000004';
 const BOT_ROLE = '410000000000000008';
 
-/** Everything the breaker and its alert need, as Discord would report it. */
 export const BOT_PERMISSIONS =
   Permissions.ViewChannel |
   Permissions.SendMessages |
@@ -65,10 +63,7 @@ function roles(): Map<string, GuildRole> {
   ]);
 }
 
-/** Role ids per member, as `fetchMemberRoles` would answer. */
 const MEMBER_ROLES: Record<string, string[]> = {
-  // @everyone is in here on purpose: removing it is a call Discord rejects, so
-  // the breaker has to filter it out rather than discover that at runtime.
   [NUKER]: [EVERYONE_ROLE, NUKER_LOW_ROLE, NUKER_HIGH_ROLE],
   [OWNER]: [NUKER_HIGH_ROLE],
   [ADMIN]: [NUKER_LOW_ROLE],
@@ -112,14 +107,6 @@ class FakeRest implements RestProxyClient {
   }
 }
 
-/**
- * A rate window whose verdict the test states outright.
- *
- * Counting is `RedisRateWindow`'s job and is proved against real Redis in
- * `antinuke.integration.test.ts`; re-deriving its semantics here would be a
- * second implementation to keep in step with the first. What these tests need is
- * control over "has the threshold been crossed", so that is what this exposes.
- */
 export class FakeRateWindow implements RateWindowStore {
   readonly hits: RateWindowHit[] = [];
   tripped = false;
@@ -153,16 +140,15 @@ export interface LogLine {
 }
 
 export interface HarnessOptions {
-  /** Swap in the real `RedisRateWindow` for the integration suite. */
   rateWindow?: RateWindowStore;
   maintenance?: MaintenanceStore;
-  /** Defaults to the full set; drop bits to exercise the I8 failures. */
+
   botPermissions?: bigint;
-  /** Roles per member, when a test needs a member with none. */
+
   memberRoles?: Record<string, string[]>;
-  /** Ports to leave unbound, for the "enabled but not protecting you" path. */
+
   omit?: Array<keyof AntinukeDeps>;
-  /** Share the clock with a store built outside the harness. */
+
   clock?: { now: number };
 }
 
@@ -173,17 +159,17 @@ export interface Harness {
   rateWindow: RateWindowStore;
   maintenance: MaintenanceStore;
   deps: AntinukeDeps;
-  /** The clock the maintenance window is judged against; tests move it. */
+
   clock: { now: number };
   handle(event: ProtonEvent, config?: Partial<AntinukeConfig>): Promise<AntinukeOutcome>;
   runCommand(options: RawOption[], config?: Partial<AntinukeConfig>): Promise<void>;
-  /** REST calls that are not the interaction acknowledgement. */
+
   discordCalls(): RestRequestOptions[];
-  /** `METHOD path` per call, in order — what the ordering assertions read. */
+
   callPaths(): string[];
   cases(): CaseInput[];
   replyContent(): string | null;
-  /** What the alert channel was told, if anything. */
+
   alertContent(): string | null;
   logged(level: LogLine['level'], fragment: string): boolean;
 }
@@ -212,8 +198,6 @@ export function harness(options: HarnessOptions = {}): Harness {
     updatedAt: NOW,
   };
 
-  // The bot's own role carries the permissions, so dropping a bit here is
-  // exactly what an admin editing that role in Discord would do.
   const botRole = state.roles.get(BOT_ROLE);
   if (botRole) botRole.permissions = options.botPermissions ?? BOT_PERMISSIONS;
 
@@ -285,8 +269,7 @@ export function harness(options: HarnessOptions = {}): Harness {
         channelId: COMMAND_CHANNEL,
         userId: ADMIN,
         config: { ...antinukeDefaultConfig, ...config },
-        // Exactly what apps/worker binds: Discord's own permission computation
-        // for the interaction's channel.
+
         executor: executor.scoped({
           channelId: COMMAND_CHANNEL,
           appPermissions: options.botPermissions ?? BOT_PERMISSIONS,
@@ -323,19 +306,11 @@ export function harness(options: HarnessOptions = {}): Harness {
 
 let entrySeed = 1_537_751_140_794_499_072n;
 
-/** One snowflake per call, each a millisecond after the last (1<<22 per ms). */
 function nextEntryId(): string {
   entrySeed += 4_194_304n;
   return String(entrySeed);
 }
 
-/**
- * An audit-derived event as the normaliser produces one.
- *
- * Entry ids advance so each event is distinct — the rate window dedupes on the
- * event id (I4), and a test that reused one would be counting one deletion
- * twenty times.
- */
 export function auditEvent(
   type: string,
   overrides: { actorId?: string | null; occurredAt?: number; entryId?: string } = {},

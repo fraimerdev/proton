@@ -47,7 +47,7 @@ describe('phishing listener', () => {
     expect(request?.targetId).toBe(AUTHOR);
     expect(request?.moduleId).toBe('phishing');
     expect(request?.reason).toContain(BAD_DOMAIN);
-    // Discord lifts a timeout itself, so nothing schedules a reversal.
+
     expect(request?.expiresAt).toBeUndefined();
   });
 
@@ -61,7 +61,6 @@ describe('phishing listener', () => {
     expect(executor.of('timeout')).toBeDefined();
   });
 
-  /** The false-positive path — the real site the listed one impersonates. */
   test('a lookalike of a listed domain is not acted on', async () => {
     const { executor, logs } = await handle(
       loaded(),
@@ -146,7 +145,7 @@ describe('phishing listener', () => {
     const content = String(payloadOf(executor.of('send')).content);
     expect(content).toContain(`login.${BAD_DOMAIN}`);
     expect(content).toContain(BAD_DOMAIN);
-    // Proton cannot delete a single message, so the alert must never imply it did.
+
     expect(content).not.toContain('removed');
     expect(content).toContain('still up');
   });
@@ -158,18 +157,6 @@ describe('phishing listener', () => {
     expect(executor.of('timeout')).toBeDefined();
   });
 
-  /**
-   * The double-action case, and the reason keys are rooted on the message
-   * rather than on the event.
-   *
-   * This module watches both `message.created` and `message.updated`, and the
-   * normaliser gives them different ids by design — it has to, or an edit would
-   * dedupe against the post it edits and never be scanned. But Discord raises
-   * MESSAGE_UPDATE for its own embed resolution, carrying (per the gateway
-   * reference) the full message object with the original content. A message with
-   * a link is by definition one Discord unfurls, so an event-rooted key means
-   * one scam link times the author out twice.
-   */
   test('the create and the embed-resolution update act once between them', async () => {
     const created = await handle(loaded(), `https://${BAD_DOMAIN}/gift`, {
       alertChannel: ALERT_CHANNEL,
@@ -177,8 +164,6 @@ describe('phishing listener', () => {
 
     const harness = context({ alertChannel: ALERT_CHANNEL });
     await listener(loaded()).handler(
-      // Same message id, different event id — exactly what Discord sends when it
-      // resolves the preview on the link that was just posted.
       messageEvent({ type: 'message.updated', content: `https://${BAD_DOMAIN}/gift` }),
       harness.ctx,
     );
@@ -216,7 +201,7 @@ describe('phishing listener', () => {
     expect(first.executor.of('timeout')?.idempotencyKey).toBe(
       second.executor.of('timeout')?.idempotencyKey ?? '',
     );
-    // Distinct from the alert's, or one would dedupe against the other.
+
     expect(first.executor.of('timeout')?.idempotencyKey).not.toBe(
       first.executor.of('send')?.idempotencyKey ?? '',
     );
@@ -261,7 +246,6 @@ describe('phishing listener', () => {
   });
 });
 
-/** The degraded paths. Every one of them has to keep message handling alive. */
 describe('phishing degradation', () => {
   test('an empty blocklist acts on nothing and does not throw', async () => {
     const { executor, logs } = await handle(new MemoryBlocklistStore(), `https://${BAD_DOMAIN}/x`);
@@ -276,8 +260,6 @@ describe('phishing degradation', () => {
 
     const { executor, logs } = await handle(store, `https://${BAD_DOMAIN}/x`);
 
-    // Never a throw: the bus would leave the event unacknowledged and redeliver
-    // it forever, turning a cache problem into a message-processing outage.
     expect(executor.requests).toEqual([]);
     const errored = logs.find((entry) => entry.level === 'error');
     expect(errored?.message).toContain('not checked');
@@ -299,7 +281,6 @@ describe('phishing degradation', () => {
   });
 });
 
-/** The permission-failure path every module owes an integration test (§12). */
 describe('phishing permission failures', () => {
   test('a refused timeout repeats the executor’s reason verbatim, naming the permission', async () => {
     const harness = context();

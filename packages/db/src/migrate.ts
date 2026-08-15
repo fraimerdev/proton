@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-// Entry point for `bun run db:migrate`.
 
 import { createEnv } from '@proton/core/env';
 import { z } from 'zod';

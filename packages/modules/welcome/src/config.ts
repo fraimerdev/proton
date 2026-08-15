@@ -2,22 +2,8 @@ import { CARD_PRESETS } from '@proton/cards';
 import { protonFields } from '@proton/core';
 import { z } from 'zod';
 
-/** Bumped whenever the shape below changes (I5). */
 export const WELCOME_SCHEMA_VERSION = 1;
 
-/**
- * The placeholder vocabulary, in full.
- *
- * Deliberately four tokens and no expression syntax. A general template language
- * is the rule builder's problem (§9 says as much about the rule UI), and
- * inventing one here would fix its syntax before there is anything to argue with
- * — including the escaping rules, which is where template languages that grew by
- * accident all end up.
- *
- * `{user}` is a mention rather than a name on purpose: it pings the arriving
- * member, which is the point of a welcome, and it renders correctly whatever
- * their display name contains.
- */
 export const WELCOME_PLACEHOLDERS = ['{user}', '{username}', '{server}', '{memberCount}'] as const;
 
 export type WelcomePlaceholder = (typeof WELCOME_PLACEHOLDERS)[number];
@@ -89,15 +75,6 @@ export interface GreetingFacts {
   memberCount: number;
 }
 
-/**
- * Substitute the placeholders.
- *
- * A single pass over the known tokens rather than a regex replace loop, because
- * a replaced value can itself contain a token — a member calling themselves
- * `{server}` would otherwise have their name expanded on the second pass. One
- * pass makes substitution non-recursive by construction rather than by
- * escaping.
- */
 export function renderGreeting(template: string, facts: GreetingFacts): string {
   const values: Record<WelcomePlaceholder, string> = {
     '{user}': `<@${facts.userId}>`,
@@ -123,7 +100,5 @@ export function renderGreeting(template: string, facts: GreetingFacts): string {
     }
   }
 
-  // Discord rejects a message body over 2000 characters outright, which would
-  // turn a long template into no greeting at all.
   return out.slice(0, 2000);
 }

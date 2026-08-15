@@ -79,7 +79,6 @@ function event(type: EventType = 'message.created', overrides: Partial<ProtonEve
   } satisfies ProtonEvent;
 }
 
-/** Records every request, so a test can assert what actually reached the executor. */
 function recordingExecutor(): { executor: ActionExecutor; requests: ActionRequest[] } {
   const requests: ActionRequest[] = [];
   return {
@@ -93,7 +92,6 @@ function recordingExecutor(): { executor: ActionExecutor; requests: ActionReques
   };
 }
 
-/** Always trips, so a rate condition is a pass/fail switch rather than a clock. */
 const trippingWindow: RateWindowStore = {
   hit: async () => ({ count: 3, tripped: true }),
 };
@@ -191,8 +189,7 @@ function build(options: {
     store,
     config: options.config ?? allEnabled,
     logger,
-    // Pinned, so the dry-run assertions do not depend on how the test runner was
-    // started. `dryRunFor` reads process.env.NODE_ENV when this is undefined.
+
     nodeEnv: options.nodeEnv ?? 'production',
   });
 
@@ -238,7 +235,6 @@ describe('which events the engine listens for', () => {
     expect(ruleTriggerEvents(registry).sort()).toEqual(['member.joined', 'moderation.warned']);
   });
 
-  /** A cron rule belongs to the scheduler; subscribing to it is meaningless. */
   test('a cron rule contributes no event type', () => {
     const registry = new ModuleRegistry();
     registry.register(
@@ -280,12 +276,6 @@ describe('subscription shape', () => {
     expect(calls[0]?.types).toEqual(['message.created']);
   });
 
-  /**
-   * Streams are never trimmed, so a group created at '0' replays everything
-   * retained, and anything older than the executor's dedupe TTL is re-executed
-   * rather than deduped — a newly wired engine banning people for events the
-   * guild settled weeks ago.
-   */
   test('the group starts at $, not at the head of the stream', () => {
     const { runtime, calls } = build({ manifests: [withRules] });
 
@@ -314,11 +304,10 @@ describe('dispatch', () => {
     expect(requests[0]?.kind).toBe('send');
     expect(requests[0]?.guildId).toBe(GUILD);
     expect(requests[0]?.moduleId).toBe('moderation');
-    // Derived from the event id, so a redelivered event is deduped (I4).
+
     expect(requests[0]?.idempotencyKey).toBe('rule:message.created:1:moderation:ban-spammers:0');
   });
 
-  /** The engine fills the target the preset could not know: the event's channel. */
   test('the channel is supplied from the facts, not hardcoded in the preset', async () => {
     const { runtime, requests } = build({ rules: [rule()] });
 
@@ -342,14 +331,10 @@ describe('dispatch', () => {
 
     expect(reads).toEqual([{ guildId: GUILD, eventType: 'message.created' }]);
     expect(requests).toEqual([]);
-    // Silent: message.created fires per message and most guilds have no rule.
+
     expect(lines).toEqual([]);
   });
 
-  /**
-   * A rule belongs to the module that shipped it. A guild that switched `cases`
-   * off must not still be escalating warns.
-   */
   test('a rule whose module is disabled in this guild does not run', async () => {
     const { runtime, requests } = build({
       rules: [rule()],
@@ -378,10 +363,6 @@ describe('dispatch', () => {
     expect(lines[0]?.message).toContain('no module with that id is loaded');
   });
 
-  /**
-   * The engine reports a rule for the wrong guild rather than acting on it (I6's
-   * argument): loading someone else's rules is a bug in the caller.
-   */
   test("another guild's rule is reported and never dispatched", async () => {
     const { runtime, requests, lines } = build({ rules: [rule({ guildId: OTHER_GUILD })] });
 
@@ -430,10 +411,6 @@ describe('conditions decide, and say why they did not', () => {
     expect(requests).toHaveLength(1);
   });
 
-  /**
-   * "Why didn't my rule fire" has to be answerable from the log alone, which is
-   * the entire reason `RuleOutcome.skipped` carries a sentence rather than a code.
-   */
   test('a condition needing a fact this event does not carry names the missing fact', async () => {
     const { runtime, lines } = build({
       rules: [
@@ -449,11 +426,8 @@ describe('conditions decide, and say why they did not', () => {
     expect(lines[0]?.message).toContain('outside any channel');
   });
 
-  /** A row nobody can parse is broken for every event, so it is an error, not a skip. */
   test('an unparseable rule is logged as an error', async () => {
     const { runtime, lines } = build({
-      // `priority` must be an integer; the store would normally have refused this,
-      // but the engine's own parse is the guarantee for a caller that did not.
       rules: [rule({ priority: 1.5 })],
     });
 
@@ -471,11 +445,6 @@ describe('failures are triaged, not treated alike', () => {
     await expect(runtime.handle(event())).rejects.toThrow('postgres is away');
   });
 
-  /**
-   * `apps/api` answers 400 for a stored config that no longer parses. Rethrowing
-   * would burn every delivery and then dead-letter that guild's events for that
-   * module permanently.
-   */
   test('a permanent config failure is logged with a remedy and the event is acked', async () => {
     const { runtime, lines } = build({
       rules: [rule()],
@@ -492,7 +461,6 @@ describe('failures are triaged, not treated alike', () => {
       },
     });
 
-    // Resolves rather than rejects: acked, not redelivered.
     await runtime.handle(event());
 
     expect(lines[0]?.level).toBe('error');
@@ -519,10 +487,6 @@ describe('failures are triaged, not treated alike', () => {
     await expect(runtime.handle(event())).rejects.toThrow('503');
   });
 
-  /**
-   * The engine catches per action, so a failed action lands in the report rather
-   * than cancelling the rest of the ladder. It still has to be shouted about.
-   */
   test('an action the executor refuses is reported at error, naming the reason', async () => {
     const registry = new ModuleRegistry();
     registry.register(manifest('moderation', []));
@@ -570,11 +534,6 @@ describe('dry run (I12)', () => {
     expect(ruleIsDryRun(rule(), 'development')).toBe(false);
   });
 
-  /**
-   * The recorded trade: `RuleFireInput.dryRun` is one boolean per rule, so a rung
-   * that bans *and* posts a mod-log line has to fall one way. It falls closed —
-   * a log line announcing a ban that never happened is a log that lies.
-   */
   test('a rule mixing a ban with a mod-log line is dry-run as a whole', () => {
     const ladder = rule({
       actions: [
@@ -683,13 +642,6 @@ describe('preset seeding', () => {
     expect(lines[0]?.message).toContain('seeded 1 preset rule(s)');
   });
 
-  /**
-   * `rules.guild_id` has a foreign key to `guilds`, and the row is written from
-   * the same event in a different consumer group — so on a guild's first
-   * appearance this can lose the race. Rethrowing lets the bus redeliver, by
-   * which time the registration has landed. Swallowing would leave that guild
-   * permanently without its presets and nothing anywhere saying so.
-   */
   test('a seeding failure rethrows rather than leaving the guild unseeded', async () => {
     const { seeder: s } = seeder({
       manifests: [cases],
@@ -707,10 +659,6 @@ describe('preset seeding', () => {
     ).rejects.toThrow('foreign key');
   });
 
-  /**
-   * Loud, not fatal. Seeding has already succeeded by then, and failing the event
-   * would redeliver it only to re-seed nothing.
-   */
   test('a cron registration failure is shouted about, not thrown', async () => {
     const { seeder: s, lines } = seeder({
       manifests: [cases],
@@ -778,15 +726,10 @@ describe('cron rules', () => {
 
     expect(requests).toHaveLength(1);
     expect(requests[0]?.payload).toEqual({ channelId: CHANNEL, content: 'swept' });
-    // BullMQ's scheduled-job id is stable across a retry of the same tick and
-    // different for the next one, which is what makes the key dedupe correctly.
+
     expect(requests[0]?.idempotencyKey).toContain('repeat:x:1770000000000');
   });
 
-  /**
-   * A cron rule is not about anybody. A condition needing an actor refuses by
-   * name rather than the engine inventing one.
-   */
   test('a condition that needs facts refuses, because a schedule has none', async () => {
     const { executor, requests } = recordingExecutor();
     const { logger, lines } = collectingLogger();
@@ -852,7 +795,6 @@ describe('cron rules', () => {
     expect(lines).toEqual([]);
   });
 
-  /** A scheduler registered by an older build, whose data shape has since moved. */
   test('job data this build cannot read is reported, not retried forever', async () => {
     const { executor, requests } = recordingExecutor();
     const { logger, lines } = collectingLogger();

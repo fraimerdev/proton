@@ -16,7 +16,7 @@ const NOW = Date.parse('2026-08-14T12:00:00.000Z');
 
 class FakeExecutor implements ActionExecutor {
   readonly requests: ActionRequest[] = [];
-  /** Keyed by action kind: throw for that kind. */
+
   readonly throwOn = new Set<string>();
   result: ActionResult = { status: 'executed', caseId: 'case-1' };
 
@@ -92,7 +92,7 @@ describe('RuleEngine.evaluate', () => {
     expect(request?.kind).toBe('timeout');
     expect(request?.guildId).toBe(GUILD);
     expect(request?.moduleId).toBe('automod');
-    // Nobody pressed a button, so the rule engine owns the action, not the member.
+
     expect(request?.actorId).toBe(RULE_ENGINE_ACTOR);
     expect(request?.targetId).toBe(MEMBER);
     expect(request?.reason).toBe('Advertising');
@@ -143,11 +143,6 @@ describe('RuleEngine.evaluate', () => {
     expect(executor.requests.map((r) => r.kind)).toEqual(['ban', 'kick']);
   });
 
-  /**
-   * The failure this guards is a whole guild's moderation going quiet because
-   * one rule's ban 500s. Later rules — and the later actions of the same rule —
-   * still run, and the report carries what broke.
-   */
   test('an action that throws stops neither the rest of the rule nor later rules', async () => {
     const executor = new FakeExecutor();
     executor.throwOn.add('ban');
@@ -219,11 +214,6 @@ describe('RuleEngine.evaluate', () => {
     expect((await evaluate([impossible]).report).outcomes[0]?.fired).toBe(false);
   });
 
-  /**
-   * A rule loaded for the wrong guild is a bug in whatever loaded it, and acting
-   * on it would ban a member of one server for something that happened in
-   * another. Refused loudly rather than silently ignored.
-   */
   test('refuses a rule that belongs to another guild', async () => {
     const { executor, report } = evaluate([rule({ guildId: OTHER_GUILD })]);
     const outcome = (await report).outcomes[0];
@@ -289,7 +279,6 @@ describe('RuleEngine action requests', () => {
     expect(executor.requests[0]?.targetId).toBe(MEMBER);
   });
 
-  /** Discord lifts a timeout itself, so scheduling a reversal would be a no-op. */
   test('a timeout duration becomes Discord’s own expiry, not a scheduled reversal', async () => {
     const { executor, report } = evaluate([
       rule({ actions: [{ kind: 'timeout', duration: '10m' }] }),
@@ -310,10 +299,6 @@ describe('RuleEngine action requests', () => {
     expect(executor.requests[0]?.expiresAt).toEqual(new Date(NOW + 7_200_000));
   });
 
-  /**
-   * The gateway redelivers on RESUME, so the same event must produce the same
-   * key and the executor must discard the second attempt (I4).
-   */
   test('idempotency keys are derived from the event, rule and action index', async () => {
     const rules = [
       rule({ actions: [{ kind: 'ban' }, { kind: 'send', payload: { content: 'x' } }] }),
@@ -384,11 +369,6 @@ describe('RuleEngine rate conditions', () => {
     expect(rateWindow.hits[0]?.actorId).toBe('guild');
   });
 
-  /**
-   * The window must only ever count events the rest of the rule accepted —
-   * otherwise it measures the wrong population, and a rule scoped to one channel
-   * would trip on traffic from every other channel.
-   */
   test('does not touch the counter when a fact condition already refused', async () => {
     const rateWindow = new FakeRateWindow();
     const scoped = rule({

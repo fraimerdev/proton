@@ -8,15 +8,14 @@ export interface ModuleConfigView {
   enabled: boolean;
   config: Record<string, unknown>;
   schemaVersion: number;
-  /** True when the stored row was migrated forward on this read (I5). */
+
   migrated: boolean;
 }
 
 export interface UpdateModuleConfigInput {
   guildId: string;
   moduleId: string;
-  // Explicit `| undefined` so callers may spread a parsed body straight in
-  // under exactOptionalPropertyTypes.
+
   enabled?: boolean | undefined;
   config?: Record<string, unknown> | undefined;
   actorId: string;
@@ -33,13 +32,6 @@ export class ModuleConfigError extends Error {
   }
 }
 
-/**
- * The single definition of "read/write a module's configuration" (PLAN.md §9).
- *
- * Dashboard server functions and the worker both call this — neither reimplements
- * it — so validation, `schema_version` stamping and audit writes cannot drift
- * apart between the two surfaces.
- */
 export class ModuleConfigService {
   readonly #db: DbHandle;
   readonly #registry: ModuleRegistry;
@@ -57,14 +49,6 @@ export class ModuleConfigService {
     return manifest;
   }
 
-  /**
-   * Read a module's config, validating on every read (I5).
-   *
-   * A row saved by an older deploy is migrated forward lazily: re-parsing through
-   * the current schema fills in defaults for fields added since. Validating on
-   * read rather than trusting the JSONB column is what stops a hand-edited or
-   * stale row from reaching module code as an unchecked object.
-   */
   async get(guildId: string, moduleId: string): Promise<ModuleConfigView> {
     const manifest = this.#manifest(moduleId);
 
@@ -107,13 +91,6 @@ export class ModuleConfigService {
     };
   }
 
-  /**
-   * Write a module's config.
-   *
-   * Validates first, then writes the row and its `audit_trail` entry in one
-   * transaction — an audit row that can be missing when the write succeeds would
-   * make I7 unenforceable.
-   */
   async update(input: UpdateModuleConfigInput): Promise<{
     before: ModuleConfigView;
     after: ModuleConfigView;

@@ -17,13 +17,6 @@ function isBlobLike(value: unknown): value is BlobLike {
   );
 }
 
-/**
- * Discord REST egress for every Proton process (PLAN.md I2).
- *
- * Callers speak plain HTTP to `/api/...` and this forwards through the one
- * shared REST client, which owns all bucket and global-limit accounting. No
- * worker ever holds a client against discord.com itself.
- */
 export function createProxyApp(rest: REST): Hono {
   const app = new Hono();
 
@@ -32,14 +25,6 @@ export function createProxyApp(rest: REST): Hono {
   app.all('/api/*', async (c) => {
     const url = new URL(c.req.url);
 
-    /**
-     * Callers may address the proxy either as `/api/gateway/bot` or, if they
-     * front it with their own `@discordjs/rest` (the gateway does, so that its
-     * `GET /gateway/bot` also egresses through here per I2), as
-     * `/api/v10/gateway/bot`. This client adds the version itself, so an
-     * unstripped one produced `https://discord.com/api/v10/v10/gateway/bot`
-     * upstream — a 404 that surfaced as a bare 502 with no hint of the cause.
-     */
     const route = url.pathname.slice('/api'.length).replace(/^\/v\d+(?=\/)/, '') as RouteLike;
     const method = c.req.method as RequestMethod;
 
@@ -47,21 +32,6 @@ export function createProxyApp(rest: REST): Hono {
     let files: RawFile[] | undefined;
 
     if (!BODYLESS_METHODS.has(c.req.method)) {
-      /**
-       * Two encodings, because Discord accepts two.
-       *
-       * Anything with an attachment — a rank card, a welcome card — arrives as
-       * `multipart/form-data` with the JSON in a `payload_json` field and the
-       * bytes in `files[n]` parts. Reading that as text and running `JSON.parse`
-       * over it, which is what this did before Phase 3, produces a 400 naming
-       * the multipart boundary as invalid JSON: a confusing error for a request
-       * that was perfectly well-formed.
-       *
-       * `@discordjs/rest` re-encodes the multipart body itself from `body` plus
-       * `files`, so the boundary this proxy received is not the one Discord
-       * sees. That is fine and in fact necessary — the parts have to be rebuilt
-       * anyway once the route and headers are attached.
-       */
       if (c.req.header('content-type')?.includes('multipart/form-data')) {
         const form = await c.req.formData().catch(() => null);
         if (!form) return c.json({ error: 'invalid multipart body' }, 400);
@@ -78,9 +48,7 @@ export function createProxyApp(rest: REST): Hono {
         files = [];
         for (const [key, value] of form.entries()) {
           if (key === 'payload_json') continue;
-          // Duck-typed rather than `instanceof File`: Hono types a form entry as
-          // a string, so a class check narrows to `never` and the branch is
-          // dropped. The runtime value is a Blob whenever a part carried bytes.
+
           const part = value as unknown;
           if (!isBlobLike(part)) continue;
 
@@ -103,13 +71,6 @@ export function createProxyApp(rest: REST): Hono {
     }
 
     try {
-      // `queueRequest` rather than `request`: both run the full bucket and 429
-      // machinery, but `request` parses the body and throws on non-2xx. This is
-      // a proxy, so a Discord 403 is data to hand back verbatim, not an
-      // exception to reshape into something the caller can't inspect.
-      // A caller may supply a *user* OAuth token (the dashboard resolving which
-      // guilds someone administers). Those calls egress here too rather than
-      // going direct, so I2 holds for every credential, not just the bot's.
       const userAuth = c.req.header('x-proton-authorization');
 
       const request: InternalRequest = {
@@ -132,8 +93,6 @@ export function createProxyApp(rest: REST): Hono {
 
       return new Response(text, { status: response.status, headers });
     } catch (error) {
-      // The client exhausted its retries, or the upstream is unreachable. Say so
-      // in a shape callers can surface to an admin rather than a bare 500.
       return c.json(
         {
           error: 'rest_proxy_upstream_failure',

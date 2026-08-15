@@ -1,14 +1,6 @@
 import { boolean, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { guilds } from './guilds.ts';
 
-/**
- * Per-guild module configuration.
- *
- * `config` is validated against the owning module's Zod schema on every read and
- * every write (PLAN.md I5) — the JSONB column is storage, never a trust boundary.
- * `schemaVersion` records which revision of that schema the stored shape matches,
- * so configs saved by an older deploy are migrated forward lazily on read.
- */
 export const guildModules = pgTable(
   'guild_modules',
   {

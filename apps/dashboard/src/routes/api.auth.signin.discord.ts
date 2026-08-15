@@ -1,21 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { auth } from '../lib/auth.ts';
 
-/**
- * GET entry point for the Discord OAuth dance.
- *
- * Better Auth only ships `POST /api/auth/sign-in/social`, which answers with the
- * authorize URL as JSON — a link cannot use it, and fetching it would put signing
- * in behind client JS. This route makes that call server-side and turns the answer
- * into a redirect, so the sign-in link stays a link.
- *
- * `asResponse` matters: sign-in sets a signed `state` cookie that the callback
- * checks against the stored verification, so a login whose Set-Cookie was dropped
- * dies at `/api/auth/callback/discord` with a state mismatch.
- *
- * `callbackURL` is fixed rather than read from the query string; a caller-supplied
- * destination here is an open redirect.
- */
 export const Route = createFileRoute('/api/auth/signin/discord')({
   server: {
     handlers: {

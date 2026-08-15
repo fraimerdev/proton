@@ -11,13 +11,6 @@ export interface GeneratedFormProps {
   roles?: readonly DiscordRole[] | undefined;
 }
 
-/**
- * Renders a module's whole config form from its descriptors.
- *
- * There is no per-module form code anywhere in the dashboard: this walks
- * whatever the module's Zod schema produced. Adding a config field to a module
- * changes exactly one file — the module's schema (PLAN.md P4).
- */
 export function GeneratedForm({
   descriptors,
   values,

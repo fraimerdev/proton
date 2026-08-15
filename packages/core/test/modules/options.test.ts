@@ -29,7 +29,6 @@ describe('createCommandOptions', () => {
   });
 
   test('snowflake options come back as strings, ready for targetId', () => {
-    // Parsing these as numbers would corrupt them — they exceed 2^53.
     expect(options.getUserId('target')).toBe(USER);
     expect(options.getChannelId('where')).toBe(CHANNEL);
     expect(options.getRoleId('role')).toBe(ROLE);
@@ -54,12 +53,6 @@ describe('createCommandOptions', () => {
     expect(options.getNumber('count')).toBe(5);
   });
 
-  /**
-   * A type mismatch means the command's registered schema and its handler
-   * disagree. Returning null would make the bot silently do nothing — the exact
-   * failure PLAN.md §1 rails against — so it throws and lands in the DLQ with
-   * the payload attached.
-   */
   test('asking for the wrong type throws rather than returning null', () => {
     expect(() => options.getInteger('text')).toThrow(CommandOptionTypeError);
     expect(() => options.getString('count')).toThrow(/registered options and its handler disagree/);
@@ -79,7 +72,7 @@ describe('subcommand flattening', () => {
     const options = createCommandOptions(raw);
 
     expect(options.getSubcommand()).toBe('add');
-    // Handlers address options by name regardless of nesting.
+
     expect(options.getUserId('user')).toBe(USER);
   });
 

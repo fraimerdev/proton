@@ -48,11 +48,6 @@ describe('/phishing', () => {
     expect(content).toContain('1 feed');
   });
 
-  /**
-   * The reason this command exists. From inside a server, an empty blocklist
-   * looks exactly like a quiet week — this is what makes the two tellable apart
-   * without shell access to the worker's logs.
-   */
   test('says plainly when nothing is loaded, and that it is not a server setting', async () => {
     const content = await run({ blocklist: new MemoryBlocklistStore(), botUserId: BOT });
 

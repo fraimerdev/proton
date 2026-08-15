@@ -9,19 +9,6 @@ import { runQuarantine, runRelease } from './quarantine.ts';
 
 type Command = CommandDefinition<VerificationConfig>;
 
-/**
- * `/verify` — the one command in Proton every member may run.
- *
- * No `default_member_permissions`, deliberately. It is the gate: restricting it
- * to a Discord permission would restrict it to people already past the gate.
- *
- * What it is *not* is a challenge. Passing means running the command, which is a
- * rules-acceptance gate — the same thing Discord's own membership screening is —
- * and it stops a script that joins and immediately posts, which is the traffic
- * this catches. A captcha or a modal challenge needs Components V2 flows (§10.6)
- * and is not built here; nothing in the wording below claims otherwise, because
- * a gate that oversells itself is worse than one that doesn't exist.
- */
 export function verifyCommand(deps: VerificationDeps): Command {
   return {
     name: 'verify',
@@ -39,12 +26,6 @@ export function verifyCommand(deps: VerificationDeps): Command {
   };
 }
 
-/**
- * MANAGE_ROLES rather than a moderation permission, because that is the
- * permission the operation actually is: a role swap. Presentation only — the
- * executor still runs every I8 precheck, since Discord's own gate can be
- * overridden per guild.
- */
 export function quarantineCommand(deps: VerificationDeps): Command {
   return {
     name: 'quarantine',

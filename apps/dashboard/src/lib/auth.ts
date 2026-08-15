@@ -6,16 +6,6 @@ import { loadEnv } from './env.ts';
 const env = loadEnv();
 const handle = createDb(env.DATABASE_URL);
 
-/**
- * Better Auth with Discord as the only provider.
- *
- * Scopes follow PLAN.md §9: `identify` + `guilds` to list the servers a user is
- * in, and `guilds.members.read` so access can later be resolved by staff role
- * rather than Manage Server alone.
- *
- * The provider access token is persisted because the API needs it to re-fetch
- * the user's guild list server-side — the browser never queries Discord (I6).
- */
 export const auth = betterAuth({
   database: drizzleAdapter(handle.db, { provider: 'pg' }),
   secret: env.BETTER_AUTH_SECRET,

@@ -10,7 +10,6 @@ const env = loadEnv();
 
 const handle = createDb(env.DATABASE_URL);
 
-// One shared list, so the API can never offer a module the worker does not run.
 const registry = createModuleRegistry();
 
 const app = createApiApp({

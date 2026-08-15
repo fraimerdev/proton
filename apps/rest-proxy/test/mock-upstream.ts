@@ -5,47 +5,37 @@ export interface UpstreamRequest {
 }
 
 export interface MockUpstreamOptions {
-  /** Bucket size advertised via X-RateLimit-Limit. */
   limit?: number;
-  /** Seconds advertised via X-RateLimit-Reset-After. */
+
   resetAfter?: number;
   bucket?: string;
-  /** Return 429 for the first N eligible requests, then succeed. */
+
   rateLimitFirst?: number;
-  /** Serve this many requests normally before the 429 window opens. */
+
   rateLimitAfter?: number;
-  /** Retry-After (seconds) sent with those 429s. */
+
   retryAfter?: number;
-  /** Make the 429 a *global* limit rather than a per-bucket one. */
+
   global?: boolean;
-  /**
-   * Hold every request until this many are in flight at once, or until
-   * `rendezvousMs` passes. Turns "did these two overlap?" from a race the
-   * scheduler decides into a rendezvous: a caller that really is concurrent
-   * always meets the other, and one that is serialised never can.
-   */
+
   rendezvous?: number;
-  /** How long a lone request waits at the rendezvous before giving up. */
+
   rendezvousMs?: number;
 }
 
 export interface MockUpstream {
   url: string;
   requests: UpstreamRequest[];
-  /** Requests that were in flight simultaneously, sampled per request. */
+
   maxConcurrent: number;
   rateLimitedCount: number;
-  /** Resolves with the moment the Nth 429 was sent. */
+
   awaitRateLimited(count: number): Promise<number>;
-  /** Forget what has been observed, keeping the upstream's own request count. */
+
   reset(): void;
   stop(): Promise<void>;
 }
 
-/**
- * Stands in for discord.com so rate-limit behaviour can be asserted
- * deterministically. Tests never touch the real API (PLAN.md I11).
- */
 export function startMockUpstream(options: MockUpstreamOptions = {}): MockUpstream {
   const limit = options.limit ?? 1;
   const resetAfter = options.resetAfter ?? 0.2;
@@ -64,7 +54,6 @@ export function startMockUpstream(options: MockUpstreamOptions = {}): MockUpstre
   const rateLimitWaiters: Array<{ count: number; resolve: (at: number) => void }> = [];
   const met = Promise.withResolvers<void>();
 
-  /** Wait for company, so concurrency is proven by meeting rather than by luck. */
   async function rendezvous(): Promise<void> {
     if (options.rendezvous === undefined) return;
     if (inFlight >= options.rendezvous) met.resolve();
@@ -110,7 +99,7 @@ export function startMockUpstream(options: MockUpstreamOptions = {}): MockUpstre
         }
 
         await rendezvous();
-        // Hold the connection briefly so genuine concurrency is observable.
+
         await Bun.sleep(15);
 
         return new Response(JSON.stringify({ ok: true, seq: served }), {

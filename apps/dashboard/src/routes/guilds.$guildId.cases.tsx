@@ -13,19 +13,9 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import { type ReactElement, useRef } from 'react';
 import { searchCases } from '../server/modules.ts';
 
-/**
- * Case browsing (PLAN.md §12, Gate 1).
- *
- * Every filter lives in the URL, not in component state: §9 requires that a
- * filtered view be shareable, and a moderator pasting "every ban I issued last
- * week in this server" into a staff channel is the whole point. The schema is
- * the API's own (`caseQuerySchema` in core), so the URL cannot ask for something
- * the query cannot answer.
- */
 export const Route = createFileRoute('/guilds/$guildId/cases')({
   validateSearch: zodValidator(caseQuerySchema),
-  // Only the search params are loader inputs; without this the loader would not
-  // re-run when a filter changes and the table would silently show stale rows.
+
   loaderDeps: ({ search }) => search,
   loader: ({ params, deps }) => searchCases({ data: { guildId: params.guildId, ...deps } }),
   component: CaseBrowser,
@@ -35,13 +25,10 @@ export const Route = createFileRoute('/guilds/$guildId/cases')({
 const features = tableFeatures({});
 const column = createColumnHelper<typeof features, CaseRecord>();
 
-/** A UTC timestamp, rendered the same way for every viewer — moderation logs are compared across timezones. */
 function formatInstant(iso: string): string {
   return iso.replace('T', ' ').slice(0, 16);
 }
 
-// `column.columns` rather than a bare array: it preserves each column's own
-// value type instead of widening them all to `unknown`.
 const columns = column.columns([
   column.accessor('caseNumber', { id: 'caseNumber', header: '#', cell: (c) => `#${c.getValue()}` }),
   column.accessor('type', { id: 'type', header: 'Action' }),
@@ -64,8 +51,7 @@ const columns = column.columns([
   column.display({
     id: 'state',
     header: 'State',
-    // Three states an admin needs to tell apart at a glance: a dry run never
-    // happened, a reverted action no longer applies, a temp action still will.
+
     cell: ({ row }) => {
       if (row.original.dryRun) return 'dry run';
       if (row.original.revertedAt) return `reverted ${formatInstant(row.original.revertedAt)}`;
@@ -93,26 +79,16 @@ function CaseBrowser(): ReactElement {
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 12,
-    // The server has no scroll element to measure. Without a starting rect the
-    // first paint would be an empty table that fills in only after hydration.
+
     initialRect: { width: 0, height: 640 },
   });
 
-  /**
-   * Every control writes to the URL; the loader is what re-queries.
-   *
-   * The patch is typed against the schema's *input*, so clearing a control to
-   * `undefined` is expressible — the schema then supplies the default on the
-   * next parse, rather than the page having to know what the default is.
-   */
   function setFilters(patch: Partial<CaseQueryInput>): void {
     void navigate({
       search: (prev) => ({
         ...prev,
         ...patch,
-        // Any filter change invalidates the current offset — page 4 of the old
-        // result set is not page 4 of the new one, and landing on an empty page
-        // reads as "no cases match" when the truth is "not on this page".
+
         page: patch.page ?? 1,
       }),
       replace: true,
@@ -201,16 +177,10 @@ function CaseBrowser(): ReactElement {
             {table.getHeaderGroups().map((group) => (
               <tr key={group.id}>
                 {group.headers.map((header) => (
-                  // Column widths are driven by `data-column` in the stylesheet:
-                  // the rows are absolutely positioned for virtualisation, so
-                  // the browser's own table layout cannot size them.
                   <th
                     key={header.id}
                     scope="col"
                     data-column={header.id}
-                    // `aria-sort` belongs on the column header itself, not on
-                    // the button inside it — a screen reader announces the
-                    // column's sort state, not the control's.
                     aria-sort={ariaSort(header.id, search)}
                   >
                     <SortableHeader
@@ -260,8 +230,6 @@ function CaseBrowser(): ReactElement {
           </p>
         ) : null}
 
-        {/* A page past the end is not "nothing matched", and saying so would
-            send an admin hunting for a filter bug that does not exist. */}
         {result.total > 0 && result.cases.length === 0 ? (
           <p className="status">
             Page {result.page} is past the end of {result.total} matching{' '}
@@ -303,7 +271,6 @@ function CaseBrowser(): ReactElement {
   );
 }
 
-/** Only these columns are sortable — the rest have no index behind them (§6). */
 const SORTABLE: Record<string, 'createdAt' | 'caseNumber'> = {
   createdAt: 'createdAt',
   caseNumber: 'caseNumber',
@@ -311,8 +278,7 @@ const SORTABLE: Record<string, 'createdAt' | 'caseNumber'> = {
 
 function ariaSort(id: string, search: CaseQuery): 'ascending' | 'descending' | 'none' | undefined {
   const sortField = SORTABLE[id];
-  // Undefined, not 'none': 'none' claims the column is sortable and simply
-  // unsorted, which is a lie for a column that can never be sorted.
+
   if (!sortField) return undefined;
   if (search.sort !== sortField) return 'none';
   return search.direction === 'asc' ? 'ascending' : 'descending';
@@ -347,13 +313,6 @@ function SortableHeader({
   );
 }
 
-/**
- * A snowflake filter that only navigates once the field is left.
- *
- * `caseQuerySchema` refuses anything that is not a snowflake, so navigating on
- * every keystroke would put the route into its error state after the first
- * digit.
- */
 function IdFilter({
   label,
   value,
@@ -377,10 +336,6 @@ function IdFilter({
   );
 }
 
-/**
- * A URL is user input — someone edits one by hand, or an old link outlives a
- * schema change. Naming the offending filter beats a blank screen.
- */
 function SearchError({ error }: { error: Error }): ReactElement {
   return (
     <section className="panel">

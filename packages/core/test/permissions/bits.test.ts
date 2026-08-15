@@ -9,12 +9,6 @@ import {
   permissionNames,
 } from '../../src/permissions/bits.ts';
 
-/**
- * These pin the exact bit values PLAN.md §10 depends on, verified against
- * Discord's live permissions reference. They are here so that a
- * discord-api-types bump which moved or renamed a bit fails the build instead of
- * quietly changing who is allowed to do what.
- */
 describe('permission bit values', () => {
   test('the 2026 permission splits are where §10.3 says they are', () => {
     expect(Permissions.PinMessages).toBe(1n << 51n);
@@ -24,8 +18,6 @@ describe('permission bit values', () => {
   });
 
   test('BYPASS_SLOWMODE is 1<<52 — the bit §10.3 omits', () => {
-    // Enforced in the same 23 Feb 2026 wave as the other splits, but missing
-    // from the spec's list. See plan deviation D6.
     expect(Permissions.BypassSlowmode).toBe(1n << 52n);
   });
 
@@ -40,8 +32,6 @@ describe('permission bit values', () => {
   });
 
   test('PIN_MESSAGES is no longer implied by MANAGE_MESSAGES', () => {
-    // Pre-split, pinning came with MANAGE_MESSAGES. Code that still assumes that
-    // silently under-requests permissions and fails at runtime.
     const manageOnly = Permissions.ManageMessages;
 
     expect(has(manageOnly, Permissions.PinMessages)).toBe(false);
@@ -55,15 +45,6 @@ describe('permission bit values', () => {
     expect(combined).toBe(6755399441055744n);
   });
 
-  /**
-   * Why every value in this module is bigint.
-   *
-   * It is not about Number.MAX_SAFE_INTEGER — the full permission set happens to
-   * fit under it. The real hazard is that JavaScript's bitwise operators coerce
-   * their operands to 32-bit signed integers, so a shift count is taken mod 32
-   * and `1 << 52` silently becomes `1 << 20`. That is off by a factor of four
-   * billion and throws no error.
-   */
   test('Number bitwise operators cannot express these bits at all', () => {
     expect(1 << 52).toBe(1 << 20);
     expect(1 << 52).not.toBe(4503599627370496);

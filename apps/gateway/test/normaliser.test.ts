@@ -78,13 +78,6 @@ describe('normalise', () => {
     expect(normalise(unknown)).toBeNull();
   });
 
-  /**
-   * Types 2 and 3 are the two Proton dispatches on; everything else is still
-   * dropped. Asserted per type rather than as "not null", because routing a
-   * component press to `interaction.command` would send it to the command
-   * runtime, which would look up a command named after a `custom_id` and log
-   * "no module owns the command" forever.
-   */
   test('separates command interactions from component ones', () => {
     expect(normalise(dispatch('interactionCreatePing'))?.type).toBe('interaction.command');
     expect(normalise(dispatch('interactionCreateComponent'))?.type).toBe('interaction.component');
@@ -99,13 +92,6 @@ describe('normalise', () => {
     }
   });
 
-  /**
-   * A reaction dispatch carries no id of its own, so the key is built from who
-   * reacted with what, where. The emoji has to be in it: two different emoji on
-   * one message by one member are two distinct facts, and a key without it would
-   * silently treat the second as a redelivery of the first — which for a role
-   * menu means the second binding never applies.
-   */
   test('reaction ids distinguish emoji on the same message', () => {
     const first = dispatch('messageReactionAdd');
     const second = dispatch('messageReactionAdd');
@@ -120,11 +106,6 @@ describe('normalise', () => {
     );
   });
 
-  /**
-   * `channel_id: null` is the disconnect, and it must not collide with joining a
-   * channel — otherwise leaving voice would dedupe against the join and the
-   * session would never be closed or paid out.
-   */
   test('a voice join and a voice disconnect are different events', () => {
     const join = normalise(dispatch('voiceStateJoin'));
     const leave = normalise(dispatch('voiceStateLeave'));
@@ -134,12 +115,6 @@ describe('normalise', () => {
     expect(join?.id).not.toBe(leave?.id);
   });
 
-  /**
-   * GUILD_MEMBER_UPDATE fires for changes Proton does not model — avatar, banner,
-   * boost status. Keying on the resulting roles/nick/timeout means those collapse
-   * onto one id and dedupe, instead of rewriting an identical sticky-role snapshot
-   * on every avatar change in the guild.
-   */
   test('member updates key on the resulting state, not the dispatch', () => {
     const unchanged = dispatch('guildMemberUpdate');
     const sameAgain = dispatch('guildMemberUpdate');
@@ -161,11 +136,6 @@ describe('normalise', () => {
     expect(normalise(forward)?.id).toBe(normalise(reversed)?.id);
   });
 
-  /**
-   * The property the whole dedupe story rests on. Gateway RESUME redelivers the
-   * identical dispatch; if the normaliser minted a fresh id each time, the same
-   * Discord event would be handled twice and I4 would be unenforceable.
-   */
   describe('event ids are deterministic across redelivery', () => {
     test('the same interaction dispatch always yields the same id', () => {
       const first = normalise(dispatch('interactionCreatePing'));
@@ -176,7 +146,6 @@ describe('normalise', () => {
     });
 
     test('the id is stable even when the sequence number differs', () => {
-      // A RESUME can replay the same event under a different `s`.
       const replayed = dispatch('interactionCreatePing');
       replayed.s = 9999;
 
@@ -190,12 +159,6 @@ describe('normalise', () => {
       expect(normalise(dispatch('messageCreate'))?.id).not.toBe(normalise(other)?.id);
     });
 
-    /**
-     * An edit must not collide with the post it edits. They share a message id,
-     * so a key built from that alone would have the first edit dedupe against
-     * the original — and phishing would never inspect the edited content, which
-     * is the entire reason MESSAGE_UPDATE is watched.
-     */
     test('an edit does not dedupe against the message it edits', () => {
       const created = normalise(dispatch('messageCreate'));
       const updated = normalise(dispatch('messageUpdate'));
@@ -210,10 +173,6 @@ describe('normalise', () => {
       expect(normalise(dispatch('messageUpdate'))?.id).not.toBe(normalise(later)?.id);
     });
 
-    /**
-     * A RESUME can replay a bulk delete with `ids` in a different order. Keyed
-     * off the raw array that would read as a second, unrelated purge.
-     */
     test('a bulk delete id is independent of the order Discord listed the ids', () => {
       const shuffled = dispatch('messageDeleteBulk');
       shuffled.d.ids = [...(shuffled.d.ids as string[])].reverse();
@@ -221,11 +180,6 @@ describe('normalise', () => {
       expect(normalise(shuffled)?.id).toBe(normalise(dispatch('messageDeleteBulk'))?.id);
     });
 
-    /**
-     * Two purges in one channel that share their lowest id, highest id and count
-     * are still different purges. A `{first, last, count}` digest would collide
-     * them onto one event id and silently drop the second.
-     */
     test('two different purges with the same bounds and count get different ids', () => {
       const first = dispatch('messageDeleteBulk');
       first.d.ids = ['1400000000000000001', '1400000000000000002', '1400000000000000009'];
@@ -236,7 +190,6 @@ describe('normalise', () => {
       expect(normalise(first)?.id).not.toBe(normalise(second)?.id);
     });
 
-    /** 100 ids is Discord's limit; the key must not carry all of them verbatim. */
     test('the bulk delete id stays short regardless of how many messages went', () => {
       const raw = dispatch('messageDeleteBulk');
       raw.d.ids = Array.from({ length: 100 }, (_, i) =>
@@ -247,11 +200,6 @@ describe('normalise', () => {
     });
   });
 
-  /**
-   * The contract `packages/modules/registry` asserts every listener against.
-   * An arm added to the switch without a line in the constant makes the guard a
-   * lie, so it is checked here, at the source.
-   */
   describe('NORMALISED_EVENT_TYPES', () => {
     test('lists every type the switch can actually return', () => {
       const emitted = new Set(NORMALISED_EVENT_TYPES);
@@ -279,22 +227,6 @@ describe('normalise', () => {
       expect(seen.filter((type) => !emitted.has(type))).toEqual([]);
     });
 
-    /**
-     * The direction that actually caused the bug, and the one a subset check
-     * cannot catch.
-     *
-     * `packages/modules/registry` asserts that every listener names a type in
-     * this constant. That guard is only worth anything if the constant is true —
-     * delete the MESSAGE_UPDATE arm and the constant still lists
-     * `message.updated`, the registry guard still passes, and `logging` and
-     * `phishing` go back to receiving nothing forever with a green suite. Which
-     * is exactly what had already happened.
-     *
-     * So every entry is *produced*, not merely declared: a dispatch is built for
-     * each one and pushed through the real switch. The audit types come from one
-     * fixture with its `action_type` varied, since that is the only field that
-     * distinguishes them.
-     */
     test('every listed type is one some dispatch really produces', () => {
       const produced = new Set<string>();
 
@@ -316,9 +248,6 @@ describe('normalise', () => {
         if (type) produced.add(type);
       }
 
-      // Two dispatches have no fixture of their own — both are a couple of
-      // fields, and this check found `member.left` missing the first time it
-      // ran, which is the point of writing it.
       for (const raw of [
         { t: 'GUILD_DELETE', s: 1, op: 0, d: { id: '900000000000000001' } },
         {
@@ -332,7 +261,6 @@ describe('normalise', () => {
         if (type) produced.add(type);
       }
 
-      // Every audit action the map knows, driven through the real arm.
       for (const actionType of AUDIT_LOG_ACTIONS.keys()) {
         const raw = dispatch('auditLogChannelDelete');
         raw.d.action_type = actionType;
@@ -354,15 +282,6 @@ describe('audit log ingestion', () => {
     return event?.payload as AuditLogEventPayload;
   }
 
-  /**
-   * The one failure in the normaliser nothing downstream can detect. A wrong
-   * action_type number does not throw and does not log — the entry simply falls
-   * through to `default`, the breaker never fires, and the guild is nuked while
-   * every test still passes. So the numbers are pinned to the values published
-   * at docs.discord.com/developers/resources/audit-log rather than only to the
-   * `discord-api-types` enum they are read from, which would make this test
-   * agree with the source it is meant to check.
-   */
   test('action_type numbers match Discord published values', () => {
     expect([...AUDIT_LOG_ACTIONS.entries()].sort((a, b) => a[0] - b[0])).toEqual([
       [10, 'channel.created'],
@@ -406,12 +325,6 @@ describe('audit log ingestion', () => {
     },
   );
 
-  /**
-   * Discord ships around fifty action types and adds more without warning. An
-   * unmapped one — here MEMBER_ROLE_UPDATE (25) and WEBHOOK_CREATE (50), both
-   * real and both deliberately not consumed — must be as uneventful as any other
-   * dispatch we have no meaning for.
-   */
   test.each([25, 50, 60, 9999, -1])('ignores unmapped action_type %i', (actionType) => {
     const raw = dispatch('auditLogChannelDelete');
     raw.d.action_type = actionType;
@@ -422,7 +335,7 @@ describe('audit log ingestion', () => {
 
   test('ignores an entry with a missing or non-numeric action_type', () => {
     const missing = dispatch('auditLogChannelDelete');
-    // Discord omits the field entirely rather than sending null.
+
     delete missing.d.action_type;
     const wrongType = dispatch('auditLogChannelDelete');
     wrongType.d.action_type = '12';
@@ -431,14 +344,9 @@ describe('audit log ingestion', () => {
     expect(normalise(wrongType)).toBeNull();
   });
 
-  /**
-   * Discord omits `user_id` on entries with no human behind them. The event is
-   * still worth logging, so it is emitted with a null actor — anti-nuke skips
-   * what it cannot attribute rather than inventing an actor to blame.
-   */
   test('emits an entry with no user_id, with a null actor', () => {
     const raw = dispatch('auditLogChannelDelete');
-    // Discord omits the field entirely rather than sending null.
+
     delete raw.d.user_id;
 
     expect(auditPayload(normalise(raw)).actorId).toBeNull();
@@ -448,7 +356,7 @@ describe('audit log ingestion', () => {
     const noId = dispatch('auditLogChannelDelete');
     noId.d.id = 'not-a-snowflake';
     const noGuild = dispatch('auditLogChannelDelete');
-    // An entry with no guild_id has nothing for a guild-scoped consumer to act on.
+
     delete noGuild.d.guild_id;
 
     expect(normalise(noId)).toBeNull();
@@ -457,9 +365,9 @@ describe('audit log ingestion', () => {
 
   test('reason and target are null when Discord sends neither', () => {
     const raw = dispatch('auditLogChannelDelete');
-    // Both fields are optional on an audit entry.
+
     delete raw.d.reason;
-    // Both fields are optional on an audit entry.
+
     delete raw.d.target_id;
 
     const payload = auditPayload(normalise(raw));
@@ -468,12 +376,6 @@ describe('audit log ingestion', () => {
     expect(payload.targetId).toBeNull();
   });
 
-  /**
-   * `occurredAt` comes from the entry snowflake, not the clock. Audit-log
-   * delivery lags reality and arrives unordered (§15), so timing a burst by
-   * arrival would compress one that was actually spread out — and would differ
-   * between the first delivery and the RESUME replay of the same entry.
-   */
   test('occurredAt is the entry snowflake time, not the clock', () => {
     const event = normalise(dispatch('auditLogChannelDelete'), { now: () => 1 });
 
@@ -506,12 +408,6 @@ describe('audit log ingestion', () => {
     });
   });
 
-  /**
-   * PLAN.md §12's Gate 2 input, ingested. This proves only what the normaliser
-   * owes the breaker: twenty distinct, attributed, deterministically identified
-   * events whose own timestamps span under five seconds. Tripping on them is
-   * anti-nuke's job.
-   */
   describe('the Gate 2 burst', () => {
     const events = dispatchSequence('auditLogChannelDeleteBurst').map((raw) => normalise(raw));
 
@@ -559,11 +455,6 @@ describe('channel obfuscation', () => {
     expect(CHANNEL_OBFUSCATED).toBe(131072);
   });
 
-  /**
-   * A guild may legitimately name a real channel `___hidden___`. Detecting by
-   * string would then hide a channel the bot can actually see — and Discord's
-   * docs explicitly warn against inspecting the name.
-   */
   test('a real channel named ___hidden___ is NOT treated as obfuscated', () => {
     expect(isObfuscatedChannel({ flags: 0 })).toBe(false);
   });
@@ -573,8 +464,6 @@ describe('channel obfuscation', () => {
     const channels = raw.d.channels as Array<Record<string, unknown>>;
     const hidden = channels.find((c) => c.id === '500000000000000002');
 
-    // id, type, position and parent_id are never obfuscated — a backup module
-    // can still record that the channel exists and where it sits.
     expect(hidden?.id).toBe('500000000000000002');
     expect(hidden?.type).toBe(0);
     expect(hidden?.position).toBe(1);

@@ -8,27 +8,8 @@ import {
   renderCardSvg,
 } from '../src/index.ts';
 
-/**
- * Gate 3 criterion 6: "A rank card renders to a PNG in CI with no network
- * access."
- *
- * Nothing in this file injects an avatar fetcher, so the default
- * `nullAvatarFetcher` is in force and no socket is opened even if one were
- * reachable — the monogram path is what renders. That is the point: a test that
- * needed the Discord CDN would fail in CI for a reason that has nothing to do
- * with the renderer.
- */
-
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-/**
- * Read the width and height out of the IHDR chunk.
- *
- * Asserting the PNG's own header rather than a byte length, because a
- * non-empty buffer of the wrong dimensions is exactly the failure a card
- * regression produces — satori laying out at the wrong size still yields a
- * perfectly valid, perfectly wrong PNG.
- */
 function readPng(bytes: Uint8Array): {
   magic: number[];
   ihdr: string;
@@ -38,7 +19,7 @@ function readPng(bytes: Uint8Array): {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return {
     magic: [...bytes.slice(0, 8)],
-    // The first chunk after the 8-byte signature and the 4-byte length must be IHDR.
+
     ihdr: String.fromCharCode(...bytes.slice(12, 16)),
     width: view.getUint32(16),
     height: view.getUint32(20),
@@ -87,8 +68,6 @@ describe('renderCard', () => {
   });
 
   test('the same descriptor renders byte-identically twice', async () => {
-    // Determinism is the property CI leans on; anything time- or locale-dependent
-    // creeping into the layout breaks here first.
     const [a, b] = await Promise.all([renderCard(rank), renderCard(rank)]);
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
   });
@@ -118,7 +97,7 @@ describe('renderCard', () => {
       },
     );
     expect(readPng(png).magic).toEqual(PNG_MAGIC);
-    // `null` is the fetcher reporting its own reason, so the renderer adds none.
+
     expect(skipped).toEqual([]);
   });
 
@@ -152,8 +131,6 @@ describe('renderCard', () => {
   });
 
   test('a real PNG avatar is embedded', async () => {
-    // Rendered rather than hand-written, so the fixture cannot drift from what
-    // the renderer itself emits.
     const avatarPng = await renderCard({ ...rank, preset: 'aurora' });
     const svg = await renderCardSvg(
       { ...welcome, avatarUrl: 'https://cdn.discordapp.com/avatars/1/abc.png' },

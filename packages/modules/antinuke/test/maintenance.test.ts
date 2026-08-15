@@ -66,13 +66,11 @@ describe('what a window covers', () => {
 
   test('covers nothing outside it, at either end', () => {
     expect(isCoveredByMaintenance(window, NOW - 1)).toBe(false);
-    // Exclusive: an act at the expiry instant is after the window, not in it.
+
     expect(isCoveredByMaintenance(window, window.expiresAt)).toBe(false);
   });
 
   test('judges coverage by when the act happened, not by the clock', () => {
-    // The entry arrives ten minutes late, long after the window closed. It is
-    // still covered, because the admin was authorised when they did it.
     const late = NOW + 30_000;
     expect(isCoveredByMaintenance(window, late)).toBe(true);
     expect(hasLapsed(window, NOW + 10 * 60_000)).toBe(true);

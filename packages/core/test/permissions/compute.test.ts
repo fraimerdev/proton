@@ -16,8 +16,6 @@ const ROLE_A = '400000000000000001';
 const ROLE_B = '400000000000000002';
 
 function roles(...entries: Array<[string, bigint]>): Map<string, GuildRole> {
-  // Position is irrelevant to permission computation; hierarchy is tested
-  // separately in the precheck suite.
   return new Map(
     entries.map(([id, permissions], index) => [id, { id, permissions, position: index }]),
   );
@@ -101,11 +99,6 @@ describe('applyOverwrites', () => {
     expect(has(result, Permissions.ManageMessages)).toBe(true);
   });
 
-  /**
-   * The important ordering property: role denies are unioned and applied BEFORE
-   * role allows are unioned and applied. Applying each role in turn would let
-   * ROLE_B's allow reinstate what ROLE_A denied.
-   */
   test('unions role denies and allows, so an allow beats a deny across roles', () => {
     const overwrites: Overwrite[] = [
       { id: ROLE_A, type: 0, allow: 0n, deny: Permissions.SendMessages },

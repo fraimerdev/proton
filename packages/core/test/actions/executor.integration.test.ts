@@ -111,7 +111,7 @@ describe('DefaultActionExecutor', () => {
 
     expect(first.status).toBe('executed');
     expect(second.status).toBe('skipped_duplicate');
-    // I4 in one assertion: the redelivered event caused no second side effect.
+
     expect(rest.calls).toHaveLength(1);
     expect(recorder.recorded).toHaveLength(1);
   });
@@ -122,8 +122,7 @@ describe('DefaultActionExecutor', () => {
     const result = await executor.execute(request({ dryRun: true }));
 
     expect(result.status).toBe('dry_run');
-    // I12: in development a destructive action must be observable without
-    // actually happening, so the case exists but Discord was never touched.
+
     expect(rest.calls).toHaveLength(0);
     expect(recorder.recorded).toHaveLength(1);
     expect(recorder.recorded[0]?.dryRun).toBe(true);
@@ -141,11 +140,6 @@ describe('DefaultActionExecutor', () => {
     expect(recorder.recorded).toHaveLength(0);
   });
 
-  /**
-   * A precheck failure must not burn the idempotency key. If it did, fixing the
-   * permission and retrying the same logical action would be silently discarded
-   * as a duplicate and nothing would ever happen.
-   */
   test('a precheck failure leaves the idempotency key reusable', async () => {
     const failing = build({ botChannelPermissions: Permissions.ViewChannel });
     const req = request();
@@ -170,7 +164,6 @@ describe('DefaultActionExecutor', () => {
     expect(failed.failure?.humanReason).toContain('Missing Permissions');
     expect(recorder.recorded).toHaveLength(0);
 
-    // The same request can now be retried once the cause is fixed.
     rest.response = { status: 200, body: {} };
     expect((await executor.execute(req)).status).toBe('executed');
   });
@@ -195,11 +188,6 @@ describe('DefaultActionExecutor', () => {
     expect(result.failure?.code).toBe('unsupported_expiry');
   });
 
-  /**
-   * There is no unsend and no unkick. Refusing before the REST call is the only
-   * honest option: executing and then quietly scheduling nothing would leave the
-   * invoker believing the action was temporary.
-   */
   test('rejects an expiry on a kind that has no reversal, before calling Discord', async () => {
     const { executor, rest, recorder } = build({}, async () => {});
 
@@ -212,11 +200,6 @@ describe('DefaultActionExecutor', () => {
     expect(recorder.recorded).toHaveLength(0);
   });
 
-  /**
-   * The action already happened, so it cannot be un-executed and its idempotency
-   * key must not be freed — a retry would perform it twice. The only honest
-   * answer is to report success *and* the reversal that was not scheduled.
-   */
   test('reports a reversal it could not schedule instead of hiding it', async () => {
     const { executor, recorder } = build({}, async () => {
       throw new Error('database unavailable');

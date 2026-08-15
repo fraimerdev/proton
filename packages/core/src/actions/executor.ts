@@ -16,42 +16,17 @@ export interface ActionExecutorDeps {
   dedupe: DedupeStore;
   rest: RestProxyClient;
   recorder: CaseRecorder;
-  /**
-   * Fetch the guild/bot/channel state the prechecks need. Injected so the
-   * executor performs no lookups of its own and stays testable without Discord.
-   *
-   * May return `{ failure }` to mean "I could not establish whether this is
-   * safe". That is a precheck failure, not an error — the alternative is
-   * inventing permissive defaults, which is precisely how the Gate 0 stub
-   * disabled the owner and hierarchy checks.
-   */
+
   resolveContext(
     request: ActionRequest,
     hints?: unknown,
   ): Promise<PrecheckInput | { failure: ActionFailure }>;
-  /** How long an idempotency claim is held. Should exceed the retry window. */
+
   dedupeTtlMs?: number;
-  /**
-   * Schedule the reversal of a temporary action.
-   *
-   * Optional, and while it is absent a request carrying `expiresAt` is refused
-   * rather than executed — a temp ban that never lifts is worse than one that
-   * never happens.
-   */
+
   scheduleReversal?(request: ActionRequest, caseId: string): Promise<void>;
 }
 
-/**
- * PLAN.md P3. Every state-changing Discord operation goes through here (I1).
- *
- * Pipeline, in the order §4-P3 mandates:
- *   validate → precheck (I8) → dedupe (I4) → execute via REST proxy → record
- *   → schedule reversal if `expiresAt`
- *
- * Dedupe deliberately comes *after* prechecks: claiming the key first would mean
- * a request that failed its prechecks had already burned its idempotency key, so
- * the corrected retry would be discarded as a duplicate.
- */
 export class DefaultActionExecutor implements ActionExecutor {
   readonly #deps: ActionExecutorDeps;
   readonly #ttl: number;
@@ -63,13 +38,6 @@ export class DefaultActionExecutor implements ActionExecutor {
     this.#hints = hints;
   }
 
-  /**
-   * A view of this executor bound to per-invocation context — for an interaction,
-   * its `app_permissions`.
-   *
-   * Modules receive the scoped executor and never see `hints`, so a module author
-   * cannot forget to pass them and silently degrade the prechecks.
-   */
   scoped(hints: unknown): ActionExecutor {
     return new DefaultActionExecutor(this.#deps, hints);
   }
@@ -92,9 +60,6 @@ export class DefaultActionExecutor implements ActionExecutor {
       );
     }
 
-    // Refused *before* Discord is touched, not silently dropped afterwards.
-    // A "temporary kick" that quietly became permanent is the failure mode this
-    // whole subsystem exists to prevent.
     if (request.expiresAt && !reversalOf(request.kind)) {
       return this.#precheckFailure(
         'not_reversible',
@@ -121,21 +86,10 @@ export class DefaultActionExecutor implements ActionExecutor {
 
     try {
       if (request.dryRun) {
-        // I12: record what *would* have happened, issue no REST call at all.
         const { caseId } = await this.#record(request);
         return { caseId, status: 'dry_run' };
       }
 
-      /**
-       * A ledger-only kind is complete once it is recorded.
-       *
-       * It has already been through validation, the I8 prechecks and the I4
-       * dedupe claim — everything the executor exists to guarantee — and the
-       * only remaining step, the REST call, is one that does not exist for it.
-       * Reported as `executed` rather than a status of its own: from the
-       * caller's point of view the warn happened, and inventing a fifth status
-       * would make every existing `status === 'executed'` check subtly wrong.
-       */
       if ('ledgerOnly' in payload) {
         const { caseId } = await this.#record(request);
         return { caseId, status: 'executed' };
@@ -144,8 +98,6 @@ export class DefaultActionExecutor implements ActionExecutor {
       const response = await this.#deps.rest.request(payload.call);
 
       if (response.status >= 400) {
-        // Give the key back so a retry is possible — a transient 500 must not
-        // permanently poison this action.
         await this.#deps.dedupe.release(request.idempotencyKey);
         return {
           status: 'failed_api',
@@ -162,10 +114,6 @@ export class DefaultActionExecutor implements ActionExecutor {
         try {
           await this.#deps.scheduleReversal?.(request, caseId);
         } catch (error) {
-          // The action already happened, so neither throwing nor releasing the
-          // idempotency key is available: a retry would ban the member twice.
-          // Report success *and* the thing that did not happen, so a moderator
-          // knows this one needs lifting by hand.
           return {
             caseId,
             status: 'executed',
@@ -208,10 +156,7 @@ export class DefaultActionExecutor implements ActionExecutor {
       targetId: request.targetId,
       reason: request.reason,
       payload: request.payload,
-      // Recorded on the case itself, not only in `scheduled_actions`: the
-      // dashboard has to be able to say "temp ban, expires in 2h" from the
-      // ledger alone, and the partial index on (expires_at) where reverted_at is
-      // null is what makes "which temp actions are still live" cheap.
+
       expiresAt: request.expiresAt,
       dryRun: request.dryRun,
       idempotencyKey: request.idempotencyKey,

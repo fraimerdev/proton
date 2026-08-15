@@ -14,7 +14,6 @@ describe('sanitiseText', () => {
   });
 
   test('drops glyphs the embedded subset cannot draw', () => {
-    // Otherwise satori emits .notdef and the card shows blanks where the name is.
     expect(sanitiseText('ユーザー名')).toBe('Member');
     expect(sanitiseText('cool 🎉 name')).toBe('cool name');
   });
@@ -51,8 +50,7 @@ describe('presets', () => {
     for (const preset of CARD_PRESETS) {
       expect(PRESET_PALETTES[preset]).toBeDefined();
     }
-    // §13 ships three and rules out a custom editor; a fourth arriving silently
-    // is a product decision that should not slip in as a refactor.
+
     expect(CARD_PRESETS).toHaveLength(3);
   });
 });

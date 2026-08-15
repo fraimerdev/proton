@@ -11,9 +11,6 @@ import { casesModule } from '../src/index.ts';
 
 describe('warn escalation as preset rules', () => {
   test('every preset rule is a valid rule definition', () => {
-    // Presets and rules a guild admin builds are the same shape (§4-P2), so they
-    // are held to the same schema — a preset that only the module understands
-    // could never be inspected, diffed or overridden in the dashboard.
     for (const rule of casesPresetRules) {
       const result = ruleDefinitionSchema.safeParse(rule);
 
@@ -54,11 +51,6 @@ describe('warn escalation as preset rules', () => {
     expect(rule?.actions[0]).toMatchObject({ kind: 'timeout', duration: '1h' });
   });
 
-  /**
-   * `exactOptionalPropertyTypes` means an absent duration must be absent, not
-   * `undefined` — a `duration: undefined` key survives JSON.stringify as a
-   * missing key but reads as present to anything checking `'duration' in action`.
-   */
   test('a rung with no duration emits no duration key at all', () => {
     const [rule] = escalationRules({
       escalationWindow: '30d',
@@ -81,10 +73,6 @@ describe('warn escalation as preset rules', () => {
     expect(new Set(priorities).size).toBe(priorities.length);
   });
 
-  /**
-   * A second rate condition would share the first one's counter — the schema
-   * refuses it, and this asserts the compiler never produces one.
-   */
   test('each rule carries exactly one rate condition', () => {
     for (const rule of casesPresetRules) {
       expect(rule.conditions.filter((c) => c.kind === 'rate-over-window')).toHaveLength(1);
@@ -101,14 +89,6 @@ describe('warn escalation as preset rules', () => {
 });
 
 describe('cases manifest', () => {
-  /**
-   * The permission-failure path for this module is a *rung* the bot cannot
-   * perform, not the module itself. `requiredPermissions` is a hard gate — the
-   * registry disables a module outright when one is missing — so listing
-   * BanMembers there would take a guild's moderation history away because it
-   * never grants bans. Each rung's permission is checked by the executor's
-   * prechecks instead, which name what is missing and where (I8).
-   */
   test('a ladder action’s permission is not a module-wide requirement', () => {
     const rungPermissions = escalationRules({
       escalationWindow: '30d',
@@ -126,13 +106,6 @@ describe('cases manifest', () => {
     expect(casesModule.requiredIntents.length).toBeGreaterThan(0);
   });
 
-  /**
-   * Registration is what proves the §9 boundary is survivable: the ladder stays
-   * in config, the generator still refuses it, and the module ships anyway
-   * because the manifest names the narrower schema its form comes from. If
-   * `formSchema` were dropped, this throws rather than silently rendering the
-   * ladder as something it is not.
-   */
   test('registers cleanly, and its generated form omits the ladder', () => {
     const registry = new ModuleRegistry();
     registry.register(casesModule as ModuleManifest);

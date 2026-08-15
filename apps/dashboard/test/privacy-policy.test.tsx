@@ -3,12 +3,6 @@ import { MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PrivacyPolicy } from '../src/components/legal/privacy-policy.tsx';
 
-/**
- * PLAN.md §6 calls stored message content a legal surface and names Proton a
- * data controller. That makes the disclosures below product requirements rather
- * than copy: a refactor that quietly drops the retention statement leaves the
- * operator non-compliant and nothing else would notice.
- */
 const html = renderToStaticMarkup(<PrivacyPolicy />);
 
 describe('the privacy policy says what the code does', () => {
@@ -26,8 +20,7 @@ describe('the privacy policy says what the code does', () => {
   test('describes what message logging stores, including the content itself', () => {
     expect(html).toContain('message, channel and server ids');
     expect(html).toContain('author');
-    // The one disclosure a reader most needs: message text is kept, not just
-    // metadata about it.
+
     expect(html).toMatch(/message <strong>text<\/strong>/);
   });
 

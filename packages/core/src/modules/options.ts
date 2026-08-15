@@ -1,13 +1,3 @@
-/**
- * Typed access to slash-command options.
- *
- * Discord delivers options as a flat-ish array of `{ name, type, value }`, with
- * subcommands nesting their own options one or two levels down. Handing that raw
- * shape to every module would mean each one re-implementing the same lookup and
- * type narrowing — and getting the subcommand nesting subtly wrong.
- */
-
-/** Discord's ApplicationCommandOptionType. */
 export const OptionType = {
   Subcommand: 1,
   SubcommandGroup: 2,
@@ -29,15 +19,6 @@ export interface RawOption {
   options?: RawOption[];
 }
 
-/**
- * Thrown when a handler asks for an option as the wrong type.
- *
- * This can only happen if a command's registered schema and its handler
- * disagree, which is a programming error. It throws rather than returning null
- * because a silent null becomes "the bot did nothing" — the failure mode
- * PLAN.md §1 and §7 exist to eliminate. Throwing leaves the event unacked, so it
- * surfaces in the DLQ with the payload attached instead of vanishing.
- */
 export class CommandOptionTypeError extends Error {
   constructor(name: string, expected: string, actualType: number) {
     super(
@@ -53,11 +34,11 @@ export interface CommandOptions {
   getInteger(name: string): number | null;
   getNumber(name: string): number | null;
   getBoolean(name: string): boolean | null;
-  /** USER options carry the user's snowflake — what ActionRequest.targetId wants. */
+
   getUserId(name: string): string | null;
   getChannelId(name: string): string | null;
   getRoleId(name: string): string | null;
-  /** The invoked subcommand, if the command declares any. */
+
   getSubcommand(): string | null;
   getSubcommandGroup(): string | null;
   has(name: string): boolean;
@@ -69,10 +50,6 @@ interface Resolved {
   group: string | null;
 }
 
-/**
- * Flatten Discord's nesting so handlers address options by name regardless of
- * whether the command uses subcommands.
- */
 function resolve(raw: readonly RawOption[]): Resolved {
   let subcommand: string | null = null;
   let group: string | null = null;
@@ -127,8 +104,6 @@ export function createCommandOptions(raw: readonly RawOption[] = []): CommandOpt
       return option ? Boolean(option.value) : null;
     },
 
-    // Snowflakes arrive as strings; Mentionable is accepted for user options
-    // because Discord uses it when a command allows either a user or a role.
     getUserId(name) {
       const option = read(name, [OptionType.User, OptionType.Mentionable], 'a user');
       return option ? String(option.value) : null;

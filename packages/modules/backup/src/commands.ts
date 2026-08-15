@@ -15,7 +15,6 @@ import type { BackupRecord } from './store.ts';
 
 export const MODULE_ID = 'backup';
 
-/** Discord rejects a message body over 2000 characters outright. */
 const CONTENT_MAX = 2000;
 
 const DISABLED =
@@ -27,29 +26,12 @@ const NO_LAYOUT =
   'That list arrives when the gateway connects to the server — try again in a moment. Nothing ' +
   'has been saved.';
 
-/**
- * The honest answer to "why did nothing happen".
- *
- * Every step of the restore is worked out and shown; what is missing is the last
- * one. Creating a channel or a role is not among the actions the ActionExecutor
- * can perform, and I1/I2 forbid a module from reaching Discord around it, so
- * this command is a preview until core grows those kinds. Saying so beats a
- * command that appears to restore and does not.
- */
 const CANNOT_APPLY =
   'Proton cannot carry this plan out yet: creating a channel or a role is not something its ' +
   'action layer can do, and a module is never allowed to call Discord directly around it. So ' +
   '`/backup restore` shows you exactly what a restore would do and changes nothing. When it can ' +
   'act, it will need the Manage Channels and Manage Roles permissions in this server.';
 
-/**
- * `/backup` — snapshot the server's structure, and preview putting it back.
- *
- * Gated on Manage Server rather than Administrator. Everything the command can
- * do — read the channel list, recreate channels and roles — is already available
- * to a Manage Server holder in Discord's own UI, and requiring Administrator
- * would push servers into handing Administrator to whoever runs backups.
- */
 export function createBackupCommands(deps: BackupDeps): CommandDefinition<BackupConfig>[] {
   return [
     {
@@ -97,7 +79,6 @@ export function createBackupCommands(deps: BackupDeps): CommandDefinition<Backup
   ];
 }
 
-/** Resolve the ports, telling the admin precisely what is missing if any are. */
 async function bound(
   ctx: CommandContext<BackupConfig>,
   deps: BackupDeps,
@@ -125,8 +106,6 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
   const layout = await ports.readLayout(ctx.guildId);
   if (!layout) return reply(ctx, [NO_LAYOUT]);
 
-  // A wiring bug that handed us another server's layout would otherwise be
-  // written into this server's row and restored into it later.
   if (layout.guildId !== ctx.guildId) {
     const message =
       `Proton read the structure of server ${layout.guildId} while backing up ${ctx.guildId}, ` +
@@ -163,9 +142,6 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
   const lines = [`Backup \`${backupId}\` saved.`, ...describeCapture(report)];
 
   if (report.obfuscatedChannelIds.length > 0) {
-    // Also to the log, not only to the ephemeral reply. The reply is seen once
-    // by one person; whoever reads the logs a month later needs to know this
-    // server's backups have holes in them.
     ctx.logger.warn(
       `backup ${backupId} could not capture ${report.obfuscatedChannelIds.length} channel(s) ` +
         `in guild ${ctx.guildId} — no VIEW_CHANNEL: ${report.obfuscatedChannelIds.join(', ')}`,
@@ -228,8 +204,6 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
   try {
     record = await ports.store.get(ctx.guildId, backupId);
   } catch (error) {
-    // `CorruptSnapshotError`'s message already names the backup and says what is
-    // wrong with it, and is written for an admin to read.
     const detail = error instanceof Error ? error.message : String(error);
     ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
     return reply(ctx, [detail]);
@@ -264,14 +238,6 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
   await reply(ctx, [...describeRestore(planned), CANNOT_APPLY]);
 }
 
-/**
- * Acknowledge the interaction.
- *
- * Ephemeral always: the reply lists the server's channel structure, including
- * the ids of channels the invoker may not be able to see, and a public post of
- * that in whatever channel the command was run in is an information leak nobody
- * asked for.
- */
 async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]): Promise<void> {
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
@@ -279,8 +245,7 @@ async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]
     kind: 'interaction_reply',
     actorId: ctx.userId,
     idempotencyKey: `${ctx.idempotencyKey}:reply`,
-    // Never dry-run: I12 withholds the destructive effect, not the explanation
-    // of why it was withheld.
+
     dryRun: false,
     payload: {
       interactionId: ctx.interaction.id,
@@ -291,7 +256,6 @@ async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]
   });
 
   if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    // Nothing left to reply *with* — the log is the only channel remaining.
     ctx.logger.warn(
       `backup could not answer the invoker: ${result.failure?.humanReason ?? 'unknown reason'}`,
       { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
@@ -299,13 +263,6 @@ async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]
   }
 }
 
-/**
- * Cut to Discord's limit, and say that it was cut.
- *
- * A silent slice would drop the tail of a skip list — the part that says which
- * channels are not coming back — and leave the reader believing they had read
- * the whole report.
- */
 function clamp(content: string): string {
   if (content.length <= CONTENT_MAX) return content;
 

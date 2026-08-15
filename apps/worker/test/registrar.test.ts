@@ -42,9 +42,6 @@ describe('registerCommands', () => {
     expect(result.count).toBeGreaterThan(0);
   });
 
-  /**
-   * The safety rail from CLAUDE.md: never publish to every guild by accident.
-   */
   test('refuses guild scope with no test guild rather than falling back to global', async () => {
     await expect(
       registerCommands(new FakeRest(), registry(), {
@@ -54,17 +51,6 @@ describe('registerCommands', () => {
     ).rejects.toThrow('DISCORD_TEST_GUILD_ID');
   });
 
-  /**
-   * `RestProxyClient.request` returns a status and does not throw on a non-2xx,
-   * so discarding the result meant the worker logged "registered N command(s)"
-   * whatever came back.
-   *
-   * Discord rejects the *entire* bulk PUT with a 400 when one command in the set
-   * is malformed, leaving the previous set in place. The pairing that produces —
-   * commands silently unchanged, log line claiming they changed — is at its worst
-   * right after a command has been renamed, which is exactly when someone is
-   * looking for it in Discord and not finding it.
-   */
   test('a non-2xx is a failure, not a success with a cheerful log line', async () => {
     const rest = new FakeRest();
     rest.response = { status: 400, body: { message: 'Invalid Form Body' } };

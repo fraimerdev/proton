@@ -1,13 +1,6 @@
 import { z } from 'zod';
 import { parseDuration } from './duration.ts';
 
-/**
- * The v1 form-generator vocabulary, verbatim from PLAN.md §9.
- *
- * Deliberately closed: discriminated unions and recursive schemas stay out, so
- * the rule builder stays a bespoke UI rather than something this generator has
- * to half-render.
- */
 export type FieldKind =
   | 'boolean'
   | 'string'
@@ -21,39 +14,21 @@ export interface FieldMetadata {
   field?: FieldKind;
   label?: string;
   description?: string;
-  /** Discord channel type numbers to offer, for `channel-id` fields. */
+
   channelTypes?: number[];
 }
 
-/**
- * Typed metadata registry (Zod 4).
- *
- * Preferred over `.meta()` on `z.globalRegistry`, whose `GlobalMeta` is
- * `[k: string]: unknown` — this one is strongly typed, so a typo in a field kind
- * is a compile error rather than a form that silently renders as a text box.
- */
 export const protonFields = z.registry<FieldMetadata>();
 
 interface FieldBase {
-  /** Dot path into the config object. */
   path: string;
   label: string;
   description?: string;
   optional: boolean;
   defaultValue?: unknown;
-  /**
-   * Set when the config value is a flat array of this kind. The kind still
-   * describes the *element*, so a renderer picks one control per kind and
-   * repeats it, rather than needing a second control per array-of-X.
-   */
+
   array?: boolean;
-  /**
-   * The array's own `.max(n)`, when it declares one.
-   *
-   * Carried so a list control can stop offering "add" at the limit rather than
-   * letting an admin build a 60-entry list that the schema rejects on save — the
-   * limit has to be visible where it applies, not only in the rejection.
-   */
+
   maxItems?: number;
 }
 
@@ -113,13 +88,6 @@ interface Unwrapped {
   metadata: FieldMetadata;
 }
 
-/**
- * Strip Optional/Nullable/Default wrappers to reach the base type.
- *
- * Metadata is collected at every level, outermost first, because
- * `.register()` may be called before or after those wrappers and both
- * orderings read naturally at the call site.
- */
 function unwrap(schema: z.ZodType): Unwrapped {
   let current: z.ZodType = schema;
   let optional = false;
@@ -146,7 +114,6 @@ function unwrap(schema: z.ZodType): Unwrapped {
   return { inner: current, optional, defaultValue, metadata };
 }
 
-/** Leaf constraints via Zod's own JSON Schema export rather than internals. */
 function jsonSchemaOf(schema: z.ZodType): Record<string, unknown> {
   try {
     return z.toJSONSchema(schema, { io: 'input' }) as Record<string, unknown>;
@@ -165,9 +132,7 @@ function stringConstraints(schema: z.ZodType): { minLength?: number; maxLength?:
 
 function numberConstraints(schema: z.ZodType): { min?: number; max?: number } {
   const json = jsonSchemaOf(schema) as { minimum?: number; maximum?: number };
-  // Zod encodes `.int()` as the ±MAX_SAFE_INTEGER range. That is a JavaScript
-  // representability limit, not a rule the guild admin set, so it must not
-  // surface as a form bound — a spinner capped at 9007199254740991 reads as a bug.
+
   const { minimum, maximum } = json;
   return {
     ...(minimum !== undefined && minimum !== -Number.MAX_SAFE_INTEGER ? { min: minimum } : {}),
@@ -175,7 +140,6 @@ function numberConstraints(schema: z.ZodType): { min?: number; max?: number } {
   };
 }
 
-/** `welcomeMessage` → `Welcome message`. Sentence case, as UI labels want. */
 function humanise(key: string): string {
   const spaced = key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -184,7 +148,6 @@ function humanise(key: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/** A registered kind must match the Zod type it sits on, or the form lies about the data. */
 function assertHint(
   path: string,
   metadata: FieldMetadata,
@@ -199,11 +162,6 @@ function assertHint(
   }
 }
 
-/**
- * A default that the runtime parser rejects would reach a guild admin as a form
- * pre-filled with a value their own module refuses to save. `parseDuration` is
- * the parser the runtime uses, so the two cannot drift.
- */
 function assertDurationDefault(path: string, defaultValue: unknown): void {
   if (defaultValue === undefined || defaultValue === null) return;
 
@@ -221,7 +179,6 @@ function assertDurationDefault(path: string, defaultValue: unknown): void {
   }
 }
 
-/** Build the descriptor for a single leaf type — the same code path elements of an array take. */
 function leafField(
   path: string,
   base: FieldBase,
@@ -241,9 +198,7 @@ function leafField(
   if (inner instanceof z.ZodEnum) {
     assertHint(path, metadata, inner, ['enum']);
     const options: unknown[] = [...inner.options];
-    // Numeric enums round-trip through JSONB as bare numbers, so a stored config
-    // would not say what it means and reordering the TS enum would silently
-    // change every guild's setting.
+
     if (!options.every((option): option is string => typeof option === 'string')) {
       throw new UnsupportedSchemaError(path, 'enums must have string values, not numeric ones');
     }
@@ -302,8 +257,6 @@ function describeField(key: string, schema: z.ZodType, prefix: string): FieldDes
       );
     }
 
-    // The kind hint reads naturally on either the array or its element, so both
-    // are honoured; the outer registration wins, matching `unwrap`'s ordering.
     const merged = { ...element.metadata, ...metadata };
     const { maxItems } = jsonSchemaOf(inner) as { maxItems?: number };
 
@@ -323,8 +276,6 @@ function describeField(key: string, schema: z.ZodType, prefix: string): FieldDes
 function walk(schema: z.ZodObject<z.ZodRawShape>, prefix: string): FieldDescriptor[] {
   const descriptors: FieldDescriptor[] = [];
 
-  // Object key order is declaration order, so the rendered form matches the
-  // schema without anyone maintaining a separate ordering list.
   for (const [key, field] of Object.entries(schema.shape)) {
     descriptors.push(...describeField(key, field as z.ZodType, prefix));
   }
@@ -332,15 +283,6 @@ function walk(schema: z.ZodObject<z.ZodRawShape>, prefix: string): FieldDescript
   return descriptors;
 }
 
-/**
- * Walk a module's config schema and emit the descriptors the dashboard renders
- * (PLAN.md P4/§9).
- *
- * Throws on anything outside the v1 scope. Failing here — at registry build time,
- * when a module is loaded — rather than at render time means an unsupported
- * schema is caught by the module's own tests instead of producing a blank field
- * in a guild admin's browser.
- */
 export function zodToDescriptors(schema: z.ZodObject<z.ZodRawShape>): FieldDescriptor[] {
   return walk(schema, '');
 }

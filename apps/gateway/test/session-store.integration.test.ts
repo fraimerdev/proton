@@ -49,11 +49,6 @@ describe('RedisSessionStore', () => {
     expect((await store.retrieveSessionInfo(1))?.sessionId).toBe('other');
   });
 
-  /**
-   * The point of I13. A fresh process must be able to recover the session and
-   * RESUME rather than IDENTIFY — session starts are capped at 1000/day and a
-   * crash loop that identifies each time would exhaust that budget.
-   */
   test('session info survives a new store instance against the same Redis', async () => {
     await store.updateSessionInfo(0, info);
 
@@ -69,10 +64,6 @@ describe('RedisSessionStore', () => {
     expect(await store.retrieveSessionInfo(0)).toBeNull();
   });
 
-  /**
-   * Corrupt state must not produce a RESUME attempt Discord will reject —
-   * returning null forces a clean IDENTIFY instead.
-   */
   test('corrupt stored state degrades to null rather than throwing', async () => {
     await redis.set('proton:gateway:session:0', 'not json at all');
 

@@ -12,18 +12,6 @@ export interface EscalationLadderEditorProps {
   onChange: (rungs: EscalationRung[]) => void;
 }
 
-/**
- * Bespoke editor for the warn-escalation ladder.
- *
- * PLAN.md §9 caps the form generator at scalars, one level of nesting and flat
- * arrays, and rules out widening it until it half-renders a rule builder. The
- * ladder is an array of objects, so it sits outside that vocabulary by design —
- * `zodToDescriptors(casesConfigSchema)` still throws, and the cases module's
- * `formSchema` omits this field precisely so a hand-written editor can own it.
- *
- * Validation is the module's own `escalationLadderSchema`, not a re-statement of
- * it, so what this refuses and what a save refuses cannot drift apart.
- */
 export function EscalationLadderEditor({
   rungs,
   onChange,
@@ -36,9 +24,7 @@ export function EscalationLadderEditor({
         if (i !== index) return rung;
 
         const next = { ...rung, ...patch };
-        // A kick cannot expire — there is no reversal for it (`REVERSAL_OF`), so
-        // a duration left behind from a previous choice would be config that
-        // reads as a temp-kick and silently does nothing.
+
         if (next.action === 'kick') delete next.duration;
         return next;
       }),
@@ -47,8 +33,7 @@ export function EscalationLadderEditor({
 
   function add(): void {
     const highest = rungs.reduce((max, rung) => Math.max(max, rung.atWarnings), 1);
-    // Defaults to the mildest rung: anything irreversible has to be chosen
-    // deliberately (PLAN.md §15 — Proton is itself an attack vector).
+
     onChange([...rungs, { atWarnings: highest + 1, action: 'timeout', duration: '1h' }]);
   }
 
@@ -62,8 +47,6 @@ export function EscalationLadderEditor({
       {rungs.map((rung, index) => (
         <div
           className="ladder-rung"
-          // Index keys: `atWarnings` is the natural id but it is the value being
-          // edited, so keying on it would remount the input mid-keystroke.
           // biome-ignore lint/suspicious/noArrayIndexKey: the edited value cannot key its own row
           key={`rung-${index}`}
         >
@@ -143,8 +126,6 @@ export function EscalationLadderEditor({
         {rungs.length >= 20 ? 'Limit of 20 rungs reached' : 'Add rung'}
       </button>
 
-      {/* The module's own message, verbatim — the admin reads here exactly what
-          the save would have told them. */}
       {parsed.success ? null : (
         <ul className="ladder-errors" role="alert">
           {parsed.error.issues.map((issue) => (

@@ -74,13 +74,6 @@ export function StringFieldInput({ descriptor, value, onChange }: FieldProps): R
   );
 }
 
-/**
- * A spinner carrying the schema's own bounds.
- *
- * An emptied box becomes `undefined` rather than `0`: zero is a legitimate value
- * for several config fields (`defaultBanDeleteDays`), so silently substituting it
- * for "I cleared this" would save a setting the admin never chose.
- */
 export function NumberFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
   const field = descriptor as NumberField;
   return (
@@ -107,8 +100,6 @@ export function EnumFieldInput({ descriptor, value, onChange }: FieldProps): Rea
         value={typeof value === 'string' ? value : ''}
         onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
       >
-        {/* Only offered when the schema allows absence — otherwise an admin
-            could clear a required choice and only find out on save. */}
         {field.optional ? <option value="">Not set</option> : null}
         {field.options.map((option) => (
           <option key={option} value={option}>
@@ -149,13 +140,6 @@ export function ChannelIdFieldInput({
   );
 }
 
-/**
- * Role picker.
- *
- * Roles arrive highest-first (see `fetchGuildRoles`) because that is the order
- * Discord shows them in and the order that matters for hierarchy — a staff role
- * is near the top, and an alphabetical list would bury it.
- */
 export function RoleIdFieldInput({
   descriptor,
   value,
@@ -180,14 +164,6 @@ export function RoleIdFieldInput({
   );
 }
 
-/**
- * Duration text box that validates as you type.
- *
- * `tryParseDuration` is the runtime's own parser, so the message here cannot
- * drift from what the module will actually accept on save. Showing it inline is
- * the difference between "1 hour" being rejected at the field and being rejected
- * by a save that looked like it worked.
- */
 export function DurationFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
   const field = descriptor as DurationField;
   const text = typeof value === 'string' ? value : '';
@@ -215,16 +191,6 @@ export function DurationFieldInput({ descriptor, value, onChange }: FieldProps):
   );
 }
 
-/**
- * A flat array of a scalar kind, rendered as one control per element.
- *
- * The element control is whatever the registry resolves for the kind, so an
- * array of channel ids gets channel pickers and an array of role ids gets role
- * pickers — adding an array-of-X costs nothing once X exists.
- *
- * `resolveElement` is injected rather than imported to keep this module free of
- * a cycle with the registry that lists it.
- */
 export function makeArrayFieldInput(
   resolveElement: (descriptor: FieldDescriptor) => ComponentType<FieldProps>,
 ) {
@@ -236,8 +202,7 @@ export function makeArrayFieldInput(
     roles,
   }: FieldProps): ReactElement {
     const items = Array.isArray(value) ? value : [];
-    // The element descriptor is the same kind without `array`, so the scalar
-    // control does not think it is rendering the whole list.
+
     const { array: _array, ...element } = descriptor;
     const Element = resolveElement(element as FieldDescriptor);
 
@@ -253,9 +218,6 @@ export function makeArrayFieldInput(
           {items.map((item, index) => (
             <div
               className="field-array-item"
-              // Index keys: the values are not unique (two empty rows are
-              // legitimate mid-edit) and the list is reordered only by the
-              // buttons below, which rebuild it wholesale.
               // biome-ignore lint/suspicious/noArrayIndexKey: values are not unique
               key={`${descriptor.path}-${index}`}
             >
@@ -293,13 +255,6 @@ export function makeArrayFieldInput(
   };
 }
 
-/**
- * Shown when a descriptor arrives with a kind this build cannot render.
- *
- * Visible and specific on purpose. A silent fallback — a blank div, or quietly
- * skipping the field — would let a guild admin save a config with a field they
- * never saw, which is worse than an obvious error.
- */
 export function UnsupportedFieldInput({ descriptor }: FieldProps): ReactElement {
   return (
     <div className="field field-unsupported" role="alert" data-path={descriptor.path}>

@@ -10,7 +10,7 @@ import type { GuildRule } from '../../src/rules/types.ts';
 let container: StartedRedisContainer;
 let redis: Redis;
 let rateWindow: RedisRateWindow;
-/** Separate sockets, so concurrent hits genuinely race rather than queueing. */
+
 let clients: Redis[] = [];
 let windows: RedisRateWindow[] = [];
 
@@ -64,24 +64,16 @@ describe('RedisRateWindow', () => {
     }
 
     expect(counts).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    // Exactly the fifth: a rule that stayed tripped would ban the same member
-    // once per message for the rest of the burst.
+
     expect(trips).toEqual([false, false, false, false, true, false, false, false]);
   });
 
-  /**
-   * The reason PLAN.md §4-P2 insists the counter is atomic. Read-then-increment
-   * from N workers consuming the same stream lets each of them observe a count
-   * below the limit, and the burst the condition exists to catch walks straight
-   * through.
-   */
   test('N concurrent hits count exactly N, and the threshold trips exactly once', async () => {
     const total = 40;
     const limit = 10;
 
     const results = await Promise.all(
       Array.from({ length: total }, (_, i) =>
-        // Round-robin across connections so the commands actually interleave.
         (windows[i % CONNECTIONS] as RedisRateWindow).hit({
           guildId: GUILD,
           ruleId: RULE,
@@ -94,7 +86,6 @@ describe('RedisRateWindow', () => {
       ),
     );
 
-    // Every hit saw a distinct count: nothing was lost and nothing double-counted.
     expect([...results.map((r) => r.count)].sort((a, b) => a - b)).toEqual(
       Array.from({ length: total }, (_, i) => i + 1),
     );
@@ -103,11 +94,6 @@ describe('RedisRateWindow', () => {
     expect(await redis.zcard(rateWindowKey(GUILD, RULE, MEMBER))).toBe(total);
   });
 
-  /**
-   * The bus is at-least-once and RESUME redelivers, so the same event arrives
-   * twice as a matter of course (I4). Counting it twice would let a quiet member
-   * trip an anti-spam window they never crossed.
-   */
   test('a redelivered occurrence is not counted twice', async () => {
     for (let i = 0; i < 4; i++) await hit({ member: `m${i}`, now: NOW + i });
     await hit({ member: 'm4', now: NOW + 4 });
@@ -115,24 +101,6 @@ describe('RedisRateWindow', () => {
     expect((await hit({ member: 'm4', now: NOW + 9 })).count).toBe(5);
   });
 
-  /**
-   * The redelivered *crossing* still reports the crossing.
-   *
-   * This assertion used to be `tripped: false`, on the reasoning that a second
-   * trip would act twice. It does not — every caller derives its executor
-   * idempotency key from the same event id, so the replayed action is discarded
-   * as a duplicate (I4). What the old behaviour actually did was lose the
-   * crossing altogether: `tripped` was an edge consumed by the first call, so if
-   * anything downstream of the hit threw — a REST failure part-way through a
-   * role strip, a blip reading guild state — the bus redelivered, the second
-   * call saw the member already in the set, and reported a plain count. And
-   * since `count == limit` holds only once per fill, nothing later in the same
-   * attack tripped either. One transient error permanently disarmed the
-   * anti-nuke breaker for that burst, in silence.
-   *
-   * So the crossing is answered idempotently instead: same occurrence, same
-   * verdict, every time it is replayed.
-   */
   test('replaying the occurrence that crossed reports the crossing again', async () => {
     for (let i = 0; i < 4; i++) await hit({ member: `m${i}`, now: NOW + i });
 
@@ -141,21 +109,18 @@ describe('RedisRateWindow', () => {
     expect(await hit({ member: 'm4', now: NOW + 20 })).toEqual({ count: 5, tripped: true });
   });
 
-  /** Only the occurrence that crossed replays as a crossing — not its neighbours. */
   test('a different occurrence in the same full window does not report a crossing', async () => {
     for (let i = 0; i < 4; i++) await hit({ member: `m${i}`, now: NOW + i });
     await hit({ member: 'm4', now: NOW + 4 });
 
-    // An earlier occurrence, redelivered after the window was already crossed.
     expect(await hit({ member: 'm2', now: NOW + 10 })).toEqual({ count: 5, tripped: false });
-    // And a genuinely new one, which takes the count past the limit.
+
     expect(await hit({ member: 'm5', now: NOW + 11 })).toEqual({ count: 6, tripped: false });
   });
 
   test('occurrences slide out of the window, and the window re-arms', async () => {
     for (let i = 0; i < 5; i++) await hit({ member: `m${i}`, now: NOW + i });
 
-    // 11s later the first five are outside a 10s window; only this one is left.
     const later = await hit({ member: 'later', now: NOW + 11_000 });
     expect(later).toEqual({ count: 1, tripped: false });
 
@@ -165,8 +130,7 @@ describe('RedisRateWindow', () => {
     }
 
     expect(refilled.map((r) => r.count)).toEqual([2, 3, 4, 5]);
-    // The window re-armed: a sustained flood keeps being caught rather than
-    // tripping once and being ignored for the rest of the raid.
+
     expect(refilled.map((r) => r.tripped)).toEqual([false, false, false, true]);
 
     expect(await hit({ member: 'after-5', now: NOW + 11_005 })).toEqual({

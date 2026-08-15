@@ -36,10 +36,6 @@ function message(overrides: Partial<SourceMessage> = {}): SourceMessage {
   } as SourceMessage;
 }
 
-/**
- * The loop guard first, because it is the only failure here that is unbounded.
- * A board that stars its own posts produces a post per post, forever.
- */
 describe('eligibility', () => {
   test('never stars a message already in the board channel', () => {
     const result = eligibility(message({ channelId: BOARD }), config(), BOARD);
@@ -76,7 +72,6 @@ describe('eligibility', () => {
   });
 
   test('the loop guard beats every other rule', () => {
-    // A bot posting in the board channel with bots allowed: still refused.
     const result = eligibility(
       message({ channelId: BOARD, authorBot: true }),
       config({ ignoreBots: false }),
@@ -135,12 +130,6 @@ describe('countStars', () => {
     expect(result.selfStarUnresolved).toBe(false);
   });
 
-  /**
-   * The guild barred self-stars but nobody fetched the reactor list, so the
-   * author's own star may be inflating the count. Flagged rather than silently
-   * tolerated — an off-by-one threshold nothing mentions is exactly the "the bot
-   * did nothing I asked" failure §1 exists to kill.
-   */
   test('an unresolved reactor list is reported, not hidden', () => {
     const result = countStars(
       message({ starredBy: null }),
@@ -162,11 +151,6 @@ describe('countStars', () => {
     expect(result.selfStarUnresolved).toBe(false);
   });
 
-  /**
-   * `starredBy` and `reactions[].count` are two reads of a live message and can
-   * disagree by one when a reaction lands between them. A negative star count
-   * would render as "-1 ⭐".
-   */
   test('the self-star subtraction never goes negative', () => {
     const racy = message({ reactions: [{ emoji: STAR, count: 0 }], starredBy: [AUTHOR] });
 
@@ -174,11 +158,6 @@ describe('countStars', () => {
   });
 });
 
-/**
- * All four transitions, plus the two no-ops. This is the whole state machine:
- * every reaction recomputes the count and re-enters here, so a wrong answer in
- * any cell is a board that drifts from reality and stays drifted.
- */
 describe('decide', () => {
   test('at the threshold with no post, creates', () => {
     expect(decide({ count: 3, threshold: 3, post: null })).toEqual({ action: 'create', count: 3 });
@@ -190,7 +169,6 @@ describe('decide', () => {
     ).toEqual({ action: 'edit', boardMessageId: 'm1', count: 5 });
   });
 
-  /** An unchanged count must cost no REST call, or every reaction re-edits. */
   test('an unchanged count does nothing', () => {
     expect(
       decide({ count: 4, threshold: 3, post: { boardMessageId: 'm1', starCount: 4 } }),
@@ -221,11 +199,6 @@ describe('decide', () => {
     ).toEqual({ action: 'edit', boardMessageId: 'm1', count: 3 });
   });
 
-  /**
-   * The decision is a pure function of the recomputed count, which is what makes
-   * a redelivered reaction harmless: the same message yields the same count
-   * yields the same decision.
-   */
   test('the same state always yields the same decision', () => {
     const state = { count: 5, threshold: 3, post: { boardMessageId: 'm1', starCount: 4 } };
 

@@ -15,7 +15,6 @@ import {
   SUPPORTED_FIELD_KINDS,
 } from '../src/components/form/registry.tsx';
 
-/** Server rendering keeps these tests DOM-free while still exercising the real components. */
 function render(node: Parameters<typeof renderToStaticMarkup>[0]): string {
   return renderToStaticMarkup(node);
 }
@@ -30,7 +29,6 @@ const ROLES = [
   { id: '600000000000000002', name: 'Member', position: 1 },
 ];
 
-/** Render one descriptor with the value it would hold, and hand back the markup. */
 function renderField(
   descriptors: readonly FieldDescriptor[],
   path: string,
@@ -69,10 +67,6 @@ describe('field registry', () => {
     }
   });
 
-  /**
-   * A blank or skipped field would let an admin save a config containing a field
-   * they never saw. An explicit error is the safer failure.
-   */
   test('an unknown kind renders a visible error, not nothing', () => {
     const rogue = {
       kind: 'colour',
@@ -91,10 +85,6 @@ describe('field registry', () => {
     expect(html).toContain('colour');
   });
 
-  /**
-   * An array of a kind this build cannot render must still fail loudly rather
-   * than falling back to a list of unsupported placeholders.
-   */
   test('an array of an unsupported kind is still refused', () => {
     const rogue = {
       kind: 'colour',
@@ -126,7 +116,6 @@ describe('rendering each supported field type', () => {
   test('string renders a text input carrying the schema’s bounds', () => {
     const html = renderField(ping, 'response', 'Pong!');
 
-    // The 1..200 bounds come from the Zod schema, not from hand-written markup.
     expect(html).toContain('minLength="1"');
     expect(html).toContain('maxLength="200"');
     expect(html).toContain('value="Pong!"');
@@ -135,10 +124,9 @@ describe('rendering each supported field type', () => {
   test('channel-id renders a picker filtered to the declared channel types', () => {
     const html = renderField(ping, 'restrictToChannel', null);
 
-    // channelTypes: [0] — text channels only, so the voice channel is excluded.
     expect(html).toContain('general');
     expect(html).not.toContain('voice');
-    // Nullable, so it offers an explicit empty choice.
+
     expect(html).toContain('No channel');
   });
 
@@ -146,18 +134,12 @@ describe('rendering each supported field type', () => {
     const html = renderField(moderation, 'defaultBanDeleteDays', 3);
 
     expect(html).toContain('type="number"');
-    // Discord caps ban message deletion at 7 days; the form says so because the
-    // schema does.
+
     expect(html).toContain('min="0"');
     expect(html).toContain('max="7"');
     expect(html).toContain('value="3"');
   });
 
-  /**
-   * `.int()` is encoded by Zod as the ±MAX_SAFE_INTEGER range. That is a
-   * JavaScript limit, not a rule an admin set, and a spinner capped at
-   * 9007199254740991 reads as a bug.
-   */
   test('number does not surface JavaScript’s integer range as a bound', () => {
     const [field] = zodToDescriptors(z.object({ count: z.number().int() }));
     const html = renderField([field as FieldDescriptor], 'count', 1);
@@ -174,7 +156,7 @@ describe('rendering each supported field type', () => {
     expect(html).toContain('>quiet<');
     expect(html).toContain('>normal<');
     expect(html).toContain('selected=""');
-    // Required, so no "not set" escape hatch that the schema would then reject.
+
     expect(html).not.toContain('Not set');
   });
 
@@ -199,11 +181,6 @@ describe('rendering each supported field type', () => {
     expect(html).not.toContain('is not a duration');
   });
 
-  /**
-   * The message names what a duration looks like. `tryParseDuration` is the
-   * runtime's own parser, so the field cannot accept something the module will
-   * then refuse on save.
-   */
   test('duration names the problem when the text is not one', () => {
     const html = renderField(moderation, 'defaultTimeoutDuration', '1 hour');
 
@@ -218,7 +195,6 @@ describe('rendering each supported field type', () => {
       '500000000000000002',
     ]);
 
-    // Two channel pickers, not one text box that could replace the whole list.
     expect(html.split('field-channel-id').length - 1).toBe(2);
     expect(html).toContain('Remove');
     expect(html).toContain('Add Ignored channels');
@@ -230,11 +206,6 @@ describe('rendering each supported field type', () => {
     expect(html).toContain('None yet.');
   });
 
-  /**
-   * The array's own `.max(50)` has to be visible where it applies. Letting an
-   * admin build a 51st entry that the schema then rejects on save is the
-   * "rejected for no visible reason" failure this exists to prevent.
-   */
   test('a full array stops offering to add and names the limit', () => {
     const full = Array.from({ length: 50 }, () => '500000000000000001');
     const html = renderField(logging, 'ignoredChannels', full);
@@ -270,11 +241,6 @@ describe('rendering each supported field type', () => {
   });
 });
 
-/**
- * The point of the generator: five shipped modules, no per-module form code.
- * If a module's schema grows a field the renderer cannot draw, this fails here
- * rather than in a guild admin's browser.
- */
 describe('every shipped module renders from its own schema', () => {
   const schemas = [
     ['ping', pingConfigSchema],

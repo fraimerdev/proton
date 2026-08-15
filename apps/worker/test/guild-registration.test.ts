@@ -49,13 +49,6 @@ function consumer(registrar: GuildRegistrar, store: GuildStateStore) {
   });
 }
 
-/**
- * The bug this guards against: the bot joined, cached guild state in Redis, and
- * the database never learned the guild existed. `guild_modules.guild_id` is a
- * foreign key to `guilds`, so no module could ever be enabled — every config
- * read fell through to defaults reporting `enabled: false`. The bot sat in the
- * server looking healthy and answering nothing.
- */
 describe('guild registration on GUILD_CREATE', () => {
   test('registers the guild in the database, not only the Redis cache', async () => {
     const { registrar, ensured } = recordingRegistrar();
@@ -68,7 +61,7 @@ describe('guild registration on GUILD_CREATE', () => {
     expect(ensured).toHaveLength(1);
     expect(ensured[0]?.guildId).toBe('900000000000000001');
     expect(ensured[0]?.name).toBe('Proton Test Guild');
-    // And the cache still gets populated — this replaced nothing.
+
     expect(states.has('900000000000000001')).toBe(true);
   });
 
@@ -83,10 +76,6 @@ describe('guild registration on GUILD_CREATE', () => {
     expect(ensured[0]?.locale).toBe('en-US');
   });
 
-  /**
-   * GUILD_CREATE arrives on every gateway connect and every RESUME, so this runs
-   * constantly for guilds already known. It must stay idempotent.
-   */
   test('re-registers without complaint on redelivery', async () => {
     const { registrar, ensured } = recordingRegistrar();
     const { store } = memoryStore();
@@ -100,11 +89,6 @@ describe('guild registration on GUILD_CREATE', () => {
     expect(ensured).toHaveLength(2);
   });
 
-  /**
-   * A registration failure must not be swallowed. If it were, the consumer would
-   * cache state for a guild the database does not know about — the exact broken
-   * state this fixes, but with the logs claiming success.
-   */
   test('a registration failure propagates so the event is retried', async () => {
     const failing: GuildRegistrar = {
       ensure: async () => {
@@ -117,7 +101,7 @@ describe('guild registration on GUILD_CREATE', () => {
     if (!event) throw new Error('fixture did not normalise');
 
     await expect(consumer(failing, store).handle(event)).rejects.toThrow('api down');
-    // State was not cached behind a guild that does not exist.
+
     expect(states.size).toBe(0);
   });
 });
@@ -140,8 +124,7 @@ describe('GUILD_DELETE means two different things', () => {
     await consumer(registrar, store).handle({
       type: 'guild.unavailable',
       guildId: '900000000000000001',
-      // Discord sets this when the guild is having an outage; the bot is still
-      // a member and it will come straight back.
+
       payload: { id: '900000000000000001', unavailable: true },
     });
 

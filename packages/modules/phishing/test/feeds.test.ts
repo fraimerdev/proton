@@ -71,10 +71,6 @@ describe('fetchBlocklist', () => {
     expect(result.succeeded[0]?.rejected).toBe(4);
   });
 
-  /**
-   * The isolation property. A module with several feeds that loses them all
-   * because one went down would be worse than a module with one feed.
-   */
   test('one feed failing leaves the others contributing, and says why in the log', async () => {
     const { logger, logs } = recordingLogger();
 
@@ -110,10 +106,6 @@ describe('fetchBlocklist', () => {
     expect(result.failed[0]?.reason).toContain('503');
   });
 
-  /**
-   * A 200 carrying no usable domain is the nastiest feed failure, because every
-   * naive client records it as a successful refresh of an empty list.
-   */
   test('treats a 200 with no usable domains as a failure, not as an empty list', async () => {
     const { logger } = recordingLogger();
 

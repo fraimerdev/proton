@@ -22,10 +22,6 @@ function request(overrides: Partial<ActionRequest> = {}): ActionRequest {
   };
 }
 
-/**
- * One valid payload per reversible kind. The drift guard below fails if a new
- * pairing is added to REVERSAL_OF without one, which is the point.
- */
 const SAMPLE_PAYLOADS: Partial<Record<ActionKind, unknown>> = {
   ban: { userId: USER, deleteMessageSeconds: 0 },
   timeout: { userId: USER, until: new Date('2026-08-14T13:00:00.000Z') },
@@ -55,11 +51,6 @@ describe('planReversal', () => {
     });
   });
 
-  /**
-   * R4: unlock restores exactly what lockdown recorded. If this ever became a
-   * guess — clearing the overwrite, say — every temp lockdown would silently
-   * rewrite the channel's real permissions when it lifted.
-   */
   test('unlock restores the overwrite bits lockdown recorded, not a default', () => {
     expect(plan('lockdown')).toEqual({
       kind: 'unlock',
@@ -72,11 +63,6 @@ describe('planReversal', () => {
     });
   });
 
-  /**
-   * Drift guard. REVERSAL_OF declares the pairings; this switch performs them.
-   * Adding a pairing without a payload translation would otherwise produce a
-   * temp action that schedules nothing and never lifts.
-   */
   test('every pairing in REVERSAL_OF has a working payload translation', () => {
     const pairings = Object.entries(REVERSAL_OF) as [ActionKind, ActionKind][];
     expect(pairings.length).toBeGreaterThan(0);
@@ -87,11 +73,6 @@ describe('planReversal', () => {
     }
   });
 
-  /**
-   * The plan is stored as JSONB and read back by another process, so a `Date`
-   * that survived the translation would come back as a string the payload schema
-   * then rejects — a temp timeout that could never be lifted.
-   */
   test('no plan carries a value that JSON cannot round-trip', () => {
     for (const original of Object.keys(REVERSAL_OF) as ActionKind[]) {
       const { payload } = plan(original);
@@ -120,8 +101,6 @@ describe('reversalIdempotencyKey', () => {
   });
 
   test('is distinct from the key it derives from', () => {
-    // Sharing the key would make the reversal look like a duplicate of the ban
-    // and it would be skipped — the ban would never lift.
     expect(reversalIdempotencyKey('01JABC')).not.toBe('01JABC');
   });
 });

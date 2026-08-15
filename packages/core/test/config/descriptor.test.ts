@@ -43,8 +43,6 @@ describe('zodToDescriptors', () => {
   });
 
   test('.int() does not leak the safe-integer range as a form bound', () => {
-    // Zod encodes `.int()` as ±MAX_SAFE_INTEGER; surfacing that as a spinner
-    // capped at 9007199254740991 would read as a bug to a guild admin.
     const [field] = zodToDescriptors(z.object({ strikes: z.number().int().min(1) }));
 
     expect(field as NumberField).toMatchObject({ kind: 'number', min: 1 });
@@ -93,8 +91,6 @@ describe('zodToDescriptors', () => {
   });
 
   test('reads metadata registered outside the wrappers too', () => {
-    // `.register()` reads naturally either before or after .nullable()/.default(),
-    // so both orderings must resolve to the same descriptor.
     const schema = z.object({
       channel: z.string().nullable().default(null).register(protonFields, { field: 'channel-id' }),
     });
@@ -202,11 +198,6 @@ describe('zodToDescriptors', () => {
     });
   });
 
-  /**
-   * These throw at registry build time — when a module is loaded and its own
-   * tests run — rather than at render time. The alternative is a blank or broken
-   * control appearing in a guild admin's browser with nothing in the logs.
-   */
   describe('rejects out-of-scope schemas loudly', () => {
     test('unions are refused', () => {
       const schema = z.object({ mode: z.union([z.string(), z.boolean()]) });
@@ -256,8 +247,6 @@ describe('zodToDescriptors', () => {
     });
 
     test('numeric enums are refused', () => {
-      // Stored as bare numbers in JSONB, a numeric enum makes every guild's
-      // config depend on the declaration order of a TypeScript enum.
       enum Level {
         Low = 1,
         High = 2,

@@ -34,7 +34,6 @@ describe('RedisDedupeStore', () => {
   });
 
   test('only one of many concurrent claimants wins', async () => {
-    // Two workers consuming the same redelivered event must not both act.
     const results = await Promise.all(
       Array.from({ length: 20 }, () => store.claim('contested', 60_000)),
     );
@@ -51,11 +50,6 @@ describe('RedisDedupeStore', () => {
     expect(await store.claim('short', 100)).toBe(true);
   });
 
-  /**
-   * Without release, a transient failure would burn the idempotency key and the
-   * retry would be silently swallowed as a duplicate — the operation would never
-   * happen and nothing would report it.
-   */
   test('release returns the key so failed work can be retried', async () => {
     expect(await store.claim('retryable', 60_000)).toBe(true);
     expect(await store.has('retryable')).toBe(true);

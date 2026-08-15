@@ -16,28 +16,14 @@ export const AUTHOR = '400000000000000001';
 export const BOT = '300000000000000001';
 export const MESSAGE = '600000000000000001';
 
-/** A domain the fixtures treat as genuinely listed. */
 export const BAD_DOMAIN = 'steamcommunity-gift.ru';
 
-/**
- * The legitimate site the bad one impersonates.
- *
- * The pair exists so every false-positive test is about a domain a real server
- * really does link, rather than an invented string that no matcher would confuse.
- */
 export const LOOKALIKE_DOMAIN = 'steamcommunity.com';
 
-/**
- * An in-memory blocklist with the same matching contract as the Redis one:
- * exact set membership over pre-computed candidates, no substring logic. A
- * memory store that matched more loosely would let a false-positive test pass
- * here and fail against Redis.
- */
 export class MemoryBlocklistStore implements BlocklistStore {
   #domains = new Set<string>();
   #stats: BlocklistStats = { size: 0, refreshedAt: null, feeds: [], failures: [] };
 
-  /** Set when `lookup` should behave as an unreachable cache. */
   failLookupWith: Error | null = null;
 
   readonly installs: BlocklistInstall[] = [];
@@ -98,7 +84,7 @@ export function recordingLogger(): { logger: Logger; logs: CapturedLog[] } {
 
 export class RecordingExecutor implements ActionExecutor {
   readonly requests: ActionRequest[] = [];
-  /** Keyed by `ActionKind`; anything unset resolves as executed. */
+
   results: Partial<Record<string, ActionResult>> = {};
 
   async execute(request: ActionRequest): Promise<ActionResult> {
@@ -111,12 +97,6 @@ export class RecordingExecutor implements ActionExecutor {
   }
 }
 
-/**
- * The payload of a request that must exist.
- *
- * Throwing with a readable message beats an optional chain that yields
- * `undefined` and fails three assertions later on something unrelated.
- */
 export function payloadOf(request: ActionRequest | undefined): Record<string, unknown> {
   if (!request) throw new Error('expected an action request to have been recorded, but none was');
   return request.payload as Record<string, unknown>;
@@ -153,13 +133,11 @@ interface MessageOverrides {
   type?: 'message.created' | 'message.updated';
 }
 
-/** The gateway hands listeners the raw Discord message object verbatim. */
 export function messageEvent(overrides: MessageOverrides = {}): ProtonEvent {
   const type = overrides.type ?? 'message.created';
   const id = overrides.id ?? MESSAGE;
 
   return {
-    // Same derivation the gateway uses, so a redelivery test reuses the id.
     id: `${type}:${id}`,
     type,
     guildId: overrides.guildId === undefined ? GUILD : overrides.guildId,
@@ -174,12 +152,6 @@ export function messageEvent(overrides: MessageOverrides = {}): ProtonEvent {
   };
 }
 
-/**
- * A `fetch` that serves canned responses per URL.
- *
- * Tests never touch the network (§11). A URL mapped to an `Error` rejects, which
- * is how a DNS failure or a connection reset reaches `fetchBlocklist`.
- */
 export function stubFetch(
   routes: Record<string, string | Error | { status: number; body?: string }>,
 ): typeof globalThis.fetch {

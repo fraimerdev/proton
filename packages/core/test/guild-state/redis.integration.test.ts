@@ -71,12 +71,6 @@ describe('RedisGuildStateStore', () => {
     expect(loaded?.channels.get(CHANNEL)?.overwrites).toHaveLength(1);
   });
 
-  /**
-   * The serialization hazard. `JSON.stringify` throws outright on a bigint, and
-   * the obvious "fix" — Number(...) — silently truncates every permission bit
-   * above 2^53, which since the 2026 splits includes PIN_MESSAGES and
-   * BYPASS_SLOWMODE. Permissions therefore cross the wire as strings.
-   */
   test('permission bigints survive the round trip exactly', async () => {
     await store.put(state());
     const loaded = await store.get(GUILD);
@@ -99,7 +93,6 @@ describe('RedisGuildStateStore', () => {
   });
 
   test('an unknown guild is null, not an empty snapshot', async () => {
-    // An empty snapshot would let prechecks compute confidently wrong answers.
     expect(await store.get('111111111111111111')).toBeNull();
   });
 
@@ -135,8 +128,6 @@ describe('RedisGuildStateStore', () => {
         role: { id: 'x', permissions: 0n, position: 1 },
       });
 
-      // Creating a partial snapshot here — one role, no owner — would let the
-      // prechecks believe they had real state.
       expect(await store.get('111111111111111111')).toBeNull();
     });
   });

@@ -27,12 +27,6 @@ describe('audit log event types', () => {
     expect(isAuditLogEventType('message.created')).toBe(false);
   });
 
-  /**
-   * The §7 hook. A module listening for any audit-derived event must declare
-   * VIEW_AUDIT_LOG, or Discord sends it an empty stream and it reports a quiet
-   * guild — the "the bot did nothing" failure the registry exists to prevent.
-   * Asking here means no module author has to memorise the list.
-   */
   test('flags a listener set that needs VIEW_AUDIT_LOG', () => {
     expect(requiresAuditLog(['message.created', 'channel.deleted'])).toBe(true);
     expect(requiresAuditLog(['message.created', 'member.joined'])).toBe(false);
@@ -41,12 +35,6 @@ describe('audit log event types', () => {
 });
 
 describe('audit log payload schema', () => {
-  /**
-   * The reason the payload is a schema and not a bare interface: the bus
-   * JSON-serialises every event, so by the time a worker reads one the type is
-   * gone and a parse is all that stands between a malformed entry and a breaker
-   * decision.
-   */
   test('survives the bus round-trip intact', () => {
     const parsed = auditLogEventPayloadSchema.safeParse(JSON.parse(JSON.stringify(payload)));
 
@@ -65,11 +53,6 @@ describe('audit log payload schema', () => {
     expect(auditLogEventPayloadSchema.safeParse({ ...payload, entryId: null }).success).toBe(false);
   });
 
-  /**
-   * Not every audit action identifies its target by snowflake, and dropping a
-   * destructive act over its target field would lose the actor we can still
-   * count. So the target is permissive where the actor is not.
-   */
   test('accepts a non-snowflake target but not a non-snowflake actor', () => {
     expect(auditLogEventPayloadSchema.safeParse({ ...payload, targetId: 'aBc123' }).success).toBe(
       true,

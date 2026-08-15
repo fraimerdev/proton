@@ -30,15 +30,6 @@ const DISABLED =
   'Anti-nuke is switched off in this server, so there is no breaker to suspend. Turn the ' +
   'Anti-nuke module on from the Proton dashboard first.';
 
-/**
- * `/antinuke` — the admin surface for maintenance mode (PLAN.md §8's
- * "maintenance-mode bypass for legit bulk admin work").
- *
- * A command rather than a dashboard setting because of *when* it is needed: in
- * the middle of a restructure, by the person holding the mouse, for the next
- * twenty minutes. It is also why the window is state rather than config —
- * config has no expiry, and this must have one.
- */
 export function createAntinukeCommands(deps: AntinukeDeps): CommandDefinition<AntinukeConfig>[] {
   return [
     {
@@ -49,9 +40,7 @@ export function createAntinukeCommands(deps: AntinukeDeps): CommandDefinition<An
         .setName('antinuke')
         .setDescription('Inspect the anti-nuke breaker, or suspend it briefly for bulk admin work.')
         .setContexts(InteractionContextType.Guild)
-        // Manage Server, not Administrator: suspending the breaker is a server
-        // management decision, and requiring Administrator would push guilds
-        // into handing out Administrator to the person doing the restructure.
+
         .setDefaultMemberPermissions(Permissions.ManageGuild)
         .addSubcommand((sub) =>
           sub
@@ -109,8 +98,6 @@ async function startMaintenance(
   try {
     durationMs = parseDuration(raw);
   } catch (error) {
-    // `InvalidDurationError` already names the accepted units and gives
-    // examples; a second phrasing here would drift from the dashboard's.
     return reply(ctx, error instanceof Error ? error.message : `'${raw}' is not a duration.`);
   }
 
@@ -137,10 +124,6 @@ async function startMaintenance(
     `${planned.reason ? `, for: ${planned.reason}` : ''}. The breaker will not act on anything ` +
     'destructive in that time, and re-arms by itself at the end — nothing extends it.';
 
-  // Both halves of §8's audit requirement start here: this line, and the lapse
-  // announcement the listener makes when the window runs out. The ephemeral
-  // reply below is itself recorded as a case against the admin who ran it, so
-  // the ledger holds who opened the hole even if the alert channel is unset.
   ctx.logger.warn(audit, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: ctx.userId });
   await announce(ctx, ctx.idempotencyKey, audit, 'maintenance-on');
 
@@ -228,15 +211,6 @@ function requireStore(deps: AntinukeDeps): MaintenanceStore | null {
   return deps.maintenance ?? null;
 }
 
-/**
- * Answer the invoker.
- *
- * Always, and always ephemerally. An unanswered interaction shows "This
- * interaction failed", which reads as an outage and teaches nobody anything
- * (§1, I9); a public one announces to the channel that the breaker is about to
- * be off, which is not information a server wants broadcast. The public record
- * goes to the alert channel instead.
- */
 async function reply(ctx: CommandContext<AntinukeConfig>, content: string): Promise<void> {
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,

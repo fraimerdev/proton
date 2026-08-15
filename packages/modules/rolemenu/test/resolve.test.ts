@@ -32,8 +32,6 @@ function resolve(
 
 describe('a key that names no binding', () => {
   test('resolves to nothing at all, in every mode', () => {
-    // The menu was edited after its message was posted. The callers answer this
-    // by saying so; what they must not do is guess at which role was meant.
     for (const mode of ['toggle', 'add-only', 'unique'] as const) {
       expect(resolve(mode, 'toggle', [], 'purple')).toBeNull();
     }
@@ -70,7 +68,6 @@ describe('mode: toggle', () => {
   });
 
   test('leaves the rest of the menu alone', () => {
-    // The difference between this and `unique`, asserted rather than implied.
     expect(resolve('toggle', 'grant', [BLUE, GREEN])).toEqual({
       roleId: RED,
       add: [RED],
@@ -119,7 +116,6 @@ describe('mode: unique', () => {
   });
 
   test('does not touch bound roles the member does not hold', () => {
-    // One call for a colour picker, not one per colour.
     expect(resolve('unique', 'grant', [])).toEqual({ roleId: RED, add: [RED], remove: [] });
   });
 
@@ -132,7 +128,6 @@ describe('mode: unique', () => {
   });
 
   test('leaves roles outside the menu alone', () => {
-    // "Every other role bound in the same menu" — not every other role they have.
     const outsider = '410000000000000099';
 
     expect(resolve('unique', 'grant', [outsider, BLUE])).toEqual({
@@ -183,9 +178,6 @@ describe('mode: unique', () => {
 
 describe('an unknown role set — MESSAGE_REACTION_REMOVE carries no member', () => {
   test('still revokes, because "they appear not to have it" is not knowledge', () => {
-    // The bug this prevents: an un-react that removes nothing, because the
-    // dispatch that cannot say what they hold was read as saying they hold
-    // nothing.
     expect(resolve('toggle', 'revoke', null)).toEqual({ roleId: RED, add: [], remove: [RED] });
   });
 
@@ -194,8 +186,6 @@ describe('an unknown role set — MESSAGE_REACTION_REMOVE carries no member', ()
   });
 
   test('a toggle with nothing known grants rather than strips', () => {
-    // The recoverable direction: a member who unexpectedly gains a role can press
-    // again, and one who unexpectedly loses one may not be able to get it back.
     expect(resolve('toggle', 'toggle', null)).toEqual({ roleId: RED, add: [RED], remove: [] });
   });
 

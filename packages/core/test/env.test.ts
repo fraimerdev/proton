@@ -46,9 +46,8 @@ describe('createEnv', () => {
       expect(error).toBeInstanceOf(EnvValidationError);
       const { message, issues } = error as EnvValidationError;
 
-      // names the failing scope so a bad deploy says which service is unhappy
       expect(message).toContain('gateway');
-      // and every offending key
+
       expect(message).toContain('DATABASE_URL');
       expect(message).toContain('DISCORD_BOT_TOKEN');
       expect(message).toContain('REDIS_DB_BUS');
@@ -56,14 +55,7 @@ describe('createEnv', () => {
     }
   });
 
-  /**
-   * PLAN.md I10: the real bot token must never appear in code, fixtures, tests
-   * or logs. An exception message is a log — this is the test that keeps the
-   * helper honest if someone later "improves" the error by including the input.
-   */
   test('never leaks the offending value into the error message', () => {
-    // Deliberately under the min(50) bound so validation *fails* — that is the
-    // only path on which the helper could leak the value.
     const secret = 'ODk1NzMyMTQ0.GxYzAb.dont-log-me';
 
     try {

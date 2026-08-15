@@ -13,16 +13,6 @@ type Command = CommandDefinition<ModerationConfig>;
 
 const REASON_MAX = 512;
 
-/**
- * These three act on the channel the command was run in, and take no channel
- * option.
- *
- * That is a deliberate limit, not an oversight. The executor prechecks a
- * channel action against `app_permissions` — Discord's own computation of what
- * the bot may do *in the interaction's channel* (§10.5). Offering `/slowmode
- * channel:#other` would have Proton check one channel and change another, so
- * the answer to "may I?" would be about the wrong place.
- */
 export const slowmodeCommand: Command = {
   name: 'slowmode',
   description: 'Set how often members may post in this channel.',
@@ -50,8 +40,6 @@ export const slowmodeCommand: Command = {
     const raw = ctx.options.getString('duration');
     if (!raw) return perform(ctx, { refusal: 'I need a slowmode duration, for example 30s.' });
 
-    // Zero is meaningful here — it is how slowmode is turned off — so this uses
-    // `readSpan` rather than the positive-only reader the temp actions use.
     const span = readSpan(raw);
     if (isRefusal(span)) return perform(ctx, span);
 
@@ -104,11 +92,6 @@ export const lockdownCommand: Command = {
     const reason = ctx.options.getString('reason');
     const rawDuration = ctx.options.getString('duration');
 
-    // `previousAllow`/`previousDeny` are left at their schema defaults ('0')
-    // because a module has no read access to channel overwrites. Consequence: a
-    // channel that already carries an everyone-overwrite is reopened to neutral
-    // rather than to exactly what it had (R4). Fixing that properly means the
-    // executor filling those fields from cached guild state, which is core's job.
     const payload = { channelId: ctx.channelId, roleId: everyoneRoleId(ctx.guildId) };
 
     if (!rawDuration) {

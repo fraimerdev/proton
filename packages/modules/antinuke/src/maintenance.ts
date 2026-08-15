@@ -4,39 +4,15 @@ import { z } from 'zod';
 
 export const MAINTENANCE_PREFIX = 'proton:antinuke:maintenance';
 
-/**
- * How long the record outlives the window it describes.
- *
- * Deliberate. Audit-log entries for work done inside a maintenance window keep
- * arriving after it closes — delivery is eventually consistent (§15) — and
- * coverage is judged by when the act happened, so a record that vanished at the
- * stroke of expiry would let the tail of a legitimate bulk deletion trip the
- * breaker on the admin who was authorised to do it. The window itself is not
- * extended by one millisecond: an act performed after `expiresAt` is counted,
- * whether or not this record still exists.
- */
 export const MAINTENANCE_GRACE_MS = 5 * 60_000;
 
 export function maintenanceKey(guildId: string, prefix: string = MAINTENANCE_PREFIX): string {
   return `${prefix}:${guildId}`;
 }
 
-/**
- * A live maintenance window: the breaker is off for this guild until `expiresAt`.
- *
- * A Zod schema rather than an interface because this round-trips through Redis
- * as JSON, so by the time it is read back the type has been erased and the only
- * thing between a corrupt value and a disabled security control is a parse (the
- * I5 argument, applied to state rather than config).
- *
- * `expiresAt` is absolute rather than a duration, and nothing renews it. The
- * expiry is the whole feature: an admin who needs longer runs the command again,
- * which produces a second audit record, which is exactly the visibility a
- * silently-extended window would destroy.
- */
 export const maintenanceWindowSchema = z.object({
   guildId: snowflakeSchema,
-  /** The admin who ran `/antinuke maintenance`. Recorded so the audit names them. */
+
   enabledBy: snowflakeSchema,
   reason: z.string().max(512).nullable(),
   startedAt: z.number().int().nonnegative(),
@@ -51,14 +27,6 @@ export interface MaintenanceStore {
   clear(guildId: string): Promise<void>;
 }
 
-/**
- * Redis-backed maintenance windows.
- *
- * Redis rather than the module's config row for one reason: the key carries a
- * TTL, so the hole closes even if nothing ever reads it again. A timestamp in a
- * JSONB config column depends on every reader remembering to compare it against
- * the clock, and the one reader that forgets leaves the breaker off forever.
- */
 export class RedisMaintenanceStore implements MaintenanceStore {
   readonly #redis: Redis;
   readonly #prefix: string;
@@ -74,9 +42,6 @@ export class RedisMaintenanceStore implements MaintenanceStore {
     const raw = await this.#redis.get(maintenanceKey(guildId, this.#prefix));
     if (raw === null) return null;
 
-    // Anything unreadable is treated as "no maintenance window", which leaves
-    // the breaker armed. That is the only safe direction to fail in: the
-    // alternative is a corrupt value that switches a security control off.
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
@@ -90,8 +55,7 @@ export class RedisMaintenanceStore implements MaintenanceStore {
 
   async set(window: MaintenanceWindow): Promise<void> {
     const remaining = window.expiresAt - this.#now();
-    // A window that ended before it was stored has nothing left to cover and no
-    // lapse worth announcing.
+
     if (remaining + MAINTENANCE_GRACE_MS <= 0) {
       await this.clear(window.guildId);
       return;
@@ -101,8 +65,7 @@ export class RedisMaintenanceStore implements MaintenanceStore {
       maintenanceKey(window.guildId, this.#prefix),
       JSON.stringify(window),
       'PX',
-      // Redis closes the hole itself, so a worker that never reads this key
-      // again cannot leave the breaker suppressed.
+
       remaining + MAINTENANCE_GRACE_MS,
     );
   }
@@ -112,19 +75,10 @@ export class RedisMaintenanceStore implements MaintenanceStore {
   }
 }
 
-/**
- * Whether an act performed at `at` happened while maintenance was on.
- *
- * Keyed on when the act happened, not on when we heard about it. Audit-log
- * delivery lags by seconds and is unordered (§15), so an entry for a legitimate
- * bulk deletion routinely arrives after the window that authorised it closed.
- * Judging it by arrival time would punish the admin for our own latency.
- */
 export function isCoveredByMaintenance(window: MaintenanceWindow, at: number): boolean {
   return at >= window.startedAt && at < window.expiresAt;
 }
 
-/** Whether the window has run out, by the clock. Drives the re-arm announcement. */
 export function hasLapsed(window: MaintenanceWindow, now: number): boolean {
   return now >= window.expiresAt;
 }
@@ -138,7 +92,6 @@ export interface MaintenancePlanInput {
   now: number;
 }
 
-/** A refusal an admin reads verbatim — never a silent no-op. */
 export interface MaintenanceRefusal {
   refusal: string;
 }
@@ -149,13 +102,6 @@ export function isMaintenanceRefusal(
   return 'refusal' in value;
 }
 
-/**
- * Turn a requested duration into a window, or refuse it.
- *
- * The cap is enforced here rather than at the schema so the refusal can name
- * both numbers: an admin who asks for 4 hours needs to be told the server's
- * limit is 1 hour, not that their input was invalid.
- */
 export function planMaintenance(
   input: MaintenancePlanInput,
 ): MaintenanceWindow | MaintenanceRefusal {

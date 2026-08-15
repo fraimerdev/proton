@@ -14,18 +14,6 @@ export interface RoleRewardsEditorProps {
 
 const MAX_REWARDS = 50;
 
-/**
- * Bespoke editor for the level → role ladder.
- *
- * PLAN.md §9 caps the form generator at scalars, one level of nesting and flat
- * arrays, and explicitly rules out widening it until it half-renders a rule
- * builder. A reward is an object with a level and a role, so it sits outside
- * that vocabulary by design — `levelingFormSchema` omits the field precisely so
- * a hand-written editor can own it, exactly as the escalation ladder is handled.
- *
- * Validation is the module's own `roleRewardsSchema` rather than a re-statement
- * of it, so what this refuses and what a save refuses cannot drift apart.
- */
 export function RoleRewardsEditor({
   rewards,
   roles,
@@ -41,8 +29,7 @@ export function RoleRewardsEditor({
     const highest = rewards.reduce((max, reward) => Math.max(max, reward.level), 0);
     onChange([
       ...rewards,
-      // The next rung up and no role chosen: a reward defaulting to some
-      // arbitrary role is a permission grant nobody asked for.
+
       { level: Math.min(MAX_LEVEL, highest + 5), roleId: '' },
     ]);
   }
@@ -57,8 +44,6 @@ export function RoleRewardsEditor({
       {rewards.map((reward, index) => (
         <div
           className="ladder-rung"
-          // Index keys: `level` is the natural id but it is also the value being
-          // edited, so keying on it would remount the input mid-keystroke.
           // biome-ignore lint/suspicious/noArrayIndexKey: the edited value cannot key its own row
           key={`reward-${index}`}
         >
@@ -79,8 +64,6 @@ export function RoleRewardsEditor({
             <span>Grant role</span>
             <select
               value={reward.roleId}
-              // An unset role is invalid rather than merely empty, so the
-              // browser marks it before the save has to.
               aria-invalid={reward.roleId === ''}
               onChange={(e) => update(index, { roleId: e.target.value })}
             >
@@ -120,8 +103,6 @@ export function RoleRewardsEditor({
         {rewards.length >= MAX_REWARDS ? `Limit of ${MAX_REWARDS} rewards reached` : 'Add reward'}
       </button>
 
-      {/* The module's own message, verbatim — the admin reads here exactly what
-          the save would have told them. */}
       {parsed.success ? null : (
         <ul className="ladder-errors" role="alert">
           {parsed.error.issues.map((issue) => (

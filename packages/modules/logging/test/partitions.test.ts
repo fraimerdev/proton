@@ -38,8 +38,6 @@ describe('partition naming', () => {
   });
 
   test('refuses a name whose date does not exist', () => {
-    // Date.UTC would roll 2026-02-30 into March and produce a partition that
-    // claims to hold a day it does not.
     expect(partitionDay('message_logs_2026_02_30')).toBeNull();
   });
 });
@@ -80,7 +78,6 @@ describe('retention', () => {
     const cutoff = retentionCutoff(AUGUST_14, 30);
     expect(cutoff.toISOString()).toBe('2026-07-16T00:00:00.000Z');
 
-    // 30 partitions inclusive: 2026-07-16 .. 2026-08-14.
     const kept = (AUGUST_14.getTime() - cutoff.getTime()) / 86_400_000;
     expect(Math.floor(kept) + 1).toBe(30);
   });
@@ -92,10 +89,10 @@ describe('retention', () => {
 
 describe('partitionsToDrop', () => {
   const existing = [
-    'message_logs_2026_07_15', // one day past a 30-day window
-    'message_logs_2026_07_16', // the oldest day still kept
-    'message_logs_2026_08_14', // today
-    'message_logs_2026_08_15', // tomorrow, pre-created
+    'message_logs_2026_07_15',
+    'message_logs_2026_07_16',
+    'message_logs_2026_08_14',
+    'message_logs_2026_08_15',
   ];
 
   test('drops only what is older than the cutoff', () => {
@@ -110,8 +107,6 @@ describe('partitionsToDrop', () => {
   });
 
   test('leaves tables it does not recognise alone', () => {
-    // This list is handed straight to DROP TABLE. "I do not know what that is"
-    // has to mean "do not touch it".
     const dropped = partitionsToDrop(
       [...existing, 'cases', 'message_logs', 'message_logs_backup'],
       retentionCutoff(AUGUST_14, 30),

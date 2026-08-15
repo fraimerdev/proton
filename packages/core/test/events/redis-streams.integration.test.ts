@@ -26,7 +26,6 @@ function event(type: EventType = 'message.created', payload: unknown = {}): Prot
   return { id: newId(), type, guildId: '900000000000000001', occurredAt: Date.now(), payload };
 }
 
-/** Poll until `predicate` holds or the budget expires — avoids arbitrary sleeps. */
 async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -65,7 +64,7 @@ describe('RedisStreamsEventBus', () => {
     await bus.publish(event('member.joined'));
 
     await waitFor(() => seen.length === 1);
-    // Give the unwanted type a chance to wrongly arrive before asserting.
+
     await Bun.sleep(200);
 
     expect(seen).toHaveLength(1);
@@ -78,14 +77,13 @@ describe('RedisStreamsEventBus', () => {
     const groupA: ProtonEvent[] = [];
     const groupB: ProtonEvent[] = [];
 
-    // Two consumers, same group — each event should go to exactly one of them.
     const a1 = bus.subscribe('shared', ['message.created'], async (e) => {
       groupA.push(e);
     });
     const a2 = bus.subscribe('shared', ['message.created'], async (e) => {
       groupA.push(e);
     });
-    // A different group sees everything independently.
+
     const b1 = bus.subscribe('other', ['message.created'], async (e) => {
       groupB.push(e);
     });
@@ -113,7 +111,6 @@ describe('RedisStreamsEventBus', () => {
 
     await bus.publish(event());
 
-    // First delivery throws and is left unacked; the reclaim path must pick it up.
     await waitFor(() => attempts >= 2, 10_000);
     expect(attempts).toBeGreaterThanOrEqual(2);
 
@@ -139,7 +136,6 @@ describe('RedisStreamsEventBus', () => {
     await waitFor(() => deadLettered.length === 1, 15_000);
     expect(deadLettered[0]?.id).toBe(sent.id);
 
-    // And it is parked on the DLQ stream rather than lost.
     const dlq = await redis.xrange(dlqKey('message.created'), '-', '+');
     expect(dlq.length).toBe(1);
 
@@ -161,7 +157,6 @@ describe('RedisStreamsEventBus', () => {
     await redis.xadd('proton:events:message.created', '*', 'event', '{not json');
     await bus.publish(event());
 
-    // The good event still arrives — the bad one did not block the stream.
     await waitFor(() => seen.length === 1 && malformed.length === 1);
     expect(malformed).toHaveLength(1);
 

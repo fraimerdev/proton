@@ -17,7 +17,6 @@ const ROLE_B = '600000000000000001';
 
 const NOW = Date.parse('2026-08-14T12:00:00.000Z');
 
-/** A user id whose snowflake encodes the given creation time. */
 function snowflakeAt(createdAt: number): string {
   return String((BigInt(createdAt) - BigInt(DISCORD_EPOCH_MS)) << 22n);
 }
@@ -72,11 +71,6 @@ describe('role-has', () => {
   });
 });
 
-/**
- * role-lacks is defined as the exact negation of role-has under the same
- * `match`. If that ever drifts, a member could satisfy neither condition and an
- * autorole rule and its opposite would both decline to fire.
- */
 describe('role-lacks', () => {
   test('any is the negation of role-has any', () => {
     const has: FactCondition = { kind: 'role-has', roleIds: [ROLE_A, ROLE_B] };
@@ -120,7 +114,6 @@ describe('account-age', () => {
     expect(check(older, { accountCreatedAt: NOW - 86_400_000 }).passed).toBe(false);
   });
 
-  /** No API call during a raid: the id already carries the creation time. */
   test('derives the age from the actor snowflake when no timestamp was supplied', () => {
     expect(check(younger, { actorId: snowflakeAt(NOW - 3_600_000) }).passed).toBe(true);
     expect(check(younger, { actorId: snowflakeAt(NOW - 400 * 86_400_000) }).passed).toBe(false);
@@ -153,16 +146,12 @@ describe('content-pattern', () => {
       mode: 'contains',
     };
     expect(check(contains, { content: 'FREE NITRO here' }).passed).toBe(true);
-    // The literal, not a pattern — a regex reading would match anything.
+
     const dots: FactCondition = { kind: 'content-pattern', pattern: 'a.c', mode: 'contains' };
     expect(check(dots, { content: 'abc' }).passed).toBe(false);
     expect(check(dots, { content: 'a.c' }).passed).toBe(true);
   });
 
-  /**
-   * The most common "the bot did nothing" report in this category: the module is
-   * enabled, the rule is right, and Message Content was never granted.
-   */
   test('names the privileged intent when content is missing', () => {
     expect(reasonOf(check(invite, { actorId: '1' }))).toContain('Message Content');
   });
@@ -189,11 +178,6 @@ describe('is-premium', () => {
   });
 });
 
-/**
- * One valid sample per kind, typed as a total record. Adding a predicate to the
- * union without a schema that accepts it fails to compile here — which is the
- * point of naming the vocabulary in the first place.
- */
 const SAMPLES: Record<RuleConditionKind, RuleCondition> = {
   'channel-in': { kind: 'channel-in', channelIds: [CHANNEL] },
   'role-has': { kind: 'role-has', roleIds: [ROLE_A] },
@@ -215,10 +199,6 @@ describe('ruleConditionSchema', () => {
     expect(ruleConditionSchema.safeParse({ kind: 'moon-phase', full: true }).success).toBe(false);
   });
 
-  /**
-   * Caught on write rather than at evaluation time: a rule saved with a broken
-   * pattern would otherwise sit in the table looking healthy and never fire.
-   */
   test('refuses a pattern that is not a valid regex', () => {
     const result = ruleConditionSchema.safeParse({ kind: 'content-pattern', pattern: '([a-z' });
     expect(result.success).toBe(false);

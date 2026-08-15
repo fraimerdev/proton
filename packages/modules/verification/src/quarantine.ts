@@ -10,10 +10,6 @@ import { MODULE_ID, REASON_MAX, reply, runSteps } from './perform.ts';
 import { checkGrantable, planQuarantine, planRelease } from './roles.ts';
 import type { QuarantineRecord } from './store.ts';
 
-/**
- * Preconditions both halves share: the module is on, a quarantine role is
- * chosen, the ports are bound, and the snapshot says Proton can move that role.
- */
 interface Ready {
   deps: BoundQuarantineDeps;
   quarantineRoleId: string;
@@ -56,9 +52,6 @@ async function prepare(
     return null;
   }
 
-  // Fail closed on a missing snapshot rather than reaching for Discord: role
-  // positions decide whether the swap is even legal, and a quarantine planned
-  // against roles Proton cannot see is a quarantine it cannot undo.
   const state = await bound.deps.guildState.get(ctx.guildId);
   if (!state) {
     await reply(
@@ -82,18 +75,6 @@ async function prepare(
   return { deps: bound.deps, quarantineRoleId, state };
 }
 
-/**
- * `/quarantine` — swap a member's roles for the quarantine role, recording what
- * they had.
- *
- * The record is written **before the first role comes off**. That ordering is
- * the whole feature: a crash, a redeploy or a Discord outage midway through
- * leaves a member stripped, and the only thing that makes that recoverable is a
- * record that already exists. Writing it afterwards would mean the one failure
- * mode where restoration matters most is the one where the record was never
- * saved. It is the same discipline as lockdown recording `previousAllow` and
- * `previousDeny` rather than guessing on unlock (R4).
- */
 export async function runQuarantine(
   ctx: CommandContext<VerificationConfig>,
   rawDeps: VerificationDeps,
@@ -104,9 +85,6 @@ export async function runQuarantine(
 
   const { deps, quarantineRoleId, state } = ready;
 
-  // Refused, not repeated. A second quarantine would read the member's *current*
-  // roles — which is now just the quarantine role — and overwrite the record
-  // with it, permanently losing what they actually had.
   const existing = await deps.quarantine.get(ctx.guildId, input.targetId);
   if (existing) {
     await reply(
@@ -121,9 +99,6 @@ export async function runQuarantine(
 
   const memberRoleIds = await deps.fetchMemberRoles(ctx.guildId, input.targetId);
   if (memberRoleIds === null) {
-    // Fail closed and change nothing. Stripping roles we could not read means
-    // quarantining somebody with no way to put them back — the exact outcome
-    // this module exists to make impossible.
     await reply(
       ctx,
       `I couldn't read <@${input.targetId}>'s roles, so I have done nothing. Quarantining ` +
@@ -152,7 +127,7 @@ export async function runQuarantine(
     reason: input.reason ?? 'Quarantined.',
     steps: plan.steps,
     idempotencyRoot: ctx.idempotencyKey,
-    // A second, durable copy of the record on every case the swap writes.
+
     payloadExtra: { priorRoleIds: plan.priorRoleIds },
   });
 
@@ -183,16 +158,6 @@ export async function runQuarantine(
   );
 }
 
-/**
- * `/unquarantine` — put a quarantined member back exactly as they were.
- *
- * The record is cleared only once every role has actually gone back. A release
- * that half-worked and then forgot what it was restoring would be worse than one
- * that plainly failed: the member looks released, and the roles they are missing
- * are missing from Proton's memory too. Leaving the record in place makes
- * `/unquarantine` safe to run again — every step carries the same idempotency key, so
- * the roles that already landed are skipped rather than reapplied (I4).
- */
 export async function runRelease(
   ctx: CommandContext<VerificationConfig>,
   rawDeps: VerificationDeps,

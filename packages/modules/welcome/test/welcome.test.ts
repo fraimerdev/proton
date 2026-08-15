@@ -35,14 +35,6 @@ class RecordingExecutor implements ActionExecutor {
   }
 }
 
-/**
- * The first request's payload, as a plain record.
- *
- * Extracted rather than cast inline. `requests[0]?.payload as T` short-circuits
- * to `undefined` and then reads a property off it, so a test with no request at
- * all reports a TypeError instead of "nothing was executed" — which is the one
- * failure mode a test should never have.
- */
 function payloadOf(executor: RecordingExecutor): Record<string, unknown> {
   const request = executor.requests[0];
   if (!request) throw new Error('no action was executed');
@@ -70,7 +62,6 @@ function config(overrides: Partial<WelcomeConfig> = {}): WelcomeConfig {
   });
 }
 
-/** A real dispatch through the real normaliser, never a hand-built event (I11). */
 function joinEvent(): ProtonEvent {
   const event = normalise(dispatch('guildMemberAdd'));
   if (!event) throw new Error('guildMemberAdd did not normalise');
@@ -102,11 +93,6 @@ describe('renderGreeting', () => {
     expect(renderGreeting('hello {nobody}', facts)).toBe('hello {nobody}');
   });
 
-  /**
-   * The reason substitution is a single pass. A member calling themselves
-   * `{server}` would otherwise have their own name expanded on a second pass,
-   * which is a small injection into every greeting the guild sends.
-   */
   test('a substituted value is not itself expanded', () => {
     const hostile = { ...facts, username: '{server}' };
 
@@ -126,11 +112,6 @@ describe('readGreetingTarget', () => {
     expect(target?.username).toBe('Newcomer');
   });
 
-  /**
-   * Neither member dispatch carries the guild name or member count — they are on
-   * GUILD_CREATE, which this module does not consume. The fallbacks exist so a
-   * template renders "this server" rather than the word "undefined".
-   */
   test('degrades gracefully when the guild name is absent', () => {
     const target = readGreetingTarget(joinEvent().payload);
 
@@ -174,7 +155,6 @@ describe('greeting listener', () => {
     expect(String(payloadOf(executor).content)).toContain('Newcomer');
   });
 
-  /** A guild may want joins announced and leaves kept quiet. */
   test('an unset channel means no greeting and no error', async () => {
     const executor = new RecordingExecutor();
     const { logger, lines } = collectingLogger();
@@ -222,11 +202,6 @@ describe('greeting listener', () => {
     expect(payloadOf(executor).files).toBeUndefined();
   });
 
-  /**
-   * The most important behaviour in the module. The message is the feature and
-   * the card is decoration — a font fault no retry can fix must not silence
-   * every welcome in every guild.
-   */
   test('a failed render still sends the message, and says why', async () => {
     const executor = new RecordingExecutor();
     const { logger, lines } = collectingLogger();
@@ -248,7 +223,6 @@ describe('greeting listener', () => {
     expect(lines.join(' ')).toContain('rasteriser unavailable');
   });
 
-  /** Gateway RESUME redelivers the join; the member must be greeted once (I4). */
   test('a redelivered join reuses the same idempotency key', async () => {
     const executor = new RecordingExecutor();
     const listener = createGreetingListener();

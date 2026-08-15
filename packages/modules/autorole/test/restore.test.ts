@@ -8,20 +8,15 @@ function role(id: string, position: number, managed = false): GuildRole {
   return { id, permissions: 0n, position, ...(managed ? { managed: true } : {}) };
 }
 
-/**
- * The bot sits at position 50. Everything below is assignable, everything at or
- * above is not — Discord's rule is *strictly* below, which is the off-by-one
- * this fixture exists to pin.
- */
 function state(overrides: Partial<GuildState> = {}): GuildState {
   const roles = new Map<string, GuildRole>([
-    [GUILD, role(GUILD, 0)], // @everyone
+    [GUILD, role(GUILD, 0)],
     ['700000000000000001', role('700000000000000001', 10)],
     ['700000000000000002', role('700000000000000002', 20)],
-    ['700000000000000003', role('700000000000000003', 50)], // level with the bot
-    ['700000000000000004', role('700000000000000004', 90)], // above the bot
-    ['700000000000000005', role('700000000000000005', 5, true)], // managed
-    ['800000000000000001', role('800000000000000001', 50)], // the bot's own
+    ['700000000000000003', role('700000000000000003', 50)],
+    ['700000000000000004', role('700000000000000004', 90)],
+    ['700000000000000005', role('700000000000000005', 5, true)],
+    ['800000000000000001', role('800000000000000001', 50)],
   ]);
 
   return {
@@ -44,7 +39,6 @@ describe('planRestore', () => {
       allowlist: [],
     });
 
-    // Ascending, so an interrupted run leaves the *least* privileged subset.
     expect(plan.restore).toEqual(['700000000000000001', '700000000000000002']);
     expect(plan.skipped).toEqual([]);
   });
@@ -98,11 +92,6 @@ describe('planRestore', () => {
     expect(plan.skipped[0]?.reason).toContain('no longer exists');
   });
 
-  /**
-   * The security-relevant case. A demoted moderator who rejoins must not be
-   * handed their moderator role back because the guild forgot to blocklist it —
-   * which is why the config is an allowlist.
-   */
   test('an allowlist excludes everything not on it', () => {
     const plan = planRestore({
       state: state(),
@@ -135,11 +124,6 @@ describe('planRestore', () => {
     expect(plan.restore).toEqual(['700000000000000001']);
   });
 
-  /**
-   * Fails closed and says why. Guessing here means handing out roles from a role
-   * list we could not read — the one situation where doing nothing is clearly
-   * right and silence clearly is not.
-   */
   test('with no guild state, restores nothing and explains', () => {
     const plan = planRestore({
       state: null,

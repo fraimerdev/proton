@@ -29,10 +29,9 @@ const MOD_ROLE = '400000000000000011';
 const BOT_ROLE = '400000000000000012';
 
 const everyone = rawRole({ id: EVERYONE_ROLE, name: '@everyone', position: 0 });
-/** A bot's own role: Discord creates it and refuses to let anyone else. */
+
 const managed = rawRole({ id: BOT_ROLE, name: 'Proton', position: 3, managed: true });
 
-/** A server with a category, children under it, overwrites, and a voice channel. */
 function fullGuild(): GuildLayout {
   return layout(
     [
@@ -67,21 +66,10 @@ function fullGuild(): GuildLayout {
   );
 }
 
-/**
- * A server that has just been nuked: every channel gone, and only the two roles
- * Discord will not let anyone delete out from under it.
- */
 function nukedGuild(): GuildLayout {
   return layout([], [everyone, managed]);
 }
 
-/**
- * Model of an applier: run the plan and hand back the guild it produced.
- *
- * Ids are preserved rather than reassigned — see `toRawChannel` in the harness
- * for why. Nothing in `src` can do this yet (blocker 1 on `createBackupModule`);
- * this exists to close the loop on whether the snapshot is complete.
- */
 function apply(present: GuildLayout, plan: RestorePlan): GuildLayout {
   const channels = [...present.channels];
   const roles = [...present.roles];
@@ -110,12 +98,8 @@ describe('a fully visible guild', () => {
 
     const restored = buildSnapshot(apply(nukedGuild(), plan(original, nukedGuild())), NOW).snapshot;
 
-    // Every channel back, field for field — including the voice channel's
-    // bitrate and the overwrite that makes mod-chat private. If the snapshot had
-    // dropped a field a restore needs, these would differ.
     expect(sortById(restored.channels)).toEqual(sortById(original.channels));
-    // Roles too: @everyone and the managed role were already there and are not
-    // recreated, and the two real roles are.
+
     expect(sortById(restored.roles)).toEqual(sortById(original.roles));
   });
 
@@ -129,7 +113,6 @@ describe('a fully visible guild', () => {
     const at = (id: string) =>
       ops.findIndex((op) => op.op === 'create_channel' && op.channel.id === id);
 
-    // Discord rejects a channel whose parent_id does not exist yet.
     expect(at(CATEGORY)).toBeLessThan(at(MOD_CHAT));
     expect(at(CATEGORY)).toBeLessThan(at(STAFF_VC));
   });
@@ -147,8 +130,7 @@ describe('restoring into a guild that is still intact', () => {
     const planned = plan(snapshot, fullGuild());
 
     expect(planned.ops).toEqual([]);
-    // Everything is skipped because it is still there — bar @everyone, which is
-    // recognised for what it is before the "does it exist" question is asked.
+
     expect(planned.skipped.filter((skip) => skip.id !== EVERYONE_ROLE)).toHaveLength(
       planned.skipped.length - 1,
     );
@@ -160,8 +142,6 @@ describe('restoring into a guild that is still intact', () => {
   });
 
   test('leaves channels created after the backup alone', () => {
-    // A restore is additive. The attacker removed things; removing more turns a
-    // partial loss into a total one (§15).
     const snapshot = buildSnapshot(fullGuild(), NOW).snapshot;
     const later = fullGuild();
     const present = {
@@ -185,8 +165,7 @@ describe('a channel Proton could not see (Gate 2)', () => {
 
     expect(skip?.code).toBe('obfuscated_at_backup');
     expect(skip?.reason).toContain('View Channel');
-    // And nothing in the plan touches it — no nameless channel appears where a
-    // private one used to be.
+
     expect(
       planned.ops.some((op) => op.op === 'create_channel' && op.channel.id === HIDDEN_CHANNEL),
     ).toBe(false);
@@ -233,8 +212,6 @@ describe('roles Discord will not let Proton create', () => {
 
 describe('refusals', () => {
   test('a REST-sourced view of the guild, which cannot see hidden channels', () => {
-    // §10.1: the REST list omits them, so every hidden channel would look
-    // missing and be recreated beside the one that already exists.
     const snapshot = buildSnapshot(fullGuild(), NOW).snapshot;
     const result = planRestore({
       backupId: 'backup-1',
@@ -283,7 +260,6 @@ describe('I12', () => {
 
 describe('the guild id', () => {
   test('is the @everyone role id Discord uses', () => {
-    // Relied on by `planRestore` to recognise @everyone without being told.
     expect(EVERYONE_ROLE).toBe(GUILD);
   });
 });

@@ -11,14 +11,6 @@ import type { DbHandle } from './client.ts';
 import { cases } from './schema/cases.ts';
 import { scheduledActions } from './schema/scheduled-actions.ts';
 
-/**
- * postgres.js hands back raw column names. A type alias rather than an interface
- * because its rows must satisfy the driver's `Record<string, unknown>` bound.
- *
- * `run_at_ms` rather than `run_at`: see the note on `claimDue` — Drizzle
- * disables postgres.js's timestamp parsing on the shared client, so a raw query
- * gets Postgres's text rendering back, not a `Date`.
- */
 type ClaimedRow = {
   id: string;
   guild_id: string;
@@ -29,7 +21,6 @@ type ClaimedRow = {
   payload: unknown;
 };
 
-/** Postgres implementation of §6's `scheduled_actions`. */
 export class DrizzleScheduledActionStore implements ScheduledActionStore {
   readonly #handle: DbHandle;
 
@@ -38,9 +29,6 @@ export class DrizzleScheduledActionStore implements ScheduledActionStore {
   }
 
   async schedule(input: ScheduledActionInput): Promise<{ scheduled: boolean }> {
-    // ON CONFLICT DO NOTHING against the unique idempotency key rather than a
-    // read-then-insert: two workers handling the same redelivered ban would both
-    // see "no row" and both insert, and the guild would get two unbans.
     const inserted = await this.#handle.db
       .insert(scheduledActions)
       .values({
@@ -48,7 +36,7 @@ export class DrizzleScheduledActionStore implements ScheduledActionStore {
         guildId: input.guildId,
         runAt: input.runAt,
         kind: input.kind,
-        // Drizzle serialises jsonb itself; see client.ts on double-encoding.
+
         payload: input.payload,
         idempotencyKey: input.idempotencyKey,
       })
@@ -58,27 +46,6 @@ export class DrizzleScheduledActionStore implements ScheduledActionStore {
     return { scheduled: inserted.length > 0 };
   }
 
-  /**
-   * Claim due rows in one statement.
-   *
-   * Lock and attempt-count move together with the selection, so there is no
-   * window in which a row is "mine" but not yet marked — two sweepers running
-   * against the same database cannot both take the same reversal. `SKIP LOCKED`
-   * means the loser walks away with the *other* due rows instead of blocking on
-   * the winner's transaction.
-   *
-   * `attempts < maxAttempts` is what stops a permanently failing reversal (a
-   * user whose account no longer exists, say) from re-issuing a REST call every
-   * sweep forever. The row stays behind as the record of what never happened.
-   *
-   * Timestamps cross this boundary as ISO strings and epoch milliseconds, never
-   * as `Date`. `drizzle({ client })` reaches into the shared postgres.js client
-   * and replaces the serialiser *and* parser for every timestamp OID with an
-   * identity function, so that Drizzle's column mappers can own date handling.
-   * The side effect is that a raw query on the same client hands a `Date`
-   * parameter straight to the wire encoder (which throws) and returns Postgres's
-   * text rendering instead of a `Date`. Explicit casts sidestep both halves.
-   */
   async claimDue(options: ClaimDueOptions): Promise<ScheduledActionRecord[]> {
     const now = options.now.toISOString();
 
@@ -113,9 +80,6 @@ export class DrizzleScheduledActionStore implements ScheduledActionStore {
 
   async complete(input: CompleteReversalInput): Promise<void> {
     await this.#handle.db.transaction(async (tx) => {
-      // `isNull(revertedAt)` so an automatic reversal never overwrites a moderator
-      // who already lifted the action by hand — their name and their timestamp
-      // are the true ones.
       await tx
         .update(cases)
         .set({ revertedAt: input.revertedAt, revertedBy: input.revertedBy })

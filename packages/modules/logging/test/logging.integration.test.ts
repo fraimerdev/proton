@@ -22,7 +22,6 @@ let container: StartedPostgreSqlContainer;
 let handle: DbHandle;
 let store: PostgresMessageLogStore;
 
-/** The instant the harness's events happen on: 2026-08-14. */
 const NOW = new Date('2026-08-14T00:10:00Z');
 
 beforeAll(async () => {
@@ -38,8 +37,6 @@ afterAll(async () => {
 }, 240_000);
 
 beforeEach(async () => {
-  // Dropping the partitions is also how the rows go — which is the whole point
-  // of the design, so the tests get to rely on it too.
   await store.dropPartitions(await store.listPartitions());
 });
 
@@ -58,11 +55,6 @@ function entry(overrides: Partial<MessageLogEntry> = {}): MessageLogEntry {
   };
 }
 
-/**
- * postgres.js needs a type alias rather than an interface for its row bound, and
- * `noUncheckedIndexedAccess` makes every raw row optional — see
- * packages/db/test/helpers.ts, which solves the same problem for that package.
- */
 type CountRow = { n: number };
 type ClassRow = { relkind: string; def: string };
 type IndexRow = { indexname: string };
@@ -81,8 +73,6 @@ describe('the message_logs migration', () => {
         from pg_class where relname = 'message_logs'
     `;
 
-    // 'p' is a partitioned table; 'r' would mean the DDL had quietly become an
-    // ordinary one and retention a 30-day DELETE.
     expect(rows[0]?.relkind).toBe('p');
     expect(rows[0]?.def).toBe('RANGE (occurred_at)');
   });
@@ -94,8 +84,6 @@ describe('the message_logs migration', () => {
       select indexname from pg_indexes where tablename = ${partitionName(NOW)}
     `;
 
-    // Inherited: the maintenance job creates a partition and never has to know
-    // which indexes the table needs.
     expect(indexes.length).toBeGreaterThanOrEqual(3);
   });
 });
@@ -107,8 +95,6 @@ describe('per-guild opt-in', () => {
     await listener.handler(messageUpdated(), context());
     await listener.handler(messageDeleted(), context());
 
-    // Not merely "no rows" — no partition was created either, so an opted-out
-    // guild leaves no trace of its messages anywhere in the database.
     expect(await store.listPartitions()).toEqual([]);
   });
 
@@ -172,8 +158,6 @@ describe('writes', () => {
   });
 
   test('create the day’s partition rather than losing the log', async () => {
-    // No maintenance run has happened; the partition does not exist. A write that
-    // failed here would discard evidence the guild opted in to keep.
     expect(await store.listPartitions()).toEqual([]);
 
     const written = await store.append([entry()]);
@@ -200,7 +184,6 @@ describe('writes', () => {
 });
 
 describe('retention', () => {
-  /** 35 days of partitions ending today, each holding one row. */
   async function stockThirtyFiveDays(): Promise<void> {
     for (let offset = 34; offset >= 0; offset--) {
       const day = new Date(NOW.getTime() - offset * 86_400_000);
@@ -241,7 +224,7 @@ describe('retention', () => {
     ]);
 
     const remaining = await store.listPartitions();
-    // 30 days kept plus tomorrow's, which the same run created.
+
     expect(remaining).toHaveLength(31);
     expect(remaining).toContain('message_logs_2026_07_16');
     expect(remaining).not.toContain('message_logs_2026_07_15');
@@ -253,7 +236,7 @@ describe('retention', () => {
     await runMessageLogMaintenance(store, { now: NOW, retentionDays: 30 });
 
     const rows = await handle.db.select().from(messageLogs);
-    // The five expired days are gone; every day inside the window still reads back.
+
     expect(rows).toHaveLength(30);
     expect(await countIn('message_logs_2026_07_16')).toBe(1);
     expect(await countIn('message_logs_2026_08_14')).toBe(1);

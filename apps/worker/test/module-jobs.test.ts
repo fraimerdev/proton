@@ -39,14 +39,6 @@ function silentLogger(): { logger: Logger; warnings: string[] } {
 }
 
 describe('the boot-time totality check', () => {
-  /**
-   * `ScheduledJob` carries no callback — it is inspectable data, deliberately.
-   * The cost is that a module can declare a job nothing implements: BullMQ would
-   * schedule it, the tick would fire, no handler would match, and the job would
-   * do nothing for the life of the deployment. Phishing's blocklist would never
-   * populate, and the module would truthfully report "no blocklist loaded"
-   * forever. So it is fatal at startup rather than silent at runtime.
-   */
   test('refuses to start when a declared job has no handler', () => {
     const registry = new ModuleRegistry();
     registry.register(moduleWithJobs('alpha', ['refresh']));
@@ -62,7 +54,6 @@ describe('the boot-time totality check', () => {
     registry.register(moduleWithJobs('beta', ['rotate']));
 
     try {
-      // Only one of the three is covered.
       assertHandlersCoverJobs(
         registry,
         { 'alpha:refresh': async () => undefined },
@@ -84,7 +75,6 @@ describe('the boot-time totality check', () => {
     expect(() => assertHandlersCoverJobs(registry, {}, silentLogger().logger)).not.toThrow();
   });
 
-  /** A renamed job id leaves a handler behind. Harmless, but it should say so. */
   test('warns about a handler no module declares', () => {
     const registry = new ModuleRegistry();
     registry.register(moduleWithJobs('alpha', ['refresh']));
@@ -108,19 +98,12 @@ describe('the boot-time totality check', () => {
   });
 });
 
-/**
- * The check is only worth having if the real registry actually satisfies it.
- * This is the test that fails when someone adds a `jobs` entry to a manifest and
- * forgets the handler in `apps/worker/src/index.ts` — which is the whole point.
- */
 describe('the shipped registry', () => {
   test('declares exactly the jobs the worker has handlers for', () => {
     const declared = declaredJobs(createModuleRegistry())
       .map(({ key }) => key)
       .sort();
 
-    // Mirrors the `handlers` map in apps/worker/src/index.ts. Written out rather
-    // than imported, so adding a job on one side without the other fails here.
     expect(declared).toEqual(['logging:partition-maintenance', 'phishing:refresh-blocklist']);
   });
 

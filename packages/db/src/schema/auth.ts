@@ -1,16 +1,5 @@
 import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
-/**
- * Better Auth's core schema.
- *
- * Transcribed from Better Auth's documented database schema rather than
- * generated: `@better-auth/cli` pulls `better-sqlite3`, which needs node-gyp and
- * does not install under Bun. Column names are camelCase because Better Auth
- * addresses them by those exact names — renaming them to snake_case would break
- * the adapter's queries. `auth-schema.integration.test.ts` asserts every column
- * the library expects actually exists.
- */
-
 export const user = pgTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -41,8 +30,7 @@ export const account = pgTable('account', {
     .references(() => user.id, { onDelete: 'cascade' }),
   accountId: text('accountId').notNull(),
   providerId: text('providerId').notNull(),
-  // The Discord OAuth access token. The API uses it to re-fetch the user's guild
-  // list server-side so guild access is never decided from client input (I6).
+
   accessToken: text('accessToken'),
   refreshToken: text('refreshToken'),
   accessTokenExpiresAt: timestamp('accessTokenExpiresAt', { withTimezone: true }),

@@ -11,8 +11,6 @@ import {
 
 describe('encodeCustomId', () => {
   test('writes the namespaced form the fixture recorded', () => {
-    // The recorded button press carries exactly this id, so a change to the
-    // grammar breaks a test rather than every menu already posted in a guild.
     expect(encodeCustomId('colours', 'red')).toBe('proton:rolemenu:colours:red');
   });
 
@@ -64,8 +62,6 @@ describe('parseCustomId refuses everything that is not ours', () => {
 
 describe('the prefix test and the parser agree about ownership', () => {
   test('a malformed id of ours is recognised as ours and still refused', () => {
-    // The distinction the handler needs: "not mine, leave it alone" versus
-    // "mine and unreadable". Only the first may be answered by another module.
     const malformed = 'proton:rolemenu:colours:red:extra';
 
     expect(hasRolemenuPrefix(malformed)).toBe(true);
@@ -88,9 +84,6 @@ describe('the recorded component interaction', () => {
 
 describe('the 100-character ceiling', () => {
   test('a menu id and key at the schema’s limits do not fit, which is why config checks', () => {
-    // 64 + 64 plus the prefix is well over 100. The bounds on the two fields are
-    // deliberately not tight enough to guarantee a fit on their own — the
-    // encoded length is what config refuses, because that is the real rule.
     expect(encodeCustomId('m'.repeat(64), 'k'.repeat(64)).length).toBeGreaterThan(
       MAX_CUSTOM_ID_LENGTH,
     );

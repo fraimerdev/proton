@@ -1,16 +1,6 @@
 import { index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 import { guilds } from './guilds.ts';
 
-/**
- * Dashboard mutations — NOT Discord's audit log.
- *
- * Every dashboard mutation writes exactly one row with before/after diffs
- * (PLAN.md I7). It is implemented as server-fn middleware rather than as calls
- * inside each handler, so it cannot be forgotten when someone adds an endpoint.
- *
- * `ipHash` is a hash, never a raw address — Proton is a data controller and an
- * IP is personal data under GDPR.
- */
 export const auditTrail = pgTable(
   'audit_trail',
   {

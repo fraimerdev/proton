@@ -13,14 +13,14 @@ describe('the message log listener', () => {
   test('records nothing for a guild that has not opted in', async () => {
     const store = new MemoryMessageLogStore();
     const listener = createMessageLogListener({ store });
-    const ctx = context(); // defaults — enabled is false
+    const ctx = context();
 
     await listener.handler(messageUpdated(), ctx);
     await listener.handler(messageDeleted(), ctx);
     await listener.handler(messageBulkDeleted(['600000000000000010']), ctx);
 
     expect(store.appended).toEqual([]);
-    // Silence, not a warning: not opting in is a choice, not a misconfiguration.
+
     expect(ctx.logs).toEqual([]);
   });
 
@@ -41,8 +41,6 @@ describe('the message log listener', () => {
     const listener = createMessageLogListener({ store });
     const ctx = context({ enabled: true });
 
-    // The gateway derives the event id from the dispatch, so a RESUME redelivers
-    // the identical event rather than a new one.
     await listener.handler(messageUpdated(), ctx);
     await listener.handler(messageUpdated(), ctx);
 
@@ -57,8 +55,7 @@ describe('the message log listener', () => {
     await listener.handler(messageUpdated(), ctx);
 
     expect(ctx.logs[0]?.level).toBe('error');
-    // "The bot did nothing" is a bug (§1): the message names the missing piece
-    // and the call that supplies it.
+
     expect(ctx.logs[0]?.message).toContain('PostgresMessageLogStore');
     expect(ctx.logs[0]?.message).toContain('createLoggingModule');
   });
@@ -67,8 +64,6 @@ describe('the message log listener', () => {
     const listener = createMessageLogListener({});
     const ctx = context({ enabled: true, ignoredChannels: [CHANNEL] });
 
-    // No store bound, but nothing to store either — an ignored channel must not
-    // produce an alarm about wiring.
     await listener.handler(messageUpdated(), ctx);
 
     expect(ctx.logs).toEqual([]);

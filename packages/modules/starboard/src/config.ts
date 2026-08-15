@@ -1,25 +1,11 @@
 import { protonFields, snowflakeSchema } from '@proton/core';
 import { z } from 'zod';
 
-/**
- * The default star. A plain unicode emoji rather than a custom one, because a
- * custom emoji id is per-guild and a default naming one would resolve to nothing
- * in every server but the one it came from.
- */
 export const DEFAULT_STAR_EMOJI = '⭐';
 
-/** Room for a per-channel starboard without letting one config row become a channel list. */
 const SOURCE_CHANNEL_MAX = 50;
 
 export const starboardConfigSchema = z.object({
-  /**
-   * Off until an admin picks a board channel.
-   *
-   * Every other module in this repo that posts something a whole server sees
-   * defaults off for the same reason: a starboard switched on by an upgrade
-   * would start reposting old conversations into whichever channel happened to
-   * be configured, and there is no undo for that.
-   */
   enabled: z
     .boolean()
     .default(false)
@@ -30,32 +16,16 @@ export const starboardConfigSchema = z.object({
         'Pick a board channel before turning this on.',
     }),
 
-  /**
-   * Where board posts go.
-   *
-   * Optional in the schema and required in practice: the listener refuses to act
-   * without it and says so by name, rather than silently doing nothing. It
-   * cannot be a required field because `defaultConfig` has to satisfy the schema
-   * and there is no channel id that is right for every guild.
-   */
   boardChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Board channel',
     description:
       'Where starred messages are reposted. Reactions inside this channel are ignored, so ' +
       'the board can never star its own posts.',
-    // Text and announcement channels, and their public/private threads.
+
     channelTypes: [0, 5, 11, 12],
   }),
 
-  /**
-   * The reaction that counts.
-   *
-   * A unicode character, or a custom emoji as `name:id`. `<:name:id>` — what
-   * Discord's own client copies into the message box — is accepted too and
-   * normalised on read, because an admin pasting the emoji from chat is the
-   * likeliest way this field is ever filled in.
-   */
   emoji: z
     .string()
     .min(1)
@@ -81,13 +51,6 @@ export const starboardConfigSchema = z.object({
         'falls back below this number has its board post removed again.',
     }),
 
-  /**
-   * Which channels can produce board posts. Empty means every channel.
-   *
-   * A flat array of ids rather than an include/exclude object, because the v1
-   * form generator renders flat arrays of scalars and refuses arrays of objects
-   * (§9) — and because "these channels" is the question an admin actually asks.
-   */
   sourceChannelIds: z
     .array(snowflakeSchema)
     .max(SOURCE_CHANNEL_MAX)
@@ -112,14 +75,6 @@ export const starboardConfigSchema = z.object({
         'complaint about a starboard.',
     }),
 
-  /**
-   * Whether the author's own star counts toward the threshold.
-   *
-   * False by default: a member who can star themselves onto the board with the
-   * last needed star turns the threshold into "threshold minus one, for me".
-   * Enforcing it costs a second read — see `SourceMessageRequest.withReactors`,
-   * which explains why Discord's message object cannot answer this on its own.
-   */
   selfStarAllowed: z
     .boolean()
     .default(false)
@@ -154,5 +109,4 @@ export const starboardDefaultConfig: StarboardConfig = {
   ignoreNsfw: true,
 };
 
-/** Bumped whenever the shape above changes (I5). */
 export const STARBOARD_SCHEMA_VERSION = 1;

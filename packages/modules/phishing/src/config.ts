@@ -1,22 +1,9 @@
 import { durationStringSchema, protonFields } from '@proton/core';
 import { z } from 'zod';
 
-/**
- * What Proton does with the author of a message carrying a blocklisted link.
- *
- * Every entry is an existing `ActionKind`, so the executor's prechecks, case
- * ledger and dry-run policy apply unchanged (I1). `none` is a real choice, not a
- * placeholder: a server with human moderators online often wants the alert and
- * nothing else, and a module that cannot be put in observe-only mode is a module
- * admins switch off entirely the first time it surprises them.
- *
- * Deleting the message is deliberately absent — see the blocker on
- * `createPhishingModule`.
- */
 export const PHISHING_ACTIONS = ['none', 'timeout', 'kick', 'ban'] as const;
 export type PhishingAction = (typeof PHISHING_ACTIONS)[number];
 
-/** Room for a guild's own list without letting one config row become a feed. */
 const GUILD_LIST_MAX = 100;
 
 export const phishingConfigSchema = z.object({
@@ -47,13 +34,6 @@ export const phishingConfigSchema = z.object({
     description: 'How long the timeout lasts. Discord caps timeouts at 28 days.',
   }),
 
-  /**
-   * Where the alert goes.
-   *
-   * Optional, and its absence is not an error: a guild that picked `none` and no
-   * alert channel has asked for detection to be logged and nothing more, which
-   * is a coherent thing to want while testing the module.
-   */
   alertChannel: z
     .string()
     .optional()
@@ -63,18 +43,10 @@ export const phishingConfigSchema = z.object({
       description:
         'Posts the channel, the author and the exact domain that matched, so staff can ' +
         'check the call. Leave empty for no alert.',
-      // Text and announcement channels, and their threads.
+
       channelTypes: [0, 5, 11, 12],
     }),
 
-  /**
-   * A guild's own additions to the list.
-   *
-   * Here rather than as extra feed URLs on purpose: the fetched list is global
-   * and shared, so a per-guild URL would have Proton issue an outbound request
-   * to any address a dashboard user typed. These are matched exactly the way
-   * feed entries are — on label boundaries, so an entry covers its subdomains.
-   */
   blockDomains: z
     .array(z.string().max(253))
     .max(GUILD_LIST_MAX)
@@ -86,13 +58,6 @@ export const phishingConfigSchema = z.object({
         'subdomains, so blocking example.com also blocks login.example.com.',
     }),
 
-  /**
-   * The escape hatch for a wrong feed entry.
-   *
-   * Community lists are curated by volunteers and do occasionally list a domain
-   * a particular server legitimately uses. Without this, that server's only
-   * remedy is switching the whole module off and waiting for an upstream fix.
-   */
   allowDomains: z
     .array(z.string().max(253))
     .max(GUILD_LIST_MAX)
@@ -115,5 +80,4 @@ export const phishingDefaultConfig: PhishingConfig = {
   allowDomains: [],
 };
 
-/** Bumped whenever the shape above changes (I5). */
 export const PHISHING_SCHEMA_VERSION = 1;

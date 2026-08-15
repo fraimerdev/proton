@@ -82,7 +82,6 @@ function config(overrides: Partial<AutoroleConfig> = {}): AutoroleConfig {
   return autoroleConfigSchema.parse({ enabled: true, stickyEnabled: true, ...overrides });
 }
 
-/** Real dispatches through the real normaliser — never a hand-built event (I11). */
 function event(name: 'guildMemberUpdate' | 'guildMemberAdd'): ProtonEvent {
   const normalised = normalise(dispatch(name));
   if (!normalised) throw new Error(`fixture ${name} did not normalise`);
@@ -105,11 +104,6 @@ describe('sticky roles', () => {
     expect(store.snapshots[0]?.roleIds).toEqual(['700000000000000001', '700000000000000002']);
   });
 
-  /**
-   * A guild that strips someone's roles has made a decision. A snapshot that
-   * refused to record removals would hand them straight back on the next
-   * rejoin, turning the feature into a way to undo a demotion.
-   */
   test('an emptied role list is recorded, not ignored', async () => {
     const store = new FakeStore();
     store.seed(MEMBER, ['700000000000000001']);
@@ -143,18 +137,13 @@ describe('sticky roles', () => {
 
     expect(executor.requests).toHaveLength(2);
     expect(executor.requests.every((r) => r.kind === 'add_role')).toBe(true);
-    // Ascending position: an interrupted run leaves the least privileged subset.
+
     expect(executor.requests.map((r) => (r.payload as { roleId: string }).roleId)).toEqual([
       '700000000000000001',
       '700000000000000002',
     ]);
   });
 
-  /**
-   * Gateway RESUME redelivers dispatches verbatim, so the same join arrives
-   * twice. Keying off the event id and the role means the executor discards the
-   * second attempt rather than re-issuing every grant (I4).
-   */
   test('a redelivered join reuses the same idempotency keys', async () => {
     const store = new FakeStore();
     store.seed(MEMBER, ['700000000000000001']);
@@ -207,10 +196,6 @@ describe('sticky roles', () => {
     expect(executor.requests).toEqual([]);
   });
 
-  /**
-   * §7: a module that cannot do the thing it is enabled for must say which part
-   * is unwired. Silence here is indistinguishable from "no one has rejoined".
-   */
   test('an unwired store is reported by name rather than going quiet', async () => {
     const { logger, lines } = collectingLogger();
     const listener = createStickyListener({});
@@ -225,7 +210,6 @@ describe('sticky roles', () => {
     expect(lines.join(' ')).toContain('no role store is wired');
   });
 
-  /** A refusal must name the role and the reason — never "something went wrong". */
   test('a refused grant is logged with the executor’s own reason', async () => {
     const store = new FakeStore();
     store.seed(MEMBER, ['700000000000000001']);

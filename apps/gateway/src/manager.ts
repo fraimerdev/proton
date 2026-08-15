@@ -13,19 +13,6 @@ export interface GatewayManagerOptions {
   onEvent?: (type: string) => void;
 }
 
-/**
- * Wire @discordjs/ws to Redis-backed session state and the event bus.
- *
- * Two things worth noting:
- *
- * 1. The REST client here points at Proton's own proxy, not discord.com. The
- *    manager needs `GET /gateway/bot` for the shard count and `max_concurrency`,
- *    and I2 admits no exceptions — even this one call is egress.
- *
- * 2. `retrieveSessionInfo` / `updateSessionInfo` are what make I13 real. With
- *    them, a gateway restart RESUMEs instead of IDENTIFYing, and the 1000/day
- *    session-start budget survives ordinary deploys.
- */
 export function createGatewayManager(options: GatewayManagerOptions): WebSocketManager {
   const rest = new REST({ version: '10', api: `${options.restProxyUrl.replace(/\/$/, '')}/api` });
   rest.setToken(options.token);

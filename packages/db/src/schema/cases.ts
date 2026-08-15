@@ -11,14 +11,10 @@ import {
 } from 'drizzle-orm/pg-core';
 import { guilds } from './guilds.ts';
 
-/**
- * The action ledger. Every state-changing Discord operation writes a row here
- * (PLAN.md P3) — there is no path that mutates a guild without leaving a case.
- */
 export const cases = pgTable(
   'cases',
   {
-    id: text('id').primaryKey(), // ulid
+    id: text('id').primaryKey(),
     guildId: text('guild_id')
       .notNull()
       .references(() => guilds.id, { onDelete: 'cascade' }),
@@ -38,19 +34,12 @@ export const cases = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    // Human-facing per-guild case numbering.
     uniqueIndex('cases_guild_case_number_uq').on(t.guildId, t.caseNumber),
 
-    // The database-level guarantee behind I4. Dedupe in Redis is the fast path;
-    // this constraint is what makes double-execution impossible rather than
-    // merely unlikely when Redis is cold, restarted or raced.
     uniqueIndex('cases_idempotency_key_uq').on(t.idempotencyKey),
 
-    // "show me this user's history in this guild, newest first"
     index('cases_guild_target_created_idx').on(t.guildId, t.targetId, t.createdAt.desc()),
 
-    // Partial index for the auto-reversal sweeper: only rows that still need
-    // reverting are indexed, so it stays small no matter how large `cases` grows.
     index('cases_pending_expiry_idx')
       .on(t.expiresAt)
       .where(sql`${t.expiresAt} is not null and ${t.revertedAt} is null`),

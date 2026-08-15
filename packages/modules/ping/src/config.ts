@@ -1,13 +1,6 @@
 import { protonFields } from '@proton/core';
 import { z } from 'zod';
 
-/**
- * Ping's configuration.
- *
- * Shaped so all three Gate 0 field types are load-bearing rather than merely
- * demonstrated: the vertical slice cannot pass unless boolean, string and
- * channel-id all render and round-trip.
- */
 export const pingConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
@@ -39,5 +32,4 @@ export const pingDefaultConfig: PingConfig = {
   restrictToChannel: null,
 };
 
-/** Bumped whenever the shape above changes (I5). */
 export const PING_SCHEMA_VERSION = 1;

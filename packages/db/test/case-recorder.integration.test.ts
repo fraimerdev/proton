@@ -73,15 +73,10 @@ describe('DrizzleCaseRecorder', () => {
     `);
 
     expect(first.map((r) => r.case_number)).toEqual([1, 2]);
-    // Numbering is per guild, so a busy guild never inflates a quiet one's numbers.
+
     expect(other.case_number).toBe(1);
   });
 
-  /**
-   * The durable half of I4. Redis dedupe is the fast path, but if Redis is
-   * flushed, cold, or raced, this constraint is what still makes double
-   * execution impossible.
-   */
   test('rejects a duplicate idempotency key at the database level', async () => {
     const key = newId();
     await recorder.record(input({ idempotencyKey: key }));
@@ -102,11 +97,6 @@ describe('DrizzleCaseRecorder', () => {
       from cases where id = ${caseId}
     `);
 
-    // Regression guard for the driver-level double-encoding described in
-    // client.ts: with drizzle-orm/bun-sql this stored a jsonb *string scalar*,
-    // so `kind` was 'string' and the extraction silently returned null. The same
-    // bug in guild_modules.config or audit_trail.before/after would corrupt
-    // module configuration and audit diffs without any error.
     expect(row.kind).toBe('object');
     expect(row.content).toBe('Pong!');
   });
@@ -122,8 +112,6 @@ describe('DrizzleCaseRecorder', () => {
     );
     const numbers = found.map((r) => r.case_number);
 
-    // Whatever survives the race must have unique numbers — never two cases
-    // sharing a number, which would break per-guild case lookup.
     expect(new Set(numbers).size).toBe(numbers.length);
     expect(numbers).toHaveLength(succeeded);
   });

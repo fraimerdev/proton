@@ -14,10 +14,6 @@ describe('autorole rule compilation', () => {
     expect(rules.map((r) => r.id)).toEqual([autoroleRuleId(ROLE_A), autoroleRuleId(ROLE_B)]);
   });
 
-  /**
-   * One rule per role rather than one rule with two actions, because that is
-   * what makes a single role's grant switchable without touching the other.
-   */
   test('each rule carries exactly one add_role naming its own role', () => {
     const [first, second] = autoroleRules({ autoroleIds: [ROLE_A, ROLE_B] });
 
@@ -27,11 +23,6 @@ describe('autorole rule compilation', () => {
     expect(second?.actions[0]?.payload).toEqual({ roleId: ROLE_B });
   });
 
-  /**
-   * A preset runs in every guild, so it cannot name a member — the engine fills
-   * `userId` from the event's facts. A payload carrying one would grant the role
-   * to the same person in every server that enabled the module.
-   */
   test('no rule hardcodes a member', () => {
     for (const rule of autoroleRules({ autoroleIds: [ROLE_A, ROLE_B] })) {
       for (const action of rule.actions) {
@@ -47,18 +38,12 @@ describe('autorole rule compilation', () => {
     expect(rule?.conditions).toEqual([]);
   });
 
-  /** Ordering must not drift between deploys, or the rules become untestable. */
   test('priorities are deterministic and ascending', () => {
     const rules = autoroleRules({ autoroleIds: [ROLE_A, ROLE_B] });
 
     expect(rules.map((r) => r.priority)).toEqual([0, 10]);
   });
 
-  /**
-   * The engine validates every rule on load and reports an unparseable one as
-   * `invalid-rule` rather than firing it. A preset that could not survive that
-   * would be silently dead in every guild.
-   */
   test('every compiled rule satisfies the engine’s own schema', () => {
     for (const rule of autoroleRules({ autoroleIds: [ROLE_A, ROLE_B] })) {
       expect(ruleDefinitionSchema.safeParse(rule).success).toBe(true);

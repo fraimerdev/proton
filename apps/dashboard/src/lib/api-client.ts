@@ -2,14 +2,6 @@ import type { CaseQuery, CaseSearchResult } from '@proton/core';
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
-/**
- * The wire shape of a FieldDescriptor.
- *
- * Core's `FieldDescriptor` carries `defaultValue?: unknown`, and TanStack Start
- * constrains server-function return types to serializable ones — `unknown` fails
- * that constraint. This mirrors the same data in JSON terms; the route casts back
- * to `FieldDescriptor` at the render boundary.
- */
 export interface JsonFieldDescriptor {
   kind: string;
   path: string;
@@ -39,17 +31,10 @@ export interface ModuleSummary {
   name: string;
   category: string;
   descriptors: JsonFieldDescriptor[];
-  /** Slash command names the module registered — see the API's `/modules` route. */
+
   commands: string[];
 }
 
-/**
- * Server-side client for the API service.
- *
- * Server functions are a thin RPC layer (PLAN.md §9) — they authenticate,
- * authorise, then delegate here. No domain logic lives in the dashboard, so the
- * worker and the dashboard cannot drift apart on what an operation means.
- */
 export class ApiClient {
   readonly #baseUrl: string;
   readonly #secret: string;
@@ -85,10 +70,6 @@ export class ApiClient {
     return this.#request(`/guilds/${guildId}/modules/${moduleId}`);
   }
 
-  /**
-   * `CaseSearchResult` is already JSON-safe — ISO strings, no `Date`, no
-   * `unknown` — so unlike `FieldDescriptor` it needs no mirror type here.
-   */
   searchCases(guildId: string, query: CaseQuery): Promise<CaseSearchResult> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {

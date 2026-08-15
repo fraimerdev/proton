@@ -27,14 +27,6 @@ export interface ApiDeps {
   sharedSecret: string;
 }
 
-/**
- * A query string is all strings; `caseQuerySchema` is typed.
- *
- * Only the two numeric fields need adapting, and doing it here — at the one
- * place strings arrive — keeps the schema itself free of `z.coerce`, which
- * would widen its input type to `unknown` and cost the dashboard's `Link`
- * search params their types.
- */
 function parseCaseQuery(raw: Record<string, string>) {
   const numeric = (key: 'page' | 'pageSize') =>
     raw[key] === undefined ? {} : { [key]: Number(raw[key]) };
@@ -42,21 +34,11 @@ function parseCaseQuery(raw: Record<string, string>) {
   return caseQuerySchema.safeParse({ ...raw, ...numeric('page'), ...numeric('pageSize') });
 }
 
-/**
- * All domain logic lives behind this service (PLAN.md §9). Dashboard server
- * functions are thin authenticate → authorise → audit → delegate wrappers, so
- * the worker and the dashboard share one definition of every operation.
- */
 export function createApiApp(deps: ApiDeps): Hono {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
-  /**
-   * Register a guild the bot is in. Called by the worker on every
-   * `guild.available`, so it must be idempotent — GUILD_CREATE arrives on every
-   * connect and every RESUME.
-   */
   app.put('/guilds/:guildId', async (c) => {
     if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
       return c.json({ error: 'unauthorised' }, 401);
@@ -71,7 +53,6 @@ export function createApiApp(deps: ApiDeps): Hono {
     return c.json({ ok: true });
   });
 
-  /** The bot was removed. Soft-marks `left_at`; never deletes the history. */
   app.delete('/guilds/:guildId', async (c) => {
     if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
       return c.json({ error: 'unauthorised' }, 401);
@@ -81,7 +62,6 @@ export function createApiApp(deps: ApiDeps): Hono {
     return c.json({ ok: true });
   });
 
-  // Service-to-service only. The browser never talks to this app.
   app.use('/guilds/*', async (c, next) => {
     if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
       return c.json({ error: 'unauthorised' }, 401);
@@ -95,23 +75,12 @@ export function createApiApp(deps: ApiDeps): Hono {
       name: m.name,
       category: m.category,
       descriptors: deps.registry.descriptors(m.id),
-      // The commands this module registered. The permissions module's override
-      // map is keyed by command name, and those names are runtime data — which
-      // modules happen to be loaded — so no static schema can enumerate them
-      // and the dashboard cannot learn them without asking (I3 forbids the
-      // permissions module importing the modules that own the commands).
+
       commands: (m.commands ?? []).map((command) => command.name),
     }));
     return c.json({ modules });
   });
 
-  /**
-   * The case browser's query (PLAN.md §9, Gate 1).
-   *
-   * Filters are validated here rather than trusted from the dashboard: the
-   * dashboard puts them in the URL so a filtered view is shareable, which means
-   * they are user input by the time they arrive.
-   */
   app.get('/guilds/:guildId/cases', async (c) => {
     const parsed = parseCaseQuery(c.req.query());
     if (!parsed.success) {
@@ -161,7 +130,6 @@ export function createApiApp(deps: ApiDeps): Hono {
   return app;
 }
 
-/** Map a thrown error to a status and body, without needing Hono's context type. */
 function toErrorResponse(error: unknown): {
   status: 400 | 404 | 500;
   body: { error: string; message?: string };

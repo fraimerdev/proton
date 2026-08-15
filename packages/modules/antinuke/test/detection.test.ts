@@ -35,10 +35,9 @@ describe('counting destructive audit events', () => {
     const hit = windowOf(h).hits[0];
     expect(hit?.actorId).toBe(NUKER);
     expect(hit?.guildId).toBe(GUILD);
-    // The entry's own timestamp. Using the clock would compress a burst that was
-    // spread out, and would disagree with itself on a RESUME replay (§15).
+
     expect(hit?.now).toBe(NOW - 4_000);
-    // Deduped on the event id, so a redelivered entry is not counted twice (I4).
+
     expect(hit?.member).toBe(event.id);
   });
 
@@ -70,8 +69,6 @@ describe('counting destructive audit events', () => {
   test('says which threshold it could not read rather than watching nothing quietly', async () => {
     const h = harness();
 
-    // A row written by an older build: the schema refuses this on write (I5), so
-    // the only way here is storage that predates the check.
     const outcome = await h.handle(auditEvent('channel.deleted'), {
       channelDeleteWindow: 'whenever',
     });
@@ -154,7 +151,7 @@ describe('unbound dependencies', () => {
     expect(line).toContain('rateWindow');
     expect(line).toContain('botUserId');
     expect(line).toContain('createAntinukeModule(');
-    // The ports that *are* bound must not be reported as missing.
+
     expect(line).not.toContain('guildState');
   });
 });
@@ -177,8 +174,7 @@ describe('maintenance mode', () => {
     });
 
     expect(outcome.action).toBe('suppressed');
-    // Not counted either: a window left loaded with legitimate bulk work would
-    // trip on the first ordinary deletion after maintenance ended.
+
     expect(windowOf(h).hits).toEqual([]);
     expect(h.rest.calls).toEqual([]);
     expect(h.logged('info', 'anti-nuke suppressed')).toBe(true);
@@ -187,7 +183,7 @@ describe('maintenance mode', () => {
   test('still covers an entry that arrives after the window closed but happened inside it', async () => {
     const h = harness();
     await h.maintenance.set(window);
-    // Audit delivery lags: we hear about it two minutes after the window shut.
+
     h.clock.now = window.expiresAt + 120_000;
 
     const outcome = await h.handle(
@@ -215,8 +211,7 @@ describe('maintenance mode', () => {
     expect(windowOf(h).hits).toHaveLength(2);
     expect(h.alertContent()).toContain('maintenance mode ended');
     expect(h.alertContent()).toContain('armed again');
-    // Keyed on the window's expiry rather than the event, so a hundred entries
-    // observing the same lapse produce one message (I4).
+
     expect(h.discordCalls().filter((c) => c.path.endsWith('/messages'))).toHaveLength(1);
   });
 

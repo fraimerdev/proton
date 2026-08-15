@@ -14,8 +14,6 @@ describe('logging config', () => {
   });
 
   test('collects nothing extra by default', () => {
-    // Whatever else changes here, the default must never start recording a
-    // channel a guild did not name.
     expect(loggingDefaultConfig.ignoredChannels).toEqual([]);
   });
 

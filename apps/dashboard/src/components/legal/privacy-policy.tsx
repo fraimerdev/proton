@@ -1,16 +1,6 @@
 import { MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
 import type { ReactElement } from 'react';
 
-/**
- * The privacy policy (PLAN.md §6, §14.5).
- *
- * §6 calls message-content retention a legal surface and names Proton the data
- * controller, which makes this a product surface rather than boilerplate: the
- * page has to describe what is actually stored, and it has to stay true as the
- * code changes. The retention window is therefore imported from the logging
- * module rather than typed in — a policy promising 30 days while the sweeper
- * keeps 45 is the failure mode that matters here.
- */
 export function PrivacyPolicy(): ReactElement {
   return (
     <section className="panel prose">
@@ -98,15 +88,9 @@ export function PrivacyPolicy(): ReactElement {
         about someone else as much as about you. Removing Proton from a server ends all collection
         for it.
       </p>
-      {/* Deliberately not a made-up address. GDPR requires a real contact point,
-          so the operator must add theirs here before this instance is public —
-          an invented one would be worse than an obvious gap. */}
+
       <p>Requests go to the operator of this Proton instance.</p>
 
-      {/* A plain anchor, not a router `Link`: a privacy policy is the one page
-          that has to render outside the app — Discord's app listing wants a URL
-          for it, and the same component should serve a static export without
-          dragging a router along. */}
       <p>
         <a href="/">Back to sign in</a>
       </p>

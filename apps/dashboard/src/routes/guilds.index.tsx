@@ -7,10 +7,6 @@ export const Route = createFileRoute('/guilds/')({
     try {
       return await listGuilds();
     } catch (error) {
-      // `requireSession` throws for a signed-out visitor. Letting that escape
-      // renders a 500, which tells someone who simply is not logged in that the
-      // site is broken. Anything else is a real fault and must keep propagating
-      // rather than being swallowed into a redirect loop.
       if (error instanceof Error && /forbidden|not signed in/i.test(error.message)) {
         throw redirect({ to: '/' });
       }
@@ -20,7 +16,6 @@ export const Route = createFileRoute('/guilds/')({
   component: GuildPicker,
 });
 
-/** Only guilds the signed-in user actually administers are ever listed (I6). */
 function GuildPicker(): ReactElement {
   const { guilds } = Route.useLoaderData();
 

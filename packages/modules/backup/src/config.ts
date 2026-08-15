@@ -1,26 +1,8 @@
 import { protonFields } from '@proton/core';
 import { z } from 'zod';
 
-/**
- * How many snapshots one guild may keep.
- *
- * A snapshot is a jsonb document holding every channel, role and overwrite in
- * the server, so an uncapped history is unbounded growth in the one column
- * nobody ever looks at. The cap is a hard schema limit rather than advice.
- */
 export const MAX_RETAINED_BACKUPS = 25;
 
-/**
- * Backup's configuration.
- *
- * Two settings, because there are only two things a server owner genuinely
- * disagrees about. Everything else this module does is either forced by Discord
- * (§10.1) or is a correctness rule that must not be switchable: it always
- * reports the channels it could not capture, and it always refuses to recreate
- * one it could not read. A "don't warn me about hidden channels" toggle would
- * turn a trustworthy backup into a silently partial one, which §10.1 names as
- * the specific way naive backup/restore breaks.
- */
 export const backupConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
@@ -49,5 +31,4 @@ export const backupDefaultConfig: BackupConfig = {
   retainBackups: 10,
 };
 
-/** Bumped whenever the shape above changes (I5). */
 export const BACKUP_SCHEMA_VERSION = 1;

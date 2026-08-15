@@ -11,15 +11,6 @@ import {
   xpForStep,
 } from '../src/curve.ts';
 
-/**
- * The curve is the one piece of leveling that everything else trusts.
- *
- * `members.level` is a cache — the executor, the dashboard and `/rank` each
- * recompute a level from XP and must agree, so the properties below matter more
- * than any particular value. The boundary cases are where a wrong answer is
- * visible to a member: a level that flickers between two values as XP crosses a
- * threshold is the bug this exactness exists to prevent.
- */
 describe('xpForLevel', () => {
   test('level 0 costs nothing, so a member’s first message announces nothing', () => {
     expect(xpForLevel(0)).toBe(0);
@@ -44,10 +35,6 @@ describe('xpForLevel', () => {
     expect(xpForLevel(-3)).toBe(0);
   });
 
-  /**
-   * `members.xp` is an int4. A curve that overflowed it would crash on the
-   * hottest write path in the system, once per message.
-   */
   test('the ceiling leaves int4 headroom', () => {
     expect(MAX_XP).toBe(xpForLevel(MAX_LEVEL));
     expect(MAX_XP).toBeLessThan(2_147_483_647 / 10);
@@ -77,11 +64,6 @@ describe('levelForXp', () => {
   });
 });
 
-/**
- * The properties, which are what actually pin the curve. PLAN.md §11 asks for
- * fast-check on the permission math; the same argument applies here, because
- * this is the other pure numeric core whose failures are silent.
- */
 describe('curve properties', () => {
   test('levelForXp is the exact inverse of xpForLevel', () => {
     fc.assert(
@@ -91,7 +73,6 @@ describe('curve properties', () => {
     );
   });
 
-  /** One XP short of a threshold must never already be the next level. */
   test('one XP below a threshold is the previous level', () => {
     fc.assert(
       fc.property(fc.integer({ min: 1, max: MAX_LEVEL }), (level) => {
@@ -154,10 +135,6 @@ describe('levelProgress', () => {
     expect(progress.remaining).toBe(progress.span);
   });
 
-  /**
-   * At the ceiling there is no next level to be a fraction of the way towards.
-   * A progress bar pinned at 100% would claim one exists.
-   */
   test('at the ceiling there is no next step to report', () => {
     const progress = levelProgress(MAX_XP + 5_000);
 

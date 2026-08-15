@@ -48,11 +48,6 @@ describe('reading module config', () => {
     await expect(service.get(GUILD, 'nope')).rejects.toThrow(ModuleConfigError);
   });
 
-  /**
-   * I5: config is validated on every read, not just on write. The JSONB column
-   * is storage, never a trust boundary — a hand-edited row, a bad migration or a
-   * restored backup must not reach module code as an unchecked object.
-   */
   test('refuses a stored config that no longer satisfies the schema', async () => {
     await handle.db.insert(guildModules).values({
       guildId: GUILD,
@@ -62,12 +57,10 @@ describe('reading module config', () => {
       schemaVersion: 1,
     });
 
-    // `response` has min(1) — an empty string must not be handed to the module.
     await expect(service.get(GUILD, 'ping')).rejects.toThrow(/does not satisfy/);
   });
 
   test('fills in defaults for fields added since the row was written', async () => {
-    // A row saved before `restrictToChannel` existed.
     await handle.db.insert(guildModules).values({
       guildId: GUILD,
       moduleId: 'ping',
@@ -114,10 +107,6 @@ describe('writing module config', () => {
     expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);
   });
 
-  /**
-   * I7: every mutation writes an audit row with before/after diffs. Implemented
-   * here, in the one shared domain operation, so no caller can forget it.
-   */
   test('writes exactly one audit_trail row with before and after', async () => {
     await service.update({
       guildId: GUILD,
@@ -144,11 +133,11 @@ describe('writing module config', () => {
     const entry = entries[0];
     expect(entry?.actor_id).toBe(ACTOR);
     expect(entry?.action).toBe('module.ping.update');
-    // Before is the pre-change state — defaults, since no row existed.
+
     expect(entry?.before.enabled).toBe(false);
     expect(entry?.after.enabled).toBe(true);
     expect(entry?.after.config.response).toBe('First');
-    // An IP is personal data; only its hash is stored.
+
     expect(entry?.ip_hash).toBe('hashed-ip');
   });
 
@@ -172,7 +161,7 @@ describe('writing module config', () => {
 
     expect(before.config.response).toBe('First');
     expect(after.config.response).toBe('Second');
-    // Enabled was not supplied, so it carries forward rather than resetting.
+
     expect(after.enabled).toBe(true);
 
     const rows = await handle.client`select count(*)::int as n from audit_trail`;

@@ -62,11 +62,6 @@ function input(overrides: Partial<ScheduledActionInput> = {}): ScheduledActionIn
 const claim = (overrides: Partial<Parameters<typeof store.claimDue>[0]> = {}) =>
   store.claimDue({ now: NOW, lockUntil: LATER, limit: 10, maxAttempts: 5, ...overrides });
 
-/**
- * Read stored rows through Drizzle rather than the raw client: Drizzle's own
- * driver setup disables postgres.js timestamp parsing on the shared connection,
- * so only its column mappers hand back real `Date`s. See client.ts.
- */
 const stored = () => handle.db.select().from(scheduledActions);
 
 describe('DrizzleScheduledActionStore.schedule', () => {
@@ -80,19 +75,11 @@ describe('DrizzleScheduledActionStore.schedule', () => {
         from scheduled_actions where idempotency_key = 'reversal:k1'
     `);
 
-    // Regression guard for the driver-level double-encoding in client.ts: as a
-    // jsonb string scalar these extractions return null and the sweeper would
-    // reject its own rows as malformed.
     expect(row.kind).toBe('object');
     expect(row.original).toBe('ban');
     expect(row.user).toBe(TARGET);
   });
 
-  /**
-   * The scheduler runs once per executed action, and a redelivered gateway event
-   * can execute the same logical action twice past the dedupe window. Two rows
-   * would mean two unbans.
-   */
   test('a repeat of the same derived key inserts nothing and says so', async () => {
     const first = await store.schedule(input({ idempotencyKey: 'reversal:k1' }));
     const second = await store.schedule(input({ idempotencyKey: 'reversal:k1' }));
@@ -113,7 +100,7 @@ describe('DrizzleScheduledActionStore.claimDue', () => {
     expect(claimed).toHaveLength(1);
     expect(claimed[0]?.kind).toBe('unban');
     expect(claimed[0]?.guildId).toBe(GUILD);
-    // Already incremented, so `1` reads as "this is the first attempt".
+
     expect(claimed[0]?.attempts).toBe(1);
 
     expect(claimed[0]?.runAt).toEqual(DUE);
@@ -132,20 +119,13 @@ describe('DrizzleScheduledActionStore.claimDue', () => {
     await store.schedule(input());
     await claim();
 
-    // Same instant: the first sweeper still holds it.
     expect(await claim()).toHaveLength(0);
 
-    // Past the lock: the claim is presumed dead and the work is reclaimed, which
-    // is what stops a worker crashing mid-reversal from stranding the row.
     const after = await claim({ now: new Date(LATER.getTime() + 1000) });
     expect(after).toHaveLength(1);
     expect(after[0]?.attempts).toBe(2);
   });
 
-  /**
-   * The atomic half of the design. Two sweepers hitting one row must not both
-   * receive it — a double claim is a double unban.
-   */
   test('concurrent claims split the rows, never share one', async () => {
     for (let i = 0; i < 6; i += 1) {
       await store.schedule(input({ idempotencyKey: `reversal:k${i}` }));
@@ -158,10 +138,6 @@ describe('DrizzleScheduledActionStore.claimDue', () => {
     expect(new Set(ids).size).toBe(6);
   });
 
-  /**
-   * Without this bound a permanently failing reversal — a user whose account no
-   * longer exists — issues a REST call every sweep, forever.
-   */
   test('stops claiming a row once it has burned its attempts', async () => {
     await store.schedule(input());
 
@@ -171,11 +147,9 @@ describe('DrizzleScheduledActionStore.claimDue', () => {
     await store.release(first[0]?.id ?? '');
     expect(await claim({ maxAttempts: 2 })).toHaveLength(1);
 
-    // attempts is now 2 and nothing else will pick it up.
     await handle.db.update(scheduledActions).set({ lockedUntil: null });
     expect(await claim({ maxAttempts: 2 })).toHaveLength(0);
 
-    // The row survives as the record of what never happened.
     expect(await stored()).toHaveLength(1);
   });
 });
@@ -217,10 +191,6 @@ describe('DrizzleScheduledActionStore.complete', () => {
     expect(await stored()).toHaveLength(0);
   });
 
-  /**
-   * A moderator who lifted the ban by hand owns that record. Overwriting their
-   * name and timestamp with the scheduler's would erase who actually did it.
-   */
   test('never overwrites a reversal a moderator already performed', async () => {
     const caseId = newId();
     await seedCase(caseId);
@@ -241,7 +211,7 @@ describe('DrizzleScheduledActionStore.complete', () => {
     const row = await storedCase(caseId);
     expect(row?.revertedBy).toBe(MOD);
     expect(row?.revertedAt).toEqual(DUE);
-    // The row is still retired — there is nothing left to do.
+
     expect(await stored()).toHaveLength(0);
   });
 });

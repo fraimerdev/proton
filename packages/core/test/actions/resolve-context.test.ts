@@ -75,7 +75,6 @@ describe('resolvePrecheckContext', () => {
     expect('context' in result).toBe(true);
     if (!('context' in result)) return;
 
-    // The Gate 0 stub returned '' and MAX_SAFE_INTEGER for these two.
     expect(result.context.guildOwnerId).toBe(OWNER);
     expect(result.context.botHighestRolePosition).toBe(5);
   });
@@ -103,7 +102,6 @@ describe('resolvePrecheckContext', () => {
     );
     if (!('context' in result)) throw new Error('expected a context');
 
-    // Discord computed this for us (§10.5) — authoritative and free.
     expect(result.context.botChannelPermissions).toBe(Permissions.Administrator);
   });
 
@@ -121,10 +119,6 @@ describe('resolvePrecheckContext', () => {
   });
 });
 
-/**
- * The security core of P1.A. Every one of these produced a *passing* precheck
- * under the Gate 0 stub, because it fabricated state designed to satisfy I8.
- */
 describe('failing closed', () => {
   test('missing guild state refuses rather than assuming', async () => {
     const result = await resolvePrecheckContext({ store: store(null), botUserId: BOT }, request());
@@ -135,9 +129,6 @@ describe('failing closed', () => {
   });
 
   test('the resolved context actually trips runPrechecks for the owner', async () => {
-    // `send` does not target a member, so simulate a kind that does by feeding
-    // the owner in as the target — this is the assertion that will guard every
-    // moderation kind added in P1.B.
     const result = await resolvePrecheckContext(
       { store: store(state()), botUserId: BOT },
       request(),
@@ -166,8 +157,6 @@ describe('failing closed', () => {
       target: { id: TARGET, highestRolePosition: 9 },
     });
 
-    // botHighestRolePosition is 5 here; under the stub it was MAX_SAFE_INTEGER
-    // and this could never fail.
     expect(failure?.code).toBe('role_hierarchy');
   });
 
@@ -176,8 +165,6 @@ describe('failing closed', () => {
       '../../src/actions/resolve-context.ts'
     );
 
-    // Simulate a member-targeting kind by asserting the helper's own contract:
-    // with no roles supplied and no fetcher, it must not invent a position.
     const result = await resolve(
       {
         store: store(state()),
@@ -188,8 +175,6 @@ describe('failing closed', () => {
       { channelId: CHANNEL },
     );
 
-    // `send` does not target a member, so this still resolves — the guard is
-    // exercised for real by the moderation kinds in P1.B.
     expect('context' in result).toBe(true);
   });
 });

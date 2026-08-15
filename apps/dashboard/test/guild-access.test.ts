@@ -57,11 +57,6 @@ describe('resolveGuildAccess', () => {
     expect(resolveGuildAccess(GUILDS, MEMBER_ONLY.id)).toBeNull();
   });
 
-  /**
-   * I6: a guild id from the browser is a lookup key, never evidence. If the id
-   * is not in the list Discord returned for *this user's* token, there is no
-   * access — regardless of what the client claimed.
-   */
   test('refuses a guild the user is not in at all', () => {
     expect(resolveGuildAccess(GUILDS, '111111111111111111')).toBeNull();
   });
@@ -70,11 +65,6 @@ describe('resolveGuildAccess', () => {
     expect(resolveGuildAccess([], OWNED.id)).toBeNull();
   });
 
-  /**
-   * Discord sends permissions as a decimal *string* because the value exceeds
-   * 2^53. Parsing it as a Number silently drops the high bits — including every
-   * permission introduced by the 2026 splits.
-   */
   test('parses high permission bits without precision loss', () => {
     const withHighBits: DiscordUserGuild = {
       ...MEMBER_ONLY,
@@ -124,11 +114,6 @@ describe('config path mapping', () => {
     expect(values.enabled).toBe(true);
   });
 
-  /**
-   * A field removed from the schema must not survive a round trip: it would come
-   * back as an unknown key that the module's Zod schema rejects on the next read
-   * (I5), locking the guild out of its own config.
-   */
   test('drops values whose field is no longer in the schema', () => {
     const result = toConfig(descriptors, {
       enabled: true,

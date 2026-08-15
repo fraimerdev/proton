@@ -67,12 +67,6 @@ describe('module publish port', () => {
     expect(bus.published[0]?.payload).toEqual({ userId: '1' });
   });
 
-  /**
-   * The reason the allowlist exists. A module that could publish another
-   * module's event type could drive its rules — forging `moderation.warned`
-   * would advance an escalation ladder into timing someone out, and nothing
-   * downstream could tell the forged event from a real one.
-   */
   test('refuses a type the module does not declare', async () => {
     const { bus, publisherFor } = setup([manifest('leveling', ['xp.level_gained'])]);
 
@@ -98,7 +92,6 @@ describe('module publish port', () => {
     );
   });
 
-  /** The module supplies a natural key; the guild is not the module's to choose. */
   test('stamps the guild from the context', async () => {
     const { bus, publisherFor } = setup([manifest('leveling', ['xp.level_gained'])]);
 
@@ -107,11 +100,6 @@ describe('module publish port', () => {
     expect(bus.published[0]?.guildId).toBe(GUILD);
   });
 
-  /**
-   * Gateway RESUME redelivers the cause, so the module republishes the effect
-   * under the same natural key. A derived id means the executor discards the
-   * second one (I4); a minted one would double every consequence.
-   */
   test('the same natural key yields the same event id', async () => {
     const { bus, publisherFor } = setup([manifest('leveling', ['xp.level_gained'])]);
     const publish = publisherFor('leveling', GUILD);
@@ -122,10 +110,6 @@ describe('module publish port', () => {
     expect(bus.published[0]?.id).toBe(bus.published[1]?.id ?? '');
   });
 
-  /**
-   * Two guilds acting on the same user id in the same second must not collide,
-   * or one guild's ladder silently swallows the other's warning.
-   */
   test('the same natural key in two guilds yields different ids', async () => {
     const { bus, publisherFor } = setup([manifest('leveling', ['xp.level_gained'])]);
 

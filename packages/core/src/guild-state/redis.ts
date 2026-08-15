@@ -4,14 +4,6 @@ import type { ChannelState, GuildState, GuildStatePatch, GuildStateStore } from 
 
 export const GUILD_STATE_PREFIX = 'proton:guild-state';
 
-/**
- * Wire format.
- *
- * Permissions are bigint in memory and **strings** on the wire: `JSON.stringify`
- * throws on a bigint, and `Number(...)` would silently truncate every permission
- * bit above 2^53 — which since the 2026 splits includes PIN_MESSAGES,
- * SET_VOICE_CHANNEL_STATUS and BYPASS_SLOWMODE.
- */
 interface WireOverwrite {
   id: string;
   type: 0 | 1;
@@ -105,11 +97,6 @@ export class RedisGuildStateStore implements GuildStateStore {
   readonly #prefix: string;
   readonly #ttlSeconds: number | null;
 
-  /**
-   * `ttlSeconds` is a safety net, not a cache policy. State is kept current by
-   * gateway events; a TTL only bounds how long a guild we somehow stopped
-   * hearing about can linger with stale role positions.
-   */
   constructor(redis: Redis, options: { prefix?: string; ttlSeconds?: number | null } = {}) {
     this.#redis = redis;
     this.#prefix = options.prefix ?? GUILD_STATE_PREFIX;
@@ -136,13 +123,6 @@ export class RedisGuildStateStore implements GuildStateStore {
     await this.#redis.set(key, payload, 'EX', this.#ttlSeconds);
   }
 
-  /**
-   * Apply an incremental change.
-   *
-   * A patch for a guild we have no snapshot of is dropped rather than creating a
-   * partial one: a state containing a single role and no owner would let
-   * prechecks compute confidently wrong answers.
-   */
   async patch(guildId: string, patch: GuildStatePatch): Promise<void> {
     const state = await this.get(guildId);
     if (!state) return;

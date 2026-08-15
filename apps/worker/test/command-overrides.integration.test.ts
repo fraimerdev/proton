@@ -25,9 +25,8 @@ const CHANNEL = '500000000000000001';
 const OWNER = '200000000000000001';
 const BOT = '1200000000000000001';
 
-/** The role the fixture's invoking member already has. */
 const MEMBER_ROLE = '400000000000000001';
-/** A role they do not have. */
+
 const MOD_ROLE = '410000000000000009';
 
 class MemoryDedupe implements DedupeStore {
@@ -66,7 +65,6 @@ class FakeRest implements RestProxyClient {
   }
 }
 
-/** The runtime only ever subscribes; these tests drive `handle` directly. */
 const bus: EventBus = {
   publish: async () => undefined,
   subscribe: (group) => ({ group, close: async () => undefined }),
@@ -74,9 +72,9 @@ const bus: EventBus = {
 
 interface Options {
   overrides?: Record<string, string[]>;
-  /** The guild's toggle for the permissions module itself. */
+
   permissionsEnabled?: boolean;
-  /** Stored config that no longer satisfies the schema. */
+
   brokenConfig?: boolean;
 }
 
@@ -111,9 +109,7 @@ function harness(options: Options = {}) {
     dedupe: new MemoryDedupe(),
     rest,
     recorder: new MemoryRecorder(),
-    // Only what the prechecks need; `interaction_reply` requires no permission,
-    // which is what lets a refusal reach a member in a channel the bot cannot
-    // otherwise post in.
+
     resolveContext: async (request) => ({
       guildId: request.guildId,
       guildOwnerId: OWNER,
@@ -130,7 +126,7 @@ function harness(options: Options = {}) {
   return {
     rest,
     logs,
-    /** What the invoker was told, or null if the interaction went unanswered. */
+
     replyContent(): string | null {
       const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
       const body = call?.body as { data?: { content?: string; flags?: number } } | undefined;
@@ -144,7 +140,6 @@ function harness(options: Options = {}) {
   };
 }
 
-/** The recorded /ping interaction, with the invoker's roles under test control. */
 function pingBy(roleIds: string[]): ProtonEvent {
   const raw = dispatch('interactionCreatePing');
   (raw.d.member as { roles: string[] }).roles = roleIds;
@@ -171,11 +166,6 @@ describe('guild command overrides', () => {
     expect(h.replyContent()).toBe(pingDefaultConfig.response);
   });
 
-  /**
-   * The permission-failure path: refused before the handler is dispatched, and
-   * the invoker is told which role they need. A silent drop shows "This
-   * interaction failed" and teaches nobody anything (§1, I9).
-   */
   test('an override the member lacks refuses the command and names the role', async () => {
     const h = harness({ overrides: { ping: [MOD_ROLE] } });
 
@@ -186,16 +176,15 @@ describe('guild command overrides', () => {
     expect(reply).toContain(`<@&${MOD_ROLE}>`);
     expect(reply).toContain(MOD_ROLE);
     expect(reply).toContain('/ping');
-    // Ephemeral: the refusal is for the invoker, not the channel.
+
     expect(h.replyFlags()).toBe(64);
-    // Exactly one call — the handler never ran.
+
     expect(h.rest.calls).toHaveLength(1);
     expect(
       h.logs.some((l) => l.level === 'warn' && l.message.includes('missing_required_role')),
     ).toBe(true);
   });
 
-  /** I4: the gateway redelivers, and the second delivery must not reply twice. */
   test('a redelivered refusal is sent once', async () => {
     const h = harness({ overrides: { ping: [MOD_ROLE] } });
     const event = pingBy([MEMBER_ROLE]);
@@ -214,11 +203,6 @@ describe('guild command overrides', () => {
     expect(h.replyContent()).toBe(pingDefaultConfig.response);
   });
 
-  /**
-   * Fails open, loudly. Refusing every command in a guild because one stored row
-   * is unreadable would be a far worse outage than the override not applying —
-   * but it must not pass in silence either.
-   */
   test('an unreadable overrides config is reported, not enforced', async () => {
     const h = harness({ brokenConfig: true });
 
@@ -230,7 +214,6 @@ describe('guild command overrides', () => {
     );
   });
 
-  /** With the module unregistered the gate is inert — nothing to consult. */
   test('a runtime without the permissions module dispatches as before', async () => {
     const rest = new FakeRest();
     const registry = new ModuleRegistry();

@@ -7,15 +7,6 @@ import {
   toDataUri,
 } from '../src/index.ts';
 
-/**
- * The guards around the one place `@proton/cards` touches the network.
- *
- * `fetchImpl` is injected everywhere below, so nothing here opens a socket (I11).
- * The point is not that fetch works — it is that the four containments the I2
- * decision rests on (host allowlist, byte cap, timeout, content-type) actually
- * fire, because that decision is only defensible if they do.
- */
-
 function response(
   body: Uint8Array,
   init: { status?: number; contentType?: string; contentLength?: string } = {},
@@ -54,7 +45,7 @@ describe('HttpAvatarFetcher', () => {
   test.each([
     ['an arbitrary host', 'https://evil.example.com/avatars/1/abc.png'],
     ['plain http', 'http://cdn.discordapp.com/avatars/1/abc.png'],
-    // The SSRF shape that matters: the avatar hash is user-influenced upstream.
+
     ['a subdomain-lookalike', 'https://cdn.discordapp.com.evil.example/a.png'],
     ['the loopback interface', 'https://127.0.0.1/a.png'],
   ])('refuses %s without calling fetch', async (_label, url) => {
@@ -80,8 +71,7 @@ describe('HttpAvatarFetcher', () => {
       response(PNG_BYTES, { contentType: 'image/webp' }),
     );
     expect(await fetch.fetch(discordAvatarUrl('1', 'abc'))).toBeNull();
-    // §1: an error names what is wrong and where. WebP is the CDN default, so
-    // this is the failure a caller building the URL by hand will actually hit.
+
     expect(skips[0]).toContain('.png extension');
   });
 
@@ -94,8 +84,6 @@ describe('HttpAvatarFetcher', () => {
   });
 
   test('enforces the cap while streaming, against a lying content-length', async () => {
-    // The case a header check alone misses: the origin claims 9 bytes and sends
-    // far more. Without the streaming guard this is an unbounded allocation.
     const { fetch, skips } = fetcher(
       async () => response(new Uint8Array(4_096), { contentLength: '9' }),
       { maxBytes: 512 },

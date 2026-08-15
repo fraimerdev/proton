@@ -13,10 +13,6 @@ function array(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-/**
- * Discord sends permission bitfields as decimal *strings* precisely because they
- * exceed 2^53. Anything that touches them must go straight to bigint.
- */
 function bits(value: unknown): bigint {
   if (typeof value === 'string' && value !== '') {
     try {
@@ -37,8 +33,7 @@ export function parseRole(raw: unknown): GuildRole | null {
     id,
     permissions: bits(role.permissions),
     position: typeof role.position === 'number' ? role.position : 0,
-    // Only carried when Discord actually said so, so "absent" and "false" stay
-    // distinguishable in a stored snapshot.
+
     ...(typeof role.managed === 'boolean' ? { managed: role.managed } : {}),
   };
 }
@@ -74,14 +69,6 @@ export function parseChannel(raw: unknown): ChannelState | null {
   };
 }
 
-/**
- * Build guild state from a GUILD_CREATE payload.
- *
- * `botRoleIds` may come back empty: GUILD_CREATE only carries members up to
- * `large_threshold`, so the bot's own member object is not guaranteed to be
- * present. The caller must then fetch that single member through the REST proxy
- * — a per-member fetch, never the rate-limited all-members form (§10.4).
- */
 export function buildGuildState(
   payload: Record<string, unknown>,
   botUserId: string,
@@ -114,7 +101,7 @@ export function buildGuildState(
   return {
     guildId,
     ownerId,
-    // Discord guarantees the @everyone role id equals the guild id.
+
     everyoneRoleId: guildId,
     roles,
     botRoleIds,

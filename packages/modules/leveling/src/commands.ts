@@ -10,20 +10,10 @@ import type { MemberXpStore, XpAdjustment } from './store.ts';
 
 type Command = CommandDefinition<LevelingConfig>;
 
-/** Ten rows fits inside Discord's 2000-character message limit with room to spare. */
 export const LEADERBOARD_PAGE_SIZE = 10;
 
-/** Bounded so a page number cannot ask Postgres for a million-row offset. */
 export const LEADERBOARD_MAX_PAGE = 1000;
 
-/**
- * Every command starts here: the module has to be on and its store bound, or
- * there is nothing truthful to answer with.
- *
- * A disabled module still replies. Returning silently would leave Discord
- * showing "This interaction failed" — indistinguishable from a crash, and the
- * invoker would have no idea a human switched it off (§1, I9).
- */
 async function ready(
   ctx: CommandContext<LevelingConfig>,
   deps: LevelingDeps,
@@ -56,13 +46,6 @@ async function ready(
   return bound.xp;
 }
 
-/**
- * `/rank` — where one member stands.
- *
- * Public rather than ephemeral, deliberately: a rank is a thing people show each
- * other, and an ephemeral reply to `/rank @someone` would make the answer
- * invisible to the person who was asked about.
- */
 export function rankCommand(deps: LevelingDeps): Command {
   return {
     name: 'rank',
@@ -110,14 +93,6 @@ export function rankCommand(deps: LevelingDeps): Command {
   };
 }
 
-/**
- * `/leaderboard` — a page of the guild's board.
- *
- * Paged rather than truncated, because "top 10 and nothing else" makes the
- * feature useless to the ninetieth member, and a full board does not fit in a
- * Discord message. The dashboard's table (§3.G) is the place to browse it
- * properly; this is the version you can run without leaving the chat.
- */
 export function leaderboardCommand(deps: LevelingDeps): Command {
   return {
     name: 'leaderboard',
@@ -166,16 +141,6 @@ export function leaderboardCommand(deps: LevelingDeps): Command {
   };
 }
 
-/**
- * `/xp give|take|set` — the admin escape hatch.
- *
- * MANAGE_GUILD as `default_member_permissions`, which is presentation rather
- * than authorisation: Discord's own gate can be overridden per guild, and the
- * `permissions` module's overrides are applied by the runtime before the handler
- * runs. What this command changes is a number, so there is no I8 hierarchy
- * question to answer — but the level-up it can cause goes through exactly the
- * same path a chat level-up does, reward roles and published event included.
- */
 export function xpCommand(deps: LevelingDeps): Command {
   return {
     name: 'xp',
@@ -242,8 +207,6 @@ export function xpCommand(deps: LevelingDeps): Command {
 
       const adjustment = readAdjustment(ctx.options.getSubcommand());
       if (adjustment === null) {
-        // Only reachable if the registered command and this handler disagree,
-        // which is a build problem rather than something an admin did.
         await reply(ctx, 'Use /xp give, /xp take or /xp set.', { ephemeral: true });
         return;
       }
@@ -261,8 +224,7 @@ export function xpCommand(deps: LevelingDeps): Command {
         userId,
         adjustment,
         amount,
-        // A command has no event timestamp to work from — this is the one path in
-        // the module that reads a clock, and it is injectable so tests can pin it.
+
         now: clockOf(deps)(),
       });
 
@@ -280,9 +242,6 @@ export function xpCommand(deps: LevelingDeps): Command {
           `${result.level === result.previousLevel ? '' : `, up from ${result.previousLevel}`}.`,
       );
 
-      // A level gained is a level gained, whoever caused it: the reward roles and
-      // the event are the ones a chat level-up produces. A level *lost*
-      // deliberately does nothing — see `applyLevelUp`.
       await applyLevelUp(ctx, {
         userId,
         previousLevel: result.previousLevel,
@@ -296,13 +255,6 @@ export function xpCommand(deps: LevelingDeps): Command {
   };
 }
 
-/**
- * The three commands, bound to the module's ports.
- *
- * Factories rather than constants, for the same reason the manifest is one: §7
- * hands a command context no storage, so the store has to be closed over at
- * construction.
- */
 export function levelingCommands(deps: LevelingDeps): Command[] {
   return [rankCommand(deps), leaderboardCommand(deps), xpCommand(deps)];
 }
@@ -311,7 +263,6 @@ function readAdjustment(value: string | null): XpAdjustment | null {
   return value === 'give' || value === 'take' || value === 'set' ? value : null;
 }
 
-/** Thousands separators, so six-figure totals are readable at a glance. */
 function count(value: number): string {
   return value.toLocaleString('en-US');
 }

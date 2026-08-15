@@ -18,7 +18,7 @@ describe('the manifest', () => {
 
     expect(paths).toContain('enabled');
     expect(paths).toContain('retainBackups');
-    // Every config key is renderable, so no bespoke editor is owed.
+
     expect(paths).toHaveLength(Object.keys(backupConfigSchema.shape).length);
   });
 
@@ -34,15 +34,10 @@ describe('the manifest', () => {
   });
 
   test('declares VIEW_CHANNEL, the permission the whole module turns on', () => {
-    // Without it every channel arrives obfuscated (§10.1) and a "backup" is a
-    // list of ids with no names, topics or permissions in it.
     expect(backupModule.requiredPermissions).toEqual([Permissions.ViewChannel]);
   });
 
   test('does not gate itself on the permissions only a restore needs', () => {
-    // requiredPermissions is a hard gate. Gating on these would leave a server
-    // that only wants snapshots with no backups at all; the restore report names
-    // them at the point they matter instead.
     expect(backupModule.requiredPermissions).not.toContain(Permissions.ManageChannels);
     expect(backupModule.requiredPermissions).not.toContain(Permissions.ManageRoles);
   });
@@ -84,7 +79,6 @@ describe('the manifest', () => {
   });
 
   test('declares no scheduled job, because nothing would run one', () => {
-    // A schedule nothing honours is a promise of backups that never happen.
     expect(backupModule.jobs).toBeUndefined();
   });
 
@@ -101,8 +95,7 @@ describe('the manifest', () => {
 
     expect(claimed.length).toBeGreaterThan(0);
     for (const field of claimed) expect(keys.has(field)).toBe(true);
-    // Nothing is left off the dashboard, which would leave a setting only an API
-    // call could change.
+
     expect(new Set(claimed).size).toBe(keys.size);
   });
 });

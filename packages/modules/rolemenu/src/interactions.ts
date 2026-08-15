@@ -13,16 +13,15 @@ import {
 } from './perform.ts';
 import { resolveRoleChanges } from './resolve.ts';
 
-/** What one button press or dropdown choice told us. */
 export interface ComponentFacts {
   interactionId: string;
   token: string;
   userId: string;
-  /** From the interaction's member object. Discord always resolves it for a guild interaction. */
+
   roleIds: string[] | null;
   customId: string;
   componentType: number;
-  /** A dropdown's chosen option values — binding keys. Empty for a button. */
+
   values: string[];
 }
 
@@ -40,12 +39,6 @@ function strings(value: unknown): string[] {
     : [];
 }
 
-/**
- * Read an `interaction.component` event.
- *
- * The one place in this module that knows Discord's INTERACTION_CREATE type-3
- * shape, for the same containment reason `readReaction` exists.
- */
 export function readComponent(event: ProtonEvent): ComponentFacts | null {
   const d = record(event.payload);
   if (!d) return null;
@@ -81,26 +74,6 @@ const NOT_WIRED =
   'what happened afterwards. A server admin should check the Proton logs — the exact missing ' +
   'piece is named there.';
 
-/**
- * Handle a button press or a dropdown choice.
- *
- * The three-second rule (I9) shapes the whole function. A component interaction
- * must be acknowledged within three seconds or Discord shows the member "This
- * interaction failed" and the token is gone; after the acknowledgement the token
- * is good for fifteen minutes. So the order is fixed:
- *
- *  1. decide whether this is even ours, from the `custom_id` alone;
- *  2. acknowledge — a deferred ephemeral message, which carries no body and so is
- *     the fastest thing Discord accepts;
- *  3. only then move roles, which is one REST call per role;
- *  4. follow up with what changed, or with the executor's own words for why it
- *     did not.
- *
- * Everything before the acknowledgement is in-memory: the config was read by the
- * listener runtime before this handler was called, so the only I/O on the path to
- * step 2 is step 2 itself. The cases that have nothing to go and *do* skip the
- * deferral and answer immediately, which is one call rather than two.
- */
 export async function handleComponent(
   event: ProtonEvent,
   ctx: ModuleContext<RolemenuConfig>,
@@ -116,15 +89,6 @@ export async function handleComponent(
     return { action: 'ignored', reason: 'unreadable interaction payload' };
   }
 
-  /**
-   * The gate that keeps this module out of everyone else's interactions.
-   *
-   * `interaction.component` carries every component press in the guild, so most
-   * of what arrives here belongs to some other module. Returning before
-   * acknowledging is essential rather than merely tidy: an interaction may be
-   * acknowledged exactly once, and answering someone else's button would take
-   * the acknowledgement their handler needs.
-   */
   const parsed = parseCustomId(facts.customId);
   if (!parsed) {
     return { action: 'ignored', reason: 'the component is not a role menu’s' };
@@ -134,8 +98,6 @@ export async function handleComponent(
 
   const bound = bindComponentDeps(rawDeps);
   if ('unbound' in bound) {
-    // Answered rather than deferred: without the application id there is nothing
-    // to follow up *with*, so the whole answer has to fit in the acknowledgement.
     ctx.logger.error(
       describeUnbound(`a press on menu '${parsed.menuId}' could not be completed`, bound.unbound),
       { guildId: ctx.guildId, moduleId: MODULE_ID },
@@ -145,8 +107,6 @@ export async function handleComponent(
   }
 
   if (!ctx.config.enabled) {
-    // The message outlives the setting. Somebody is looking at a live-looking
-    // button, and "This interaction failed" would read as an outage.
     await replyEphemeral(
       ctx,
       interaction,
@@ -171,13 +131,6 @@ export async function handleComponent(
     return { action: 'refused', reason: `no button or dropdown menu '${parsed.menuId}'` };
   }
 
-  /**
-   * A dropdown names its choices in `data.values`, a button in its own id.
-   *
-   * The dropdown's `custom_id` carries the reserved key in the binding position
-   * — a select has one id for the whole component, so there is no single choice
-   * for it to name.
-   */
   const keys =
     facts.componentType === ComponentType.StringSelect ? facts.values : [parsed.bindingKey];
 
@@ -202,8 +155,7 @@ export async function handleComponent(
     const changes = resolveRoleChanges({
       menu,
       bindingKey: key,
-      // A press flips. Which way it flips is the mode's business, not the
-      // event's — unlike a reaction, Discord tells us nothing about direction.
+
       intent: 'toggle',
       currentRoleIds: facts.roleIds,
     });
@@ -217,9 +169,6 @@ export async function handleComponent(
     for (const roleId of changes.remove) remove.add(roleId);
   }
 
-  // Two bindings in one menu may name the same role. When one choice grants it
-  // and another would strip it, the grant wins: the member asked for that one by
-  // name, and the strip is only ever a side effect of `unique`.
   for (const roleId of add) remove.delete(roleId);
 
   const report = await runRoleChanges(ctx, {
@@ -232,8 +181,6 @@ export async function handleComponent(
 
   const lines = [describeReport(report)];
   if (unknownKeys.length > 0) {
-    // The menu was edited after its message was posted. Say so — the member
-    // pressed a real button and is owed better than a shrug.
     lines.push(
       `${unknownKeys.length === 1 ? 'One option is' : `${unknownKeys.length} options are`} no ` +
         'longer part of this menu, so I skipped it. Ask an admin to re-post the menu.',

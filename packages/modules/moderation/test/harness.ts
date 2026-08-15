@@ -31,9 +31,8 @@ export const BOT = '300000000000000001';
 export const MODERATOR = '100000000000000001';
 export const CHANNEL = '500000000000000001';
 
-/** A member below the bot: every action on them should be allowed. */
 export const MEMBER = '400000000000000001';
-/** A member whose top role sits above the bot's: I8 must refuse. */
+
 export const ABOVE_BOT = '400000000000000002';
 
 const EVERYONE_ROLE = GUILD;
@@ -41,7 +40,6 @@ const LOW_ROLE = '410000000000000001';
 const BOT_ROLE = '410000000000000005';
 const HIGH_ROLE = '410000000000000009';
 
-/** Everything the moderation commands need, as Discord would report it. */
 export const BOT_PERMISSIONS =
   Permissions.ViewChannel |
   Permissions.SendMessages |
@@ -72,7 +70,6 @@ function guildState(): GuildState {
   };
 }
 
-/** Role ids per member — what an interaction's `resolved.members` would carry. */
 const MEMBER_ROLES: Record<string, string[]> = {
   [MEMBER]: [LOW_ROLE],
   [ABOVE_BOT]: [HIGH_ROLE],
@@ -127,24 +124,24 @@ export interface Harness {
   recorder: MemoryRecorder;
   scheduled: Array<{ request: ActionRequest; caseId: string }>;
   logs: Array<{ level: string; message: string }>;
-  /** What the command published through the `emits` port, in order. */
+
   published: PublishedEvent[];
-  /** REST calls that are not the interaction acknowledgement. */
+
   discordCalls(): RestRequestOptions[];
-  /** Recorded cases, minus the one every reply writes. */
+
   cases(): CaseInput[];
-  /** What the moderator was told, or null if nothing was sent. */
+
   replyContent(): string | null;
   run(command: string, options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
 }
 
 export interface RunOverrides {
   config: Partial<ModerationConfig>;
-  /** Overrides Discord's `app_permissions` for the interaction channel. */
+
   appPermissions: bigint;
-  /** Reused between two runs to exercise redelivery (I4). */
+
   idempotencyKey: string;
-  /** Fails the reversal scheduler, to prove the module reports what did not happen. */
+
   scheduleReversal: (request: ActionRequest, caseId: string) => Promise<void>;
 }
 
@@ -155,22 +152,13 @@ const store: GuildStateStore = {
   delete: async () => undefined,
 };
 
-/**
- * A moderation command wired to the real executor.
- *
- * Only the REST proxy is faked. The prechecks, the guild-state resolution, the
- * hierarchy arithmetic and the dedupe claim are all the production code paths —
- * which is the point: the Gate 0 stub passed its tests precisely because those
- * were replaced with permissive fakes.
- */
 export function harness(): Harness {
   const rest = new FakeRest();
   const recorder = new MemoryRecorder();
   const scheduled: Array<{ request: ActionRequest; caseId: string }> = [];
   const logs: Array<{ level: string; message: string }> = [];
   const published: PublishedEvent[] = [];
-  // Shared across runs so a redelivered interaction meets the claim the first
-  // delivery made (I4).
+
   const dedupe = new MemoryDedupe();
 
   const logger: Logger = {
@@ -232,8 +220,7 @@ export function harness(): Harness {
         channelId: CHANNEL,
         userId: MODERATOR,
         config: { ...moderationDefaultConfig, ...overrides.config },
-        // Exactly what apps/worker binds: Discord's own permission computation
-        // for this channel, plus the channel the interaction came from.
+
         executor: executor.scoped({
           channelId: CHANNEL,
           appPermissions: overrides.appPermissions ?? BOT_PERMISSIONS,
@@ -242,8 +229,7 @@ export function harness(): Harness {
         options: createCommandOptions(options),
         interaction: { id: '600000000000000001', token: 'interaction-token' },
         idempotencyKey: overrides.idempotencyKey ?? newId(),
-        // What `ModuleListenerRuntime` binds in production, minus the allowlist
-        // check — that belongs to the runtime and is tested against the registry.
+
         publish: async (type, naturalKey, payload) => {
           published.push({ type, naturalKey, payload });
         },

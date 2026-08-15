@@ -2,39 +2,13 @@ import { newId } from '@proton/core';
 import type { GuildLayout } from './snapshot.ts';
 import type { BackupStore } from './store.ts';
 
-/**
- * Everything this module needs that `ModuleContext` cannot give it (§7).
- *
- * A module gets a guild id, its config, an executor and a logger — no database
- * and no view of the server's structure. So the ports are declared here and
- * bound by whatever process runs modules, exactly as `createLoggingModule({
- * store })` binds its message-log store. Both are optional so the manifest can
- * still be registered, rendered in the dashboard and typechecked with nothing
- * bound; what must never happen is a `/backup create` that reports success
- * without a snapshot existing anywhere.
- */
 export interface BackupDeps {
-  /** Where snapshots go. `DrizzleBackupStore` from this package. */
   store?: BackupStore;
 
-  /**
-   * The guild's channels and roles as they are right now.
-   *
-   * **Must be the gateway's view**, carrying obfuscated channels with their
-   * `CHANNEL_OBFUSCATED` flag intact. From 16 Nov 2026 `GET /guilds/{id}/channels`
-   * omits those channels entirely (§10.1), so a layout sourced from it cannot
-   * count what it is missing — which is why `GuildLayout` carries its own
-   * provenance and why `planRestore` refuses a REST-sourced one outright.
-   *
-   * Returns null when the process has no layout for the guild yet; the caller
-   * says so rather than writing an empty backup.
-   */
   readLayout?(guildId: string): Promise<GuildLayout | null>;
 
-  /** Injected so tests can pin the instant a snapshot claims to be from. */
   now?(): number;
 
-  /** Injected so a test can assert on a known backup id. */
   newBackupId?(): string;
 }
 
@@ -71,14 +45,6 @@ export function bindDeps(deps: BackupDeps): BindResult {
   };
 }
 
-/**
- * What to say when an admin asks for a backup and the module was never given
- * what it needs to take one.
- *
- * Names the ports and the exact construction. "It said it worked" about a backup
- * that does not exist is the worst outcome this module has, because the guild
- * only finds out after it has been nuked.
- */
 export function describeUnbound(unbound: readonly string[]): string {
   return (
     'Backups are enabled in this server but Proton cannot take one: this deployment was started ' +

@@ -34,10 +34,6 @@ describe('parseDuration', () => {
 });
 
 describe('formatDuration', () => {
-  /**
-   * The meaningful property is value-preservation, not string identity: `7d`
-   * formats as `1w` because they are the same duration and `w` is larger.
-   */
   test('formatting then parsing preserves the value', () => {
     for (const input of ['30s', '5m', '2h', '7d', '90s']) {
       const ms = parseDuration(input);

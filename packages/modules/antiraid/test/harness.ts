@@ -26,7 +26,6 @@ import { dispatch } from '@proton/fixtures';
 import { type AntiraidConfig, antiraidDefaultConfig } from '../src/config.ts';
 import { createAntiraidModule } from '../src/index.ts';
 
-/** The guild the recorded GUILD_MEMBER_ADD fixture belongs to. */
 export const GUILD = '900000000000000001';
 export const OWNER = '200000000000000001';
 export const BOT = '300000000000000001';
@@ -36,10 +35,9 @@ export const QUARANTINE_ROLE = '410000000000000003';
 
 const EVERYONE_ROLE = GUILD;
 const BOT_ROLE = '410000000000000005';
-/** Above the bot — a member holding it must fail the hierarchy precheck (I8). */
+
 export const HIGH_ROLE = '410000000000000009';
 
-/** Everything the response ladder plus the alert needs. */
 export const BOT_PERMISSIONS =
   Permissions.ViewChannel |
   Permissions.SendMessages |
@@ -68,15 +66,6 @@ function guildState(botPermissions: bigint): GuildState {
   };
 }
 
-/**
- * The sliding window, in memory.
- *
- * A line-for-line mirror of `RATE_WINDOW_LUA`: trim by score, insert only if the
- * member is new (NX), count. The real one is exercised against Redis in
- * `packages/core/test/rules/rate-window.integration.test.ts` and again, through
- * this module, in `join-rate.integration.test.ts` — this copy exists so the
- * behavioural tests below can run without Docker, not to stand in for either.
- */
 export class MemoryRateWindow implements RateWindowStore {
   readonly #windows = new Map<string, Map<string, number>>();
 
@@ -135,36 +124,21 @@ class FakeRest implements RestProxyClient {
   }
 }
 
-/**
- * A Discord id for an account created at `createdAt`.
- *
- * The inverse of `snowflakeCreatedAt`, so the account-age heuristic is exercised
- * through the same arithmetic production uses rather than against a hand-written
- * literal whose age silently drifts as the test suite ages.
- */
 export function accountId(createdAt: number): string {
   return String((BigInt(Math.trunc(createdAt)) - BigInt(DISCORD_EPOCH_MS)) << 22n);
 }
 
 export interface JoinInput {
-  /** Defaults to an account created a year before `joinedAt`. */
   userId?: string;
-  /** ms since epoch; becomes the dispatch's `joined_at` and the event's clock. */
+
   joinedAt: number;
-  /** Discord sends null for an account that never set one. */
+
   avatar?: string | null;
   bot?: boolean;
 }
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
-/**
- * Build a `member.joined` event from the recorded GUILD_MEMBER_ADD fixture.
- *
- * The payload is the real recorded shape (I11); the id and `occurredAt` are
- * derived exactly as `apps/gateway`'s normaliser derives them, rather than by
- * importing the gateway — a module package must not depend on an app.
- */
 export function joinEvent(input: JoinInput): ProtonEvent {
   const raw = dispatch('guildMemberAdd');
   const joinedAt = new Date(input.joinedAt).toISOString();
@@ -187,9 +161,9 @@ export function joinEvent(input: JoinInput): ProtonEvent {
 
 export interface RunOverrides {
   config: Partial<AntiraidConfig>;
-  /** What the bot's role grants. Lower it to exercise the I8 refusal path. */
+
   botPermissions: bigint;
-  /** Role ids per member, as a member fetch would report them. */
+
   memberRoles: Record<string, string[]>;
 }
 
@@ -197,32 +171,23 @@ export interface Harness {
   rest: FakeRest;
   recorder: MemoryRecorder;
   logs: Array<{ level: string; message: string }>;
-  /** Every REST call, in order. */
+
   calls(): RestRequestOptions[];
-  /** Calls that changed a member — role adds and kicks, not alert messages. */
+
   memberCalls(): RestRequestOptions[];
-  /** The raid alert's text, or null if none was posted. */
+
   alertContent(): string | null;
   cases(): CaseInput[];
   join(input: JoinInput, overrides?: Partial<RunOverrides>): Promise<void>;
 }
 
-/**
- * The antiraid listener wired to the real executor.
- *
- * Only Discord itself is faked. The prechecks, the guild-state resolution, the
- * hierarchy arithmetic, the dedupe claim and the sliding-window semantics are all
- * production code paths — the point being that a permissive fake in any of those
- * places is exactly how a module passes its tests and does nothing in a raid.
- */
 export function harness(options: { rateWindow?: RateWindowStore } = {}): Harness {
   const rest = new FakeRest();
   const recorder = new MemoryRecorder();
   const logs: Array<{ level: string; message: string }> = [];
-  // Shared across joins, so a burst accumulates and a redelivery meets the claim
-  // its first delivery made (I4).
+
   const dedupe = new MemoryDedupe();
-  // The real Redis window is passed in by `join-rate.integration.test.ts`.
+
   const rateWindow = options.rateWindow ?? new MemoryRateWindow();
 
   const logger: Logger = {
@@ -265,8 +230,7 @@ export function harness(options: { rateWindow?: RateWindowStore } = {}): Harness
             {
               store,
               botUserId: BOT,
-              // A member who just joined holds no roles; the fetch answering with
-              // an empty list is what production's single-member lookup returns.
+
               fetchMemberRoles: async (_guildId, userId) => memberRoles[userId] ?? [],
             },
             request,

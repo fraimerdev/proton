@@ -14,14 +14,6 @@ import type { RuleFacts } from './facts.ts';
 import { RATE_WINDOW_GUILD_SCOPE, type RateWindowStore } from './rate-window.ts';
 import { type GuildRule, guildRuleSchema, type RuleAction } from './types.ts';
 
-/**
- * `ActionRequest.actorId` for anything a rule did.
- *
- * Not a snowflake, on the same reasoning as `AUTO_REVERSAL_ACTOR`: nobody
- * pressed a button. Attributing an automod ban to the member who happened to
- * trigger it — or to the admin who once enabled the rule — would misread in the
- * case ledger and in the dashboard as a person having done it by hand.
- */
 export const RULE_ENGINE_ACTOR = 'proton:rule-engine';
 
 export type RuleSkipCode =
@@ -33,9 +25,9 @@ export type RuleSkipCode =
 
 export interface RuleSkip {
   code: RuleSkipCode;
-  /** Names what stopped the rule — the dashboard's "why didn't this fire" answer. */
+
   humanReason: string;
-  /** Which predicate refused, when one did. */
+
   conditionKind?: RuleConditionKind;
 }
 
@@ -43,9 +35,9 @@ export interface RuleActionOutcome {
   index: number;
   kind: ActionKind;
   idempotencyKey: string;
-  /** Absent when the request could not even be built, or the executor threw. */
+
   result?: ActionResult;
-  /** Why this action never reached the executor, or how it blew up. */
+
   error?: string;
 }
 
@@ -65,12 +57,11 @@ export interface RuleEvaluationReport {
 export interface RuleFireInput {
   event: ProtonEvent;
   facts: RuleFacts;
-  /** I12: the caller decides, so development runs presets dry without a fork. */
+
   dryRun: boolean;
 }
 
 export interface RuleEvaluationInput extends RuleFireInput {
-  /** The guild's rules. Cron-triggered ones are ignored here — see `evaluate`. */
   rules: readonly GuildRule[];
 }
 
@@ -84,19 +75,6 @@ function isRateCondition(condition: RuleCondition): condition is RateOverWindowC
   return condition.kind === 'rate-over-window';
 }
 
-/**
- * Payload fields the engine knows how to fill from the event.
- *
- * A preset cannot hardcode the offender or the channel — it is written once and
- * runs in every guild — so the engine supplies the target and the rule supplies
- * only what is genuinely its own (which role, what message). Anything the rule
- * *does* state wins, so `send` can name a mod-log channel instead of the one the
- * message arrived in.
- *
- * Deliberately not a template language: `{{user.id}}` interpolation is the rule
- * builder's problem, and inventing the syntax now would fix it before there is a
- * UI to argue with.
- */
 function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unknown> {
   switch (kind) {
     case 'ban':
@@ -118,19 +96,11 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'unlock':
       return facts.channelId ? { channelId: facts.channelId } : {};
 
-    /**
-     * These name a specific message, and `RuleFacts` deliberately does not carry
-     * one — it describes who and where, not which message, because most events a
-     * rule triggers on have no message at all. A rule that edits, deletes or
-     * reacts to something must say which something in its own `payload`, the
-     * same way `add_role` must name the role.
-     */
     case 'edit_message':
     case 'delete_message':
     case 'add_reaction':
       return facts.channelId ? { channelId: facts.channelId } : {};
 
-    // An interaction reply or follow-up needs a token nothing in an event can supply.
     case 'interaction_reply':
     case 'interaction_followup':
       return {};
@@ -139,15 +109,6 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
 
 type BuiltRequest = { request: ActionRequest } | { error: string };
 
-/**
- * The rule engine (PLAN.md §4-P2).
- *
- * One engine for automod, anti-nuke, autorole, level rewards, welcome, raid
- * detection and custom responders: an event arrives, the rules whose trigger
- * matches are evaluated in priority order, and those whose conditions all hold
- * dispatch their actions through the `ActionExecutor` (I1). The engine issues no
- * REST call and holds no Discord client of its own.
- */
 export class RuleEngine {
   readonly #deps: RuleEngineDeps;
   readonly #now: () => number;
@@ -157,14 +118,6 @@ export class RuleEngine {
     this.#now = deps.now ?? (() => Date.now());
   }
 
-  /**
-   * Decide which rules fire for this event and run their actions.
-   *
-   * Only `event` triggers are considered; a cron rule belongs to the scheduler,
-   * which calls `fire` with the rule it woke up for. Nothing throws: one broken
-   * rule must not silence every other rule for the guild, so failures land in
-   * the report and evaluation continues.
-   */
   async evaluate(input: RuleEvaluationInput): Promise<RuleEvaluationReport> {
     const now = this.#now();
     const guildId = input.event.guildId;
@@ -174,9 +127,6 @@ export class RuleEngine {
     for (const rule of input.rules) {
       const parsed = guildRuleSchema.safeParse(rule);
       if (!parsed.success) {
-        // Reported even when the trigger does not match: a rule nobody can parse
-        // is broken for every event, and one that vanishes quietly is the failure
-        // mode this whole engine is meant to make impossible.
         outcomes.push(
           this.#skip(rule, {
             code: 'invalid-rule',
@@ -203,8 +153,6 @@ export class RuleEngine {
       }
 
       if (valid.guildId !== guildId) {
-        // Loading someone else's rules is a bug in the caller, not a config
-        // mistake — never silently acted on (I6's argument, applied here).
         outcomes.push(
           this.#skip(valid, {
             code: 'wrong-guild',
@@ -222,9 +170,6 @@ export class RuleEngine {
       candidates.push(valid);
     }
 
-    // Lower priority first (§4-P2). Ties break on module and id so two rules at
-    // the same priority always run in the same order — an escalation ladder that
-    // reordered itself between deploys would be untestable.
     candidates.sort(
       (a, b) =>
         a.priority - b.priority || a.moduleId.localeCompare(b.moduleId) || a.id.localeCompare(b.id),
@@ -237,15 +182,6 @@ export class RuleEngine {
     return { eventId: input.event.id, outcomes };
   }
 
-  /**
-   * Evaluate one already-selected rule's conditions and run its actions.
-   *
-   * Separate from `evaluate` because the scheduler will call it directly for a
-   * cron rule, where there is no event to match a trigger against. The rule is
-   * assumed to have been validated already — `evaluate` parses before it gets
-   * here, and a caller arriving directly should parse with `guildRuleSchema`
-   * rather than have every message pay for a second parse.
-   */
   async fire(
     rule: GuildRule,
     input: RuleFireInput,
@@ -255,8 +191,6 @@ export class RuleEngine {
     try {
       conditions = await this.#evaluateConditions(rule, input, now);
     } catch (error) {
-      // Redis being down must not stop the other rules; it also must not look
-      // like the rule simply did not match.
       return this.#skip(rule, {
         code: 'condition-failed',
         humanReason: `a condition could not be evaluated: ${
@@ -295,8 +229,6 @@ export class RuleEngine {
           result,
         });
       } catch (error) {
-        // One action failing does not cancel the rest of the ladder: a ban that
-        // 500s must not also suppress the mod-log message explaining it.
         actions.push({
           index,
           kind: action.kind,
@@ -313,16 +245,6 @@ export class RuleEngine {
     return { ruleId: rule.id, moduleId: rule.moduleId, fired: false, skipped: skip, actions: [] };
   }
 
-  /**
-   * All conditions must hold (they are ANDed; alternation is the rule builder's
-   * job later). Evaluation short-circuits on the first refusal.
-   *
-   * Fact conditions run before the rate condition regardless of the order they
-   * were written in, because hitting the window has a side effect: a counter
-   * that also counted the messages the rule's own filters would have rejected is
-   * measuring the wrong population, and an author cannot be expected to know
-   * that ordering carries that much weight.
-   */
   async #evaluateConditions(
     rule: GuildRule,
     input: RuleFireInput,
@@ -375,8 +297,7 @@ export class RuleEngine {
 
     const { count, tripped } = await this.#deps.rateWindow.hit({
       guildId: rule.guildId,
-      // Rule ids are unique per module, not globally, so two modules could each
-      // ship a rule called 'spam' and share a counter.
+
       ruleId: `${rule.moduleId}:${rule.id}`,
       actorId,
       windowMs,
@@ -411,8 +332,6 @@ export class RuleEngine {
       if (ms === null) return { error: `'${action.duration}' is not a duration I can read.` };
 
       if (action.kind === 'timeout') {
-        // Discord lifts a timeout itself at `until`, so scheduling a reversal
-        // would queue an untimeout for a member who is already free.
         payload.until = new Date(now + ms);
       } else {
         expiresAt = new Date(now + ms);
@@ -442,11 +361,6 @@ type ConditionOutcome =
   | { passed: true }
   | { passed: false; kind: RuleConditionKind; humanReason: string };
 
-/**
- * Derived from the event id, so a redelivered event produces the same key and
- * the executor discards the second attempt (I4). The rule and action index are
- * in there because one event legitimately causes several distinct actions.
- */
 function idempotencyKey(event: ProtonEvent, rule: GuildRule, index: number): string {
   return `rule:${event.id}:${rule.moduleId}:${rule.id}:${index}`;
 }

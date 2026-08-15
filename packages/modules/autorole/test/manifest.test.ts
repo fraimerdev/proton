@@ -5,11 +5,6 @@ import { autoroleConfigSchema, autoroleDefaultConfig } from '../src/config.ts';
 import { autoroleModule, createAutoroleModule } from '../src/index.ts';
 
 describe('autorole manifest', () => {
-  /**
-   * Registration is the validation step: it checks the default config against
-   * the schema and that the dashboard's form generator can render every field.
-   * A manifest that fails here would fail on a guild admin's settings page.
-   */
   test('registers cleanly, so the dashboard can render it', () => {
     const registry = new ModuleRegistry();
 
@@ -23,8 +18,6 @@ describe('autorole manifest', () => {
 
     const kinds = new Set(registry.descriptors('autorole').map((d) => d.kind));
 
-    // Role arrays are flat arrays of scalars, which §9 supports. An array of
-    // objects would have thrown at registration above.
     expect(kinds.has('role-id')).toBe(true);
     expect(kinds.has('boolean')).toBe(true);
   });
@@ -35,11 +28,6 @@ describe('autorole manifest', () => {
     expect(autoroleConfigSchema.safeParse(autoroleDefaultConfig).success).toBe(true);
   });
 
-  /**
-   * Both halves are dead without GUILD_MEMBERS — no GUILD_MEMBER_ADD means no
-   * grant, no GUILD_MEMBER_UPDATE means no snapshot. Declaring it is what turns
-   * that into a named reason in the dashboard instead of silence.
-   */
   test('declares the privileged intent it cannot work without', () => {
     expect(autoroleModule.requiredIntents).toContain(GatewayIntentBits.GuildMembers);
   });
@@ -76,10 +64,6 @@ describe('autorole manifest', () => {
     expect(status.disabledReason?.humanReason).toContain('Server Settings');
   });
 
-  /**
-   * Built with nothing bound — which is what `apps/api` and the dashboard do —
-   * it must still be a complete, valid manifest.
-   */
   test('is a valid manifest with no store wired', () => {
     const registry = new ModuleRegistry();
 

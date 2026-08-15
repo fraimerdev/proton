@@ -3,7 +3,6 @@ import { ACTION_KINDS, type ActionKind } from './kinds.ts';
 
 export { ACTION_KINDS, type ActionKind } from './kinds.ts';
 
-/** Verbatim from PLAN.md §4-P3. */
 export interface ActionRequest {
   guildId: string;
   moduleId: string;
@@ -26,19 +25,14 @@ export type ActionStatus =
 
 export interface ActionFailure {
   code: string;
-  /** Surfaced verbatim to the invoker (PLAN.md §1) — must name what and where. */
+
   humanReason: string;
 }
 
 export interface ActionResult {
   caseId?: string;
   status: ActionStatus;
-  /**
-   * Why the action did not happen — or, on an `executed` result, what *else*
-   * did not happen. A temporary action whose reversal could not be scheduled
-   * succeeded and still needs telling about, so branch on `status`, never on
-   * the presence of this field.
-   */
+
   failure?: ActionFailure;
 }
 
@@ -46,10 +40,6 @@ export interface ActionExecutor {
   execute(request: ActionRequest): Promise<ActionResult>;
 }
 
-/**
- * An executor that can bind per-invocation context (an interaction's
- * `app_permissions`, its resolved members) without modules ever seeing it.
- */
 export interface ScopedActionExecutor extends ActionExecutor {
   scoped(hints: unknown): ActionExecutor;
 }

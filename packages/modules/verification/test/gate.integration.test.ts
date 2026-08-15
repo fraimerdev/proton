@@ -20,10 +20,6 @@ function sorted(ids: string[]): string[] {
 
 describe('the join gate (§10.5 — use, don’t rebuild)', () => {
   test('does nothing when the invite already granted the unverified role', async () => {
-    // A role-granting invite applies it at the instant of joining, with no bot
-    // round trip for a script to race. Re-applying it would be a redundant REST
-    // call, and treating "Proton applied it" as the only valid path would make a
-    // correctly configured server look broken.
     const h = harness();
 
     const outcome = await h.join(joinPayload(JOINER, [UNVERIFIED_ROLE]), GATED);
@@ -54,7 +50,7 @@ describe('the join gate (§10.5 — use, don’t rebuild)', () => {
 
     expect(outcome.action).toBe('ungated');
     expect(h.discordCalls()).toEqual([]);
-    // Named loudly: the guild believes its invites gate people and they do not.
+
     const warning = h.logs.find((l) => l.level === 'warn');
     expect(warning?.message).toContain('NOT gated');
     expect(warning?.message).toContain('Server Settings → Invites');
@@ -107,9 +103,6 @@ describe('the join gate (§10.5 — use, don’t rebuild)', () => {
   });
 
   test('an unbound port means an ungated member and a named port, never silence', async () => {
-    // The manifest as the registry and dashboard load it: no ports bound. A guild
-    // that has enabled verification must be told exactly which construction is
-    // missing, not left with a gate that quietly opens.
     const logs: string[] = [];
     const outcome = await handleJoin(
       {
@@ -159,17 +152,11 @@ describe('/verify', () => {
 
     await h.run('verify', [], { config: GATED });
 
-    // Still gated. The alternative ordering removes the unverified role, fails
-    // to grant the member role, and reports success to somebody staring at an
-    // empty server.
     expect(sorted(h.rolesOf(MODERATOR))).toEqual(sorted([EVERYONE_ROLE, UNVERIFIED_ROLE]));
     expect(h.replyContent()).toContain('nothing has changed');
   });
 
   test('refuses when the member role sits above the bot, naming the role and the fix', async () => {
-    // The gap core's prechecks do not cover: the target member holds nothing but
-    // @everyone, so I8's member-hierarchy check passes comfortably, and Discord
-    // would still refuse the grant with a bare 403.
     const h = harness();
 
     await h.run('verify', [], { config: { ...GATED, verifiedRoleId: ABOVE_BOT_ROLE } });

@@ -63,11 +63,6 @@ describe('phishing manifest', () => {
     expect(status.enabled).toBe(true);
   });
 
-  /**
-   * Not a hard gate, deliberately. A server that never grants bans should still
-   * get detection and alerts; the executor names the missing permission per
-   * action instead (I8).
-   */
   test('stays enabled without ModerateMembers, BanMembers or KickMembers', () => {
     const status = registry().evaluate('phishing', {
       grantedIntents: ALL_INTENTS,
@@ -88,9 +83,7 @@ describe('phishing failure paths', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    // Without it Discord blanks `content`, so every message would scan as an
-    // empty string and the module would report itself healthy while catching
-    // nothing at all.
+
     expect(status.disabledReason?.humanReason).toContain('MessageContent');
     expect(status.disabledReason?.humanReason).toContain('developer portal');
   });

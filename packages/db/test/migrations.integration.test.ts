@@ -22,11 +22,6 @@ afterAll(async () => {
   await container?.stop();
 }, 240_000);
 
-/**
- * Drizzle query builders are thenables, not Promises, so passing one straight to
- * `expect().rejects` makes the matcher inspect the builder instead of awaiting
- * it. Forcing execution inside an async function gives us a real Promise.
- */
 async function insertCase(values: typeof cases.$inferInsert): Promise<void> {
   await handle.db.insert(cases).values(values);
 }
@@ -79,8 +74,6 @@ describe('cases constraints', () => {
     const key = crypto.randomUUID();
     await insertCase(newCase({ idempotencyKey: key }));
 
-    // Redis dedupe is the fast path; this constraint is what makes double
-    // execution impossible rather than merely unlikely when Redis is cold.
     await expect(insertCase(newCase({ idempotencyKey: key }))).rejects.toThrow();
   });
 
@@ -115,8 +108,6 @@ describe('cases indexes', () => {
     expect(found).toHaveLength(1);
     const def = found[0]?.indexdef ?? '';
 
-    // A full index here would grow without bound as `cases` grows; the WHERE
-    // clause keeps it to just the rows that still need reverting.
     expect(def).toContain('WHERE');
     expect(def).toContain('expires_at IS NOT NULL');
     expect(def).toContain('reverted_at IS NULL');

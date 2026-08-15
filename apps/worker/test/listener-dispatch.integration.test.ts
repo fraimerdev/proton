@@ -47,28 +47,17 @@ const OWNER = '200000000000000001';
 const HIGH_ROLE = '410000000000000004';
 const LOW_ROLE = '410000000000000002';
 
-/**
- * Poll until the predicate holds.
- *
- * A throwing predicate counts as "not yet", not as a failure: the things these
- * tests wait for do not exist at first, and Redis answers `ERR no such key` for
- * XINFO GROUPS on a stream nothing has created. Letting that reject would make
- * the wait fail on its first poll — the opposite of waiting.
- */
 async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 20_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
       if (await predicate()) return;
-    } catch {
-      // Not ready yet.
-    }
+    } catch {}
     await Bun.sleep(25);
   }
   throw new Error('waitFor timed out');
 }
 
-/** Gate 2's literal input, through the production adapter. */
 function burst(): ProtonEvent[] {
   return dispatchSequence('auditLogChannelDeleteBurst').map((raw) => {
     const event = normalise(raw);
@@ -77,7 +66,6 @@ function burst(): ProtonEvent[] {
   });
 }
 
-/** Records what the modules asked Discord to do, in order. */
 function recordingExecutor(): { executor: ActionExecutor; requests: ActionRequest[] } {
   const requests: ActionRequest[] = [];
   return {
@@ -103,7 +91,6 @@ function silent(): { logger: Logger; logs: string[] } {
   };
 }
 
-/** The anti-nuke module as `apps/worker` builds it, against this Redis. */
 function antinuke(): ModuleManifest {
   return createAntinukeModule({
     rateWindow: new RedisRateWindow(redis),
@@ -140,15 +127,6 @@ const enabledConfig: ConfigProvider = {
   },
 };
 
-/**
- * Gate 2 clause 1, of the wired system rather than of a directly-called function.
- *
- * The module's own suite already replays this fixture into `handleDestructiveEvent`.
- * What it cannot prove is that the event ever *reaches* a listener in production —
- * which until now it never did, because nothing read `manifest.listeners`. So this
- * publishes to a real Redis Streams bus and asserts the breaker trips on the far
- * side of a real subscription.
- */
 describe('Gate 2: the 20-deletion burst reaches the breaker through the bus', () => {
   test('publishing the fixture trips the breaker, strip-first, exactly once', async () => {
     const bus = new RedisStreamsEventBus(redis, { blockMs: 50, claimIdleMs: 30_000 });
@@ -167,27 +145,24 @@ describe('Gate 2: the 20-deletion burst reaches the breaker through the bus', ()
     });
 
     const subscriptions = runtime.start();
-    // Groups are created at '$', so nothing may be published until they exist.
+
     await Promise.all(subscriptions.map((s) => s.ready));
 
     for (const event of burst()) await bus.publish(event);
 
     await waitFor(() => requests.length >= 2);
-    // Nothing further should arrive: the breaker trips on the crossing, not on
-    // each of the eighteen deletions above the limit.
+
     await Bun.sleep(500);
 
     const strips = requests.filter((r) => r.kind === 'remove_role');
     expect(strips).toHaveLength(2);
-    // The compromised admin named in the fixture, not whoever happened to be
-    // first in the payload.
+
     expect(new Set(strips.map((r) => r.targetId))).toEqual(new Set([NUKER]));
     expect(strips.map((r) => (r.payload as { roleId: string }).roleId)).toEqual([
       HIGH_ROLE,
       LOW_ROLE,
     ]);
-    // @everyone is never among them: its id is the guild id and Discord rejects
-    // the call.
+
     expect(strips.some((r) => (r.payload as { roleId: string }).roleId === GUILD)).toBe(false);
 
     await Promise.all(subscriptions.map((s) => s.close()));
@@ -227,8 +202,7 @@ describe('Gate 2: the 20-deletion burst reaches the breaker through the bus', ()
     await Bun.sleep(1_500);
 
     expect(requests).toEqual([]);
-    // Nothing was counted either, so the window is not left loaded for the
-    // moment maintenance ends.
+
     expect(await redis.keys('proton:rate:*')).toEqual([]);
 
     await Promise.all(subscriptions.map((s) => s.close()));
@@ -262,16 +236,6 @@ function probeModule(id: string, seen: string[], throws = false): ModuleManifest
 }
 
 describe('per-module consumer groups isolate failure', () => {
-  /**
-   * The reason dispatch uses one group per module rather than one shared
-   * subscription over the union of every type.
-   *
-   * The bus's only unit of acknowledgement is `(group, entry)`. Under a shared
-   * group, a throwing module would leave the entry unacked and the event would be
-   * redelivered to *every* module on that subscription — so one broken module
-   * would make all its peers re-run, up to `maxDeliveries` times, and then
-   * dead-letter the event for all of them.
-   */
   test('a throwing module is retried without its healthy peer being re-run', async () => {
     const bus = new RedisStreamsEventBus(redis, { blockMs: 50, claimIdleMs: 400 });
     const { executor } = recordingExecutor();
@@ -302,8 +266,6 @@ describe('per-module consumer groups isolate failure', () => {
     const event = burst()[0] as ProtonEvent;
     await bus.publish(event);
 
-    // The broken module is reclaimed and retried after claimIdleMs; the healthy
-    // one acked on the first pass and must never see the event again.
     await waitFor(() => broken.length >= 2, 20_000);
 
     expect(healthy).toEqual([`healthy:${event.id}`]);
@@ -350,18 +312,11 @@ describe('per-module consumer groups isolate failure', () => {
     await bus.close();
   }, 120_000);
 
-  /**
-   * Streams are never trimmed. A group created at '0' would replay the whole
-   * retained history on first deploy, and anything past the executor's 24h dedupe
-   * TTL is re-executed rather than deduped — a freshly deployed anti-nuke would
-   * start stripping roles over long-settled deletions.
-   */
   test('a newly created listener group does not see events published before it', async () => {
     const bus = new RedisStreamsEventBus(redis, { blockMs: 50 });
     const { executor } = recordingExecutor();
     const { logger } = silent();
 
-    // Backlog, published before anything is listening.
     for (const event of burst()) await bus.publish(event);
 
     const seen: string[] = [];
@@ -391,11 +346,6 @@ describe('per-module consumer groups isolate failure', () => {
 });
 
 describe('config reads are collapsed across a burst', () => {
-  /**
-   * Twenty events arriving together must not become twenty API round trips. This
-   * is the property that makes listener dispatch affordable at all — phishing
-   * runs on every message, and anti-raid on every join during a raid.
-   */
   test('the twenty-event burst costs one config read per module', async () => {
     const bus = new RedisStreamsEventBus(redis, { blockMs: 50 });
     const { executor } = recordingExecutor();

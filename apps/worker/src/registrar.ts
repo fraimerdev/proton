@@ -6,13 +6,6 @@ export interface RegistrarOptions {
   testGuildId?: string | undefined;
 }
 
-/**
- * Register every module's slash commands.
- *
- * Guild-scoped in development because guild commands propagate instantly while
- * global ones take up to an hour (PLAN.md §2). Guild scope also enforces the
- * agent safety rail: commands only ever appear in the designated test guild.
- */
 export async function registerCommands(
   rest: RestProxyClient,
   registry: ModuleRegistry,
@@ -36,16 +29,6 @@ export async function registerCommands(
   return put(rest, path, commands);
 }
 
-/**
- * Send the bulk overwrite, and believe Discord rather than ourselves.
- *
- * `RestProxyClient.request` returns a status; it does not throw on a non-2xx. So
- * discarding the result meant the worker logged "registered 11 command(s)"
- * whatever came back — including the 400 Discord returns when one command in the
- * set is malformed, which rejects *the whole PUT* and leaves the previous set in
- * place. The commands silently stay as they were and the log says they changed,
- * which is the worst possible pairing when a command has just been renamed.
- */
 async function put(
   rest: RestProxyClient,
   path: string,

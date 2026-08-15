@@ -16,7 +16,6 @@ const MOD_B = '100000000000000002';
 const TARGET_A = '200000000000000001';
 const TARGET_B = '200000000000000002';
 
-/** Run a query the way the wire does — through the schema, so defaults apply. */
 function search(input: CaseQueryInput = {}) {
   return service.search(GUILD, caseQuerySchema.parse(input));
 }
@@ -61,12 +60,11 @@ beforeAll(async () => {
       moduleId: 'moderation',
       dryRun: false,
       idempotencyKey: `seed-${seed.n}`,
-      // Mid-day, so an inclusive `to` bound has to cover the whole day to match.
+
       createdAt: new Date(`${seed.day}T12:00:00.000Z`),
     })),
   );
 
-  // A neighbouring guild's history. Nothing below may ever see it.
   await handle.db.insert(cases).values({
     id: newId(),
     guildId: OTHER_GUILD,
@@ -94,18 +92,12 @@ describe('filtering', () => {
     expect(result.cases).toHaveLength(SEEDS.length);
   });
 
-  /**
-   * I6 lives above this service, but a query that could span guilds would make
-   * that check pointless: one server's moderation history must never surface in
-   * another's dashboard.
-   */
   test('never returns another guild’s cases', async () => {
     const neighbour = await service.search(OTHER_GUILD, caseQuerySchema.parse({}));
     const ours = await search();
 
     expect(neighbour.total).toBe(1);
-    // Both guilds have a case numbered 1 and a case by MOD_A; the row ids are
-    // what prove the two histories never mix.
+
     const ids = new Set(ours.cases.map((c) => c.id));
     expect(neighbour.cases.some((c) => ids.has(c.id))).toBe(false);
   });
@@ -117,12 +109,6 @@ describe('filtering', () => {
     expect(result.cases.map((c) => c.caseNumber).sort()).toEqual([2, 4]);
   });
 
-  /**
-   * The recorder writes the invoking moderator to `actor_id` and leaves
-   * `moderator_id` null. Matching only `moderator_id` would return nothing for
-   * every case recorded to date — an empty table that reads as "this moderator
-   * has done nothing".
-   */
   test('filters by moderator, matching the actor the recorder actually writes', async () => {
     const result = await search({ moderatorId: MOD_A });
 
@@ -144,8 +130,6 @@ describe('filtering', () => {
   });
 
   test('a date range includes both of its end days in full', async () => {
-    // Case 2 happened at midday on the 10th: an exclusive upper bound at
-    // midnight would drop it and the range would look empty.
     const result = await search({ from: '2026-01-05', to: '2026-01-10' });
 
     expect(result.cases.map((c) => c.caseNumber).sort()).toEqual([1, 2]);
@@ -171,10 +155,12 @@ describe('sorting and paging', () => {
   });
 
   test('sorts by case number in both directions', async () => {
-    expect((await search({ sort: 'caseNumber', direction: 'asc' })).cases.map((c) => c.caseNumber)) //
-      .toEqual([1, 2, 3, 4, 5]);
-    expect((await search({ sort: 'caseNumber', direction: 'desc' })).cases.map((c) => c.caseNumber)) //
-      .toEqual([5, 4, 3, 2, 1]);
+    expect(
+      (await search({ sort: 'caseNumber', direction: 'asc' })).cases.map((c) => c.caseNumber),
+    ).toEqual([1, 2, 3, 4, 5]);
+    expect(
+      (await search({ sort: 'caseNumber', direction: 'desc' })).cases.map((c) => c.caseNumber),
+    ).toEqual([5, 4, 3, 2, 1]);
   });
 
   test('total counts every match, not just the page', async () => {

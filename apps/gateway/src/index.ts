@@ -26,7 +26,6 @@ console.log('gateway connected');
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     void (async () => {
-      // Destroy without clearing session state, so the next boot RESUMEs (I13).
       await manager.destroy({ reason: `received ${signal}` });
       sessionRedis.disconnect();
       busRedis.disconnect();

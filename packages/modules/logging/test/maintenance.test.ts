@@ -5,7 +5,6 @@ import { MemoryMessageLogStore } from './harness.ts';
 
 const NOW = new Date('2026-08-14T00:10:00Z');
 
-/** A store already holding 35 days of partitions, ending today. */
 function stocked(): MemoryMessageLogStore {
   const store = new MemoryMessageLogStore();
   for (let offset = 34; offset >= 0; offset--) {
@@ -34,7 +33,6 @@ describe('partition maintenance', () => {
 
     const result = await runMessageLogMaintenance(store, { now: NOW, retentionDays: 30 });
 
-    // 35 days existed; the five oldest go, the 30-day window stays.
     expect(result.dropped).toEqual([
       'message_logs_2026_07_11',
       'message_logs_2026_07_12',
@@ -47,7 +45,7 @@ describe('partition maintenance', () => {
     expect(kept).toContain('message_logs_2026_07_16');
     expect(kept).toContain('message_logs_2026_08_14');
     expect(kept).not.toContain('message_logs_2026_07_15');
-    // 30 days kept, plus tomorrow's, which the same run created.
+
     expect(kept).toHaveLength(31);
   });
 
@@ -55,8 +53,6 @@ describe('partition maintenance', () => {
     const inner = stocked();
     const order: string[] = [];
 
-    // Surplus partitions cost disk; missing ones lose writes. If a run dies half
-    // way it must be on the safe side of that trade.
     const observed: MessageLogStore = {
       append: (entries) => inner.append(entries),
       ensurePartition: (day) => {

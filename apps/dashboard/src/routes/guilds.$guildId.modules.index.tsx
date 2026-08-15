@@ -7,14 +7,6 @@ export const Route = createFileRoute('/guilds/$guildId/modules/')({
   component: ModuleList,
 });
 
-/**
- * Every module Proton has loaded, for one server.
- *
- * The list comes from the registry rather than a hardcoded menu, so a module
- * that ships is a module an admin can find — the API and the worker share one
- * registry (`@proton/modules`), which is what stops the dashboard offering a
- * module nothing actually runs.
- */
 function ModuleList(): ReactElement {
   const { guildId } = Route.useParams();
   const { modules } = Route.useLoaderData();

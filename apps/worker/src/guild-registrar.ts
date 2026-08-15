@@ -1,15 +1,3 @@
-/**
- * Registers guilds with the API so they exist in the database.
- *
- * Without this the bot joins a server, caches its state in Redis, and the
- * database never learns the guild exists — so `guild_modules` (whose `guild_id`
- * is a foreign key to `guilds`) can never hold a row, every config read falls
- * through to defaults, and every module reports itself disabled. The bot looks
- * present and does nothing.
- *
- * Goes through the API rather than writing directly, because §9 requires the
- * worker and the dashboard to share one definition of every domain operation.
- */
 export class HttpGuildRegistrar {
   readonly #baseUrl: string;
   readonly #secret: string;

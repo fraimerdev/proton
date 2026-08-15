@@ -13,60 +13,29 @@ export interface Logger {
   error(message: string, meta?: Record<string, unknown>): void;
 }
 
-/**
- * What a module is handed at runtime.
- *
- * Deliberately narrow: no bus, no database, no registry. A module cannot reach
- * another module's data or publish arbitrary events, which is what makes I3
- * ("modules never import each other") enforceable rather than merely a
- * convention someone will eventually break.
- */
 export interface ModuleContext<C = unknown> {
   guildId: string;
   config: C;
   executor: ActionExecutor;
   logger: Logger;
-  /**
-   * Emit one of the event types this module declares in `emits`.
-   *
-   * The narrowest thing that makes `xp.level_gained` (§4-P1) possible without
-   * handing a module the bus. Three properties are what keep it a port rather
-   * than a hole in I3:
-   *
-   *  - **The runtime stamps the guild.** A module cannot publish into a guild
-   *    other than the one its context is for.
-   *  - **The runtime derives the id** from the type, the guild and the module's
-   *    `naturalKey`, so a redelivered cause produces a redelivered effect and
-   *    the executor dedupes it (I4). A module cannot mint a random id and defeat
-   *    that.
-   *  - **`emits` is an allowlist**, enforced at registration. A module cannot
-   *    publish another module's event type, so nothing can forge a
-   *    `moderation.warned` to drive someone else's escalation ladder.
-   *
-   * Optional because a module that emits nothing should not have to think about
-   * it, and because `apps/api` and the dashboard build the same manifests with
-   * no bus in reach.
-   */
+
   publish?(type: EventType, naturalKey: string, payload: unknown): Promise<void>;
 }
 
 export interface CommandContext<C = unknown> extends ModuleContext<C> {
   channelId: string;
   userId: string;
-  /** Typed slash-command options. Every command but `ping` needs these. */
+
   options: CommandOptions;
   interaction: { id: string; token: string };
-  /**
-   * Derived from the originating event id, so a redelivered interaction reuses
-   * the same key and the executor dedupes it (I4).
-   */
+
   idempotencyKey: string;
 }
 
 export interface CommandDefinition<C = unknown> {
   name: string;
   description: string;
-  /** Registration payload — typically `new SlashCommandBuilder()...toJSON()`. */
+
   data: RESTPostAPIChatInputApplicationCommandsJSONBody;
   handler(ctx: CommandContext<C>): Promise<void>;
 }
@@ -76,7 +45,6 @@ export interface EventListener<C = unknown> {
   handler(event: ProtonEvent, ctx: ModuleContext<C>): Promise<void>;
 }
 
-/** Modules own their own tables (PLAN.md §7). */
 export interface Migration {
   id: string;
   sql: string;
@@ -85,35 +53,19 @@ export interface Migration {
 export interface SectionDescriptor {
   id: string;
   title: string;
-  /** Config paths shown in this section; empty means "everything not claimed". */
+
   fields: string[];
 }
 
-/** PLAN.md §7. */
 export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> {
   id: string;
   name: string;
   category: ModuleCategory;
   configSchema: C;
-  /**
-   * The subset of `configSchema` the dashboard's form generator builds fields
-   * from. Defaults to the whole config schema.
-   *
-   * Exists because §9 deliberately caps the generator at a flat vocabulary, and
-   * a module may legitimately store richer per-guild data than that vocabulary
-   * describes — cases' escalation ladder is an array of objects, which the
-   * generator refuses, correctly. Without this the module could not be
-   * registered at all, so the choice would be to widen the generator until it
-   * half-renders a rule builder (§9 rules that out in as many words) or to move
-   * the ladder out of config and lose I5 validation and the I7 audit diff.
-   *
-   * Omitting a field here is a promise that a bespoke editor renders it. Every
-   * key must exist in `configSchema`; the registry enforces that, so a form
-   * cannot collect a value the config would then reject.
-   */
+
   formSchema?: z.ZodObject<z.ZodRawShape>;
   defaultConfig: z.infer<C>;
-  /** Bumped whenever `configSchema` changes shape (I5). */
+
   schemaVersion: number;
   requiredIntents: number[];
   requiredPermissions: bigint[];
@@ -121,24 +73,9 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   dependsOn?: string[];
   commands?: CommandDefinition<z.infer<C>>[];
   listeners?: EventListener<z.infer<C>>[];
-  /**
-   * Event types this module may publish through `ModuleContext.publish`.
-   *
-   * An allowlist, checked at registration and again at runtime. Declaring a type
-   * here is also what tells the emission assertion in
-   * `packages/modules/registry` that the type has a producer — without it, a
-   * module subscribing to `xp.level_gained` would be reported as listening for
-   * something nothing emits, which is exactly the check that caught `logging`
-   * being dead for a whole phase.
-   */
+
   emits?: EventType[];
-  /**
-   * Preset rules and recurring jobs the module ships with (§4-P2).
-   *
-   * Data, not callbacks: the engine and scheduler load these the same way they
-   * load rows a guild admin created, so a preset can be inspected, diffed and
-   * overridden instead of being invisible logic inside the module.
-   */
+
   rules?: RuleDefinition[];
   jobs?: ScheduledJob[];
   migrations: Migration[];

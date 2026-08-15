@@ -16,7 +16,6 @@ import {
 const env = loadEnv();
 const api = new ApiClient(env.API_URL, env.API_SHARED_SECRET);
 
-/** Hash the caller's IP — audit_trail stores a hash, never the address itself. */
 async function ipHash(): Promise<string | undefined> {
   const raw =
     getRequest().headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
@@ -33,10 +32,6 @@ async function ipHash(): Promise<string | undefined> {
 export const listGuilds = createServerFn({ method: 'GET' })
   .middleware([requireSession])
   .handler(async ({ context }) => {
-    // No `return { guilds: [] }` on failure. Reporting "you administer no
-    // servers" to someone who administers five is worse than an error, because
-    // it looks like a settled answer and sends them looking at their Discord
-    // permissions instead of at us. Let it throw.
     const token = await getDiscordAccessToken(getRequest().headers, context.session.user.id);
 
     return { guilds: administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token)) };
@@ -62,14 +57,6 @@ export const getGuildRoles = createServerFn({ method: 'GET' })
   .validator(z.object({ guildId: z.string().min(1) }))
   .handler(({ data }) => fetchGuildRoles(env.REST_PROXY_URL, data.guildId));
 
-/**
- * The case browser's query (Gate 1).
- *
- * Thin, like every server function here: `requireGuildAccess` decides whether
- * this user may see this guild's history at all (I6 — the guild id in the URL is
- * only a lookup key), and the query itself is the API's, so `/history` in
- * Discord and the dashboard table cannot disagree about what a filter means.
- */
 export const searchCases = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(caseQuerySchema.extend({ guildId: z.string().min(1) }))
@@ -78,13 +65,6 @@ export const searchCases = createServerFn({ method: 'GET' })
     return api.searchCases(guildId, query);
   });
 
-/**
- * The mutation Gate 0's acceptance run exercises.
- *
- * Note how little happens here: authenticate, authorise, then delegate. The
- * validation, `schema_version` stamping and `audit_trail` write all live in the
- * API service, which the worker calls too (PLAN.md §9).
- */
 export const updateModuleConfig = createServerFn({ method: 'POST' })
   .middleware([requireManageGuild])
   .validator(

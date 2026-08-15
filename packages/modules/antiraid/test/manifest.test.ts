@@ -31,8 +31,7 @@ describe('antiraid manifest', () => {
     expect(byPath.get('brandNewAccountAge')).toBe('duration');
     expect(byPath.get('scoreThreshold')).toBe('number');
     expect(byPath.get('response')).toBe('enum');
-    // A role picker, not a text box — an admin pasting a role id by hand is how
-    // the quarantine rung ends up pointing at a role that no longer exists.
+
     expect(byPath.get('verificationRoleId')).toBe('role-id');
     expect(byPath.get('quarantineRoleId')).toBe('role-id');
     expect(byPath.get('alertChannelId')).toBe('channel-id');
@@ -51,8 +50,7 @@ describe('antiraid manifest', () => {
 
   test('listens for joins and nothing else', () => {
     expect(antiraidModule.listeners?.[0]?.types).toEqual(['member.joined']);
-    // No commands and no preset rules: the score has no expression in §4-P2's
-    // closed predicate set, which is why this is a listener at all.
+
     expect(antiraidModule.commands).toBeUndefined();
     expect(antiraidModule.rules).toBeUndefined();
   });
@@ -74,10 +72,6 @@ describe('antiraid failure paths', () => {
       botPermissions: ALL_PERMISSIONS,
     });
 
-    // Without it GUILD_MEMBER_ADD is never dispatched, so the join counter would
-    // read zero through a raid of a thousand accounts — silence indistinguishable
-    // from a quiet server. Naming the intent and the portal is the difference
-    // between a fixable problem and "the bot did nothing".
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
     expect(status.disabledReason?.humanReason).toContain('GuildMembers');
@@ -101,9 +95,6 @@ describe('antiraid failure paths', () => {
       botPermissions: Permissions.ManageRoles,
     });
 
-    // A hard gate rather than a per-rung precheck, unlike `cases`: a guild that
-    // finds out at 3am that the bot cannot kick has learned it at the one moment
-    // the answer is useless.
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.humanReason).toContain('KickMembers');
   });

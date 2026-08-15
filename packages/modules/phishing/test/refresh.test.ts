@@ -24,10 +24,6 @@ describe('refreshBlocklist', () => {
     expect(store.installs[0]?.refreshedAt).toEqual(new Date('2026-08-15T10:00:00.000Z'));
   });
 
-  /**
-   * The requirement in one test: a feed being down leaves the module functional
-   * with whatever it had, and says why.
-   */
   test('a partial failure still installs, and warns that coverage narrowed', async () => {
     const store = new MemoryBlocklistStore();
     const { logger, logs } = recordingLogger();
@@ -46,19 +42,12 @@ describe('refreshBlocklist', () => {
     expect(outcome.size).toBe(1);
     expect(outcome.feedsFailed).toBe(1);
 
-    // The failure is carried into the cache so `/phishing` can show it, not only
-    // into a log line nobody reads.
     expect(store.installs[0]?.failures[0]?.url).toBe(FEED_B);
 
     const warned = logs.find((entry) => entry.level === 'warn');
     expect(warned?.message).toContain('coverage is reduced');
   });
 
-  /**
-   * The single most important behaviour in the package. An empty install is
-   * indistinguishable from "nothing is phishing" once stored, so a total feed
-   * outage must never produce one.
-   */
   test('every feed failing keeps the previous list instead of wiping it', async () => {
     const store = new MemoryBlocklistStore(['already-cached.ru']);
     const { logger, logs } = recordingLogger();
@@ -75,7 +64,7 @@ describe('refreshBlocklist', () => {
 
     expect(outcome.installed).toBe(false);
     expect(store.installs).toEqual([]);
-    // Still armed with what it had.
+
     expect(await store.lookup(['already-cached.ru'])).toBe('already-cached.ru');
 
     const errored = logs.find(

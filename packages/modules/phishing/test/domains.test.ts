@@ -46,8 +46,6 @@ describe('extractHosts', () => {
   });
 
   test('is not fooled by a legitimate host in the userinfo position', () => {
-    // https://steamcommunity.com@evil.com/ resolves to evil.com. Both are
-    // extracted, so the blocked one is still checked.
     expect(extractHosts('https://steamcommunity.com@evil.com/gift')).toEqual([
       'steamcommunity.com',
       'evil.com',
@@ -95,14 +93,6 @@ describe('domainCandidates', () => {
   });
 });
 
-/**
- * The false-positive suite.
- *
- * Every case here is one that a `content.includes(domain)` or an `endsWith`
- * implementation gets wrong, which is why they are written as candidate-set
- * assertions rather than left to the integration test: this is the property the
- * module is judged on, and it has to fail loudly at the unit level.
- */
 describe('label-boundary matching', () => {
   const blocked = 'steamcommunity-gift.ru';
 
@@ -126,7 +116,6 @@ describe('label-boundary matching', () => {
   });
 
   test('does not match when the listed domain is a label of somebody else’s host', () => {
-    // A classic: the blocked name appears in full, but the site is evil.net's.
     expect(matches('steamcommunity-gift.ru.evil.net')).toBe(false);
   });
 

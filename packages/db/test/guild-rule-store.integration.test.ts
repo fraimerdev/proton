@@ -13,16 +13,6 @@ import { runMigrations } from '../src/migrator.ts';
 import { guilds, rules } from '../src/schema/index.ts';
 import { rows } from './helpers.ts';
 
-/**
- * The store that finally reads and writes §6's `rules`.
- *
- * Against real Postgres because the two behaviours worth asserting are both the
- * database's: `trigger_event` is a generated column, so "this guild's rules for
- * event X" is a claim about an expression nothing in TypeScript evaluates; and
- * `ON CONFLICT DO NOTHING` is what makes re-seeding on every gateway reconnect
- * safe, which a fake would simply agree with.
- */
-
 let container: StartedPostgreSqlContainer;
 let handle: DbHandle;
 
@@ -31,7 +21,6 @@ const OTHER_GUILD = '900000000000000002';
 const CHANNEL = '500000000000000001';
 const ROLE = '700000000000000001';
 
-/** Every rule the store reports as unreadable, in the order it reported them. */
 let reported: Array<{ context: InvalidRuleContext; detail: string }> = [];
 
 function store(): DrizzleGuildRuleStore {
@@ -100,21 +89,12 @@ describe('seedPresets', () => {
     ]);
   });
 
-  /**
-   * The single most important property in this file.
-   *
-   * Seeding runs on `guild.available`, which fires on every gateway reconnect. An
-   * upsert would rewrite `enabled` from the manifest each time, so a guild that
-   * switched a rung off would find it back on within hours, silently, with the
-   * dashboard showing a value nobody chose.
-   */
   test('a preset a guild disabled stays disabled across re-seeding', async () => {
     await store().seedPresets(GUILD, 'cases', [escalate]);
 
     const rowId = guildRuleRowId(GUILD, 'cases', 'escalate-at-3');
     await handle.db.update(rules).set({ enabled: false }).where(eq(rules.id, rowId));
 
-    // Every reconnect for the rest of the deployment's life.
     expect(await store().seedPresets(GUILD, 'cases', [escalate])).toBe(0);
     expect(await store().seedPresets(GUILD, 'cases', [escalate])).toBe(0);
 
@@ -122,7 +102,6 @@ describe('seedPresets', () => {
     expect(stored?.enabled).toBe(false);
   });
 
-  /** Nor may it overwrite an edit — the guild owns the row once it exists. */
   test('re-seeding does not overwrite a guild’s edits to a preset', async () => {
     await store().seedPresets(GUILD, 'cases', [escalate]);
 
@@ -147,17 +126,11 @@ describe('seedPresets', () => {
     expect(await store().listForEvent(OTHER_GUILD, 'moderation.warned')).toHaveLength(1);
   });
 
-  /**
-   * `ModuleRegistry` does not validate `manifest.rules`, and presets are often
-   * compiled from config rather than written as literals. A bad one must not cost
-   * the guild the rest of the module's ladder.
-   */
   test('an invalid preset is reported and the rest are still seeded', async () => {
     const broken = {
       ...escalate,
       id: 'escalate-at-5',
-      // Two rate conditions share one counter, which `ruleDefinitionSchema`
-      // refuses outright rather than papering over.
+
       conditions: [
         { kind: 'rate-over-window', limit: 5, window: '24h' },
         { kind: 'rate-over-window', limit: 9, window: '1h' },
@@ -189,13 +162,6 @@ describe('listForEvent', () => {
     await store().seedPresets(OTHER_GUILD, 'cases', [escalate]);
   });
 
-  /**
-   * The rule's own id comes back, not the composite primary key. The engine
-   * builds the rate-window key (`moduleId:ruleId`) and every idempotency key from
-   * it, and a module's stable name for a rung — `escalate-at-3` — is what has to
-   * appear there for a stored override to be matchable to the preset it came
-   * from.
-   */
   test('returns the rule under the id its module declared', async () => {
     const [found] = await store().listForEvent(GUILD, 'moderation.warned');
 
@@ -213,7 +179,6 @@ describe('listForEvent', () => {
     expect(found).toEqual([]);
   });
 
-  /** A cron rule sorts into the generated column's NULLs, so it is never a candidate. */
   test('never returns a cron rule, whatever the event', async () => {
     for (const type of ['moderation.warned', 'member.joined'] as const) {
       const found = await store().listForEvent(GUILD, type);
@@ -238,13 +203,6 @@ describe('listForEvent', () => {
     expect(found.map((r) => r.id)).toEqual(['escalate-at-5', 'escalate-at-3']);
   });
 
-  /**
-   * I5's argument, applied to rules: "it came from our own table" is not a
-   * guarantee of shape, because an older build may have written it. A row that
-   * cannot be read is skipped and named rather than handed to the engine, so it
-   * cannot become an outcome attributed to a rule whose id was part of what
-   * failed to parse.
-   */
   test('a row that no longer parses is reported and left out', async () => {
     await handle.client`
       insert into rules (id, guild_id, module_id, trigger, conditions, actions, priority)
@@ -279,11 +237,6 @@ describe('listCron', () => {
     });
   });
 
-  /**
-   * A malformed trigger also derives a NULL `trigger_event`, so it arrives on
-   * this query. It must not be scheduled — a rule nobody can read has no
-   * schedule that could be correct.
-   */
   test('a row with an unreadable trigger is reported, not scheduled', async () => {
     await handle.client`
       insert into rules (id, guild_id, module_id, trigger, actions)

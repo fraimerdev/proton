@@ -13,7 +13,6 @@ const OWNER = '200000000000000000';
 const MEMBER = '300000000000000000';
 const ROLE_IDS = ['400000000000000001', '400000000000000002', '400000000000000003'] as const;
 
-/** Arbitrary permission bitfield across the full 0..1<<53 range Discord uses. */
 const permissionBits = fc.bigInt({ min: 0n, max: (1n << 53n) - 1n });
 
 const overwriteArb: fc.Arbitrary<Overwrite> = fc.record({
@@ -48,7 +47,6 @@ describe('permission math properties', () => {
   test('the result never grants a bit absent from both the base and every allow', () => {
     fc.assert(
       fc.property(permissionBits, fc.array(overwriteArb, { maxLength: 12 }), (base, overwrites) => {
-        // ADMINISTRATOR legitimately expands to everything; exclude it here.
         const nonAdminBase = base & ~Permissions.Administrator;
         const result = applyOverwrites(nonAdminBase, overwrites, baseCtx());
 
@@ -74,12 +72,6 @@ describe('permission math properties', () => {
     );
   });
 
-  /**
-   * The bigint guard. Every bit at 1<<43 and above was introduced by the 2026
-   * permission splits; doing this arithmetic in `number` silently drops them,
-   * and the failure mode is "the bot mysteriously lacks a permission it was
-   * granted" rather than a crash.
-   */
   test('high bits survive the full overwrite pipeline intact', () => {
     const highBits = [
       Permissions.CreateGuildExpressions,

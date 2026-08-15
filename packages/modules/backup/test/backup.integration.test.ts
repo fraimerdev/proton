@@ -37,7 +37,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await handle.db.delete(backups);
   await handle.db.delete(guilds);
-  // `backups.guild_id` is a real foreign key (§6), so the guild has to exist.
+
   await handle.db.insert(guilds).values({ id: GUILD, name: 'Proton Test Guild' });
 });
 
@@ -69,9 +69,6 @@ describe('storing a snapshot in Postgres', () => {
   });
 
   test('keeps large permission bitfields exact', async () => {
-    // The failure this guards against is silent: a bitfield that survives as a
-    // JSON number loses its low bits past 2^53 and the restore quietly grants
-    // the wrong permissions.
     const big = String((1n << 51n) | (1n << 44n) | 1n);
     const snapshot = buildSnapshot(
       layout(
@@ -93,8 +90,6 @@ describe('storing a snapshot in Postgres', () => {
   });
 
   test('is stored as jsonb, not as a jsonb string', async () => {
-    // Drizzle serialises the column itself; a hand-rolled JSON.stringify would
-    // double-encode it and `snapshot->>'guildId'` would come back null.
     await save('backup-1', new Date(NOW));
 
     const rows = (await handle.client`
@@ -112,8 +107,6 @@ describe('storing a snapshot in Postgres', () => {
   });
 
   test('refuses to read back a document it cannot validate', async () => {
-    // A snapshot read back as an empty object would plan a restore that skips
-    // everything and report a healthy-looking "0 channels to recreate".
     await handle.db.insert(backups).values({
       id: 'corrupt',
       guildId: GUILD,
@@ -139,7 +132,7 @@ describe('storing a snapshot in Postgres', () => {
 
     expect(await store.prune(GUILD, 2)).toBe(1);
     expect((await store.list(GUILD, 10)).map((record) => record.id)).toEqual(['newest', 'middle']);
-    // Idempotent: pruning again deletes nothing.
+
     expect(await store.prune(GUILD, 2)).toBe(0);
   });
 
@@ -160,8 +153,6 @@ describe('storing a snapshot in Postgres', () => {
       snapshot: { ...snapshotOf('guildCreate'), guildId: '900000000000000002' },
     });
 
-    // Keeping one snapshot per guild drops this guild's oldest and nobody
-    // else's, however old theirs is.
     expect(await store.prune(GUILD, 1)).toBe(1);
 
     const survivors = await handle.db
@@ -172,14 +163,6 @@ describe('storing a snapshot in Postgres', () => {
   });
 });
 
-/**
- * PLAN.md §12, Gate 2: "Backup snapshot marks obfuscated channels and restore
- * skips them with a report."
- *
- * End to end, against a real database: the recorded gateway fixture goes in
- * through `/backup create`, the row lands in Postgres, and `/backup restore`
- * reads it back and reports.
- */
 describe('Gate 2, end to end', () => {
   test('marks the channel it cannot see, and skips it when restoring', async () => {
     const bot = harness({ store, layout: fixtureLayout('channelObfuscated') });
@@ -195,7 +178,6 @@ describe('Gate 2, end to end', () => {
     expect(hidden?.obfuscated).toBe(true);
     expect(hidden?.name).toBeNull();
 
-    // Now the server is nuked and the admin asks for it back.
     bot.current.layout = layout([]);
     await bot.run(subcommand('restore', [stringOption('backup_id', stored[0]?.id ?? '')]));
 
@@ -207,8 +189,6 @@ describe('Gate 2, end to end', () => {
   });
 
   test('the permission-failure path: no VIEW_CHANNEL means an empty-looking guild, said out loud', async () => {
-    // Every channel obfuscated is what a server that never granted VIEW_CHANNEL
-    // actually looks like from 16 Nov 2026. The backup must not read as healthy.
     const blind = layout([
       rawChannel({ id: '500000000000000031', flags: 1 << 17 }),
       rawChannel({ id: '500000000000000032', flags: 1 << 17 }),

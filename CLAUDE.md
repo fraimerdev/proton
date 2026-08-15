@@ -70,6 +70,12 @@ TLS" (Bun handles TCP fine). Otherwise run them in CI, or in WSL with Bun instal
 
 ## Code style
 
+- **Comments: almost none.** The owner reads code, not prose. No block comments, no JSDoc, no
+  section headers, no comment that restates what the line does. Write a **single-line** `//` comment
+  only when the code is correct in a way that looks wrong, so the next reader would "fix" it into a
+  bug — the reaction-id derivation, starboard recomputing instead of counting, `ON CONFLICT DO
+  NOTHING` on preset seeding. If you cannot name the bug the comment prevents, delete it. Keep
+  functional directives (`biome-ignore`, `--> statement-breakpoint`) — they are code.
 - TypeScript strict, ESM only. No `any` without an inline justification comment.
 - Zod schemas are the single source of truth (config, env, search params, API IO). Derive types
   with `z.infer`; never hand-write a parallel interface.

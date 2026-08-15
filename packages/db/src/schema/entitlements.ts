@@ -1,13 +1,6 @@
 import { pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { guilds } from './guilds.ts';
 
-/**
- * Premium entitlements.
- *
- * `source` discriminates the provider. v1 carries both Discord App Subscriptions
- * and Stripe (owner decision, superseding PLAN.md §2's "Stripe later"), so this
- * column does real work rather than always reading 'discord'.
- */
 export const entitlements = pgTable(
   'entitlements',
   {

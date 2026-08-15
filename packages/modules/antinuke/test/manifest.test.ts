@@ -22,7 +22,7 @@ describe('the manifest', () => {
     expect(paths).toContain('channelDeleteLimit');
     expect(paths).toContain('alertChannelId');
     expect(paths).toContain('maintenanceMaxDuration');
-    // Every config key is renderable, so no bespoke editor is owed.
+
     expect(paths).toHaveLength(Object.keys(antinukeConfigSchema.shape).length);
   });
 
@@ -31,8 +31,6 @@ describe('the manifest', () => {
   });
 
   test('ships defaults that act on nobody irreversibly', () => {
-    // A security module that bans out of the box makes Proton the attack vector
-    // §15 warns about.
     expect(antinukeDefaultConfig.afterStrip).toBe('none');
   });
 
@@ -41,15 +39,11 @@ describe('the manifest', () => {
 
     expect(requiresAuditLog(types)).toBe(true);
     expect(antinukeModule.requiredPermissions).toContain(Permissions.ViewAuditLog);
-    // And MANAGE_ROLES, because detecting without stripping is a report, not a
-    // breaker.
+
     expect(antinukeModule.requiredPermissions).toContain(Permissions.ManageRoles);
   });
 
   test('does not gate itself on the permissions only an opt-in response needs', () => {
-    // Gating a security control on ban rights would leave servers that never
-    // grant them with no anti-nuke at all; the executor's precheck names the
-    // missing permission per action instead (I8).
     expect(antinukeModule.requiredPermissions).not.toContain(Permissions.BanMembers);
     expect(antinukeModule.requiredPermissions).not.toContain(Permissions.SendMessages);
   });
@@ -106,8 +100,7 @@ describe('the manifest', () => {
 
     expect(claimed.length).toBeGreaterThan(0);
     for (const field of claimed) expect(keys.has(field)).toBe(true);
-    // Nothing is left off the dashboard, which would leave a setting only an API
-    // call could change.
+
     expect(new Set(claimed).size).toBe(keys.size);
   });
 

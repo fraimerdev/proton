@@ -3,15 +3,6 @@ import { and, eq } from 'drizzle-orm';
 import type { StarboardPost, StarboardStore } from './store.ts';
 import { starboardPosts } from './table.ts';
 
-/**
- * Postgres implementation of `starboard_posts`.
- *
- * Every statement is scoped by guild as well as by message id. A message id is
- * unique across Discord, so the guild is not needed to find the row — but it is
- * needed to make sure one guild's reaction can never reach another guild's board
- * post, and a store that only trusts the id would make that a one-typo bug (I6's
- * rule: a client-supplied id is never trusted on its own).
- */
 export class DrizzleStarboardStore implements StarboardStore {
   readonly #handle: DbHandle;
 
@@ -43,11 +34,6 @@ export class DrizzleStarboardStore implements StarboardStore {
     };
   }
 
-  /**
-   * `ON CONFLICT DO NOTHING` on the primary key, so the second of two concurrent
-   * creates records nothing and says so instead of raising a unique violation
-   * that the listener would have to interpret.
-   */
   async record(post: StarboardPost): Promise<boolean> {
     const inserted = await this.#handle.db
       .insert(starboardPosts)

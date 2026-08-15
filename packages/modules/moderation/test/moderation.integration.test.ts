@@ -13,16 +13,6 @@ import {
   userOption,
 } from './harness.ts';
 
-/**
- * Moderation end to end, against the real ActionExecutor.
- *
- * No container: the seam is the REST proxy client, which is the only thing
- * faked. Everything the invariants live in — I8's prechecks, I4's dedupe, I12's
- * dry-run — is the production code path.
- *
- * I12 makes destructive kinds dry-run outside production, so tests that assert a
- * real Discord call must say they are production. One test pins the opposite.
- */
 const ORIGINAL_ENV = process.env.NODE_ENV;
 
 beforeEach(() => {
@@ -43,7 +33,7 @@ describe('/ban', () => {
     expect(h.discordCalls()).toHaveLength(1);
     expect(h.discordCalls()[0]?.method).toBe('PUT');
     expect(h.discordCalls()[0]?.path).toBe(`/guilds/${GUILD}/bans/${MEMBER}`);
-    // The audit-log reason is what makes the server's own log explain itself.
+
     expect(h.discordCalls()[0]?.headers?.['x-audit-log-reason']).toBe('raiding');
     expect(h.cases()).toHaveLength(1);
     expect(h.cases()[0]?.kind).toBe('ban');
@@ -51,10 +41,6 @@ describe('/ban', () => {
     expect(h.replyContent()).toContain('Banned');
   });
 
-  /**
-   * The Gate 0 stub reported `guildOwnerId: ''`, so this ban went through and
-   * every test stayed green. It is the first of the two regression guards.
-   */
   test('refuses to ban the guild owner, and says why', async () => {
     const h = harness();
 
@@ -65,10 +51,6 @@ describe('/ban', () => {
     expect(h.replyContent()).toContain('server owner');
   });
 
-  /**
-   * The second guard: the stub claimed `botHighestRolePosition:
-   * MAX_SAFE_INTEGER`, which made every hierarchy check pass.
-   */
   test('refuses a member whose top role outranks the bot, and says how to fix it', async () => {
     const h = harness();
 
@@ -77,7 +59,7 @@ describe('/ban', () => {
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.cases()).toHaveLength(0);
     expect(h.replyContent()).toContain('above or equal to mine');
-    // Naming the fix, not just the failure (§1).
+
     expect(h.replyContent()).toContain('Server Settings');
   });
 
@@ -105,10 +87,6 @@ describe('/ban', () => {
     expect(h.replyContent()).toContain('lifts automatically');
   });
 
-  /**
-   * The ban happened; the reversal did not. Reporting only the success would
-   * leave a "temporary" ban that never lifts and nobody looking for it.
-   */
   test('reports a reversal that could not be scheduled', async () => {
     const h = harness();
 
@@ -158,7 +136,6 @@ describe('/ban', () => {
     expect(h.replyContent()).toContain('longer than zero');
   });
 
-  /** I12. */
   test('outside production the ban is recorded but never sent to Discord', async () => {
     process.env.NODE_ENV = 'development';
     const h = harness();
@@ -169,11 +146,10 @@ describe('/ban', () => {
     expect(h.cases()).toHaveLength(1);
     expect(h.cases()[0]?.dryRun).toBe(true);
     expect(h.replyContent()).toContain('Dry run');
-    // The invoker is told it did not happen — a silent no-op is the bug.
+
     expect(h.replyContent()).toContain('nothing changed');
   });
 
-  /** I4: the gateway redelivers, and the second delivery must change nothing. */
   test('a redelivered interaction bans once', async () => {
     const h = harness();
     const options = [userOption('user', MEMBER)];
@@ -232,7 +208,6 @@ describe('/timeout and /untimeout', () => {
     expect(new Date(body?.communication_disabled_until ?? 0).getTime()).toBeGreaterThan(Date.now());
     expect(h.replyContent()).toContain('30m');
 
-    // Discord lifts a timeout itself, so nothing may be queued to lift it again.
     expect(h.scheduled).toHaveLength(0);
   });
 
@@ -276,10 +251,6 @@ describe('/unban', () => {
     expect(h.replyContent()).toContain('Unbanned');
   });
 
-  /**
-   * A banned user is not a member, so there is no hierarchy to check and the
-   * bot's own roles are irrelevant. Refusing here would make every unban fail.
-   */
   test('does not apply the hierarchy check to a user who is not a member', async () => {
     const h = harness();
 
@@ -347,7 +318,7 @@ describe('/lockdown and /unlock', () => {
 
     const call = h.discordCalls()[0];
     expect(call?.method).toBe('PUT');
-    // The @everyone role id is the guild id.
+
     expect(call?.path).toBe(`/channels/${CHANNEL}/permissions/${GUILD}`);
     expect(call?.body).toEqual({ type: 0, allow: '0', deny: String(Permissions.SendMessages) });
   });
@@ -371,7 +342,6 @@ describe('/lockdown and /unlock', () => {
     expect(h.replyContent()).toContain('Unlocked');
   });
 
-  /** Channel overwrites are governed by MANAGE_ROLES, not MANAGE_CHANNELS. */
   test('names ManageRoles when it is missing', async () => {
     const h = harness();
 
@@ -435,10 +405,6 @@ describe('module policy', () => {
     ).toBeUndefined();
   });
 
-  /**
-   * Whatever the outcome, the moderator hears about it. An unanswered
-   * interaction shows "This interaction failed" and teaches nobody anything.
-   */
   test('every command acknowledges the interaction', async () => {
     for (const [command, options] of [
       ['ban', [userOption('user', ABOVE_BOT)]],

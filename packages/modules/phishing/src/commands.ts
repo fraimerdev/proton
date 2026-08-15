@@ -6,16 +6,6 @@ import { bindDeps, describeUnbound, type PhishingDeps } from './deps.ts';
 import { MODULE_ID } from './listener.ts';
 import type { BlocklistStats } from './store.ts';
 
-/**
- * `/phishing` — how many domains are loaded, from where, and when.
- *
- * The only feature in Gate 2 that depends on something outside Proton is this
- * one, which means it is the only one that can be quietly doing nothing while
- * every dashboard toggle says it is on. A blocklist of zero domains looks
- * identical, from inside a server, to a week in which nobody posted a scam. This
- * command is what makes those two distinguishable without shell access to the
- * worker's logs, and it is the reason the store exposes `stats()` at all.
- */
 export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefinition<PhishingConfig> {
   return {
     name: 'phishing',
@@ -25,8 +15,7 @@ export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefiniti
       .setName('phishing')
       .setDescription('Show the state of the phishing blocklist in this server.')
       .setContexts(InteractionContextType.Guild)
-      // Whoever can configure the module can inspect it. Not ModerateMembers:
-      // the answer is about Proton's health, not about a member.
+
       .setDefaultMemberPermissions(Permissions.ManageGuild)
       .toJSON(),
 
@@ -49,7 +38,7 @@ export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefiniti
           interactionId: ctx.interaction.id,
           interactionToken: ctx.interaction.token,
           content: body.slice(0, 2000),
-          // Server health, not an announcement.
+
           ephemeral: true,
         },
       });
@@ -83,8 +72,6 @@ async function describeStats(
   const lines: string[] = [];
 
   if (stats.size === 0) {
-    // Stated first and stated plainly. Everything else on this reply is detail
-    // about a module that is currently catching nothing.
     lines.push(
       '**No blocklist is loaded, so no links are being checked.** Every feed failed, or the ' +
         'cached list expired before a refresh succeeded. This is a Proton-side problem, not ' +

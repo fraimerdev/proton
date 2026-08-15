@@ -29,8 +29,7 @@ describe('logging manifest', () => {
   test('declares the daily partition maintenance job in UTC', () => {
     const job = loggingModule.jobs?.[0];
     expect(job?.id).toBe(PARTITION_MAINTENANCE_JOB_ID);
-    // Partitions are UTC days; a local-time schedule would create the wrong day
-    // twice a year.
+
     expect(job?.timezone).toBeUndefined();
     expect(job?.payload).toEqual({ retentionDays: 30, lookaheadDays: 1 });
   });
@@ -54,9 +53,7 @@ describe('logging failure paths', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    // Without it Discord blanks `content` on MESSAGE_UPDATE, so every edit would
-    // be logged as an empty string. Saying which intent, and where to turn it on,
-    // is the difference between a fixable problem and "the bot did nothing".
+
     expect(status.disabledReason?.humanReason).toContain('MessageContent');
     expect(status.disabledReason?.humanReason).toContain('developer portal');
   });

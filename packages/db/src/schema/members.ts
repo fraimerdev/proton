@@ -14,8 +14,7 @@ export const members = pgTable(
     messageCount: integer('message_count').notNull().default(0),
     voiceSeconds: integer('voice_seconds').notNull().default(0),
     joinedAt: timestamp('joined_at', { withTimezone: true }),
-    // PLAN.md §6 specifies BIGINT[] for this column specifically. Read back in
-    // string mode so 64-bit role snowflakes survive the trip through JS.
+
     stickyRoles: bigint('sticky_roles', { mode: 'bigint' }).array(),
   },
   (t) => [primaryKey({ columns: [t.guildId, t.userId] })],

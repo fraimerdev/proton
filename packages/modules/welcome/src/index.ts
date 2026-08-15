@@ -25,18 +25,6 @@ export {
   type WelcomeDeps,
 } from './listeners.ts';
 
-/**
- * Welcome and goodbye greetings, with optional cards (PLAN.md §8, Phase 3).
- *
- * A factory rather than a constant so the card renderer can be injected —
- * without that, every test would rasterise a real PNG and fetch a real avatar
- * from Discord's CDN, which I11 forbids.
- *
- * The one behaviour worth stating at the manifest level: **a card failure never
- * costs the message**. Rendering is decoration, greeting is the feature, and a
- * font fault that no retry fixes must not silence every welcome in every guild.
- * See `renderGreetingCard`.
- */
 export function createWelcomeModule(
   deps: WelcomeDeps = {},
 ): ModuleManifest<typeof welcomeConfigSchema> {
@@ -48,26 +36,8 @@ export function createWelcomeModule(
     defaultConfig: welcomeDefaultConfig,
     schemaVersion: WELCOME_SCHEMA_VERSION,
 
-    /**
-     * GUILD_MEMBERS is privileged and the module is nothing without it: neither
-     * GUILD_MEMBER_ADD nor GUILD_MEMBER_REMOVE is dispatched without it, so every
-     * greeting would silently never happen. Declaring it means the registry
-     * disables the module with the intent named and the portal toggle to flip
-     * (§7), instead of an admin concluding the bot is broken.
-     */
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 
-    /**
-     * Sending is the whole feature, so both are a hard gate — unlike `cases`,
-     * which keeps ban rights out of its requirements because it has value
-     * without them. A welcome module that cannot post has none.
-     *
-     * ATTACH_FILES is deliberately absent even though cards are attachments:
-     * cards are off by default and optional, and gating the text greeting on a
-     * permission only the optional half needs would disable the module for every
-     * guild that never turned cards on. A missing ATTACH_FILES surfaces as
-     * Discord's own 403 through the executor instead, which names it.
-     */
     requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
 
     listeners: [createGreetingListener(deps)],
@@ -85,7 +55,6 @@ export function createWelcomeModule(
   };
 }
 
-/** The module as the registry and dashboard see it, with the default renderer. */
 export const welcomeModule: ModuleManifest<typeof welcomeConfigSchema> = createWelcomeModule();
 
 export default welcomeModule;

@@ -8,7 +8,6 @@ import type { ConfigProvider, ModuleConfigSnapshot } from '../src/runtime.ts';
 
 const GUILD = '900000000000000001';
 
-/** Counts reads, and can be made to stall so single-flight is observable. */
 function countingProvider(
   snapshot: ModuleConfigSnapshot = { enabled: true, config: { enabled: true } },
 ): { provider: ConfigProvider; reads: () => number; release: () => void } {
@@ -76,11 +75,6 @@ describe('CachingConfigProvider', () => {
     expect(inner.reads()).toBe(3);
   });
 
-  /**
-   * The load-bearing case. A twenty-deletion burst arrives as twenty events at
-   * once; without single-flight that is twenty concurrent HTTP round trips for
-   * one answer, and the burst is exactly the traffic anti-nuke exists for.
-   */
   test('concurrent reads for the same module collapse into one fetch', async () => {
     const inner = countingProvider();
     const cache = new CachingConfigProvider(inner.provider, { ttlMs: 5_000 });
@@ -93,11 +87,6 @@ describe('CachingConfigProvider', () => {
     expect(results.every((r) => r.enabled)).toBe(true);
   });
 
-  /**
-   * A module a guild has *not* enabled is the common case by a wide margin. If
-   * only positive answers were cached it would cost a round trip per message
-   * forever, which is the opposite of the point.
-   */
   test('a disabled module is cached too', async () => {
     const inner = countingProvider({ enabled: false, config: {} });
     const cache = new CachingConfigProvider(inner.provider, { ttlMs: 5_000 });
@@ -108,7 +97,6 @@ describe('CachingConfigProvider', () => {
     expect(inner.reads()).toBe(1);
   });
 
-  /** A 500 that stuck for the TTL would outlive the outage that caused it. */
   test('a failure is never cached', async () => {
     let reads = 0;
     const cache = new CachingConfigProvider(
@@ -137,15 +125,6 @@ describe('CachingConfigProvider', () => {
     expect(inner.reads()).toBe(2);
   });
 
-  /**
-   * Expired entries are deleted on read, not merely ignored.
-   *
-   * A worker serving thousands of guilds would otherwise hold one entry per
-   * (guild, module) for the life of the process — a map that only ever grows,
-   * holding values it will never return. Asserted through the public surface by
-   * re-reading the same key after expiry and checking the cache did not keep
-   * both the stale value and the fresh one.
-   */
   test('an expired entry is evicted rather than left in the map', async () => {
     const inner = countingProvider();
     const clock = { now: 1_000 };
@@ -157,11 +136,9 @@ describe('CachingConfigProvider', () => {
     await cache.get(GUILD, 'phishing');
     clock.now += 2_000;
 
-    // The expired entry is gone, so this is a miss...
     await cache.get(GUILD, 'phishing');
     expect(inner.reads()).toBe(2);
 
-    // ...and the replacement is cached normally rather than the map holding two.
     await cache.get(GUILD, 'phishing');
     expect(inner.reads()).toBe(2);
   });
@@ -183,11 +160,6 @@ describe('CachingConfigProvider', () => {
 });
 
 describe('HttpConfigProvider error classification', () => {
-  /**
-   * The distinction the listener path depends on. A 400 means the stored config
-   * does not parse and will not parse on the next try either; retrying it burns
-   * every delivery and dead-letters that guild's events for that module.
-   */
   test('4xx is permanent', async () => {
     const provider = new HttpConfigProvider('http://api.invalid', 'a'.repeat(16));
     const original = globalThis.fetch;
@@ -221,12 +193,6 @@ describe('HttpConfigProvider error classification', () => {
     }
   });
 
-  /**
-   * The one that would have been a fleet-wide silent outage. `apps/api` answers
-   * 401 from its shared-secret middleware, so under a `4xx = permanent` rule a
-   * rotated API_SHARED_SECRET would have every listener ack and discard every
-   * event, unrecoverably, for every guild.
-   */
   test.each([401, 403, 408, 429])('%i is transient, not permanent', async (status) => {
     const provider = new HttpConfigProvider('http://api.invalid', 'a'.repeat(16));
     const original = globalThis.fetch;

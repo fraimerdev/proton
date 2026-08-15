@@ -9,13 +9,12 @@ import {
 } from './snapshot.ts';
 
 export const RESTORE_SKIP_CODES = [
-  /** The bot could not see the channel when the backup was taken (§10.1). */
   'obfuscated_at_backup',
-  /** It still exists, so recreating it would duplicate it. */
+
   'already_present',
-  /** Owned by an integration; Discord refuses to create these. */
+
   'managed_role',
-  /** @everyone exists in every guild and cannot be created. */
+
   'everyone_role',
 ] as const;
 
@@ -25,21 +24,10 @@ export interface RestoreSkip {
   kind: 'channel' | 'role';
   id: string;
   code: RestoreSkipCode;
-  /** Written for the admin reading the report, not for a log grep. */
+
   reason: string;
 }
 
-/**
- * One step of a restore.
- *
- * The ids inside are **snapshot** ids: the channel and role ids the guild had
- * when the backup was taken. Discord assigns new ids to everything it creates,
- * so whatever applies this plan has to keep an old-id → new-id map and translate
- * `parentId` and every overwrite `id` through it as it goes. That translation is
- * the difference between a restored server and a server full of channels whose
- * permissions point at roles that no longer exist — and it belongs to the
- * applier, because only the applier learns the new ids.
- */
 export type RestoreOp =
   | { op: 'create_role'; role: RoleSnapshot }
   | { op: 'create_channel'; channel: ChannelSnapshot };
@@ -47,11 +35,11 @@ export type RestoreOp =
 export interface RestorePlan {
   guildId: string;
   backupId: string;
-  /** I12: outside production a restore is planned and reported, never performed. */
+
   dryRun: boolean;
   ops: RestoreOp[];
   skipped: RestoreSkip[];
-  /** Consequences of the skips that an admin has to decide about. */
+
   warnings: string[];
 }
 
@@ -68,36 +56,17 @@ export function isRestoreRefusal(value: RestoreResult): value is RestoreRefusal 
 export interface RestoreInput {
   backupId: string;
   snapshot: GuildSnapshot;
-  /** The guild as it is right now — the same raw shape a snapshot is built from. */
+
   present: GuildLayout;
   dryRun: boolean;
-  /** Discord's @everyone role id equals the guild id. */
+
   everyoneRoleId?: string;
 }
 
-/**
- * I12 lists restore among the destructive actions that default to dry run
- * outside production. There is no `ActionKind` for "create a channel", so
- * `isDestructive` cannot answer this one and the rule is applied here instead.
- */
 export function restoreIsDryRun(env: string | undefined = process.env.NODE_ENV): boolean {
   return env !== 'production';
 }
 
-/**
- * Work out what a restore would do, and what it would refuse to do.
- *
- * The comparison is snapshot-to-snapshot: the current guild is run through the
- * same `buildSnapshot` the backup came from, so both sides were parsed by one
- * reader and a difference between them is a real difference rather than two
- * parsers disagreeing.
- *
- * Nothing here deletes. A restore after a nuke has to be additive: the attacker
- * removed things, and removing more — channels created since the backup, a role
- * added yesterday — turns a partial loss into a total one. §15's framing is that
- * the product's value is restore *quality*, and quality here means never
- * destroying something the backup simply does not know about.
- */
 export function planRestore(input: RestoreInput): RestoreResult {
   const { snapshot, present, backupId } = input;
 
@@ -119,11 +88,6 @@ export function planRestore(input: RestoreInput): RestoreResult {
     };
   }
 
-  // The one refusal §10.1 makes unavoidable. A REST channel list omits hidden
-  // channels rather than marking them, so every hidden channel would look
-  // "missing" and be recreated alongside the one that already exists — a restore
-  // that doubles the server. Detecting that after the fact is impossible; the
-  // duplicates are indistinguishable from channels the admin wanted.
   if (present.source === 'rest') {
     return {
       refusal:
@@ -135,8 +99,6 @@ export function planRestore(input: RestoreInput): RestoreResult {
     };
   }
 
-  // Same parser both sides, so "present" means exactly what "captured" meant.
-  // Only ids and shapes are read from it; the clock it is handed is irrelevant.
   const current = buildSnapshot(present, snapshot.capturedAt).snapshot;
   const presentChannelIds = new Set(current.channels.map((channel) => channel.id));
   const presentRoleIds = new Set(current.roles.map((role) => role.id));
@@ -185,10 +147,6 @@ export function planRestore(input: RestoreInput): RestoreResult {
   const channelsToCreate: ChannelSnapshot[] = [];
   for (const channel of snapshot.channels) {
     if (channel.obfuscated) {
-      // The headline of §10.1 and of Gate 2: skip, and say so. Recreating from a
-      // placeholder would produce a channel with no name, no topic and no
-      // permissions sitting where a private channel used to be — worse than the
-      // hole it filled, because it looks restored.
       skipped.push({
         kind: 'channel',
         id: channel.id,
@@ -214,10 +172,6 @@ export function planRestore(input: RestoreInput): RestoreResult {
     channelsToCreate.push(channel);
   }
 
-  // A category that was hidden at backup time is skipped, which orphans every
-  // child that lived under it. Creating the child at the top level anyway is the
-  // right call — the messages have somewhere to go — but it is a visible change
-  // to the server's shape, so it is named rather than absorbed.
   const creatableIds = new Set(channelsToCreate.map((channel) => channel.id));
   const orphaned: ChannelSnapshot[] = [];
   for (const channel of channelsToCreate) {
@@ -236,12 +190,8 @@ export function planRestore(input: RestoreInput): RestoreResult {
   }
 
   const ops: RestoreOp[] = [
-    // Roles first: a channel's permission overwrites name roles, so the roles
-    // have to exist before the overwrites can point at them. Ascending position
-    // keeps the order deterministic and rebuilds the hierarchy bottom-up.
     ...sortByPosition(rolesToCreate).map((role): RestoreOp => ({ op: 'create_role', role })),
-    // Then categories, then everything else — Discord rejects a channel whose
-    // `parent_id` does not exist yet.
+
     ...sortChannels(channelsToCreate).map(
       (channel): RestoreOp => ({ op: 'create_channel', channel }),
     ),
@@ -251,7 +201,6 @@ export function planRestore(input: RestoreInput): RestoreResult {
 }
 
 function sortByPosition<T extends { position: number; id: string }>(items: readonly T[]): T[] {
-  // Id breaks ties, so two roles at the same position never swap between runs.
   return [...items].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
 }
 
@@ -261,7 +210,6 @@ function sortChannels(channels: readonly ChannelSnapshot[]): ChannelSnapshot[] {
   return [...sortByPosition(categories), ...sortByPosition(rest)];
 }
 
-/** How many of each thing a plan would create — the headline of the report. */
 export function summariseRestore(plan: RestorePlan): { roles: number; channels: number } {
   return {
     roles: plan.ops.filter((op) => op.op === 'create_role').length,
@@ -269,7 +217,6 @@ export function summariseRestore(plan: RestorePlan): { roles: number; channels: 
   };
 }
 
-/** Discord caps a message at 2000 characters; a 40-line skip list would not fit. */
 const MAX_LISTED = 8;
 
 function skipLine(skip: RestoreSkip): string {
@@ -283,10 +230,6 @@ function skipLines(skips: readonly RestoreSkip[]): string[] {
   return rest > 0 ? [...lines, `- …and ${rest} more.`] : lines;
 }
 
-/**
- * The report §12's Gate 2 asks for: what a restore would do, and every channel
- * it would leave alone, with the reason attached to each one.
- */
 export function describeRestore(plan: RestorePlan): string[] {
   const counts = summariseRestore(plan);
   const lines = [

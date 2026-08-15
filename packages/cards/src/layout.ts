@@ -2,14 +2,6 @@ import type { CardDescriptor, GoodbyeCard, RankCard, WelcomeCard } from './descr
 import { FONT_FAMILY } from './fonts.ts';
 import { type PresetPalette, paletteFor } from './presets.ts';
 
-/**
- * The node shape satori consumes.
- *
- * Declared here rather than imported because satori types its element parameter
- * as React's `ReactNode` — pulling `@types/react` into a package that renders
- * PNGs on a server would be a dependency taken for a type alias. These four
- * fields are the whole of what satori reads from a node.
- */
 export interface CardNode {
   type: 'div' | 'img';
   props: {
@@ -19,54 +11,24 @@ export interface CardNode {
   };
 }
 
-/**
- * The code points the embedded latin subset can actually draw.
- *
- * `@fontsource/inter`'s `unicode.json` `latin` range — Google Fonts' own subset
- * definition for the exact files in `assets/` — with one deliberate narrowing:
- * that range starts at U+0000, and this starts at U+0020, because C0 control
- * characters are not glyphs and a name is not improved by carrying a U+0007
- * through to the renderer. Written as escapes rather than literal characters so
- * the set stays auditable against `unicode.json` without trusting an editor to
- * render combining marks and a BOM legibly.
- */
 const RENDERABLE =
   // biome-ignore lint/suspicious/noMisleadingCharacterClass: these are code points, not grapheme clusters. The combining marks (U+0304, U+0308, U+0329) are members of the font's subset in their own right and are meant to match individually.
   /[ -ÿıŒ-œʻ-ʼˆ˚˜̩̄̈ -⁯€™↑↓−∕﻿�]/u;
 
-/** Shown when a name consists entirely of glyphs the subset cannot draw. */
 const UNRENDERABLE_NAME = 'Member';
 
-/**
- * Drop what the font cannot draw, rather than letting satori emit .notdef boxes.
- *
- * satori does not throw on a missing glyph — verified — it silently renders
- * nothing, so a CJK or emoji username would otherwise produce a card with a row
- * of blanks where the name should be, which reads as a rendering bug. Dropping is
- * the lesser evil and is not the only line of defence: `@proton/module-welcome`
- * always sends its text message alongside the card, and Discord renders the
- * member's real name there in the client's own fonts. The card is the decoration;
- * the message is the content.
- *
- * The real fix is a CJK-capable fallback face, which is several megabytes of
- * binary in git and a deliberate decision for whoever owns i18n — not something
- * to smuggle in behind a card.
- */
 export function sanitiseText(input: string, fallback = UNRENDERABLE_NAME): string {
   const kept = [...input].filter((char) => RENDERABLE.test(char)).join('');
-  // Control characters and stray whitespace survive the range test above; a name
-  // is one line, so they collapse rather than reflowing the layout.
+
   const collapsed = kept.replace(/\s+/gu, ' ').trim();
   return collapsed.length > 0 ? collapsed : fallback;
 }
 
-/** The letter drawn when there is no avatar bitmap to draw. */
 export function monogram(displayName: string): string {
   const first = [...sanitiseText(displayName, '')].find((char) => /[\p{L}\p{N}]/u.test(char));
   return (first ?? '?').toUpperCase();
 }
 
-/** `1234` → `1,234`. Card numbers are read at a glance, so they get separators. */
 function group(value: number): string {
   return value.toLocaleString('en-US');
 }
@@ -75,13 +37,6 @@ function text(value: string, style: Record<string, string | number>): CardNode {
   return { type: 'div', props: { style: { display: 'flex', ...style }, children: value } };
 }
 
-/**
- * The avatar, or a monogram standing in for it.
- *
- * One function for both so the ring, the diameter and the circle geometry cannot
- * drift between the two cases — a fallback that is a different size from the
- * thing it replaces makes a CDN blip visible as a layout shift.
- */
 function avatar(
   dataUri: string | null,
   displayName: string,
@@ -96,7 +51,6 @@ function avatar(
   };
 
   if (dataUri) {
-    // `objectFit: cover` so a non-square avatar is cropped rather than squashed.
     return { type: 'img', props: { src: dataUri, style: { ...frame, objectFit: 'cover' } } };
   }
 
@@ -135,9 +89,7 @@ function root(
 
 function rankLayout(card: RankCard, dataUri: string | null): CardNode {
   const palette = paletteFor(card.preset);
-  // Clamped rather than trusted: the schema refuses a numerator above its
-  // denominator, but a bar drawn from a percentage is one arithmetic slip away
-  // from overflowing its track, and a card is not worth a crash.
+
   const ratio = Math.min(1, Math.max(0, card.xpIntoLevel / card.xpForNextLevel));
 
   const header: CardNode = {
@@ -194,8 +146,7 @@ function rankLayout(card: RankCard, dataUri: string | null): CardNode {
           props: {
             style: {
               display: 'flex',
-              // A zero-width fill is a rounded sliver of colour rather than
-              // nothing, which reads as "no progress" instead of "bar missing".
+
               width: `${Math.max(2, ratio * 100)}%`,
               height: '100%',
               borderRadius: '11px',
@@ -221,8 +172,7 @@ function rankLayout(card: RankCard, dataUri: string | null): CardNode {
               flexDirection: 'column',
               flexGrow: 1,
               marginLeft: '32px',
-              // Total XP sits below the bar; the gap does the vertical rhythm so
-              // no child carries a margin that a reorder would strand.
+
               gap: '14px',
             },
             children: [
@@ -241,11 +191,6 @@ function rankLayout(card: RankCard, dataUri: string | null): CardNode {
   };
 }
 
-/**
- * Welcome and goodbye are one layout with two sets of words (§3.C: "same shape,
- * different copy"), so the copy is a table and the geometry is written once. A
- * second near-identical layout function is how the two silently drift apart.
- */
 const GREETING_COPY = {
   welcome: {
     eyebrow: 'WELCOME',
@@ -306,13 +251,6 @@ function greetingLayout(card: WelcomeCard | GoodbyeCard, dataUri: string | null)
   };
 }
 
-/**
- * Build the node tree for any card.
- *
- * `dataUri` is resolved by the caller rather than fetched here, so this whole
- * file is pure: same descriptor and same avatar bytes give the same tree, which
- * is what makes the rendered PNG assertable byte-for-byte in CI.
- */
 export function buildLayout(card: CardDescriptor, dataUri: string | null): CardNode {
   switch (card.kind) {
     case 'rank':

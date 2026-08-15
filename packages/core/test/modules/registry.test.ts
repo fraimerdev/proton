@@ -10,13 +10,6 @@ import {
 } from '../../src/modules/registry.ts';
 import { Permissions } from '../../src/permissions/bits.ts';
 
-/**
- * A trivial manifest factory.
- *
- * This is the mechanical half of Gate 0's "adding a second module takes < 1 day"
- * criterion: the contract suite below is parameterised over manifests, so a new
- * module is a fixture here, never new framework code.
- */
 function manifest(overrides: Partial<ModuleManifest> = {}): ModuleManifest {
   const configSchema = z.object({
     enabled: z.boolean().default(true),
@@ -58,11 +51,6 @@ describe('ModuleRegistry registration', () => {
     expect(() => registry.register(manifest())).toThrow(ModuleRegistrationError);
   });
 
-  /**
-   * P4's "drift is impossible" property. A schema change that forgets to update
-   * defaultConfig would otherwise ship a module no guild can enable, and the
-   * failure would appear as a validation error in production.
-   */
   test('refuses a defaultConfig that does not satisfy its own schema', () => {
     const registry = new ModuleRegistry();
     const broken = manifest({
@@ -80,8 +68,6 @@ describe('ModuleRegistry registration', () => {
       defaultConfig: { mode: 'a' },
     });
 
-    // Caught at load time, in this module's own tests — not at render time in a
-    // guild admin's browser.
     expect(() => registry.register(broken)).toThrow();
   });
 
@@ -100,14 +86,6 @@ describe('ModuleRegistry registration', () => {
     expect(registry.descriptors('ping').map((d) => d.kind)).toEqual(['boolean', 'channel-id']);
   });
 
-  /**
-   * The escape hatch for §9's deliberately closed vocabulary: a module may store
-   * per-guild data richer than the generator renders — cases' escalation ladder
-   * is an array of objects — as long as it names the narrower schema the form is
-   * built from. Without this the module could not be registered at all, and the
-   * only ways out would be widening the generator into a rule builder or moving
-   * the data out of config, losing I5 validation and the I7 audit diff.
-   */
   test('generates the form from formSchema when the config schema is richer', () => {
     const registry = new ModuleRegistry();
     const configSchema = z.object({
@@ -115,7 +93,6 @@ describe('ModuleRegistry registration', () => {
       ladder: z.array(z.object({ at: z.number() })).default([]),
     });
 
-    // The full schema is still refused — the boundary has not moved.
     expect(() =>
       registry.register(manifest({ configSchema, defaultConfig: { enabled: true } })),
     ).toThrow(/ladder/);
@@ -131,10 +108,6 @@ describe('ModuleRegistry registration', () => {
     expect(registry.descriptors('ping').map((d) => d.path)).toEqual(['enabled']);
   });
 
-  /**
-   * A form field with no config key behind it saves into nothing: the module's
-   * own schema drops the unknown key and the admin watches their setting revert.
-   */
   test('refuses a formSchema field the config schema does not define', () => {
     const registry = new ModuleRegistry();
     const broken = manifest({
@@ -145,11 +118,6 @@ describe('ModuleRegistry registration', () => {
     expect(() => registry.register(broken)).toThrow(/typo/);
   });
 
-  /**
-   * Preset rules and jobs are plain data (§4-P2), so they survive registration
-   * untouched and the engine and scheduler can load them exactly as they load
-   * rows a guild admin created.
-   */
   test('keeps a manifest’s declared rules and jobs', () => {
     const registry = new ModuleRegistry();
     registry.register(
@@ -191,7 +159,7 @@ describe('ModuleRegistry gating', () => {
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
     expect(status.disabledReason?.humanReason).toContain('MessageContent');
-    // And says where to fix it.
+
     expect(status.disabledReason?.humanReason).toContain('developer portal');
   });
 
@@ -207,14 +175,6 @@ describe('ModuleRegistry gating', () => {
     expect(status.disabledReason?.humanReason).toContain('Server Settings');
   });
 
-  /**
-   * The audit-log path specifically (§8 Phase 2). Discord delivers
-   * GUILD_AUDIT_LOG_ENTRY_CREATE only to bots holding VIEW_AUDIT_LOG and only
-   * under the GUILD_MODERATION intent, and it signals neither refusal — a
-   * security module without them looks exactly like a peaceful guild. This is
-   * the only place that difference can be made visible, so it is pinned here
-   * rather than left to the generic permission case above.
-   */
   test('disables an audit-log consumer that lacks VIEW_AUDIT_LOG or GUILD_MODERATION', () => {
     const registry = new ModuleRegistry();
     registry.register(
@@ -275,7 +235,6 @@ describe('aggregate requirements', () => {
       manifest({ id: 'second', name: 'Second', requiredPermissions: [Permissions.ManageMessages] }),
     );
 
-    // PLAN.md §10.3 — this is the number that goes in the invite URL.
     expect(registry.invitePermissions()).toBe(
       Permissions.ViewChannel | Permissions.SendMessages | Permissions.ManageMessages,
     );
@@ -303,16 +262,6 @@ describe('aggregate requirements', () => {
   });
 });
 
-/**
- * The `emits` allowlist — the narrow opening in I3 that lets a module publish
- * `xp.level_gained` without being handed the bus.
- *
- * What is being protected here is not the ability to publish, which is
- * harmless in itself, but the ability to publish *someone else's* event type. A
- * module that could forge `moderation.warned` could drive another guild's
- * escalation ladder into banning people, and nothing downstream would be able to
- * tell the forged event from a real one — they are the same shape by design.
- */
 describe('emits allowlist', () => {
   test('a module may publish only what it declares', () => {
     const registry = new ModuleRegistry();
@@ -333,11 +282,6 @@ describe('emits allowlist', () => {
     expect(new ModuleRegistry().mayEmit('ghost', 'xp.level_gained')).toBe(false);
   });
 
-  /**
-   * This is the set the gateway's `NORMALISED_EVENT_TYPES` is unioned with, so
-   * that a listener on an internal event is not reported as subscribing to
-   * something nothing emits.
-   */
   test('collects every declared type across modules, without duplicates', () => {
     const registry = new ModuleRegistry();
     registry.register(manifest({ id: 'leveling', emits: ['xp.level_gained'] }));
@@ -349,10 +293,6 @@ describe('emits allowlist', () => {
     expect(registry.emittedTypes()).toHaveLength(2);
   });
 
-  /**
-   * Harmless at runtime but always a mistake, and invisible in `emittedTypes()`
-   * because that is a union. Caught where it can name the module.
-   */
   test('refuses a manifest that lists the same type twice', () => {
     const registry = new ModuleRegistry();
 

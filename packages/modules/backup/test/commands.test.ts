@@ -33,8 +33,6 @@ describe('/backup create', () => {
   });
 
   test('tells the admin at backup time which channels it could not capture', async () => {
-    // §10.1's requirement, and the reason this module exists in phase 2 at all:
-    // the warning has to arrive now, not during the restore that follows a nuke.
     const store = new MemoryBackupStore();
     const bot = harness({ store, layout: fixtureLayout('channelObfuscated') });
 
@@ -45,7 +43,6 @@ describe('/backup create', () => {
     expect(reply).toContain(`<#${HIDDEN_CHANNEL}>`);
     expect(reply).toContain('View Channel');
 
-    // The snapshot still records the gap rather than omitting the channel.
     const hidden = store.records[0]?.snapshot.channels.find((c) => c.id === HIDDEN_CHANNEL);
     expect(hidden?.obfuscated).toBe(true);
     expect(hidden?.name).toBeNull();
@@ -85,7 +82,7 @@ describe('/backup create', () => {
     await bot.run(subcommand('create'), { retainBackups: 2 });
 
     expect(store.records).toHaveLength(2);
-    // The new one survives; the two oldest go.
+
     expect(store.records.map((record) => record.id)).toContain(BACKUP_ID);
     expect(bot.replyContent()).toContain('Deleted 2 older snapshots');
   });
@@ -170,7 +167,7 @@ describe('/backup restore', () => {
     const bot = harness({ store, layout: fixtureLayout('channelObfuscated') });
 
     await bot.run(subcommand('create'));
-    // The server is nuked: every channel gone.
+
     bot.current.layout = layout([]);
     await bot.run(subcommand('restore', [stringOption('backup_id', BACKUP_ID)]));
 
@@ -178,7 +175,7 @@ describe('/backup restore', () => {
     expect(reply).toContain('recreate 0 roles and 1 channel');
     expect(reply).toContain('cannot be restored');
     expect(reply).toContain(`<#${HIDDEN_CHANNEL}>`);
-    // And it is honest about not being able to act (blocker 1).
+
     expect(reply).toContain('cannot carry this plan out yet');
     expect(reply).toContain('Manage Channels');
   });

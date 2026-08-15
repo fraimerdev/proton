@@ -7,39 +7,20 @@ import type { ActionFailure, ActionRequest } from './types.ts';
 export interface ResolveContextDeps {
   store: GuildStateStore;
   botUserId: string;
-  /**
-   * Fetch one member's role ids when the interaction did not resolve them.
-   * A single-member fetch — never Request Guild Members (§10.4).
-   */
+
   fetchMemberRoles?(guildId: string, userId: string): Promise<string[] | null>;
 }
 
 export interface ResolveContextHints {
-  /** Channel the action affects. */
   channelId?: string | undefined;
-  /**
-   * `app_permissions` from the originating interaction. Discord resolves the
-   * bot's effective permissions in that channel for us (§10.5), so when the
-   * action targets the interaction's own channel this is both authoritative and
-   * free — no REST call, no dependence on cache freshness.
-   */
+
   appPermissions?: bigint | undefined;
-  /** Target's role ids from `data.resolved.members`, when present. */
+
   targetRoleIds?: string[] | undefined;
 }
 
 export type ResolveContextResult = { context: PrecheckInput } | { failure: ActionFailure };
 
-/**
- * Assemble the real state I8 needs.
- *
- * **This fails closed.** If guild state is missing, or a member-targeting action
- * cannot determine the target's roles, it returns a failure rather than a
- * permissive context. The Gate 0 stub did the opposite — it returned
- * `guildOwnerId: ''` and `botHighestRolePosition: MAX_SAFE_INTEGER`, values
- * engineered so `runPrechecks` always passed. Under that stub the bot would
- * cheerfully ban the server owner while every test stayed green.
- */
 export async function resolvePrecheckContext(
   deps: ResolveContextDeps,
   request: ActionRequest,
@@ -60,8 +41,6 @@ export async function resolvePrecheckContext(
 
   const required = requiredPermissionsFor(request.kind);
 
-  // Prefer Discord's own computation for the interaction channel; fall back to
-  // computing from cached overwrites for any other channel.
   const botChannelPermissions =
     hints.appPermissions ??
     computeChannelPermissions(
@@ -106,8 +85,6 @@ export async function resolvePrecheckContext(
   const roleIds = hints.targetRoleIds ?? (await deps.fetchMemberRoles?.(request.guildId, targetId));
 
   if (!roleIds) {
-    // Fail closed: unknown roles means unknown hierarchy, and guessing here is
-    // how a bot ends up acting on someone it outranks only on paper.
     return {
       failure: {
         code: 'target_state_unavailable',

@@ -65,11 +65,6 @@ describe('RedisBlocklistStore', () => {
     expect(await store.lookup(['new.example'])).toBe('new.example');
   });
 
-  /**
-   * The swap has to be atomic. Clear-then-repopulate leaves a window in which
-   * the list is empty, and every message handled in that window silently goes
-   * unchecked — a nightly self-inflicted outage nobody would ever observe.
-   */
   test('the old list stays queryable and complete right up to the swap', async () => {
     await install(['old.example']);
 
@@ -80,8 +75,6 @@ describe('RedisBlocklistStore', () => {
       failures: [],
     });
 
-    // Interleaved with the write, deliberately: the staging key is a different
-    // key, so nothing here can observe a half-built set.
     const during = await Promise.all(
       Array.from({ length: 25 }, () => store.lookup(['old.example'])),
     );
@@ -129,11 +122,6 @@ describe('RedisBlocklistStore', () => {
     expect(stats).toEqual({ size: 0, refreshedAt: null, feeds: [], failures: [] });
   });
 
-  /**
-   * The staleness ceiling. If the refresher dies, the list must eventually stop
-   * being enforced rather than being served from an arbitrarily distant past
-   * while everything reports healthy.
-   */
   test('the cached list carries a TTL so a dead refresher becomes visible', async () => {
     await install([BAD_DOMAIN]);
 
@@ -178,10 +166,6 @@ describe('refresh → cache → detect, against real Redis', () => {
     expect(clean.executor.requests).toEqual([]);
   });
 
-  /**
-   * The Gate 2 requirement for this module, end to end: the feed is down, the
-   * cache is cold, and the bot keeps handling messages.
-   */
   test('every feed down leaves the module functional with an empty list, and logs why', async () => {
     const { logger, logs } = recordingLogger();
 
@@ -203,7 +187,6 @@ describe('refresh → cache → detect, against real Redis', () => {
     expect(explained?.message).toContain('ENOTFOUND');
     expect(explained?.message).toContain('502');
 
-    // And the module still handles messages, doing nothing, without throwing.
     const listener = createPhishingListener({ blocklist: store, botUserId: BOT });
     const harness = context({ alertChannel: ALERT_CHANNEL });
 
@@ -229,7 +212,6 @@ describe('refresh → cache → detect, against real Redis', () => {
     const harness = context();
     await listener.handler(messageEvent({ content: `https://${BAD_DOMAIN}/x` }), harness.ctx);
 
-    // Stale coverage beats no coverage.
     expect(harness.executor.of('timeout')).toBeDefined();
   });
 });

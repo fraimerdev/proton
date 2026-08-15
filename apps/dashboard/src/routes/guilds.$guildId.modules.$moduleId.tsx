@@ -30,11 +30,8 @@ export const Route = createFileRoute('/guilds/$guildId/modules/$moduleId')({
     const found = modules.modules.find((m) => m.id === params.moduleId);
     if (!found) throw new Error(`unknown module '${params.moduleId}'`);
 
-    // Descriptors cross the wire as JSON; cast back at the render boundary.
     const module = { ...found, descriptors: found.descriptors as unknown as FieldDescriptor[] };
 
-    // Every command Proton has loaded, in name order. The permissions module's
-    // override map is keyed by these and cannot learn them itself (I3).
     const commands = [...new Set(modules.modules.flatMap((m) => m.commands))].sort();
 
     return { module, commands, view, channels, roles };
@@ -50,12 +47,6 @@ function ModuleSettings(): ReactElement {
   const [enabled, setEnabled] = useState(view.enabled);
   const [status, setStatus] = useState<string | null>(null);
 
-  /**
-   * The override map's keys are the loaded commands, so its fields cannot come
-   * from a static schema — the permissions module ships a builder for exactly
-   * this, and the result is ordinary `role-id` array descriptors the generator
-   * already knows how to render (see that module's `config.ts`).
-   */
   const descriptors = useMemo(() => {
     if (moduleId !== 'permissions') return module.descriptors;
 
@@ -67,7 +58,6 @@ function ModuleSettings(): ReactElement {
 
   const [values, setValues] = useState(() => toFormValues(descriptors, view.config));
 
-  // Outside the generator's vocabulary by design (§9) — see the editors.
   const [ladder, setLadder] = useState<EscalationRung[]>(
     () => (view.config.escalationLadder ?? []) as unknown as EscalationRung[],
   );
@@ -78,9 +68,6 @@ function ModuleSettings(): ReactElement {
   async function save(): Promise<void> {
     setStatus('Saving…');
     try {
-      // Merged over the config this page loaded, so fields no generated
-      // descriptor covers survive the save instead of resetting to their
-      // schema defaults.
       const config = toConfig(descriptors, values, view.config);
       if (moduleId === 'cases') config.escalationLadder = ladder;
       if (moduleId === 'leveling') config.roleRewards = rewards;
@@ -90,7 +77,6 @@ function ModuleSettings(): ReactElement {
       setStatus('Saved.');
       await router.invalidate();
     } catch (error) {
-      // Surface the real reason — never "something went wrong".
       setStatus(error instanceof Error ? error.message : String(error));
     }
   }
@@ -121,7 +107,6 @@ function ModuleSettings(): ReactElement {
         />
       </label>
 
-      {/* Rendered entirely from the module's Zod schema — no per-module UI. */}
       <GeneratedForm
         descriptors={descriptors}
         values={values}
@@ -152,15 +137,6 @@ function ModuleSettings(): ReactElement {
   );
 }
 
-/**
- * Drop commands with no roles selected.
- *
- * An empty list already means "Discord's own rules apply", so storing one per
- * loaded command would bury the guild's two real overrides in a wall of empty
- * entries and make every `audit_trail` diff (I7) unreadable. Commands that are
- * not loaded right now keep whatever they had — a module being temporarily
- * unregistered must not silently discard its overrides.
- */
 function pruneOverrides(overrides: unknown): Record<string, unknown> {
   if (typeof overrides !== 'object' || overrides === null) return {};
 

@@ -27,7 +27,6 @@ function menu(overrides: Partial<RolemenuMenu> = {}): RolemenuMenu {
   };
 }
 
-/** The messages, not just the failure — an admin has to be able to act on them. */
 function messages(menus: unknown[]): string[] {
   const parsed = rolemenuMenusSchema.safeParse(menus);
   return parsed.success ? [] : parsed.error.issues.map((issue) => issue.message);
@@ -44,8 +43,6 @@ describe('defaults', () => {
   });
 
   test('give nobody a role', () => {
-    // An enabled menu with no menus configured would do nothing; an enabled menu
-    // with a guessed role would hand out a role the admin never chose.
     expect(rolemenuDefaultConfig.enabled).toBe(false);
     expect(rolemenuDefaultConfig.menus).toEqual([]);
   });
@@ -53,8 +50,6 @@ describe('defaults', () => {
 
 describe('the §9 boundary', () => {
   test('the config schema is outside the v1 form generator, by design', () => {
-    // Not a bug to fix by widening the generator — §9 rules that out in as many
-    // words, and `cases` refuses for the same reason with the same shape.
     expect(() => zodToDescriptors(rolemenuConfigSchema)).toThrow(UnsupportedSchemaError);
   });
 
@@ -95,8 +90,6 @@ describe('menu ids', () => {
 
 describe('binding keys', () => {
   test('a duplicate within one menu is refused', () => {
-    // Two bindings on one key make resolution ambiguous, and the second is dead
-    // config that looks live.
     const clashing = [
       menu({
         bindings: [
@@ -163,8 +156,6 @@ describe('binding keys', () => {
 
 describe('the 100-character custom_id ceiling', () => {
   test('a menu that could not address its own buttons is refused on save', () => {
-    // Discord rejects the whole message rather than truncating, so discovering
-    // this when someone runs /rolemenu is discovering it far too late.
     const unaddressable = [
       menu({ id: 'm'.repeat(64), bindings: [{ key: 'k'.repeat(64), roleId: RED }] }),
     ];
@@ -194,8 +185,6 @@ describe('the 100-character custom_id ceiling', () => {
 
 describe('reaction menus', () => {
   test('need the id of the message they react to', () => {
-    // A reaction dispatch carries a channel, a message and an emoji. Without the
-    // message id the menu can never be recognised at all.
     const unmatched = [menu({ kind: 'reaction' })];
 
     expect(messages(unmatched)[0]).toContain('a reaction menu needs the id of the message');

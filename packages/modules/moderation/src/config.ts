@@ -1,15 +1,6 @@
 import { durationStringSchema, protonFields } from '@proton/core';
 import { z } from 'zod';
 
-/**
- * Moderation's configuration.
- *
- * Every field here is policy a server owner genuinely disagrees about — nothing
- * that merely restates a Discord permission. Who *may* run `/ban` is already
- * decided by the command's `default_member_permissions` and by Discord's own
- * permission UI; duplicating that as config would give two answers to one
- * question.
- */
 export const moderationConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
@@ -66,5 +57,4 @@ export const moderationDefaultConfig: ModerationConfig = {
   defaultBanDeleteDays: 0,
 };
 
-/** Bumped whenever the shape above changes (I5). */
 export const MODERATION_SCHEMA_VERSION = 1;

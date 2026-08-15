@@ -6,10 +6,6 @@ import { permissionsModule } from '../src/index.ts';
 const MOD_ROLE = '410000000000000009';
 
 describe('permissions manifest', () => {
-  /**
-   * Registration checks the default config against the schema and that the
-   * dashboard can render it, so this one call is the module's contract test.
-   */
   test('registers cleanly', () => {
     const registry = new ModuleRegistry();
 
@@ -17,7 +13,6 @@ describe('permissions manifest', () => {
     expect(registry.get('permissions')?.schemaVersion).toBe(1);
   });
 
-  /** Enforcement gates other modules' commands, so this one ships none itself. */
   test('owns no commands and no listeners', () => {
     expect(permissionsModule.commands).toBeUndefined();
     expect(permissionsModule.listeners).toBeUndefined();
@@ -40,7 +35,7 @@ describe('permissions config', () => {
     const result = permissionsConfigSchema.safeParse({ overrides: { '/Ban': [MOD_ROLE] } });
 
     expect(result.success).toBe(false);
-    // Says what a key must look like, rather than "invalid input".
+
     expect(result.error?.issues[0]?.message).toContain('lowercase');
   });
 
@@ -51,11 +46,6 @@ describe('permissions config', () => {
     expect(result.error?.issues[0]?.path).toEqual(['overrides', 'ban', 0]);
   });
 
-  /**
-   * The map's keys are the loaded commands — runtime data, not a static shape —
-   * so the generator emits nothing for it and the dashboard builds the fields
-   * from the live command list instead (§9).
-   */
   test('the overrides map yields no generated field, but the per-command form does', () => {
     const paths = zodToDescriptors(permissionsConfigSchema).map((d) => d.path);
     expect(paths).toEqual(['enabled']);
@@ -72,7 +62,7 @@ describe('permissions config', () => {
 
     expect(form.parse({ ban: [MOD_ROLE] })).toEqual({ ban: [MOD_ROLE] });
     expect(form.safeParse({ ban: ['not-an-id'] }).success).toBe(false);
-    // An untouched picker submits nothing and means "no requirement".
+
     expect(form.parse({})).toEqual({ ban: [] });
   });
 });

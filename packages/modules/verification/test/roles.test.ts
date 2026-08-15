@@ -61,7 +61,7 @@ describe('checkGrantable — I8 hierarchy for the role, not the member', () => {
     expect(check.reason).toContain('position 9');
     expect(check.reason).toContain('position 6');
     expect(check.reason).toContain('Server Settings → Roles');
-    // The id, so an admin can find the role even if it is named confusingly.
+
     expect(check.reason).toContain(ABOVE);
   });
 
@@ -103,8 +103,6 @@ describe('planQuarantine', () => {
   });
 
   test('strips before it marks, so the isolation actually takes effect', () => {
-    // Discord unions the allows of every role a member holds, so the quarantine
-    // role's denies mean nothing until the others are gone.
     const plan = planQuarantine({
       state: GUILD_STATE,
       memberRoleIds: [GUILD, LOW, MID],
@@ -119,8 +117,6 @@ describe('planQuarantine', () => {
   });
 
   test('never records the quarantine role as one of the prior roles', () => {
-    // Otherwise a second quarantine, then a release, hands the isolation role
-    // back as though the member had always had it.
     const plan = planQuarantine({
       state: GUILD_STATE,
       memberRoleIds: [GUILD, QUARANTINE, LOW],
@@ -156,7 +152,6 @@ describe('planQuarantine', () => {
 
 describe('planRelease', () => {
   test('restores the roles first and drops the quarantine role last', () => {
-    // Interrupted the other way round, the member looks released and has nothing.
     const plan = planRelease({
       state: GUILD_STATE,
       record: record([MID, LOW]),

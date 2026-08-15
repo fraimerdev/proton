@@ -27,13 +27,12 @@ import type { BackupDeps } from '../src/deps.ts';
 import type { ChannelSnapshot, GuildLayout, LayoutSource, RoleSnapshot } from '../src/snapshot.ts';
 import type { BackupRecord, BackupStore } from '../src/store.ts';
 
-/** The ids the recorded fixtures use, so tests and fixtures cannot drift apart. */
 export const GUILD = '900000000000000001';
 export const OWNER = '200000000000000001';
 export const BOT = '300000000000000001';
 export const ADMIN = '100000000000000001';
 export const COMMAND_CHANNEL = '500000000000000001';
-/** The channel the bot cannot VIEW_CHANNEL in `channel-obfuscated.json`. */
+
 export const HIDDEN_CHANNEL = '500000000000000002';
 
 export const EVERYONE_ROLE = GUILD;
@@ -44,7 +43,6 @@ export const NOW = Date.parse('2026-08-15T12:00:00.000Z');
 export const BOT_PERMISSIONS =
   Permissions.ViewChannel | Permissions.SendMessages | Permissions.ManageChannels;
 
-/** The guild layout as the gateway delivers it, from a recorded dispatch (I11). */
 export function fixtureLayout(name: 'guildCreate' | 'channelObfuscated'): GuildLayout {
   const payload = dispatch(name).d;
 
@@ -64,14 +62,6 @@ export function layout(
   return { guildId: GUILD, source, channels, roles };
 }
 
-/**
- * Raw Discord shapes for the round-trip guild.
- *
- * Hand-built rather than recorded because no recorded dispatch has a category
- * with children in it, and dependency order between a category and its channels
- * is the part of the restore plan most worth proving. The obfuscation tests use
- * the recorded fixtures, where the flag has to come from Discord's own payload.
- */
 export function rawChannel(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: '500000000000000010',
@@ -99,19 +89,6 @@ export function rawRole(overrides: Record<string, unknown> = {}): Record<string,
   };
 }
 
-/**
- * The inverse of `captureChannel` — what an applier would have to send Discord.
- *
- * Lives in the tests, not in `src`, because nothing can apply a plan yet
- * (blocker 1 on `createBackupModule`). Its job here is to close the loop: if the
- * snapshot has dropped a field a restore needs, rebuilding from it and
- * re-snapshotting produces a different document and the round-trip test fails.
- *
- * Ids are preserved, which Discord would not do — it assigns new ones and the
- * applier remaps `parentId` and every overwrite id through them (see the note on
- * `RestoreOp`). Preserving them here keeps the test about whether the snapshot
- * is *complete*, which is the question this file can answer.
- */
 export function toRawChannel(channel: ChannelSnapshot): Record<string, unknown> {
   return {
     id: channel.id,
@@ -147,10 +124,9 @@ export function toRawRole(role: RoleSnapshot): Record<string, unknown> {
   };
 }
 
-/** In-memory `BackupStore`, for everything that does not need real jsonb. */
 export class MemoryBackupStore implements BackupStore {
   readonly records: BackupRecord[] = [];
-  /** Set to make the next `save` fail, as a database outage would. */
+
   failNextSave: string | null = null;
 
   async save(record: BackupRecord): Promise<void> {
@@ -232,11 +208,10 @@ export interface LogLine {
 }
 
 export interface HarnessOptions {
-  /** Swap in `DrizzleBackupStore` for the integration suite. */
   store?: BackupStore;
-  /** What `readLayout` answers. Null models a guild the gateway has not sent yet. */
+
   layout?: GuildLayout | null;
-  /** Ports to leave unbound, for the "enabled but cannot back anything up" path. */
+
   omit?: Array<keyof BackupDeps>;
   botPermissions?: bigint;
   backupId?: string;
@@ -246,7 +221,7 @@ export interface Harness {
   store: BackupStore;
   logs: LogLine[];
   deps: BackupDeps;
-  /** What `readLayout` will answer next; tests move it. */
+
   current: { layout: GuildLayout | null };
   run(options: RawOption[], config?: Partial<BackupConfig>): Promise<void>;
   replyContent(): string | null;
@@ -347,7 +322,6 @@ export function harness(options: HarnessOptions = {}): Harness {
       await command.handler(ctx);
     },
 
-    /** The most recent reply — several tests run two commands in a row. */
     replyContent() {
       const call = rest.calls.filter((c) => c.path.startsWith('/interactions/')).at(-1);
       const body = call?.body as { data?: { content?: string } } | undefined;

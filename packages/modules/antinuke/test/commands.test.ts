@@ -42,8 +42,7 @@ describe('/antinuke maintenance', () => {
     const alert = h.alertContent() ?? '';
     expect(alert).toContain(ADMIN);
     expect(alert).toContain('re-arms by itself');
-    // The ephemeral reply is itself a case, so the ledger names who opened the
-    // hole even in a guild with no alert channel.
+
     expect(h.recorder.recorded.some((c) => c.kind === 'interaction_reply')).toBe(true);
   });
 
@@ -118,7 +117,7 @@ describe('/antinuke status', () => {
     expect(reply).toContain('channel deletions: 3 per 30s');
     expect(reply).toContain('bans or kicks: 5 per 30s');
     expect(reply).toContain('Nothing irreversible');
-    // A breaker nobody hears from is half a control.
+
     expect(reply).toContain('No alert channel is set');
   });
 

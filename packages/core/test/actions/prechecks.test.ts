@@ -34,7 +34,7 @@ describe('runPrechecks', () => {
     );
 
     expect(failure?.code).toBe('missing_permission');
-    // The whole point of I8's structured reasons: an admin can act on this.
+
     expect(failure?.humanReason).toContain('SendMessages');
     expect(failure?.humanReason).toContain(CHANNEL);
   });
@@ -68,13 +68,11 @@ describe('runPrechecks', () => {
     const failure = runPrechecks(input({ target: { id: TARGET, highestRolePosition: 11 } }));
 
     expect(failure?.code).toBe('role_hierarchy');
-    // Tells the admin how to fix it, not just that it failed.
+
     expect(failure?.humanReason).toContain('Roles');
   });
 
   test('refuses a target at exactly the bot’s role position', () => {
-    // Discord requires strictly higher, not equal — an easy off-by-one to get
-    // wrong, and it fails only for the specific members who matter most.
     const failure = runPrechecks(input({ target: { id: TARGET, highestRolePosition: 10 } }));
 
     expect(failure?.code).toBe('role_hierarchy');

@@ -1,13 +1,5 @@
 import type { z } from 'zod';
 
-/**
- * Thrown when a package's environment fails validation at boot.
- *
- * The message names every offending variable and why it failed, but **never**
- * includes the received value. Environments carry the bot token, the OAuth
- * client secret and the auth signing secret; PLAN.md I10 requires that those
- * never reach code, fixtures, tests or logs, and an error message is a log.
- */
 export class EnvValidationError extends Error {
   readonly issues: readonly string[];
 
@@ -23,13 +15,6 @@ export class EnvValidationError extends Error {
   }
 }
 
-/**
- * Validate and parse an environment against a Zod schema, failing fast at boot.
- *
- * `scope` names the package or app in the error so a misconfigured deploy says
- * *which* service is unhappy. Unknown keys are stripped, so a process only ever
- * sees the variables it declared.
- */
 export function createEnv<S extends z.ZodObject<z.ZodRawShape>>(
   scope: string,
   schema: S,

@@ -19,8 +19,7 @@ describe('antiraidConfigSchema', () => {
   test('the shipped default parses and is off until a guild configures it', () => {
     const parsed = antiraidConfigSchema.parse(antiraidDefaultConfig);
     expect(parsed).toEqual(antiraidDefaultConfig);
-    // The verify rung needs a role the guild has to create, so shipping it on
-    // could only mean logging "I would have acted" once per suspicious join.
+
     expect(parsed.enabled).toBe(false);
     expect(parsed.response).toBe('verify');
   });
@@ -30,8 +29,6 @@ describe('antiraidConfigSchema', () => {
   });
 
   test('a score threshold below the floor is refused', () => {
-    // The floor is what makes "one signal is never enough" unescapable through
-    // configuration rather than a promise in a comment.
     const result = parse({ scoreThreshold: MIN_ACTIONABLE_SCORE - 1 });
     expect(result.success).toBe(false);
     expect(parse({ scoreThreshold: MIN_ACTIONABLE_SCORE }).success).toBe(true);
@@ -50,7 +47,6 @@ describe('antiraidConfigSchema', () => {
     expect(issue(result)).toContain('brand-new accounts are a subset of new ones');
     expect(result.success ? [] : result.error.issues[0]?.path).toEqual(['brandNewAccountAge']);
 
-    // Equal is allowed: it collapses the grading to one tier, which is a choice.
     expect(parse({ newAccountAge: '7d', brandNewAccountAge: '7d' }).success).toBe(true);
   });
 
@@ -86,8 +82,6 @@ describe('readScoreSettings', () => {
   });
 
   test('a row an older build wrote is named, not thrown', () => {
-    // The schema refuses this on write, so it can only arrive from storage — and
-    // a throw inside a listener leaves the bus message unacknowledged forever.
     const stored = { ...antiraidDefaultConfig, joinWindow: 'a while' } as AntiraidConfig;
     const parsed = readScoreSettings(stored);
 

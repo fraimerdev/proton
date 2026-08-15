@@ -8,18 +8,8 @@ type Command = CommandDefinition<ModerationConfig>;
 
 const SECONDS_PER_DAY = 86_400;
 
-/**
- * 512 characters because that is the ceiling `actionRequestSchema` enforces.
- * Letting Discord accept more would mean the executor rejecting an otherwise
- * valid ban over a field that only annotates it.
- */
 const REASON_MAX = 512;
 
-/**
- * `default_member_permissions` hides a command from members who could not use
- * it. That is presentation, not authorisation: the executor still runs every I8
- * precheck, because Discord's own gate can be overridden per guild.
- */
 export const banCommand: Command = {
   name: 'ban',
   description: 'Ban a member from this server.',
@@ -73,8 +63,6 @@ export const banCommand: Command = {
     const duration = readDuration(rawDuration, 'A temporary ban');
     if (isRefusal(duration)) return perform(ctx, duration);
 
-    // `expiresAt` is what makes this temporary: the executor schedules the
-    // unban, and refuses the whole request up front if it cannot (I1/P3).
     return perform(ctx, {
       kind: 'ban',
       targetId: userId,
@@ -86,21 +74,6 @@ export const banCommand: Command = {
   },
 };
 
-/**
- * A warning: a `cases` row and nothing else.
- *
- * `warn` is the one action kind that issues no REST call — Discord has no
- * endpoint for "this member has been warned" — so it runs through the executor
- * for what the executor provides rather than for what it sends: the I8
- * prechecks (Proton should no more warn the owner than ban them), the
- * idempotency key, and the ledger row. See `LEDGER_ONLY_KINDS` in core.
- *
- * The command's second job is the one that makes escalation work at all. After
- * the case is recorded it publishes `moderation.warned`, which is what the
- * `cases` module's compiled ladder triggers on. Until slice 3.A that event had
- * no publisher — `cases` recorded it as a known blocker — so every guild's
- * escalation ladder sat in the rules table and could never fire.
- */
 export const warnCommand: Command = {
   name: 'warn',
   description: 'Record a warning against a member.',
@@ -133,21 +106,7 @@ export const warnCommand: Command = {
       payload: { userId, ...(reason ? { note: reason } : {}) },
       ...(reason ? { reason } : {}),
       success: `Warned <@${userId}>.`,
-      /**
-       * Published only once the warn is genuinely recorded.
-       *
-       * `perform` calls this after the executor returns `executed`, so a warn
-       * refused by a precheck — the guild owner, someone above Proton — raises
-       * no event and advances no ladder. A rung that fired on a warning that
-       * never happened would time out a member for nothing.
-       *
-       * The natural key is the idempotency key, so a redelivered interaction
-       * republishes under the same event id and the ladder's rate window counts
-       * it once (I4). The payload matches `internalMemberEventSchema` in
-       * `apps/worker/src/rule-facts.ts`: `userId` is the member the event is
-       * *about*, never the moderator who typed the command — counting the
-       * moderator would point the ladder at staff.
-       */
+
       async onRecorded() {
         await ctx.publish?.('moderation.warned', `${ctx.idempotencyKey}:warn`, {
           userId,
@@ -185,9 +144,6 @@ export const unbanCommand: Command = {
     const userId = ctx.options.getString('user_id')?.trim() ?? '';
     const reason = ctx.options.getString('reason');
 
-    // A banned user is not a member, so Discord cannot offer them as a USER
-    // option. The id arrives as free text; checking it here turns a typo into an
-    // instruction instead of a 404 from Discord.
     if (!snowflakeSchema.safeParse(userId).success) {
       return perform(ctx, {
         refusal:
@@ -277,9 +233,6 @@ export const timeoutCommand: Command = {
 
     const reason = ctx.options.getString('reason');
 
-    // Deliberately no `expiresAt`. Discord lifts a timeout itself at
-    // `communication_disabled_until`, so a scheduled reversal would queue an
-    // untimeout for a member who is already free.
     return perform(ctx, {
       kind: 'timeout',
       targetId: userId,
@@ -326,7 +279,6 @@ export const untimeoutCommand: Command = {
   },
 };
 
-/** The commands that act on a member, and so face the hierarchy prechecks. */
 export const memberCommands: Command[] = [
   banCommand,
   unbanCommand,

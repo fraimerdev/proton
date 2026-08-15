@@ -35,11 +35,10 @@ export const BOT = '300000000000000001';
 export const MODERATOR = '100000000000000001';
 export const CHANNEL = '500000000000000001';
 
-/** Holds two ordinary roles. The common case for quarantine. */
 export const MEMBER = '400000000000000001';
-/** Holds nothing but @everyone — the "no roles" case. */
+
 export const BARE = '400000000000000002';
-/** A fresh joiner. */
+
 export const JOINER = '400000000000000003';
 
 export const EVERYONE_ROLE = GUILD;
@@ -49,10 +48,9 @@ export const LOW_ROLE = '410000000000000003';
 export const MID_ROLE = '410000000000000004';
 export const VERIFIED_ROLE = '410000000000000005';
 export const BOT_ROLE = '410000000000000006';
-/** Positioned above the bot: every grant of it must be refused (I8 hierarchy). */
+
 export const ABOVE_BOT_ROLE = '410000000000000009';
 
-/** Role positions. The bot sits at 6; ABOVE_BOT_ROLE at 9. */
 const POSITIONS: Record<string, number> = {
   [EVERYONE_ROLE]: 0,
   [UNVERIFIED_ROLE]: 1,
@@ -122,19 +120,10 @@ export class MemoryQuarantineStore implements QuarantineStore {
   }
 }
 
-/**
- * A REST proxy that also *applies* the role changes it is told to make.
- *
- * The whole claim this module makes is "restoration is exact", and a fake that
- * merely records calls cannot check that: it would let a test assert the right
- * requests were sent while the member ended up holding the wrong set. So the
- * member's roles are a real mutable set here, and the restore assertions compare
- * it against what they held before.
- */
 class FakeRest implements RestProxyClient {
   readonly calls: RestRequestOptions[] = [];
   readonly memberRoles: Map<string, Set<string>>;
-  /** Paths to answer with this status instead of 204. */
+
   readonly failures = new Map<string, RestResponse>();
 
   constructor(memberRoles: Map<string, Set<string>>) {
@@ -164,11 +153,11 @@ class FakeRest implements RestProxyClient {
 
 export interface RunOverrides {
   config: Partial<VerificationConfig>;
-  /** Overrides Discord's `app_permissions` for the interaction channel. */
+
   appPermissions: bigint;
-  /** Reused between two runs to exercise redelivery (I4). */
+
   idempotencyKey: string;
-  /** Who ran the command. Defaults to the moderator. */
+
   userId: string;
 }
 
@@ -177,20 +166,20 @@ export interface Harness {
   recorder: MemoryRecorder;
   quarantine: MemoryQuarantineStore;
   logs: Array<{ level: string; message: string }>;
-  /** Mutable role positions, so a test can move Proton's role down mid-quarantine. */
+
   positions: Map<string, number>;
-  /** Mutable membership, shared with the fake REST proxy. */
+
   memberRoles: Map<string, Set<string>>;
   deps: VerificationDeps;
-  /** Role ids the member holds now, as the fake Discord sees them. */
+
   rolesOf(userId: string): string[];
-  /** REST calls that are not the interaction acknowledgement. */
+
   discordCalls(): RestRequestOptions[];
-  /** Recorded cases, minus the ones every reply writes. */
+
   cases(): CaseInput[];
-  /** Every reply sent, in order. */
+
   replies(): string[];
-  /** The last thing the invoker was told, or null. */
+
   replyContent(): string | null;
   run(command: string, options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
   join(
@@ -199,14 +188,6 @@ export interface Harness {
   ): Promise<JoinGateOutcome>;
 }
 
-/**
- * A verification command wired to the real executor.
- *
- * Only the REST proxy and the two module-declared ports are faked. The
- * prechecks, the guild-state resolution, the hierarchy arithmetic and the dedupe
- * claim are all production code paths — which is the point: the Gate 0 stub
- * passed its tests precisely because those were replaced with permissive fakes.
- */
 export function harness(options: { deleteRole?: string } = {}): Harness {
   const positions = new Map(Object.entries(POSITIONS));
   if (options.deleteRole) positions.delete(options.deleteRole);
@@ -232,7 +213,7 @@ export function harness(options: { deleteRole?: string } = {}): Harness {
 
   const guildState = (): GuildState => {
     const map = roles();
-    // Re-read positions each call so a test can move a role between actions.
+
     for (const [id, role] of map) {
       const position = positions.get(id);
       if (position === undefined) map.delete(id);
@@ -360,7 +341,6 @@ export function stringOption(name: string, value: string): RawOption {
   return { name, type: OptionType.String, value };
 }
 
-/** A GUILD_MEMBER_ADD payload, as the normaliser passes it through. */
 export function joinPayload(userId: string, roleIds: string[] = []): Record<string, unknown> {
   return {
     guild_id: GUILD,
@@ -370,14 +350,12 @@ export function joinPayload(userId: string, roleIds: string[] = []): Record<stri
   };
 }
 
-/** The gate config a working guild would have. */
 export const GATED: Partial<VerificationConfig> = {
   enabled: true,
   unverifiedRoleId: UNVERIFIED_ROLE,
   verifiedRoleId: VERIFIED_ROLE,
 };
 
-/** The quarantine config a working guild would have. */
 export const QUARANTINED: Partial<VerificationConfig> = {
   enabled: true,
   quarantineRoleId: QUARANTINE_ROLE,

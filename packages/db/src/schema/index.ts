@@ -1,5 +1,3 @@
-// PLAN.md §6 core tables, plus Better Auth's own four.
-
 export * from './audit-trail.ts';
 export * from './auth.ts';
 export * from './backups.ts';

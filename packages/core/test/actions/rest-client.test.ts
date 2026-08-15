@@ -1,15 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { HttpRestProxyClient, type RestRequestOptions } from '../../src/actions/rest-client.ts';
 
-/**
- * The multipart encoding, asserted at the boundary that produces it.
- *
- * These tests replace `fetch` rather than standing up a server, because the
- * thing under test *is* the request: which content-type is set, what the body
- * turns into, and whether the parts carry the names the `attachments[]`
- * descriptors refer to. A round trip through a real server would assert the
- * server's parser as much as this encoder.
- */
 const realFetch = globalThis.fetch;
 
 interface Captured {
@@ -98,12 +89,6 @@ describe('HttpRestProxyClient', () => {
     expect((part as Blob).type).toBe('image/png');
   });
 
-  /**
-   * The boundary parameter has to match the body `fetch` generated, so the
-   * content-type must be left for `fetch` to set. Supplying one by hand produces
-   * a body the far side cannot parse — and the resulting error names the
-   * boundary, not the cause.
-   */
   test('does not set content-type on a multipart request', async () => {
     const { captured } = captureFetch();
 

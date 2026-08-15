@@ -25,8 +25,6 @@ describe('capturing a guild', () => {
   test('is a document its own schema accepts after a jsonb round trip', () => {
     const { snapshot } = buildSnapshot(fixtureLayout('guildCreate'), NOW);
 
-    // What Postgres gives back is parsed JSON, not the object that went in — so
-    // this is the shape `DrizzleBackupStore.get` actually has to validate.
     const reread = guildSnapshotSchema.safeParse(JSON.parse(JSON.stringify(snapshot)));
 
     expect(reread.success).toBe(true);
@@ -34,8 +32,6 @@ describe('capturing a guild', () => {
   });
 
   test('keeps permission bitfields as decimal strings', () => {
-    // PIN_MESSAGES is 1<<51 (§10.3) — far past 2^53 once combined. A snapshot
-    // that stored these as numbers would silently round a server's permissions.
     const big = String((1n << 51n) | (1n << 44n));
     const { snapshot } = buildSnapshot(
       layout(
@@ -61,14 +57,10 @@ describe('a channel Proton cannot see (§10.1)', () => {
     const hidden = snapshot.channels.find((channel) => channel.id === HIDDEN_CHANNEL);
 
     expect(hidden?.obfuscated).toBe(true);
-    // Discord sends `___hidden___`. Storing that would put a lie in the backup:
-    // a restore would recreate a channel literally called ___hidden___.
+
     expect(hidden?.name).toBeNull();
     expect(hidden?.topic).toBeNull();
-    // The dispatch carries overwrites for it, and they are dropped on purpose:
-    // Discord nulls the sensitive fields of a hidden channel, so what arrives
-    // cannot be assumed complete, and restoring half a permission set silently
-    // rewrites that channel's access rules.
+
     expect(hidden?.overwrites).toEqual([]);
   });
 
@@ -91,8 +83,6 @@ describe('a channel Proton cannot see (§10.1)', () => {
   });
 
   test('is detected by the flag, never by the name', () => {
-    // A guild may legitimately name a real channel `___hidden___`. Matching the
-    // string would hide a channel Proton can see perfectly well.
     const { snapshot, report } = buildSnapshot(
       layout([rawChannel({ name: '___hidden___', topic: '___hidden___', flags: 0 })]),
       NOW,
@@ -104,8 +94,6 @@ describe('a channel Proton cannot see (§10.1)', () => {
   });
 
   test('is recognised whatever else is set in the flags bitfield', () => {
-    // CHANNEL_OBFUSCATED is one bit among many; an equality test against
-    // 131072 would stop working the moment Discord sets another flag too.
     const { snapshot } = buildSnapshot(layout([rawChannel({ flags: (1 << 17) | (1 << 4) })]), NOW);
 
     expect(snapshot.channels[0]?.obfuscated).toBe(true);
@@ -120,9 +108,9 @@ describe('the report an admin gets at backup time', () => {
     expect(text).toContain('could NOT be backed up');
     expect(text).toContain(`<#${HIDDEN_CHANNEL}>`);
     expect(text).toContain('View Channel');
-    // Where to fix it — "the bot did nothing" is a bug (§1).
+
     expect(text).toContain('Channel Settings → Permissions');
-    // And what it will mean at restore, while there is still time to act.
+
     expect(text).toContain('untouched');
   });
 
@@ -135,8 +123,6 @@ describe('the report an admin gets at backup time', () => {
   });
 
   test('warns that a REST-sourced snapshot cannot count what is missing from it', () => {
-    // §10.1: GET /guilds/{id}/channels omits obfuscated channels entirely, so
-    // "0 hidden channels" from that source means "unknown", not "none".
     const { report } = buildSnapshot(layout([rawChannel()], [], 'rest'), NOW);
 
     expect(describeCapture(report).join('\n')).toContain('may therefore be missing channels');
@@ -151,9 +137,6 @@ describe('the report an admin gets at backup time', () => {
   });
 
   test('loses only the odd object, not the whole backup', () => {
-    // One channel with an id that is not a snowflake, and one role whose
-    // permissions are not a bitfield. Throwing here would mean the guild ends up
-    // with no backup at all because of one malformed entry.
     const { snapshot, report } = buildSnapshot(
       layout(
         [rawChannel(), rawChannel({ id: 'not-a-snowflake' })],

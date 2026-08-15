@@ -32,26 +32,12 @@ function request(kind: ActionKind, payload: unknown, reason?: string): ActionReq
   };
 }
 
-/**
- * Narrow a mapping result to the REST call it produced, failing the test with
- * the actual reason otherwise.
- *
- * `PayloadResult` grew a third arm when `warn` arrived — a kind that validates
- * and then deliberately produces no call — so `if ('error' in result)` no longer
- * narrows all the way to `{ call }`.
- */
 function callOf(result: PayloadResult): RestCall {
   if ('error' in result) throw new Error(result.error);
   if ('ledgerOnly' in result) throw new Error('expected a REST call, got a ledger-only kind');
   return result.call;
 }
 
-/**
- * These are the guards that make widening ActionKind safe. Every kind must
- * declare a permission, a targeting stance, and a REST mapping — a kind missing
- * any of them would ship as a command that either never precheck-fails or fails
- * at Discord with a bare 403.
- */
 describe('every action kind is fully wired', () => {
   test('declares a required permission', () => {
     for (const kind of ACTION_KINDS) {
@@ -84,8 +70,6 @@ describe('permission requirements', () => {
   });
 
   test('channel overwrites need MANAGE_ROLES, not MANAGE_CHANNELS', () => {
-    // A common and confusing Discord detail: editing a channel's permission
-    // overwrites is governed by MANAGE_ROLES.
     expect(requiredPermissionsFor('lockdown')).toBe(Permissions.ManageRoles);
     expect(requiredPermissionsFor('unlock')).toBe(Permissions.ManageRoles);
   });
@@ -96,11 +80,6 @@ describe('permission requirements', () => {
     );
   });
 
-  /**
-   * Discord always permits an app to answer its own interaction. Requiring
-   * SendMessages would refuse legitimate replies — including the reply that
-   * explains why some other action was refused.
-   */
   test('replying to an interaction requires nothing', () => {
     expect(requiredPermissionsFor('interaction_reply')).toBe(0n);
   });
@@ -113,11 +92,6 @@ describe('targeting stance', () => {
     }
   });
 
-  /**
-   * A banned user is not a member: no roles, no hierarchy. Marking unban as
-   * member-targeting would make every unban fail closed on an unresolvable
-   * member — you could ban someone and never get them back.
-   */
   test('unban does not, because a banned user has no roles', () => {
     expect(targetsMember('unban')).toBe(false);
   });
@@ -147,8 +121,6 @@ describe('REST mapping', () => {
   test('a reason becomes Discord’s audit-log header', () => {
     const call = callOf(toRestCall(request('kick', { userId: USER }, 'spamming')));
 
-    // Without this the server's own audit log shows the bot acting for no
-    // stated reason.
     expect(call.headers?.['x-audit-log-reason']).toBe('spamming');
   });
 
@@ -177,11 +149,6 @@ describe('REST mapping', () => {
     expect('error' in result).toBe(true);
   });
 
-  /**
-   * R4: unlock can only restore faithfully because lockdown recorded what it
-   * replaced. Lockdown also ORs its deny onto the existing one rather than
-   * overwriting, so it cannot silently clear unrelated restrictions.
-   */
   test('lockdown preserves existing overwrites and adds SEND_MESSAGES to deny', () => {
     const call = callOf(
       toRestCall(
@@ -216,11 +183,6 @@ describe('REST mapping', () => {
     expect(call.body).toEqual({ type: 0, allow: '1024', deny: '64' });
   });
 
-  /**
-   * The one kind that validates and then deliberately produces no call. Asserted
-   * because the alternative failure — a `warn` that quietly mapped to some
-   * endpoint — would ban or kick somebody.
-   */
   test('warn maps to no REST call at all', () => {
     const result = toRestCall(request('warn', { userId: USER }));
 
@@ -241,11 +203,6 @@ describe('REST mapping', () => {
     expect(result.error).toContain('content, an embed, a component or a file');
   });
 
-  /**
-   * The multipart contract: part `files[0]` is described by the descriptor with
-   * `id: 0`, and an embed refers to it by filename. Out of step, the bytes upload
-   * and the embed renders a broken image.
-   */
   test('send with a file produces matching parts and attachment descriptors', () => {
     const call = callOf(
       toRestCall(
@@ -300,14 +257,6 @@ describe('reversal pairing', () => {
   });
 });
 
-/**
- * I12 as a single rule rather than one per module.
- *
- * Six modules had copied these three lines by the end of Phase 2 (I3 forbids
- * importing across modules, so each had to). They agreed, but only by luck —
- * nothing made them agree, and the point of I12 is that it is uniform. Pinned
- * here so the next module inherits the policy instead of retyping it.
- */
 describe('dryRunFor', () => {
   test('withholds destructive kinds outside production', () => {
     expect(dryRunFor('ban', 'development')).toBe(true);
@@ -320,12 +269,6 @@ describe('dryRunFor', () => {
     expect(dryRunFor('lockdown', 'production')).toBe(false);
   });
 
-  /**
-   * The half that matters to anti-nuke and verification: a role strip and a
-   * quarantine run for real in development. Withholding them would leave the
-   * reversible, restore-exactness half of both modules untested everywhere it
-   * is safe to test.
-   */
   test('never withholds a non-destructive kind, whatever the environment', () => {
     for (const env of ['development', 'test', 'production', undefined]) {
       expect(dryRunFor('remove_role', env)).toBe(false);
