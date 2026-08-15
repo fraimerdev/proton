@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 
 export const Route = createFileRoute('/')({
@@ -14,7 +14,13 @@ function Home(): ReactElement {
         Sign in with Discord
       </a>
       <p>
-        <a href="/guilds">Your servers</a>
+        <Link to="/guilds">Your servers</Link>
+      </p>
+      {/* Before signing in, not buried after it: signing in is the point at
+          which Proton starts holding data about you (PLAN.md §6). */}
+      <p className="field-description">
+        Proton stores moderation cases, server settings and — only where a server admin switches it
+        on — message edit and deletion logs. <Link to="/privacy">What Proton stores</Link>.
       </p>
     </section>
   );

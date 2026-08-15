@@ -1,0 +1,19 @@
+{
+  "name": "@proton/module-moderation",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "discord.js": "^14.27.0",
+    "zod": "^4.4.3"
+  }
+}

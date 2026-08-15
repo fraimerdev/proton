@@ -1,6 +1,6 @@
 import type { FieldDescriptor } from '@proton/core';
 import type { ReactElement } from 'react';
-import type { DiscordChannel } from './fields.tsx';
+import type { DiscordChannel, DiscordRole } from './fields.tsx';
 import { resolveFieldComponent } from './registry.tsx';
 
 export interface GeneratedFormProps {
@@ -8,6 +8,7 @@ export interface GeneratedFormProps {
   values: Record<string, unknown>;
   onChange: (path: string, value: unknown) => void;
   channels?: readonly DiscordChannel[] | undefined;
+  roles?: readonly DiscordRole[] | undefined;
 }
 
 /**
@@ -22,6 +23,7 @@ export function GeneratedForm({
   values,
   onChange,
   channels,
+  roles,
 }: GeneratedFormProps): ReactElement {
   return (
     <div className="generated-form">
@@ -34,6 +36,7 @@ export function GeneratedForm({
             value={values[descriptor.path]}
             onChange={(value) => onChange(descriptor.path, value)}
             channels={channels}
+            roles={roles}
           />
         );
       })}

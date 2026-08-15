@@ -1,5 +1,6 @@
 import type { CaseRecorder } from './case-recorder.ts';
 import type { DedupeStore } from './dedupe.ts';
+import { reversalOf } from './kinds.ts';
 import { type PrecheckInput, runPrechecks } from './prechecks.ts';
 import type { RestProxyClient } from './rest-client.ts';
 import { toRestCall } from './rest-mapping.ts';
@@ -31,9 +32,11 @@ export interface ActionExecutorDeps {
   /** How long an idempotency claim is held. Should exceed the retry window. */
   dedupeTtlMs?: number;
   /**
-   * Schedule the reversal of a temporary action. Absent until P1.C, and while
-   * it is absent a request carrying `expiresAt` is refused rather than executed
-   * — a temp ban that never lifts is worse than one that never happens.
+   * Schedule the reversal of a temporary action.
+   *
+   * Optional, and while it is absent a request carrying `expiresAt` is refused
+   * rather than executed — a temp ban that never lifts is worse than one that
+   * never happens.
    */
   scheduleReversal?(request: ActionRequest, caseId: string): Promise<void>;
 }
@@ -89,6 +92,17 @@ export class DefaultActionExecutor implements ActionExecutor {
       );
     }
 
+    // Refused *before* Discord is touched, not silently dropped afterwards.
+    // A "temporary kick" that quietly became permanent is the failure mode this
+    // whole subsystem exists to prevent.
+    if (request.expiresAt && !reversalOf(request.kind)) {
+      return this.#precheckFailure(
+        'not_reversible',
+        `A '${request.kind}' can't be temporary — Proton has no action that undoes it. ` +
+          'Perform it without a duration, or pick an action that can be reversed.',
+      );
+    }
+
     const payload = toRestCall(request);
     if ('error' in payload) {
       return this.#precheckFailure('invalid_payload', payload.error);
@@ -130,7 +144,25 @@ export class DefaultActionExecutor implements ActionExecutor {
       const { caseId } = await this.#record(request);
 
       if (request.expiresAt) {
-        await this.#deps.scheduleReversal?.(request, caseId);
+        try {
+          await this.#deps.scheduleReversal?.(request, caseId);
+        } catch (error) {
+          // The action already happened, so neither throwing nor releasing the
+          // idempotency key is available: a retry would ban the member twice.
+          // Report success *and* the thing that did not happen, so a moderator
+          // knows this one needs lifting by hand.
+          return {
+            caseId,
+            status: 'executed',
+            failure: {
+              code: 'reversal_not_scheduled',
+              humanReason:
+                `The ${request.kind} was applied, but I couldn't schedule its automatic ` +
+                `reversal (${error instanceof Error ? error.message : String(error)}). ` +
+                'It will not lift on its own — reverse it manually.',
+            },
+          };
+        }
       }
 
       return { caseId, status: 'executed' };
@@ -161,6 +193,11 @@ export class DefaultActionExecutor implements ActionExecutor {
       targetId: request.targetId,
       reason: request.reason,
       payload: request.payload,
+      // Recorded on the case itself, not only in `scheduled_actions`: the
+      // dashboard has to be able to say "temp ban, expires in 2h" from the
+      // ledger alone, and the partial index on (expires_at) where reverted_at is
+      // null is what makes "which temp actions are still live" cheap.
+      expiresAt: request.expiresAt,
       dryRun: request.dryRun,
       idempotencyKey: request.idempotencyKey,
     });

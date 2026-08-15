@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-const snowflake = z.string().regex(/^\d{17,20}$/, 'must be a Discord snowflake');
+/**
+ * A Discord id, wherever one is validated.
+ *
+ * Exported because rule conditions name channels and roles too, and two copies
+ * of this regex would eventually disagree about what an id looks like.
+ */
+export const snowflakeSchema = z.string().regex(/^\d{17,20}$/, 'must be a Discord snowflake');
 
 /** Discord's InteractionCallbackType.ChannelMessageWithSource. */
 export const INTERACTION_CALLBACK_CHANNEL_MESSAGE = 4;
@@ -17,46 +23,46 @@ export const MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 export const MAX_SLOWMODE_SECONDS = 21_600;
 
 export const sendPayloadSchema = z.object({
-  channelId: snowflake,
+  channelId: snowflakeSchema,
   content: z.string().min(1).max(2000),
 });
 
 export const interactionReplyPayloadSchema = z.object({
-  interactionId: snowflake,
+  interactionId: snowflakeSchema,
   interactionToken: z.string().min(1),
   content: z.string().min(1).max(2000),
   ephemeral: z.boolean().default(false),
 });
 
 export const banPayloadSchema = z.object({
-  userId: snowflake,
+  userId: snowflakeSchema,
   /** Message history to purge on ban. Discord accepts 0–604800 seconds. */
   deleteMessageSeconds: z.number().int().min(0).max(604_800).default(0),
 });
 
-export const unbanPayloadSchema = z.object({ userId: snowflake });
-export const kickPayloadSchema = z.object({ userId: snowflake });
+export const unbanPayloadSchema = z.object({ userId: snowflakeSchema });
+export const kickPayloadSchema = z.object({ userId: snowflakeSchema });
 
 export const timeoutPayloadSchema = z.object({
-  userId: snowflake,
+  userId: snowflakeSchema,
   /** Absolute expiry. Discord refuses anything beyond 28 days out. */
   until: z.date(),
 });
 
-export const untimeoutPayloadSchema = z.object({ userId: snowflake });
+export const untimeoutPayloadSchema = z.object({ userId: snowflakeSchema });
 
 export const roleChangePayloadSchema = z.object({
-  userId: snowflake,
-  roleId: snowflake,
+  userId: snowflakeSchema,
+  roleId: snowflakeSchema,
 });
 
 export const purgePayloadSchema = z.object({
-  channelId: snowflake,
-  messageIds: z.array(snowflake).min(2).max(BULK_DELETE_MAX),
+  channelId: snowflakeSchema,
+  messageIds: z.array(snowflakeSchema).min(2).max(BULK_DELETE_MAX),
 });
 
 export const slowmodePayloadSchema = z.object({
-  channelId: snowflake,
+  channelId: snowflakeSchema,
   seconds: z.number().int().min(0).max(MAX_SLOWMODE_SECONDS),
 });
 
@@ -68,16 +74,16 @@ export const slowmodePayloadSchema = z.object({
  * server's permissions. See plan risk R4.
  */
 export const lockdownPayloadSchema = z.object({
-  channelId: snowflake,
+  channelId: snowflakeSchema,
   /** Usually the @everyone role, whose id equals the guild id. */
-  roleId: snowflake,
+  roleId: snowflakeSchema,
   previousAllow: z.string().default('0'),
   previousDeny: z.string().default('0'),
 });
 
 export const unlockPayloadSchema = z.object({
-  channelId: snowflake,
-  roleId: snowflake,
+  channelId: snowflakeSchema,
+  roleId: snowflakeSchema,
   restoreAllow: z.string().default('0'),
   restoreDeny: z.string().default('0'),
 });

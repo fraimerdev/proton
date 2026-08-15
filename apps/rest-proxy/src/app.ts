@@ -17,7 +17,16 @@ export function createProxyApp(rest: REST): Hono {
 
   app.all('/api/*', async (c) => {
     const url = new URL(c.req.url);
-    const route = url.pathname.slice('/api'.length) as RouteLike;
+
+    /**
+     * Callers may address the proxy either as `/api/gateway/bot` or, if they
+     * front it with their own `@discordjs/rest` (the gateway does, so that its
+     * `GET /gateway/bot` also egresses through here per I2), as
+     * `/api/v10/gateway/bot`. This client adds the version itself, so an
+     * unstripped one produced `https://discord.com/api/v10/v10/gateway/bot`
+     * upstream — a 404 that surfaced as a bare 502 with no hint of the cause.
+     */
+    const route = url.pathname.slice('/api'.length).replace(/^\/v\d+(?=\/)/, '') as RouteLike;
     const method = c.req.method as RequestMethod;
 
     let body: unknown;

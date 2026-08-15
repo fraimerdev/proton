@@ -20,7 +20,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await handle?.close();
   await container?.stop();
-});
+}, 240_000);
 
 /**
  * Drizzle query builders are thenables, not Promises, so passing one straight to

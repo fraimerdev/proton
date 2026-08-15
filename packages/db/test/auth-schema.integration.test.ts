@@ -16,7 +16,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await handle?.close();
   await container?.stop();
-});
+}, 240_000);
 
 async function columnsOf(table: string): Promise<Set<string>> {
   const found = await rows<{ column_name: string }>(handle.client`

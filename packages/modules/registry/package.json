@@ -12,6 +12,10 @@
   },
   "dependencies": {
     "@proton/core": "workspace:*",
+    "@proton/module-cases": "workspace:*",
+    "@proton/module-logging": "workspace:*",
+    "@proton/module-moderation": "workspace:*",
+    "@proton/module-permissions": "workspace:*",
     "@proton/module-ping": "workspace:*"
   }
 }

@@ -23,6 +23,30 @@ export async function fetchUserGuilds(
   return (await response.json()) as DiscordUserGuild[];
 }
 
+/**
+ * Roles in a guild, for the role-id field type.
+ *
+ * `@everyone` is filtered out: it is a role in Discord's data model but never a
+ * meaningful answer to "which role may do this" — every member has it, so
+ * picking it is the same as setting no restriction at all, expressed in a way
+ * that looks like one.
+ */
+export async function fetchGuildRoles(
+  restProxyUrl: string,
+  guildId: string,
+): Promise<Array<{ id: string; name: string; position: number }>> {
+  const response = await fetch(`${restProxyUrl.replace(/\/$/, '')}/api/guilds/${guildId}/roles`);
+
+  if (!response.ok) return [];
+
+  const roles = (await response.json()) as Array<{ id: string; name: string; position: number }>;
+
+  return roles
+    .filter((role) => role.id !== guildId)
+    .sort((a, b) => b.position - a.position)
+    .map((role) => ({ id: role.id, name: role.name, position: role.position }));
+}
+
 /** Text channels in a guild, for the channel-id field type. */
 export async function fetchGuildChannels(
   restProxyUrl: string,

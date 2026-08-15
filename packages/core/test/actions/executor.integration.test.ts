@@ -25,7 +25,7 @@ beforeAll(async () => {
 afterAll(async () => {
   redis?.disconnect();
   await container?.stop();
-});
+}, 240_000);
 
 beforeEach(async () => {
   await redis.flushall();
@@ -51,13 +51,17 @@ class FakeRest implements RestProxyClient {
   }
 }
 
-function build(overrides: Partial<PrecheckInput> = {}) {
+function build(
+  overrides: Partial<PrecheckInput> = {},
+  scheduleReversal?: (request: ActionRequest, caseId: string) => Promise<void>,
+) {
   const recorder = new InMemoryRecorder();
   const rest = new FakeRest();
   const executor = new DefaultActionExecutor({
     dedupe: new RedisDedupeStore(redis),
     rest,
     recorder,
+    ...(scheduleReversal ? { scheduleReversal } : {}),
     resolveContext: async (): Promise<PrecheckInput> => ({
       guildId: GUILD,
       guildOwnerId: '200000000000000000',
@@ -189,6 +193,49 @@ describe('DefaultActionExecutor', () => {
 
     expect(result.status).toBe('failed_precheck');
     expect(result.failure?.code).toBe('unsupported_expiry');
+  });
+
+  /**
+   * There is no unsend and no unkick. Refusing before the REST call is the only
+   * honest option: executing and then quietly scheduling nothing would leave the
+   * invoker believing the action was temporary.
+   */
+  test('rejects an expiry on a kind that has no reversal, before calling Discord', async () => {
+    const { executor, rest, recorder } = build({}, async () => {});
+
+    const result = await executor.execute(request({ expiresAt: new Date(Date.now() + 60_000) }));
+
+    expect(result.status).toBe('failed_precheck');
+    expect(result.failure?.code).toBe('not_reversible');
+    expect(result.failure?.humanReason).toContain("'send'");
+    expect(rest.calls).toHaveLength(0);
+    expect(recorder.recorded).toHaveLength(0);
+  });
+
+  /**
+   * The action already happened, so it cannot be un-executed and its idempotency
+   * key must not be freed — a retry would perform it twice. The only honest
+   * answer is to report success *and* the reversal that was not scheduled.
+   */
+  test('reports a reversal it could not schedule instead of hiding it', async () => {
+    const { executor, recorder } = build({}, async () => {
+      throw new Error('database unavailable');
+    });
+
+    const result = await executor.execute(
+      request({
+        kind: 'ban',
+        payload: { userId: '400000000000000000' },
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
+    );
+
+    expect(result.status).toBe('executed');
+    expect(result.caseId).toBeDefined();
+    expect(recorder.recorded).toHaveLength(1);
+    expect(result.failure?.code).toBe('reversal_not_scheduled');
+    expect(result.failure?.humanReason).toContain('will not lift on its own');
+    expect(result.failure?.humanReason).toContain('database unavailable');
   });
 
   test('rejects a malformed payload before touching Discord', async () => {

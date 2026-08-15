@@ -1,3 +1,5 @@
+import type { CaseQuery, CaseSearchResult } from '@proton/core';
+
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
 /**
@@ -15,8 +17,13 @@ export interface JsonFieldDescriptor {
   description?: string;
   optional: boolean;
   defaultValue?: JsonValue;
+  array?: boolean;
+  maxItems?: number;
   minLength?: number;
   maxLength?: number;
+  min?: number;
+  max?: number;
+  options?: string[];
   channelTypes?: number[];
 }
 
@@ -32,6 +39,8 @@ export interface ModuleSummary {
   name: string;
   category: string;
   descriptors: JsonFieldDescriptor[];
+  /** Slash command names the module registered — see the API's `/modules` route. */
+  commands: string[];
 }
 
 /**
@@ -74,6 +83,19 @@ export class ApiClient {
 
   getModule(guildId: string, moduleId: string): Promise<ModuleConfigView> {
     return this.#request(`/guilds/${guildId}/modules/${moduleId}`);
+  }
+
+  /**
+   * `CaseSearchResult` is already JSON-safe — ISO strings, no `Date`, no
+   * `unknown` — so unlike `FieldDescriptor` it needs no mirror type here.
+   */
+  searchCases(guildId: string, query: CaseQuery): Promise<CaseSearchResult> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+
+    return this.#request(`/guilds/${guildId}/cases?${params.toString()}`);
   }
 
   updateModule(

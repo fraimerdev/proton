@@ -1,6 +1,7 @@
 import { createDb } from '@proton/db';
 import { createModuleRegistry } from '@proton/modules';
 import { createApiApp } from './app.ts';
+import { CaseQueryService } from './cases/service.ts';
 import { loadEnv } from './env.ts';
 import { ModuleConfigService } from './modules/service.ts';
 
@@ -13,6 +14,7 @@ const registry = createModuleRegistry();
 
 const app = createApiApp({
   modules: new ModuleConfigService(handle, registry),
+  cases: new CaseQueryService(handle),
   registry,
   sharedSecret: env.API_SHARED_SECRET,
 });

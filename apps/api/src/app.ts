@@ -1,6 +1,7 @@
-import type { ModuleRegistry } from '@proton/core';
+import { caseQuerySchema, type ModuleRegistry } from '@proton/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import type { CaseQueryService } from './cases/service.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 
 const updateBodySchema = z.object({
@@ -13,8 +14,24 @@ const updateBodySchema = z.object({
 
 export interface ApiDeps {
   modules: ModuleConfigService;
+  cases: CaseQueryService;
   registry: ModuleRegistry;
   sharedSecret: string;
+}
+
+/**
+ * A query string is all strings; `caseQuerySchema` is typed.
+ *
+ * Only the two numeric fields need adapting, and doing it here — at the one
+ * place strings arrive — keeps the schema itself free of `z.coerce`, which
+ * would widen its input type to `unknown` and cost the dashboard's `Link`
+ * search params their types.
+ */
+function parseCaseQuery(raw: Record<string, string>) {
+  const numeric = (key: 'page' | 'pageSize') =>
+    raw[key] === undefined ? {} : { [key]: Number(raw[key]) };
+
+  return caseQuerySchema.safeParse({ ...raw, ...numeric('page'), ...numeric('pageSize') });
 }
 
 /**
@@ -41,8 +58,38 @@ export function createApiApp(deps: ApiDeps): Hono {
       name: m.name,
       category: m.category,
       descriptors: deps.registry.descriptors(m.id),
+      // The commands this module registered. The permissions module's override
+      // map is keyed by command name, and those names are runtime data — which
+      // modules happen to be loaded — so no static schema can enumerate them
+      // and the dashboard cannot learn them without asking (I3 forbids the
+      // permissions module importing the modules that own the commands).
+      commands: (m.commands ?? []).map((command) => command.name),
     }));
     return c.json({ modules });
+  });
+
+  /**
+   * The case browser's query (PLAN.md §9, Gate 1).
+   *
+   * Filters are validated here rather than trusted from the dashboard: the
+   * dashboard puts them in the URL so a filtered view is shareable, which means
+   * they are user input by the time they arrive.
+   */
+  app.get('/guilds/:guildId/cases', async (c) => {
+    const parsed = parseCaseQuery(c.req.query());
+    if (!parsed.success) {
+      return c.json(
+        {
+          error: 'invalid_query',
+          message: parsed.error.issues
+            .map((i) => `${i.path.map(String).join('.') || 'query'}: ${i.message}`)
+            .join('; '),
+        },
+        400,
+      );
+    }
+
+    return c.json(await deps.cases.search(c.req.param('guildId'), parsed.data));
   });
 
   app.get('/guilds/:guildId/modules/:moduleId', async (c) => {

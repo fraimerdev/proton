@@ -10,13 +10,22 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as GuildsIndexRouteImport } from './routes/guilds.index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api.auth.$'
+import { Route as GuildsGuildIdCasesRouteImport } from './routes/guilds.$guildId.cases'
+import { Route as ApiAuthSigninDiscordRouteImport } from './routes/api.auth.signin.discord'
+import { Route as GuildsGuildIdModulesIndexRouteImport } from './routes/guilds.$guildId.modules.index'
 import { Route as GuildsGuildIdModulesModuleIdRouteImport } from './routes/guilds.$guildId.modules.$moduleId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuildsIndexRoute = GuildsIndexRouteImport.update({
@@ -29,6 +38,22 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GuildsGuildIdCasesRoute = GuildsGuildIdCasesRouteImport.update({
+  id: '/guilds/$guildId/cases',
+  path: '/guilds/$guildId/cases',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSigninDiscordRoute = ApiAuthSigninDiscordRouteImport.update({
+  id: '/api/auth/signin/discord',
+  path: '/api/auth/signin/discord',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuildsGuildIdModulesIndexRoute =
+  GuildsGuildIdModulesIndexRouteImport.update({
+    id: '/guilds/$guildId/modules/',
+    path: '/guilds/$guildId/modules/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const GuildsGuildIdModulesModuleIdRoute =
   GuildsGuildIdModulesModuleIdRouteImport.update({
     id: '/guilds/$guildId/modules/$moduleId',
@@ -38,42 +63,77 @@ const GuildsGuildIdModulesModuleIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/privacy': typeof PrivacyRoute
   '/guilds/': typeof GuildsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/guilds/$guildId/cases': typeof GuildsGuildIdCasesRoute
+  '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
   '/guilds/$guildId/modules/$moduleId': typeof GuildsGuildIdModulesModuleIdRoute
+  '/guilds/$guildId/modules/': typeof GuildsGuildIdModulesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/privacy': typeof PrivacyRoute
   '/guilds': typeof GuildsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/guilds/$guildId/cases': typeof GuildsGuildIdCasesRoute
+  '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
   '/guilds/$guildId/modules/$moduleId': typeof GuildsGuildIdModulesModuleIdRoute
+  '/guilds/$guildId/modules': typeof GuildsGuildIdModulesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/privacy': typeof PrivacyRoute
   '/guilds/': typeof GuildsIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/guilds/$guildId/cases': typeof GuildsGuildIdCasesRoute
+  '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
   '/guilds/$guildId/modules/$moduleId': typeof GuildsGuildIdModulesModuleIdRoute
+  '/guilds/$guildId/modules/': typeof GuildsGuildIdModulesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/guilds/' | '/api/auth/$' | '/guilds/$guildId/modules/$moduleId'
+    | '/'
+    | '/privacy'
+    | '/guilds/'
+    | '/api/auth/$'
+    | '/guilds/$guildId/cases'
+    | '/api/auth/signin/discord'
+    | '/guilds/$guildId/modules/$moduleId'
+    | '/guilds/$guildId/modules/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/guilds' | '/api/auth/$' | '/guilds/$guildId/modules/$moduleId'
+  to:
+    | '/'
+    | '/privacy'
+    | '/guilds'
+    | '/api/auth/$'
+    | '/guilds/$guildId/cases'
+    | '/api/auth/signin/discord'
+    | '/guilds/$guildId/modules/$moduleId'
+    | '/guilds/$guildId/modules'
   id:
     | '__root__'
     | '/'
+    | '/privacy'
     | '/guilds/'
     | '/api/auth/$'
+    | '/guilds/$guildId/cases'
+    | '/api/auth/signin/discord'
     | '/guilds/$guildId/modules/$moduleId'
+    | '/guilds/$guildId/modules/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PrivacyRoute: typeof PrivacyRoute
   GuildsIndexRoute: typeof GuildsIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  GuildsGuildIdCasesRoute: typeof GuildsGuildIdCasesRoute
+  ApiAuthSigninDiscordRoute: typeof ApiAuthSigninDiscordRoute
   GuildsGuildIdModulesModuleIdRoute: typeof GuildsGuildIdModulesModuleIdRoute
+  GuildsGuildIdModulesIndexRoute: typeof GuildsGuildIdModulesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -83,6 +143,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/guilds/': {
@@ -99,6 +166,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/guilds/$guildId/cases': {
+      id: '/guilds/$guildId/cases'
+      path: '/guilds/$guildId/cases'
+      fullPath: '/guilds/$guildId/cases'
+      preLoaderRoute: typeof GuildsGuildIdCasesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/signin/discord': {
+      id: '/api/auth/signin/discord'
+      path: '/api/auth/signin/discord'
+      fullPath: '/api/auth/signin/discord'
+      preLoaderRoute: typeof ApiAuthSigninDiscordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guilds/$guildId/modules/': {
+      id: '/guilds/$guildId/modules/'
+      path: '/guilds/$guildId/modules'
+      fullPath: '/guilds/$guildId/modules/'
+      preLoaderRoute: typeof GuildsGuildIdModulesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/guilds/$guildId/modules/$moduleId': {
       id: '/guilds/$guildId/modules/$moduleId'
       path: '/guilds/$guildId/modules/$moduleId'
@@ -111,9 +199,13 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PrivacyRoute: PrivacyRoute,
   GuildsIndexRoute: GuildsIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  GuildsGuildIdCasesRoute: GuildsGuildIdCasesRoute,
+  ApiAuthSigninDiscordRoute: ApiAuthSigninDiscordRoute,
   GuildsGuildIdModulesModuleIdRoute: GuildsGuildIdModulesModuleIdRoute,
+  GuildsGuildIdModulesIndexRoute: GuildsGuildIdModulesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

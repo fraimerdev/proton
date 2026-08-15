@@ -15,6 +15,20 @@
       "when": 1786720913596,
       "tag": "0001_bored_dormammu",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786780000000,
+      "tag": "0002_message_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786794167913,
+      "tag": "0003_rule_trigger_jsonb",
+      "breakpoints": true
     }
   ]
 }

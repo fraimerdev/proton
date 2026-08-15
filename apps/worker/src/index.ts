@@ -1,19 +1,22 @@
 import {
+  DatabaseReversalScheduler,
   DefaultActionExecutor,
   HttpRestProxyClient,
   RedisDedupeStore,
   RedisGuildStateStore,
   RedisStreamsEventBus,
   type ResolveContextHints,
+  ReversalSweeper,
   resolvePrecheckContext,
 } from '@proton/core';
-import { createDb, DrizzleCaseRecorder } from '@proton/db';
+import { createDb, DrizzleCaseRecorder, DrizzleScheduledActionStore } from '@proton/db';
 import { createModuleRegistry } from '@proton/modules';
 import Redis from 'ioredis';
 import { HttpConfigProvider } from './config-provider.ts';
 import { loadEnv } from './env.ts';
 import { GuildStateConsumer } from './guild-state-consumer.ts';
 import { registerCommands } from './registrar.ts';
+import { startReversalJobs } from './reversal-jobs.ts';
 import { ModuleRuntime } from './runtime.ts';
 
 const env = loadEnv();
@@ -29,11 +32,16 @@ const rest = new HttpRestProxyClient(env.REST_PROXY_URL);
 const bus = new RedisStreamsEventBus(busRedis);
 
 const guildState = new RedisGuildStateStore(stateRedis);
+const schedule = new DrizzleScheduledActionStore(handle);
+const reversals = new DatabaseReversalScheduler({ store: schedule, logger: console });
 
 const executor = new DefaultActionExecutor({
   dedupe: new RedisDedupeStore(dedupeRedis),
   rest,
   recorder: new DrizzleCaseRecorder(handle),
+
+  /** Makes `expiresAt` honourable: without this the executor refuses temp actions. */
+  scheduleReversal: (request, caseId) => reversals.schedule(request, caseId),
 
   /**
    * Real guild state, and it fails closed.
@@ -91,14 +99,31 @@ const stateConsumer = new GuildStateConsumer({
 });
 
 const subscriptions = [stateConsumer.start(), runtime.start()];
+
+const reversalJobs = startReversalJobs({
+  // BullMQ owns its own connection (it needs blocking clients and
+  // `maxRetriesPerRequest: null`), on the logical DB reserved for jobs.
+  connection: { url: env.REDIS_URL, db: env.REDIS_DB_JOBS, maxRetriesPerRequest: null },
+  sweeper: new ReversalSweeper({
+    store: schedule,
+    executor,
+    logger: console,
+    now: () => new Date(),
+  }),
+  intervalMs: env.REVERSAL_SWEEP_INTERVAL_MS,
+  logger: console,
+});
+
 console.log('worker consuming events');
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     void (async () => {
       await Promise.all(subscriptions.map((s) => s.close()));
+      await reversalJobs.close();
       busRedis.disconnect();
       dedupeRedis.disconnect();
+      stateRedis.disconnect();
       await handle.close();
       process.exit(0);
     })();

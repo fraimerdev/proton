@@ -22,7 +22,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "test": "bun test",
-    "db:migrate": "bun run --filter @proton/db migrate"
+    "db:migrate": "bun run packages/db/src/migrate.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.8",

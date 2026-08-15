@@ -2,6 +2,7 @@ import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord-ap
 import type { z } from 'zod';
 import type { ActionExecutor } from '../actions/types.ts';
 import type { EventType, ProtonEvent } from '../events/types.ts';
+import type { RuleDefinition, ScheduledJob } from '../rules/types.ts';
 import type { CommandOptions } from './options.ts';
 
 export type ModuleCategory = 'moderation' | 'security' | 'engagement' | 'utility' | 'logging';
@@ -66,19 +67,29 @@ export interface SectionDescriptor {
   fields: string[];
 }
 
-/**
- * PLAN.md §7.
- *
- * `rules` and `jobs` from the spec are not present yet: the rule engine (P2) and
- * BullMQ arrive in Phase 1, so those fields would reference types with no
- * implementation and no consumer. Adding them later is a pure type widening and
- * breaks no existing manifest. See plan deviation D13.
- */
+/** PLAN.md §7. */
 export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> {
   id: string;
   name: string;
   category: ModuleCategory;
   configSchema: C;
+  /**
+   * The subset of `configSchema` the dashboard's form generator builds fields
+   * from. Defaults to the whole config schema.
+   *
+   * Exists because §9 deliberately caps the generator at a flat vocabulary, and
+   * a module may legitimately store richer per-guild data than that vocabulary
+   * describes — cases' escalation ladder is an array of objects, which the
+   * generator refuses, correctly. Without this the module could not be
+   * registered at all, so the choice would be to widen the generator until it
+   * half-renders a rule builder (§9 rules that out in as many words) or to move
+   * the ladder out of config and lose I5 validation and the I7 audit diff.
+   *
+   * Omitting a field here is a promise that a bespoke editor renders it. Every
+   * key must exist in `configSchema`; the registry enforces that, so a form
+   * cannot collect a value the config would then reject.
+   */
+  formSchema?: z.ZodObject<z.ZodRawShape>;
   defaultConfig: z.infer<C>;
   /** Bumped whenever `configSchema` changes shape (I5). */
   schemaVersion: number;
@@ -88,6 +99,15 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   dependsOn?: string[];
   commands?: CommandDefinition<z.infer<C>>[];
   listeners?: EventListener<z.infer<C>>[];
+  /**
+   * Preset rules and recurring jobs the module ships with (§4-P2).
+   *
+   * Data, not callbacks: the engine and scheduler load these the same way they
+   * load rows a guild admin created, so a preset can be inspected, diffed and
+   * overridden instead of being invisible logic inside the module.
+   */
+  rules?: RuleDefinition[];
+  jobs?: ScheduledJob[];
   migrations: Migration[];
   dashboard?: { icon: string; sections: SectionDescriptor[] };
 }

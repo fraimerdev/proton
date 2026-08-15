@@ -33,6 +33,12 @@ export interface ActionFailure {
 export interface ActionResult {
   caseId?: string;
   status: ActionStatus;
+  /**
+   * Why the action did not happen — or, on an `executed` result, what *else*
+   * did not happen. A temporary action whose reversal could not be scheduled
+   * succeeded and still needs telling about, so branch on `status`, never on
+   * the presence of this field.
+   */
   failure?: ActionFailure;
 }
 

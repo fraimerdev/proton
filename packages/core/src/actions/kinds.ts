@@ -27,6 +27,16 @@ export const ACTION_KINDS = [
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
 /**
+ * Narrow a string read back from storage.
+ *
+ * `scheduled_actions.kind` is a text column written by a possibly older build,
+ * so it is a claim about an action kind rather than one of ours.
+ */
+export function isActionKind(value: string): value is ActionKind {
+  return (ACTION_KINDS as readonly string[]).includes(value);
+}
+
+/**
  * What the bot must be able to do for each kind.
  *
  * `interaction_reply` is deliberately zero: Discord always permits an app to
@@ -82,7 +92,13 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   unlock: false,
 };
 
-/** Kinds that undo another kind, for the reversal scheduler (P1.C). */
+/**
+ * Kinds that undo another kind.
+ *
+ * A kind absent here cannot carry an `expiresAt`: the executor refuses the
+ * request rather than performing an action nothing will ever lift.
+ * `planReversal` translates each pairing's payload.
+ */
 export const REVERSAL_OF: Partial<Record<ActionKind, ActionKind>> = {
   ban: 'unban',
   timeout: 'untimeout',

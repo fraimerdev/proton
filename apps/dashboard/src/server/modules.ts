@@ -1,9 +1,10 @@
+import { caseQuerySchema } from '@proton/core';
 import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { ApiClient } from '../lib/api-client.ts';
 import { auth } from '../lib/auth.ts';
-import { fetchGuildChannels, fetchUserGuilds } from '../lib/discord.ts';
+import { fetchGuildChannels, fetchGuildRoles, fetchUserGuilds } from '../lib/discord.ts';
 import { loadEnv } from '../lib/env.ts';
 import { administrableGuilds } from '../lib/guild-access.ts';
 import {
@@ -56,6 +57,27 @@ export const getGuildChannels = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(z.object({ guildId: z.string().min(1) }))
   .handler(({ data }) => fetchGuildChannels(env.REST_PROXY_URL, data.guildId));
+
+export const getGuildRoles = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(z.object({ guildId: z.string().min(1) }))
+  .handler(({ data }) => fetchGuildRoles(env.REST_PROXY_URL, data.guildId));
+
+/**
+ * The case browser's query (Gate 1).
+ *
+ * Thin, like every server function here: `requireGuildAccess` decides whether
+ * this user may see this guild's history at all (I6 — the guild id in the URL is
+ * only a lookup key), and the query itself is the API's, so `/history` in
+ * Discord and the dashboard table cannot disagree about what a filter means.
+ */
+export const searchCases = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(caseQuerySchema.extend({ guildId: z.string().min(1) }))
+  .handler(({ data }) => {
+    const { guildId, ...query } = data;
+    return api.searchCases(guildId, query);
+  });
 
 /**
  * The mutation Gate 0's acceptance run exercises.

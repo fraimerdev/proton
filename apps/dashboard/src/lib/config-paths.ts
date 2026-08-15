@@ -49,17 +49,26 @@ export function toFormValues(
 }
 
 /**
- * Rebuild the nested config object from flat form state.
+ * Rebuild the nested config object from flat form state, over the config the
+ * page loaded.
  *
- * Only declared paths are copied across, so a field removed from the schema
- * cannot survive a round trip and reappear as an unknown key the module's Zod
- * schema would then reject on read (I5).
+ * The base matters: a module may legitimately store fields the generator does
+ * not render — cases' escalation ladder, permissions' override map — and
+ * building the object from descriptors alone would drop them, whereupon the
+ * module's schema would fill them back in from `.default()` and an admin would
+ * watch an unrelated setting reset itself because they toggled a checkbox.
+ *
+ * Reusing the loaded config as the base is safe precisely because it came from
+ * `ModuleConfigService.get`, which returns the *parsed* object — Zod strips keys
+ * the schema no longer declares, so a field removed from the schema cannot ride
+ * along here and reappear (I5).
  */
 export function toConfig(
   descriptors: readonly FieldDescriptor[],
   values: Record<string, unknown>,
+  base: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  const config: Record<string, unknown> = {};
+  const config = structuredClone(base);
   for (const descriptor of descriptors) {
     setAtPath(config, descriptor.path, values[descriptor.path]);
   }

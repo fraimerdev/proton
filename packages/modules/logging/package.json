@@ -1,0 +1,20 @@
+{
+  "name": "@proton/module-logging",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "@proton/db": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.4.3"
+  }
+}

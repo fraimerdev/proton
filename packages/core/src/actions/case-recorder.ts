@@ -8,6 +8,8 @@ export interface CaseInput {
   targetId?: string | undefined;
   reason?: string | undefined;
   payload?: unknown;
+  /** Set for a temporary action; the reversal is scheduled separately. */
+  expiresAt?: Date | undefined;
   dryRun: boolean;
   idempotencyKey: string;
 }

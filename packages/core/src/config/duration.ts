@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 const UNITS: Record<string, number> = {
   s: 1000,
   m: 60_000,
@@ -57,3 +59,16 @@ export function formatDuration(ms: number): string {
   }
   return `${Math.round(ms / 1000)}s`;
 }
+
+/**
+ * A duration as it is authored and stored — the string, not the milliseconds.
+ *
+ * Rule and config JSONB keeps `'30m'` rather than `1800000` so the stored value
+ * still reads like what the admin typed when it comes back out in a dashboard
+ * form or a config diff. `parseDuration` stays the only thing that turns it
+ * into a number, so the schema and the runtime can never disagree about what
+ * `'30m'` means.
+ */
+export const durationStringSchema = z.string().refine((value) => tryParseDuration(value) !== null, {
+  message: 'must be a number followed by s, m, h, d or w — for example 30m, 12h or 7d',
+});

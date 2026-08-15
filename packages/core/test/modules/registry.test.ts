@@ -99,6 +99,79 @@ describe('ModuleRegistry registration', () => {
 
     expect(registry.descriptors('ping').map((d) => d.kind)).toEqual(['boolean', 'channel-id']);
   });
+
+  /**
+   * The escape hatch for §9's deliberately closed vocabulary: a module may store
+   * per-guild data richer than the generator renders — cases' escalation ladder
+   * is an array of objects — as long as it names the narrower schema the form is
+   * built from. Without this the module could not be registered at all, and the
+   * only ways out would be widening the generator into a rule builder or moving
+   * the data out of config, losing I5 validation and the I7 audit diff.
+   */
+  test('generates the form from formSchema when the config schema is richer', () => {
+    const registry = new ModuleRegistry();
+    const configSchema = z.object({
+      enabled: z.boolean().default(true),
+      ladder: z.array(z.object({ at: z.number() })).default([]),
+    });
+
+    // The full schema is still refused — the boundary has not moved.
+    expect(() =>
+      registry.register(manifest({ configSchema, defaultConfig: { enabled: true } })),
+    ).toThrow(/ladder/);
+
+    registry.register(
+      manifest({
+        configSchema,
+        formSchema: configSchema.omit({ ladder: true }),
+        defaultConfig: { enabled: true, ladder: [] },
+      }),
+    );
+
+    expect(registry.descriptors('ping').map((d) => d.path)).toEqual(['enabled']);
+  });
+
+  /**
+   * A form field with no config key behind it saves into nothing: the module's
+   * own schema drops the unknown key and the admin watches their setting revert.
+   */
+  test('refuses a formSchema field the config schema does not define', () => {
+    const registry = new ModuleRegistry();
+    const broken = manifest({
+      formSchema: z.object({ enabled: z.boolean(), typo: z.string() }),
+    });
+
+    expect(() => registry.register(broken)).toThrow(ModuleRegistrationError);
+    expect(() => registry.register(broken)).toThrow(/typo/);
+  });
+
+  /**
+   * Preset rules and jobs are plain data (§4-P2), so they survive registration
+   * untouched and the engine and scheduler can load them exactly as they load
+   * rows a guild admin created.
+   */
+  test('keeps a manifest’s declared rules and jobs', () => {
+    const registry = new ModuleRegistry();
+    registry.register(
+      manifest({
+        rules: [
+          {
+            id: 'escalate-on-third-warn',
+            trigger: { kind: 'event', event: 'moderation.warned' },
+            conditions: [{ kind: 'rate-over-window', limit: 3, window: '24h' }],
+            actions: [{ kind: 'timeout', duration: '1h', reason: 'Third warning' }],
+            enabled: true,
+            priority: 10,
+          },
+        ],
+        jobs: [{ id: 'sweep-expired', cron: '*/5 * * * *' }],
+      }),
+    );
+
+    const registered = registry.get('ping');
+    expect(registered?.rules?.[0]?.actions[0]?.kind).toBe('timeout');
+    expect(registered?.jobs?.[0]?.cron).toBe('*/5 * * * *');
+  });
 });
 
 describe('ModuleRegistry gating', () => {

@@ -35,6 +35,7 @@ export class DrizzleCaseRecorder implements CaseRecorder {
       reason: input.reason ?? null,
       moduleId: input.moduleId,
       payload: input.payload ?? null,
+      expiresAt: input.expiresAt ?? null,
       dryRun: input.dryRun,
       idempotencyKey: input.idempotencyKey,
     });

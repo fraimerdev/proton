@@ -25,7 +25,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await handle?.close();
   await container?.stop();
-});
+}, 240_000);
 
 beforeEach(async () => {
   await handle.client`delete from cases`;

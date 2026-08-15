@@ -77,9 +77,28 @@ export class ModuleRegistry {
       );
     }
 
+    // A form field with no matching config key writes into nothing: the module
+    // would validate the saved object, drop the unknown key, and the admin would
+    // watch their setting revert. Caught here rather than in their browser.
+    if (manifest.formSchema) {
+      const configKeys = new Set(Object.keys(manifest.configSchema.shape));
+      const stray = Object.keys(manifest.formSchema.shape).filter((k) => !configKeys.has(k));
+      if (stray.length > 0) {
+        throw new ModuleRegistrationError(
+          manifest.id,
+          `formSchema declares ${stray.join(', ')}, which ${
+            stray.length === 1 ? 'is' : 'are'
+          } not in configSchema`,
+        );
+      }
+    }
+
     // The dashboard must be able to render it. Failing now turns an unsupported
     // schema into a failing unit test instead of a blank form.
-    this.#descriptors.set(manifest.id, zodToDescriptors(manifest.configSchema));
+    this.#descriptors.set(
+      manifest.id,
+      zodToDescriptors(manifest.formSchema ?? manifest.configSchema),
+    );
     this.#modules.set(manifest.id, manifest);
   }
 

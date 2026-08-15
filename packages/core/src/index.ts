@@ -1,3 +1,16 @@
+export {
+  CASE_PAGE_SIZE_DEFAULT,
+  CASE_PAGE_SIZE_MAX,
+  CASE_SORT_DIRECTIONS,
+  CASE_SORT_FIELDS,
+  type CaseQuery,
+  type CaseQueryInput,
+  type CaseRecord,
+  type CaseSearchResult,
+  type CaseSortDirection,
+  type CaseSortField,
+  caseQuerySchema,
+} from './actions/case-query.ts';
 export type { CaseInput, CaseRecorder } from './actions/case-recorder.ts';
 export { DEDUPE_PREFIX, type DedupeStore, RedisDedupeStore } from './actions/dedupe.ts';
 export { type ActionExecutorDeps, DefaultActionExecutor } from './actions/executor.ts';
@@ -5,6 +18,7 @@ export {
   ACTION_KINDS,
   type ActionKind,
   DESTRUCTIVE_KINDS,
+  isActionKind,
   isDestructive,
   REQUIRED_PERMISSIONS,
   REVERSAL_OF,
@@ -29,6 +43,31 @@ export {
 } from './actions/rest-client.ts';
 export { type PayloadResult, type RestCall, toRestCall } from './actions/rest-mapping.ts';
 export {
+  AUTO_REVERSAL_ACTOR,
+  planReversal,
+  type ReversalPlan,
+  type ReversalPlanResult,
+  reversalIdempotencyKey,
+} from './actions/reversal.ts';
+export {
+  DatabaseReversalScheduler,
+  type ReversalSchedulerDeps,
+} from './actions/reversal-scheduler.ts';
+export {
+  ReversalSweeper,
+  type ReversalSweeperDeps,
+  type SweepResult,
+} from './actions/reversal-sweeper.ts';
+export {
+  type ClaimDueOptions,
+  type CompleteReversalInput,
+  type ScheduledActionInput,
+  type ScheduledActionRecord,
+  type ScheduledActionStore,
+  type ScheduledReversalPayload,
+  scheduledReversalPayloadSchema,
+} from './actions/scheduled-actions.ts';
+export {
   type ActionExecutor,
   type ActionFailure,
   type ActionRequest,
@@ -41,15 +80,20 @@ export {
 export {
   type BooleanField,
   type ChannelIdField,
+  type DurationField,
+  type EnumField,
   type FieldDescriptor,
   type FieldKind,
   type FieldMetadata,
+  type NumberField,
   protonFields,
+  type RoleIdField,
   type StringField,
   UnsupportedSchemaError,
   zodToDescriptors,
 } from './config/descriptor.ts';
 export {
+  durationStringSchema,
   formatDuration,
   InvalidDurationError,
   parseDuration,
@@ -75,7 +119,7 @@ export {
   type GuildStateStore,
   highestRolePosition,
 } from './guild-state/types.ts';
-export { newId } from './ids.ts';
+export { DISCORD_EPOCH_MS, newId, snowflakeCreatedAt } from './ids.ts';
 export type {
   CommandContext,
   CommandDefinition,
@@ -118,3 +162,53 @@ export {
   type Overwrite,
   type PermissionContext,
 } from './permissions/compute.ts';
+export {
+  type ConditionResult,
+  evaluateFactCondition,
+  type FactCondition,
+  MAX_PATTERN_LENGTH,
+  type RateOverWindowCondition,
+  RULE_CONDITION_KINDS,
+  type RuleCondition,
+  type RuleConditionKind,
+  ruleConditionSchema,
+} from './rules/conditions.ts';
+export {
+  RULE_ENGINE_ACTOR,
+  type RuleActionOutcome,
+  RuleEngine,
+  type RuleEngineDeps,
+  type RuleEvaluationInput,
+  type RuleEvaluationReport,
+  type RuleFireInput,
+  type RuleOutcome,
+  type RuleSkip,
+  type RuleSkipCode,
+} from './rules/engine.ts';
+export {
+  ENTITLEMENT_TIERS,
+  type EntitlementTier,
+  entitlementRank,
+  type RuleFacts,
+} from './rules/facts.ts';
+export {
+  RATE_WINDOW_GUILD_SCOPE,
+  RATE_WINDOW_PREFIX,
+  type RateWindowHit,
+  type RateWindowResult,
+  type RateWindowStore,
+  RedisRateWindow,
+  type RedisRateWindowOptions,
+  rateWindowKey,
+} from './rules/rate-window.ts';
+export {
+  type GuildRule,
+  guildRuleSchema,
+  type RuleAction,
+  type RuleDefinition,
+  type RuleTrigger,
+  ruleActionSchema,
+  ruleDefinitionSchema,
+  ruleTriggerSchema,
+  type ScheduledJob,
+} from './rules/types.ts';

@@ -25,7 +25,7 @@ beforeAll(async () => {
 afterAll(async () => {
   redis?.disconnect();
   await container?.stop();
-});
+}, 240_000);
 
 beforeEach(async () => {
   await redis.flushall();
