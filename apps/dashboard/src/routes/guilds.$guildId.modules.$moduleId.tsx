@@ -3,12 +3,14 @@ import { zodToDescriptors } from '@proton/core';
 import type { EscalationRung } from '@proton/module-cases';
 import type { RoleReward } from '@proton/module-leveling';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
+import type { RolemenuMenu } from '@proton/module-rolemenu';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EscalationLadderEditor } from '../components/cases/escalation-ladder.tsx';
 import { GeneratedForm } from '../components/form/generated-form.tsx';
 import { RoleRewardsEditor } from '../components/leveling/role-rewards.tsx';
+import { RolemenuEditor } from '../components/rolemenu/menus.tsx';
 import { toConfig, toFormValues } from '../lib/config-paths.ts';
 import {
   getGuildChannels,
@@ -64,6 +66,9 @@ function ModuleSettings(): ReactElement {
   const [rewards, setRewards] = useState<RoleReward[]>(
     () => (view.config.roleRewards ?? []) as unknown as RoleReward[],
   );
+  const [menus, setMenus] = useState<RolemenuMenu[]>(
+    () => (view.config.menus ?? []) as unknown as RolemenuMenu[],
+  );
 
   async function save(): Promise<void> {
     setStatus('Saving…');
@@ -71,6 +76,7 @@ function ModuleSettings(): ReactElement {
       const config = toConfig(descriptors, values, view.config);
       if (moduleId === 'cases') config.escalationLadder = ladder;
       if (moduleId === 'leveling') config.roleRewards = rewards;
+      if (moduleId === 'rolemenu') config.menus = menus;
       if (moduleId === 'permissions') config.overrides = pruneOverrides(config.overrides);
 
       await updateModuleConfig({ data: { guildId, moduleId, enabled, config } });
@@ -126,6 +132,13 @@ function ModuleSettings(): ReactElement {
         <section className="subsection">
           <h2>Role rewards</h2>
           <RoleRewardsEditor rewards={rewards} roles={roles} onChange={setRewards} />
+        </section>
+      ) : null}
+
+      {moduleId === 'rolemenu' ? (
+        <section className="subsection">
+          <h2>Role menus</h2>
+          <RolemenuEditor menus={menus} roles={roles} channels={channels} onChange={setMenus} />
         </section>
       ) : null}
 

@@ -16,6 +16,7 @@
   "dependencies": {
     "@proton/core": "workspace:*",
     "@proton/db": "workspace:*",
+    "@proton/module-leveling": "workspace:*",
     "@proton/module-ping": "workspace:*",
     "@proton/modules": "workspace:*",
     "drizzle-orm": "^0.45.2",

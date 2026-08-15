@@ -1,4 +1,4 @@
-import { caseQuerySchema } from '@proton/core';
+import { caseQuerySchema, leaderboardQuerySchema } from '@proton/core';
 import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
@@ -63,6 +63,14 @@ export const searchCases = createServerFn({ method: 'GET' })
   .handler(({ data }) => {
     const { guildId, ...query } = data;
     return api.searchCases(guildId, query);
+  });
+
+export const searchLeaderboard = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(leaderboardQuerySchema.extend({ guildId: z.string().min(1) }))
+  .handler(({ data }) => {
+    const { guildId, ...query } = data;
+    return api.searchLeaderboard(guildId, query);
   });
 
 export const updateModuleConfig = createServerFn({ method: 'POST' })

@@ -137,6 +137,15 @@ export {
   highestRolePosition,
 } from './guild-state/types.ts';
 export { DISCORD_EPOCH_MS, newId, snowflakeCreatedAt } from './ids.ts';
+export {
+  LEADERBOARD_PAGE_SIZE_DEFAULT,
+  LEADERBOARD_PAGE_SIZE_MAX,
+  type LeaderboardQuery,
+  type LeaderboardQueryInput,
+  type LeaderboardResult,
+  type LeaderboardRow,
+  leaderboardQuerySchema,
+} from './leaderboard.ts';
 export type {
   CommandContext,
   CommandDefinition,

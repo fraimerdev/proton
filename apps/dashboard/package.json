@@ -19,6 +19,7 @@
     "@proton/module-logging": "workspace:*",
     "@proton/module-moderation": "workspace:*",
     "@proton/module-permissions": "workspace:*",
+    "@proton/module-rolemenu": "workspace:*",
     "@proton/module-ping": "workspace:*",
     "@tanstack/react-form": "1.33.5",
     "@tanstack/react-query": "5.101.4",

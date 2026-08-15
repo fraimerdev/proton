@@ -1,4 +1,9 @@
-import type { CaseQuery, CaseSearchResult } from '@proton/core';
+import type {
+  CaseQuery,
+  CaseSearchResult,
+  LeaderboardQuery,
+  LeaderboardResult,
+} from '@proton/core';
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
@@ -77,6 +82,15 @@ export class ApiClient {
     }
 
     return this.#request(`/guilds/${guildId}/cases?${params.toString()}`);
+  }
+
+  searchLeaderboard(guildId: string, query: LeaderboardQuery): Promise<LeaderboardResult> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+
+    return this.#request(`/guilds/${guildId}/leaderboard?${params.toString()}`);
   }
 
   updateModule(

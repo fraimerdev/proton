@@ -1,8 +1,9 @@
-import { caseQuerySchema, type ModuleRegistry } from '@proton/core';
+import { caseQuerySchema, leaderboardQuerySchema, type ModuleRegistry } from '@proton/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { CaseQueryService } from './cases/service.ts';
 import type { GuildService } from './guilds/service.ts';
+import type { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 
 const updateBodySchema = z.object({
@@ -22,6 +23,7 @@ const ensureGuildBodySchema = z.object({
 export interface ApiDeps {
   modules: ModuleConfigService;
   cases: CaseQueryService;
+  leaderboard: LeaderboardService;
   guilds: GuildService;
   registry: ModuleRegistry;
   sharedSecret: string;
@@ -32,6 +34,22 @@ function parseCaseQuery(raw: Record<string, string>) {
     raw[key] === undefined ? {} : { [key]: Number(raw[key]) };
 
   return caseQuerySchema.safeParse({ ...raw, ...numeric('page'), ...numeric('pageSize') });
+}
+
+function parseLeaderboardQuery(raw: Record<string, string>) {
+  const numeric = (key: 'page' | 'pageSize') =>
+    raw[key] === undefined ? {} : { [key]: Number(raw[key]) };
+
+  return leaderboardQuerySchema.safeParse({ ...numeric('page'), ...numeric('pageSize') });
+}
+
+function invalidQuery(error: z.ZodError): { error: string; message: string } {
+  return {
+    error: 'invalid_query',
+    message: error.issues
+      .map((i) => `${i.path.map(String).join('.') || 'query'}: ${i.message}`)
+      .join('; '),
+  };
 }
 
 export function createApiApp(deps: ApiDeps): Hono {
@@ -96,6 +114,13 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
 
     return c.json(await deps.cases.search(c.req.param('guildId'), parsed.data));
+  });
+
+  app.get('/guilds/:guildId/leaderboard', async (c) => {
+    const parsed = parseLeaderboardQuery(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return c.json(await deps.leaderboard.search(c.req.param('guildId'), parsed.data));
   });
 
   app.get('/guilds/:guildId/modules/:moduleId', async (c) => {

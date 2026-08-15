@@ -1,7 +1,7 @@
 # Phase 3 — Engagement (plan)
 
-> **Implementation status — 2026-08-15.** Slices 3.A–3.F are built; 3.G is partial. The repo is
-> green on `bun run typecheck` (25/25), `bun run lint` (clean) and `bun test` (**1174 pass, 22 fail —
+> **Implementation status — 2026-08-15.** Slices 3.A–3.G are built. The repo is
+> green on `bun run typecheck` (25/25), `bun run lint` (clean) and `bun test` (**1179 pass, 22 fail —
 > every failure is a `*.integration.test.ts` reporting "Could not find a working container runtime
 > strategy"**). Sixteen modules register. See §7 below for what is *not* done, and read §0 first:
 > **no gate can be claimed from this host**, because the integration suites have never executed.
@@ -383,6 +383,7 @@ Patterned on Gates 0–2. Every criterion proven by command output, not assertio
 | 3.F starboard | done | recompute-never-increment; create keyed on `(guild, message)` not the event |
 | welcome | done | greeting + optional card; a failed render never costs the message |
 | Gate 1 debt | done | `/warn`, the `warn` ledger-only kind, and `moderation.warned` published — the escalation ladder can finally fire |
+| 3.G dashboard | done | leaderboard route (typed search params, shareable URL), `GET /guilds/:guildId/leaderboard` in `apps/api`, and bespoke editors for `leveling.roleRewards` and `rolemenu.menus` — both arrays the v1 form generator refuses by design (§9) |
 
 Two additions to `packages/core` that the plan did not anticipate:
 
@@ -395,21 +396,17 @@ Two additions to `packages/core` that the plan did not anticipate:
 
 ### Not built
 
-1. **3.G dashboard, apart from the role-rewards editor.** No `guilds/$guildId/leaderboard` route, and
-   no bespoke editor for `rolemenu.menus`. That array is excluded from `formSchema` by design (§9),
-   so **role menus currently cannot be configured from the dashboard at all** — `/rolemenu` and a
-   direct config write are the only routes in. This is the largest functional gap.
-2. **The leaderboard API endpoint.** `MemberXpStore.leaderboard` exists and `/leaderboard` uses it,
-   but `apps/api` exposes no `GET /guilds/:guildId/leaderboard`, so the dashboard has nothing to call.
-3. **Integration tests have never run.** Every `*.integration.test.ts` written for this phase is
+1. **Integration tests have never run.** Every `*.integration.test.ts` written for this phase is
    unexecuted. Docker's TCP endpoint on 2375 is closed on this host and CLAUDE.md rules out the
    named-pipe path for Bun.
-4. **Gate 3 acceptance is therefore unproven.** Criteria 2, 3, 5, 7, 8, 9 and 10 in §4 all depend on
+2. **Gate 3 acceptance is therefore unproven.** Criteria 2, 3, 5, 7, 8, 9 and 10 in §4 all depend on
    integration suites. Nothing in §4 should be treated as demonstrated.
-5. **`manifest.migrations` still runs nowhere** (R5). Phase 3 added two more tables to the core
+3. **No card preview in the dashboard.** Rendering lives in `apps/worker` by decision, so the
+   settings page names the preset but cannot show it.
+4. **`manifest.migrations` still runs nowhere** (R5). Phase 3 added two more tables to the core
    drizzle set — `0004_leveling.sql` and `0005_starboard.sql` — via `logging`'s workaround. That is
    now three modules deep and should be closed rather than repeated a fourth time.
-6. **`ActionResult` discards Discord's response body**, so a module cannot learn the id of a message
+5. **`ActionResult` discards Discord's response body**, so a module cannot learn the id of a message
    it just sent. Starboard works around this by re-reading the board channel and matching on the
    embed's jump-link URL (`resolveBoardPost`). It is the ugliest thing in the phase and the fix
    belongs in `packages/core`.

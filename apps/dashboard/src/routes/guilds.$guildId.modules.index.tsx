@@ -18,6 +18,10 @@ function ModuleList(): ReactElement {
         <Link to="/guilds/$guildId/cases" params={{ guildId }} search={{}}>
           Browse cases
         </Link>
+        {' · '}
+        <Link to="/guilds/$guildId/leaderboard" params={{ guildId }} search={{}}>
+          Leaderboard
+        </Link>
       </p>
 
       <ul className="module-list">

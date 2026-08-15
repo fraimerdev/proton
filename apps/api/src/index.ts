@@ -4,6 +4,7 @@ import { createApiApp } from './app.ts';
 import { CaseQueryService } from './cases/service.ts';
 import { loadEnv } from './env.ts';
 import { GuildService } from './guilds/service.ts';
+import { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigService } from './modules/service.ts';
 
 const env = loadEnv();
@@ -16,6 +17,7 @@ const app = createApiApp({
   guilds: new GuildService(handle),
   modules: new ModuleConfigService(handle, registry),
   cases: new CaseQueryService(handle),
+  leaderboard: new LeaderboardService(handle),
   registry,
   sharedSecret: env.API_SHARED_SECRET,
 });
