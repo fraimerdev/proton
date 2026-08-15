@@ -1,4 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import { DEFAULT_INTENTS } from '@proton/gateway/env';
+import { NORMALISED_EVENT_TYPES } from '@proton/gateway/normaliser';
+import { GatewayIntentBits } from 'discord-api-types/v10';
 import { createModuleRegistry, MODULES } from '../src/index.ts';
 
 /**
@@ -7,7 +10,26 @@ import { createModuleRegistry, MODULES } from '../src/index.ts';
  * one out — fails here instead of shipping a build where a guild admin's
  * settings page silently loses a section.
  */
-const SHIPPED_MODULE_IDS = ['ping', 'cases', 'moderation', 'logging', 'permissions'];
+const SHIPPED_MODULE_IDS = [
+  // Phase 0–1.
+  'ping',
+  'cases',
+  'moderation',
+  'logging',
+  'permissions',
+  // Phase 2 (§8): security.
+  'antinuke',
+  'antiraid',
+  'verification',
+  'backup',
+  'phishing',
+  // Phase 3 (§8): engagement.
+  'leveling',
+  'autorole',
+  'rolemenu',
+  'starboard',
+  'welcome',
+];
 
 describe('shipped module registry', () => {
   test('ships exactly the expected modules', () => {
@@ -99,5 +121,89 @@ describe('shipped module registry', () => {
 
     expect(registry.invitePermissions()).toBeGreaterThan(0n);
     expect(registry.requiredIntents()).toBeGreaterThan(0);
+  });
+
+  /**
+   * The one place the derivation above is *not* actually derived.
+   *
+   * `apps/gateway` cannot import this list — it identifies before any module
+   * runs, and a gateway that depended on the module graph would redeploy every
+   * time a manifest changed, which I13 exists to prevent — so `DEFAULT_INTENTS`
+   * is written by hand and the two can drift. The drift is silent in the worst
+   * possible way: `registry.evaluate` is told the granted intents and would
+   * happily report a module enabled, while the gateway never subscribed to the
+   * dispatch it needs, so the module sits in a healthy-looking dashboard
+   * receiving an empty stream. Phase 2 hit exactly this — five manifests wanted
+   * GUILD_MODERATION for the audit-log dispatch and the constant did not have
+   * it yet.
+   *
+   * A subset check, not equality: the owner may enable an intent ahead of the
+   * module that consumes it, and that is not a fault.
+   */
+  test('every intent a shipped module needs is one the gateway identifies with', () => {
+    const needed = createModuleRegistry().requiredIntents();
+    const missing = needed & ~DEFAULT_INTENTS;
+
+    // Named, not just counted — `expected 8 to be 0` would send whoever hits
+    // this reading bit tables.
+    expect(
+      Object.entries(GatewayIntentBits)
+        .filter(([, bit]) => typeof bit === 'number' && (missing & bit) !== 0)
+        .map(([name]) => name),
+    ).toEqual([]);
+  });
+
+  /**
+   * The same class of silent drift as the intents check above, one layer in.
+   *
+   * `EventType` is the vocabulary a listener is *allowed* to name; the normaliser
+   * decides what is ever actually said. Subscribing to a declared-but-unemitted
+   * type compiles, registers, evaluates as enabled, and receives nothing —
+   * forever, with no error anywhere. It is not a hypothetical: `logging` shipped
+   * subscribed to `message.updated`, `message.deleted` and `message.bulk_deleted`
+   * and `phishing` to `message.updated`, none of which the normaliser emitted, so
+   * every message-edit path in the product was dead and every test passed.
+   *
+   * This is the guard that makes that a failing unit test. It names the module
+   * and the type, because the whole failure mode is not being told.
+   */
+  test('every listener subscribes to an event something actually emits', () => {
+    /**
+     * Two producers, not one.
+     *
+     * The normaliser speaks for Discord. Since Phase 3 a module may also publish,
+     * through the `emits` allowlist on its manifest — that is how
+     * `xp.level_gained` (§4-P1) exists at all, given that no Discord dispatch
+     * corresponds to it. A listener naming a type in neither set can never fire,
+     * which is the failure this test exists to catch, so the check is against the
+     * union rather than against the gateway alone.
+     */
+    const emitted = new Set<string>([
+      ...NORMALISED_EVENT_TYPES,
+      ...MODULES.flatMap((manifest) => manifest.emits ?? []),
+    ]);
+
+    const dead = MODULES.flatMap((manifest) =>
+      (manifest.listeners ?? []).flatMap((listener) =>
+        listener.types
+          .filter((type) => !emitted.has(type))
+          .map((type) => `${manifest.id} listens for '${type}', which nothing emits`),
+      ),
+    );
+
+    expect(dead).toEqual([]);
+  });
+
+  /**
+   * A listener with no types is a subscription to nothing — `bus.subscribe` with
+   * an empty array creates no consumer groups and blocks forever. Cheap to
+   * assert, and it would otherwise look identical to a quiet guild.
+   */
+  test('no listener declares an empty type list', () => {
+    const empty = MODULES.filter((manifest) =>
+      (manifest.listeners ?? []).some((listener) => listener.types.length === 0),
+    ).map((manifest) => manifest.id);
+
+    expect(empty).toEqual([]);
   });
 });

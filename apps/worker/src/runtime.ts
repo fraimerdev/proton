@@ -16,6 +16,8 @@ import {
   PERMISSIONS_MODULE_ID,
   permissionsConfigSchema,
 } from '@proton/module-permissions';
+import { ConfigUnavailableError } from './config-provider.ts';
+import type { ModulePublisherFactory } from './module-publish.ts';
 
 export interface ModuleConfigSnapshot {
   enabled: boolean;
@@ -41,6 +43,13 @@ export interface ModuleRuntimeDeps {
   config: ConfigProvider;
   logger: Logger;
   group?: string;
+  /**
+   * Builds the `publish` a module receives, bound to its id and guild.
+   *
+   * The command path needs it as much as the listener path does: `/warn` is a
+   * command, and `moderation.warned` is what the escalation ladder triggers on.
+   */
+  publisherFor?: ModulePublisherFactory;
 }
 
 const SUBSCRIBED_TYPES: EventType[] = ['interaction.command'];
@@ -153,7 +162,32 @@ export class ModuleRuntime {
       return;
     }
 
-    const snapshot = await this.#deps.config.get(guildId, manifest.id);
+    /**
+     * A config failure that cannot succeed on retry must not be retried.
+     *
+     * The same triage the listener path does, for the same reason and against
+     * the same error type: rethrowing a 400 leaves the entry unacked, the bus
+     * redelivers it five times over a couple of minutes, and then dead-letters
+     * an interaction that was never going to work. Having the two runtimes treat
+     * one failure differently is exactly the drift `ConfigUnavailableError`
+     * exists to prevent.
+     */
+    let snapshot: ModuleConfigSnapshot;
+    try {
+      snapshot = await this.#deps.config.get(guildId, manifest.id);
+    } catch (error) {
+      if (error instanceof ConfigUnavailableError && error.permanent) {
+        this.#deps.logger.error(
+          `/${commandName} could not run because ${manifest.id}'s configuration could not be ` +
+            `read, and retrying will not help: ${error.message}. Open the module's settings in ` +
+            'the Proton dashboard and save them once to rewrite the stored config.',
+          { guildId, moduleId: manifest.id, status: error.status },
+        );
+        return;
+      }
+      throw error;
+    }
+
     if (!snapshot.enabled) {
       this.#deps.logger.info(`${manifest.id} is disabled in this guild`, { guildId });
       return;
@@ -178,6 +212,9 @@ export class ModuleRuntime {
       config: parsed.data,
       executor,
       logger: this.#deps.logger,
+      ...(this.#deps.publisherFor
+        ? { publish: this.#deps.publisherFor(manifest.id, guildId) }
+        : {}),
       interaction: { id: interactionId, token: interactionToken },
       // The event id is derived deterministically from the dispatch, so a
       // redelivered interaction reuses this key and dedupes (I4).

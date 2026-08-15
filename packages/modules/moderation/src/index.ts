@@ -21,6 +21,7 @@ export {
   timeoutCommand,
   unbanCommand,
   untimeoutCommand,
+  warnCommand,
 } from './commands/member.ts';
 export {
   MODERATION_SCHEMA_VERSION,
@@ -68,6 +69,18 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
     Permissions.ManageRoles,
   ],
   commands: [...memberCommands, ...channelCommands],
+  /**
+   * `/warn` publishes this so the `cases` module's escalation ladder has
+   * something to trigger on (§4-P2).
+   *
+   * The allowlist is the reason this is safe to grant: `ModuleContext.publish`
+   * refuses any type not listed here, so moderation cannot mint an
+   * `xp.level_gained` or forge another module's events. It is also what tells
+   * the registry's emission assertion that `moderation.warned` has a producer —
+   * without it, `cases`' rules would be reported as triggering on something
+   * nothing emits, which until now they genuinely were.
+   */
+  emits: ['moderation.warned'],
   migrations: [],
   dashboard: {
     icon: 'shield',

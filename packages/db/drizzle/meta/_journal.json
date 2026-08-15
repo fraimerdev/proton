@@ -29,6 +29,20 @@
       "when": 1786794167913,
       "tag": "0003_rule_trigger_jsonb",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786880000000,
+      "tag": "0004_leveling",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786880100000,
+      "tag": "0005_starboard",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import {
   ACTION_KINDS,
   type ActionKind,
+  DESTRUCTIVE_KINDS,
+  dryRunFor,
   isDestructive,
   REQUIRED_PERMISSIONS,
   requiredPermissionsFor,
@@ -9,7 +11,7 @@ import {
   TARGETS_MEMBER,
   targetsMember,
 } from '../../src/actions/kinds.ts';
-import { toRestCall } from '../../src/actions/rest-mapping.ts';
+import { type PayloadResult, type RestCall, toRestCall } from '../../src/actions/rest-mapping.ts';
 import type { ActionRequest } from '../../src/actions/types.ts';
 import { Permissions } from '../../src/permissions/bits.ts';
 
@@ -28,6 +30,20 @@ function request(kind: ActionKind, payload: unknown, reason?: string): ActionReq
     payload,
     ...(reason ? { reason } : {}),
   };
+}
+
+/**
+ * Narrow a mapping result to the REST call it produced, failing the test with
+ * the actual reason otherwise.
+ *
+ * `PayloadResult` grew a third arm when `warn` arrived — a kind that validates
+ * and then deliberately produces no call — so `if ('error' in result)` no longer
+ * narrows all the way to `{ call }`.
+ */
+function callOf(result: PayloadResult): RestCall {
+  if ('error' in result) throw new Error(result.error);
+  if ('ledgerOnly' in result) throw new Error('expected a REST call, got a ledger-only kind');
+  return result.call;
 }
 
 /**
@@ -115,28 +131,25 @@ describe('targeting stance', () => {
 
 describe('REST mapping', () => {
   test('ban maps to PUT with the message-purge window', () => {
-    const result = toRestCall(request('ban', { userId: USER, deleteMessageSeconds: 3600 }));
-    if ('error' in result) throw new Error(result.error);
+    const call = callOf(toRestCall(request('ban', { userId: USER, deleteMessageSeconds: 3600 })));
 
-    expect(result.call.method).toBe('PUT');
-    expect(result.call.path).toBe(`/guilds/${GUILD}/bans/${USER}`);
-    expect(result.call.body).toEqual({ delete_message_seconds: 3600 });
+    expect(call.method).toBe('PUT');
+    expect(call.path).toBe(`/guilds/${GUILD}/bans/${USER}`);
+    expect(call.body).toEqual({ delete_message_seconds: 3600 });
   });
 
   test('untimeout clears the field rather than setting a past date', () => {
-    const result = toRestCall(request('untimeout', { userId: USER }));
-    if ('error' in result) throw new Error(result.error);
+    const call = callOf(toRestCall(request('untimeout', { userId: USER })));
 
-    expect(result.call.body).toEqual({ communication_disabled_until: null });
+    expect(call.body).toEqual({ communication_disabled_until: null });
   });
 
   test('a reason becomes Discord’s audit-log header', () => {
-    const result = toRestCall(request('kick', { userId: USER }, 'spamming'));
-    if ('error' in result) throw new Error(result.error);
+    const call = callOf(toRestCall(request('kick', { userId: USER }, 'spamming')));
 
     // Without this the server's own audit log shows the bot acting for no
     // stated reason.
-    expect(result.call.headers?.['x-audit-log-reason']).toBe('spamming');
+    expect(call.headers?.['x-audit-log-reason']).toBe('spamming');
   });
 
   test('timeout beyond Discord’s 28-day cap is refused with an explanation', () => {
@@ -170,17 +183,18 @@ describe('REST mapping', () => {
    * overwriting, so it cannot silently clear unrelated restrictions.
    */
   test('lockdown preserves existing overwrites and adds SEND_MESSAGES to deny', () => {
-    const result = toRestCall(
-      request('lockdown', {
-        channelId: CHANNEL,
-        roleId: GUILD,
-        previousAllow: '0',
-        previousDeny: String(Permissions.AddReactions),
-      }),
+    const call = callOf(
+      toRestCall(
+        request('lockdown', {
+          channelId: CHANNEL,
+          roleId: GUILD,
+          previousAllow: '0',
+          previousDeny: String(Permissions.AddReactions),
+        }),
+      ),
     );
-    if ('error' in result) throw new Error(result.error);
 
-    const body = result.call.body as { deny: string };
+    const body = call.body as { deny: string };
     const deny = BigInt(body.deny);
 
     expect(deny & Permissions.SendMessages).toBe(Permissions.SendMessages);
@@ -188,17 +202,81 @@ describe('REST mapping', () => {
   });
 
   test('unlock restores exactly what lockdown recorded', () => {
-    const result = toRestCall(
-      request('unlock', {
-        channelId: CHANNEL,
-        roleId: GUILD,
-        restoreAllow: '1024',
-        restoreDeny: '64',
-      }),
+    const call = callOf(
+      toRestCall(
+        request('unlock', {
+          channelId: CHANNEL,
+          roleId: GUILD,
+          restoreAllow: '1024',
+          restoreDeny: '64',
+        }),
+      ),
     );
-    if ('error' in result) throw new Error(result.error);
 
-    expect(result.call.body).toEqual({ type: 0, allow: '1024', deny: '64' });
+    expect(call.body).toEqual({ type: 0, allow: '1024', deny: '64' });
+  });
+
+  /**
+   * The one kind that validates and then deliberately produces no call. Asserted
+   * because the alternative failure — a `warn` that quietly mapped to some
+   * endpoint — would ban or kick somebody.
+   */
+  test('warn maps to no REST call at all', () => {
+    const result = toRestCall(request('warn', { userId: USER }));
+
+    expect(result).toEqual({ ledgerOnly: true });
+  });
+
+  test('warn still validates its payload', () => {
+    const result = toRestCall(request('warn', { userId: 'not-a-snowflake' }));
+
+    expect('error' in result).toBe(true);
+  });
+
+  test('a message with nothing in it is refused before Discord sees it', () => {
+    const result = toRestCall(request('send', { channelId: CHANNEL }));
+
+    expect('error' in result).toBe(true);
+    if (!('error' in result)) return;
+    expect(result.error).toContain('content, an embed, a component or a file');
+  });
+
+  /**
+   * The multipart contract: part `files[0]` is described by the descriptor with
+   * `id: 0`, and an embed refers to it by filename. Out of step, the bytes upload
+   * and the embed renders a broken image.
+   */
+  test('send with a file produces matching parts and attachment descriptors', () => {
+    const call = callOf(
+      toRestCall(
+        request('send', {
+          channelId: CHANNEL,
+          embeds: [{ image: { url: 'attachment://rank.png' } }],
+          files: [{ filename: 'rank.png', contentType: 'image/png', data: new Uint8Array([1, 2]) }],
+        }),
+      ),
+    );
+
+    expect(call.files?.[0]?.name).toBe('files[0]');
+    expect(call.files?.[0]?.filename).toBe('rank.png');
+    expect((call.body as { attachments: unknown[] }).attachments).toEqual([
+      { id: 0, filename: 'rank.png' },
+    ]);
+  });
+
+  test('a deferral carries no message body', () => {
+    const call = callOf(
+      toRestCall(
+        request('interaction_reply', {
+          interactionId: USER,
+          interactionToken: 'tok',
+          callbackType: 5,
+          ephemeral: true,
+        }),
+      ),
+    );
+
+    expect(call.body).toEqual({ type: 5, data: { flags: 64 } });
   });
 });
 
@@ -219,5 +297,46 @@ describe('reversal pairing', () => {
     expect(isDestructive('ban')).toBe(true);
     expect(isDestructive('purge')).toBe(true);
     expect(isDestructive('send')).toBe(false);
+  });
+});
+
+/**
+ * I12 as a single rule rather than one per module.
+ *
+ * Six modules had copied these three lines by the end of Phase 2 (I3 forbids
+ * importing across modules, so each had to). They agreed, but only by luck —
+ * nothing made them agree, and the point of I12 is that it is uniform. Pinned
+ * here so the next module inherits the policy instead of retyping it.
+ */
+describe('dryRunFor', () => {
+  test('withholds destructive kinds outside production', () => {
+    expect(dryRunFor('ban', 'development')).toBe(true);
+    expect(dryRunFor('kick', 'test')).toBe(true);
+    expect(dryRunFor('purge', undefined)).toBe(true);
+  });
+
+  test('performs destructive kinds in production', () => {
+    expect(dryRunFor('ban', 'production')).toBe(false);
+    expect(dryRunFor('lockdown', 'production')).toBe(false);
+  });
+
+  /**
+   * The half that matters to anti-nuke and verification: a role strip and a
+   * quarantine run for real in development. Withholding them would leave the
+   * reversible, restore-exactness half of both modules untested everywhere it
+   * is safe to test.
+   */
+  test('never withholds a non-destructive kind, whatever the environment', () => {
+    for (const env of ['development', 'test', 'production', undefined]) {
+      expect(dryRunFor('remove_role', env)).toBe(false);
+      expect(dryRunFor('add_role', env)).toBe(false);
+      expect(dryRunFor('timeout', env)).toBe(false);
+    }
+  });
+
+  test('covers exactly DESTRUCTIVE_KINDS, so a new destructive kind is caught here', () => {
+    const withheld = ACTION_KINDS.filter((kind) => dryRunFor(kind, 'development'));
+
+    expect(new Set(withheld)).toEqual(new Set(DESTRUCTIVE_KINDS));
   });
 });

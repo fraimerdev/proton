@@ -49,11 +49,25 @@ export function toMessageLogEntries(event: ProtonEvent, config: LoggingConfig): 
       if (!config.logEdits) return [];
 
       const messageId = str(d.id);
-      // A MESSAGE_UPDATE without `content` is Discord resolving an embed, pinning,
-      // or flagging — not a member editing text. Logging those as edits would fill
-      // the log with entries that read as "the message was blanked".
       const content = str(d.content);
-      if (!messageId || content === null) return [];
+
+      /**
+       * `edited_timestamp` is the discriminator, not the presence of `content`.
+       *
+       * Discord raises MESSAGE_UPDATE for its own work too — resolving a link
+       * preview, pinning, suppressing embeds — and per the gateway reference the
+       * inner payload is "a message object with the same extra fields as
+       * MESSAGE_CREATE", i.e. the *full* object with the original content
+       * attached. So testing `content !== null` classifies every one of those as
+       * an edit, and a guild that opted in to edit logging would accumulate rows
+       * asserting that members edited messages they never touched — while
+       * retaining the verbatim content of messages that were only ever posted,
+       * which is precisely the content §6 treats as a legal surface.
+       *
+       * `edited_timestamp` is defined as when the message was edited, null if
+       * never. That is the question being asked, so it is the field to ask.
+       */
+      if (!messageId || content === null || str(d.edited_timestamp) === null) return [];
 
       return [
         {

@@ -108,14 +108,48 @@ describe('RedisRateWindow', () => {
    * twice as a matter of course (I4). Counting it twice would let a quiet member
    * trip an anti-spam window they never crossed.
    */
-  test('a redelivered occurrence is not counted twice and does not trip again', async () => {
+  test('a redelivered occurrence is not counted twice', async () => {
+    for (let i = 0; i < 4; i++) await hit({ member: `m${i}`, now: NOW + i });
+    await hit({ member: 'm4', now: NOW + 4 });
+
+    expect((await hit({ member: 'm4', now: NOW + 9 })).count).toBe(5);
+  });
+
+  /**
+   * The redelivered *crossing* still reports the crossing.
+   *
+   * This assertion used to be `tripped: false`, on the reasoning that a second
+   * trip would act twice. It does not — every caller derives its executor
+   * idempotency key from the same event id, so the replayed action is discarded
+   * as a duplicate (I4). What the old behaviour actually did was lose the
+   * crossing altogether: `tripped` was an edge consumed by the first call, so if
+   * anything downstream of the hit threw — a REST failure part-way through a
+   * role strip, a blip reading guild state — the bus redelivered, the second
+   * call saw the member already in the set, and reported a plain count. And
+   * since `count == limit` holds only once per fill, nothing later in the same
+   * attack tripped either. One transient error permanently disarmed the
+   * anti-nuke breaker for that burst, in silence.
+   *
+   * So the crossing is answered idempotently instead: same occurrence, same
+   * verdict, every time it is replayed.
+   */
+  test('replaying the occurrence that crossed reports the crossing again', async () => {
     for (let i = 0; i < 4; i++) await hit({ member: `m${i}`, now: NOW + i });
 
-    const crossing = await hit({ member: 'm4', now: NOW + 4 });
-    expect(crossing).toEqual({ count: 5, tripped: true });
+    expect(await hit({ member: 'm4', now: NOW + 4 })).toEqual({ count: 5, tripped: true });
+    expect(await hit({ member: 'm4', now: NOW + 9 })).toEqual({ count: 5, tripped: true });
+    expect(await hit({ member: 'm4', now: NOW + 20 })).toEqual({ count: 5, tripped: true });
+  });
 
-    const redelivered = await hit({ member: 'm4', now: NOW + 9 });
-    expect(redelivered).toEqual({ count: 5, tripped: false });
+  /** Only the occurrence that crossed replays as a crossing — not its neighbours. */
+  test('a different occurrence in the same full window does not report a crossing', async () => {
+    for (let i = 0; i < 4; i++) await hit({ member: `m${i}`, now: NOW + i });
+    await hit({ member: 'm4', now: NOW + 4 });
+
+    // An earlier occurrence, redelivered after the window was already crossed.
+    expect(await hit({ member: 'm2', now: NOW + 10 })).toEqual({ count: 5, tripped: false });
+    // And a genuinely new one, which takes the count past the limit.
+    expect(await hit({ member: 'm5', now: NOW + 11 })).toEqual({ count: 6, tripped: false });
   });
 
   test('occurrences slide out of the window, and the window re-arms', async () => {

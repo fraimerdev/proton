@@ -4,6 +4,7 @@ import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { auth } from '../lib/auth.ts';
 import { fetchUserGuilds } from '../lib/discord.ts';
+import { getDiscordAccessToken } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { accessGrants, resolveGuildAccess } from '../lib/guild-access.ts';
 
@@ -39,13 +40,31 @@ export const requireSession = createMiddleware({ type: 'function' }).server(asyn
  */
 export const requireGuildAccess = createMiddleware({ type: 'function' })
   .middleware([requireSession])
-  .validator(z.object({ guildId: z.string().min(1) }))
+  /**
+   * `looseObject`, and it has to be.
+   *
+   * Start runs validators as a pipeline and each one *replaces* the payload:
+   * `ctx.data = await execValidator(validator, ctx.data)` in
+   * `createServerFn.js`. A plain `z.object` strips unknown keys, so this
+   * middleware — which only cares about `guildId` — was deleting every other
+   * field before the server function's own validator ran.
+   *
+   * The damage was uneven, which is why it survived. `getModuleConfig` needs a
+   * `moduleId` with no default, so every module settings page died on
+   * "expected string, received undefined". `searchCases` has defaults or
+   * `.optional()` on everything but `guildId`, so the case table rendered
+   * perfectly while silently discarding the caller's filters, sort and page —
+   * the worse of the two failures, because nothing looked wrong.
+   *
+   * A middleware validator here is a precondition, not a schema for the whole
+   * call. It must narrow what it reads and pass the rest through untouched.
+   */
+  .validator(z.looseObject({ guildId: z.string().min(1) }))
   .server(async ({ next, data, context }) => {
-    const accounts = await auth.api.listUserAccounts({ headers: getRequest().headers });
-    const discord = accounts?.find((a) => a.providerId === 'discord');
-    const token = (discord as { accessToken?: string } | undefined)?.accessToken;
-
-    if (!token) throw new ForbiddenError('no linked Discord account');
+    // `listUserAccounts` redacts tokens by design, so reading accessToken off it
+    // always yielded undefined and every guild page 403'd with "no linked
+    // Discord account" — blaming the user's Discord for our own lookup.
+    const token = await getDiscordAccessToken(getRequest().headers, context.session.user.id);
 
     const guilds = await fetchUserGuilds(env.REST_PROXY_URL, token);
     const access = resolveGuildAccess(guilds, data.guildId);

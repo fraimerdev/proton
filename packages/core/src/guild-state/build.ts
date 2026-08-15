@@ -37,6 +37,9 @@ export function parseRole(raw: unknown): GuildRole | null {
     id,
     permissions: bits(role.permissions),
     position: typeof role.position === 'number' ? role.position : 0,
+    // Only carried when Discord actually said so, so "absent" and "false" stay
+    // distinguishable in a stored snapshot.
+    ...(typeof role.managed === 'boolean' ? { managed: role.managed } : {}),
   };
 }
 

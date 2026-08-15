@@ -15,6 +15,7 @@
     "@proton/core": "workspace:*",
     "@proton/db": "workspace:*",
     "@proton/module-cases": "workspace:*",
+    "@proton/module-leveling": "workspace:*",
     "@proton/module-logging": "workspace:*",
     "@proton/module-moderation": "workspace:*",
     "@proton/module-permissions": "workspace:*",
@@ -27,6 +28,7 @@
     "@tanstack/react-virtual": "3.14.9",
     "@tanstack/zod-adapter": "1.167.0",
     "better-auth": "^1.6.28",
+    "drizzle-orm": "^0.45.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"

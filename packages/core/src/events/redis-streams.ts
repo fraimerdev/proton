@@ -1,5 +1,5 @@
 import type { Redis } from 'ioredis';
-import type { EventBus, Subscription } from './bus.ts';
+import type { EventBus, GroupStartId, SubscribeOptions, Subscription } from './bus.ts';
 import type { EventType, ProtonEvent } from './types.ts';
 
 export const STREAM_PREFIX = 'proton:events';
@@ -17,35 +17,47 @@ export interface RedisStreamsEventBusOptions {
    * invisible, so it trades recovery latency against tolerating slow handlers.
    */
   claimIdleMs?: number;
+  /** Default start id for groups this bus creates. Per-subscription override wins. */
+  groupStartId?: GroupStartId;
   /** Deliveries after which an event is dead-lettered rather than retried forever. */
   maxDeliveries?: number;
   /** Blocking read timeout. Also bounds how long `close()` takes. */
   blockMs?: number;
   batchSize?: number;
-  onDeadLetter?: (event: ProtonEvent, deliveries: number) => void;
-  onHandlerError?: (event: ProtonEvent, error: unknown) => void;
+  onDeadLetter?: (event: ProtonEvent, deliveries: number, group: string) => void;
+  onHandlerError?: (event: ProtonEvent, error: unknown, group: string) => void;
+  /**
+   * The read loop itself failed — a connection hiccup, a vanished group, an ACL
+   * change. Carries the group, because with one group per module "something
+   * failed" is not actionable and "listener:antinuke failed" is.
+   */
+  onSubscriptionError?: (group: string, error: unknown) => void;
   /** Entries that cannot be parsed at all — acked so they cannot wedge the group. */
   onMalformed?: (streamKey: string, id: string) => void;
 }
 
-interface ResolvedOptions
-  extends Required<
-    Omit<RedisStreamsEventBusOptions, 'onDeadLetter' | 'onHandlerError' | 'onMalformed'>
-  > {
-  onDeadLetter: ((event: ProtonEvent, deliveries: number) => void) | undefined;
-  onHandlerError: ((event: ProtonEvent, error: unknown) => void) | undefined;
+type CallbackKeys = 'onDeadLetter' | 'onHandlerError' | 'onMalformed' | 'onSubscriptionError';
+
+interface ResolvedOptions extends Required<Omit<RedisStreamsEventBusOptions, CallbackKeys>> {
+  onDeadLetter: ((event: ProtonEvent, deliveries: number, group: string) => void) | undefined;
+  onHandlerError: ((event: ProtonEvent, error: unknown, group: string) => void) | undefined;
   onMalformed: ((streamKey: string, id: string) => void) | undefined;
+  onSubscriptionError: ((group: string, error: unknown) => void) | undefined;
 }
 
 function resolve(options: RedisStreamsEventBusOptions): ResolvedOptions {
   return {
     claimIdleMs: options.claimIdleMs ?? 30_000,
+    // Unchanged default: existing groups (`worker`, `guild-state`) keep reading
+    // from the start of the stream exactly as they did before.
+    groupStartId: options.groupStartId ?? '0',
     maxDeliveries: options.maxDeliveries ?? 5,
     blockMs: options.blockMs ?? 500,
     batchSize: options.batchSize ?? 16,
     onDeadLetter: options.onDeadLetter,
     onHandlerError: options.onHandlerError,
     onMalformed: options.onMalformed,
+    onSubscriptionError: options.onSubscriptionError,
   };
 }
 
@@ -64,6 +76,9 @@ class StreamSubscription implements Subscription {
   readonly #consumer: string;
   readonly #handler: (e: ProtonEvent) => Promise<void>;
   readonly #opts: ResolvedOptions;
+  readonly #startId: GroupStartId;
+  #ensured = false;
+  readonly #ready = Promise.withResolvers<void>();
 
   constructor(
     redis: Redis,
@@ -72,6 +87,7 @@ class StreamSubscription implements Subscription {
     consumer: string,
     handler: (e: ProtonEvent) => Promise<void>,
     opts: ResolvedOptions,
+    startId: GroupStartId,
   ) {
     this.#redis = redis;
     this.group = group;
@@ -79,6 +95,7 @@ class StreamSubscription implements Subscription {
     this.#consumer = consumer;
     this.#handler = handler;
     this.#opts = opts;
+    this.#startId = startId;
     this.#loop = this.#run();
   }
 
@@ -88,33 +105,75 @@ class StreamSubscription implements Subscription {
     this.#redis.disconnect();
   }
 
+  /**
+   * The read loop.
+   *
+   * Group creation is *inside* the loop's error handling, not before it. It used
+   * to be a bare `await` ahead of the `while`, which had two consequences, both
+   * silent. A Redis that was not up yet — entirely normal at boot — rejected the
+   * promise this constructor never awaits, producing an unhandled rejection and
+   * handing the caller a `Subscription` object that would never consume
+   * anything. And because `#ensureGroups` ran exactly once, a group deleted
+   * underneath a running subscription was never recreated: XREADGROUP answers
+   * NOGROUP forever, the catch below swallows it, and the process looks healthy
+   * while every consumer in it is deaf. That was survivable with three
+   * subscriptions; it is not with one per module.
+   *
+   * `#ensured` makes the common path free — after the first success it is a
+   * boolean check, not a round trip.
+   */
   async #run(): Promise<void> {
-    await this.#ensureGroups();
-
     while (this.#running) {
       try {
+        await this.#ensureGroups();
         await this.#reclaimStale();
         if (!this.#running) break;
         await this.#readNew();
-      } catch {
+      } catch (error) {
         if (!this.#running) break;
-        // Connection hiccup or a group vanishing under us — pause briefly so a
-        // persistent failure cannot become a hot loop.
+
+        // NOGROUP means the group vanished — re-create it on the next pass
+        // rather than spinning against a group that is not there.
+        if (String(error).includes('NOGROUP')) this.#ensured = false;
+
+        this.#opts.onSubscriptionError?.(this.group, error);
+        // Pause briefly so a persistent failure cannot become a hot loop.
         await Bun.sleep(50);
       }
     }
   }
 
   async #ensureGroups(): Promise<void> {
+    if (this.#ensured) return;
+
     for (const type of this.#types) {
       try {
         // MKSTREAM so a subscriber may start before the first publisher.
-        await this.#redis.xgroup('CREATE', streamKey(type), this.group, '0', 'MKSTREAM');
+        await this.#redis.xgroup('CREATE', streamKey(type), this.group, this.#startId, 'MKSTREAM');
       } catch (error) {
         // Another process created it first; that is the normal case on restart.
         if (!String(error).includes('BUSYGROUP')) throw error;
       }
     }
+
+    // Only after every group exists, so a failure part-way through is retried
+    // from the top rather than leaving some streams unsubscribed.
+    this.#ensured = true;
+    this.#ready.resolve();
+  }
+
+  /**
+   * Resolves once every group this subscription needs exists.
+   *
+   * A group created at `'$'` anchors to the stream's last id *at creation time*,
+   * so anything published between `subscribe()` returning and the CREATE landing
+   * is invisible to it forever — there is no cursor to fall back on. Callers that
+   * publish into their own subscription (every integration test, and any process
+   * that starts a publisher in the same breath as a consumer) need to await this
+   * first. A long-running worker consuming another process's stream does not.
+   */
+  get ready(): Promise<void> {
+    return this.#ready.promise;
   }
 
   /**
@@ -205,7 +264,7 @@ class StreamSubscription implements Subscription {
       // Deliberately NOT acked. The entry stays pending and is reclaimed after
       // claimIdleMs — this is the redelivery that Gate 0's kill-the-worker
       // criterion depends on.
-      this.#opts.onHandlerError?.(event, error);
+      this.#opts.onHandlerError?.(event, error, this.group);
     }
   }
 
@@ -216,7 +275,7 @@ class StreamSubscription implements Subscription {
     if (entry) {
       const event = parseEntry(entry[1]);
       await this.#redis.xadd(dlqKey(type), '*', FIELD, entry[1][1] ?? '');
-      if (event) this.#opts.onDeadLetter?.(event, deliveries);
+      if (event) this.#opts.onDeadLetter?.(event, deliveries, this.group);
     }
 
     await this.#redis.xack(key, this.group, id);
@@ -260,6 +319,7 @@ export class RedisStreamsEventBus implements EventBus {
     group: string,
     types: EventType[],
     handler: (e: ProtonEvent) => Promise<void>,
+    options: SubscribeOptions = {},
   ): Subscription {
     // Blocking reads occupy a connection, so each subscription gets its own.
     const connection = this.#redis.duplicate();
@@ -272,6 +332,7 @@ export class RedisStreamsEventBus implements EventBus {
       consumer,
       handler,
       this.#opts,
+      options.startId ?? this.#opts.groupStartId,
     );
     this.#subscriptions.add(subscription);
     return subscription;

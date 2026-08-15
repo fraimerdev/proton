@@ -1,0 +1,22 @@
+{
+  "name": "@proton/module-antiraid",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@proton/fixtures": "workspace:*",
+    "ioredis": "^6.0.0"
+  }
+}

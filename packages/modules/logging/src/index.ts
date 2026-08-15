@@ -57,25 +57,20 @@ export { type MessageLogRow, messageLogs, type NewMessageLogRow } from './table.
  * keeps that dependency explicit and the handlers testable; when the framework
  * grows a port, this becomes an ordinary constant.
  *
- * Known blockers, all outside a module's remit, all of which mean the manifest
- * below is declared correctly but cannot yet run:
+ * This module was dead on arrival for its whole first phase, in a way nothing
+ * detected: all three of the event types it subscribes to were declared in
+ * `EVENT_TYPES` and emitted by nothing, so its listener could never fire while
+ * every one of its tests passed. Both halves are now closed — the normaliser has
+ * MESSAGE_UPDATE, MESSAGE_DELETE and MESSAGE_DELETE_BULK arms, and
+ * `packages/modules/registry`'s test asserts every manifest's listener types
+ * against the set the normaliser actually emits, so the failure cannot recur
+ * silently.
  *
- *  1. `apps/gateway`'s normaliser maps MESSAGE_CREATE and nothing else.
- *     `message.updated`, `message.deleted` and `message.bulk_deleted` exist in
- *     `EVENT_TYPES` but no dispatch is ever turned into one, so these listeners
- *     have nothing to consume. Three cases in one switch statement.
- *  2. `apps/worker`'s `ModuleRuntime` subscribes only to `interaction.command`
- *     and dispatches only `manifest.commands`. Nothing anywhere reads
- *     `manifest.listeners`, so no module can react to an event today.
- *  3. Nothing executes `manifest.jobs`. `ScheduledJob` is data with no runner, so
- *     the partition maintenance declared below never fires — which means
- *     partitions are neither created nor dropped, and `append` falls back to
- *     creating them on demand. `runMessageLogMaintenance` is exported so a
- *     runner can call it the moment one exists.
- *  4. Nothing runs `manifest.migrations`. The table therefore ships in the core
- *     migration set as `packages/db/drizzle/0002_message_logs.sql`, hand-written
- *     because drizzle-kit cannot express `PARTITION BY`. Listing it here as well
- *     would be two copies of the same DDL with no mechanism to keep them equal.
+ * One limitation remains, and it is not a blocker: nothing runs
+ * `manifest.migrations`. The table therefore ships in the core migration set as
+ * `packages/db/drizzle/0002_message_logs.sql`, hand-written because drizzle-kit
+ * cannot express `PARTITION BY`. Listing it here as well would be two copies of
+ * the same DDL with no mechanism to keep them equal.
  */
 export function createLoggingModule(
   deps: LoggingDeps = {},

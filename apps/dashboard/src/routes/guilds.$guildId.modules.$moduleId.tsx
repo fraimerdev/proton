@@ -1,12 +1,14 @@
 import type { FieldDescriptor } from '@proton/core';
 import { zodToDescriptors } from '@proton/core';
 import type { EscalationRung } from '@proton/module-cases';
+import type { RoleReward } from '@proton/module-leveling';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useMemo, useState } from 'react';
 import { z } from 'zod';
 import { EscalationLadderEditor } from '../components/cases/escalation-ladder.tsx';
 import { GeneratedForm } from '../components/form/generated-form.tsx';
+import { RoleRewardsEditor } from '../components/leveling/role-rewards.tsx';
 import { toConfig, toFormValues } from '../lib/config-paths.ts';
 import {
   getGuildChannels,
@@ -65,9 +67,12 @@ function ModuleSettings(): ReactElement {
 
   const [values, setValues] = useState(() => toFormValues(descriptors, view.config));
 
-  // Outside the generator's vocabulary by design (§9) — see the editor.
+  // Outside the generator's vocabulary by design (§9) — see the editors.
   const [ladder, setLadder] = useState<EscalationRung[]>(
     () => (view.config.escalationLadder ?? []) as unknown as EscalationRung[],
+  );
+  const [rewards, setRewards] = useState<RoleReward[]>(
+    () => (view.config.roleRewards ?? []) as unknown as RoleReward[],
   );
 
   async function save(): Promise<void> {
@@ -78,6 +83,7 @@ function ModuleSettings(): ReactElement {
       // schema defaults.
       const config = toConfig(descriptors, values, view.config);
       if (moduleId === 'cases') config.escalationLadder = ladder;
+      if (moduleId === 'leveling') config.roleRewards = rewards;
       if (moduleId === 'permissions') config.overrides = pruneOverrides(config.overrides);
 
       await updateModuleConfig({ data: { guildId, moduleId, enabled, config } });
@@ -128,6 +134,13 @@ function ModuleSettings(): ReactElement {
         <section className="subsection">
           <h2>Warn escalation</h2>
           <EscalationLadderEditor rungs={ladder} onChange={setLadder} />
+        </section>
+      ) : null}
+
+      {moduleId === 'leveling' ? (
+        <section className="subsection">
+          <h2>Role rewards</h2>
+          <RoleRewardsEditor rewards={rewards} roles={roles} onChange={setRewards} />
         </section>
       ) : null}
 

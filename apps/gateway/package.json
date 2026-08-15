@@ -5,6 +5,7 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
+    "./env": "./src/env.ts",
     "./normaliser": "./src/normaliser.ts",
     "./session-store": "./src/session-store.ts"
   },

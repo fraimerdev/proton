@@ -3,7 +3,7 @@ import {
   type ActionRequest,
   type ActionResult,
   type CommandContext,
-  isDestructive,
+  dryRunFor,
   parseDuration,
 } from '@proton/core';
 import type { ModerationConfig } from './config.ts';
@@ -39,6 +39,21 @@ export interface ActionPlan {
   expiresAt?: Date;
   /** Past tense, as the moderator should read it once it has happened. */
   success: string;
+  /**
+   * Run after the executor genuinely recorded the action, and never otherwise.
+   *
+   * Exists for `/warn`, which has to publish `moderation.warned` so the
+   * escalation ladder can trigger on it. Deliberately gated on `executed`: a
+   * warn refused by a precheck, or discarded as a duplicate, must not advance a
+   * ladder that could time somebody out. A dry run does not fire it either —
+   * the case row is a record of what *would* have happened, and cascading from
+   * it would make development runs escalate for real.
+   *
+   * Failures here are logged, never surfaced as the command failing: by this
+   * point the action has happened, and telling the moderator it did not would
+   * be worse than the missed event.
+   */
+  onRecorded?(): Promise<void>;
 }
 
 export type PlanResult = ActionPlan | Refusal;
@@ -46,21 +61,6 @@ export type PlanResult = ActionPlan | Refusal;
 /** Generic so it narrows a parsed option as readily as it narrows a plan. */
 export function isRefusal<T extends object>(value: T | Refusal): value is Refusal {
   return 'refusal' in value;
-}
-
-/**
- * I12: destructive kinds are planned but not performed outside production.
- *
- * Derived from core's `isDestructive` rather than a list of our own, so a kind
- * that becomes destructive later cannot stay live here by omission. Read from
- * the environment at call time so a test can pin it explicitly instead of
- * inheriting whatever the runner happened to set.
- */
-export function dryRunFor(
-  kind: ActionKind,
-  env: string | undefined = process.env.NODE_ENV,
-): boolean {
-  return isDestructive(kind) && env !== 'production';
 }
 
 /**
@@ -155,6 +155,23 @@ export async function perform(
       kind: plan.kind,
       code: result.failure?.code,
     });
+  }
+
+  if (result.status === 'executed' && plan.onRecorded) {
+    try {
+      await plan.onRecorded();
+    } catch (error) {
+      // The action already happened. Failing the command now would tell the
+      // moderator their warn did not land when it did; the missed event is the
+      // smaller loss, and it is the one worth a log line naming it.
+      ctx.logger.error(
+        `${plan.kind} was recorded, but the follow-up event could not be published, so any ` +
+          `rule triggered on it will not fire for this action: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        { guildId: ctx.guildId, moduleId: MODULE_ID, kind: plan.kind },
+      );
+    }
   }
 
   await reply(ctx, describe(plan, result));

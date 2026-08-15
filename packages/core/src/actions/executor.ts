@@ -126,6 +126,21 @@ export class DefaultActionExecutor implements ActionExecutor {
         return { caseId, status: 'dry_run' };
       }
 
+      /**
+       * A ledger-only kind is complete once it is recorded.
+       *
+       * It has already been through validation, the I8 prechecks and the I4
+       * dedupe claim — everything the executor exists to guarantee — and the
+       * only remaining step, the REST call, is one that does not exist for it.
+       * Reported as `executed` rather than a status of its own: from the
+       * caller's point of view the warn happened, and inventing a fifth status
+       * would make every existing `status === 'executed'` check subtly wrong.
+       */
+      if ('ledgerOnly' in payload) {
+        const { caseId } = await this.#record(request);
+        return { caseId, status: 'executed' };
+      }
+
       const response = await this.#deps.rest.request(payload.call);
 
       if (response.status >= 400) {

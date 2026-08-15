@@ -18,8 +18,11 @@ export {
   ACTION_KINDS,
   type ActionKind,
   DESTRUCTIVE_KINDS,
+  dryRunFor,
   isActionKind,
   isDestructive,
+  isLedgerOnly,
+  LEDGER_ONLY_KINDS,
   REQUIRED_PERMISSIONS,
   REVERSAL_OF,
   requiredPermissionsFor,
@@ -37,6 +40,7 @@ export {
 } from './actions/resolve-context.ts';
 export {
   HttpRestProxyClient,
+  type RestFile,
   type RestProxyClient,
   type RestRequestOptions,
   type RestResponse,
@@ -100,7 +104,20 @@ export {
   tryParseDuration,
 } from './config/duration.ts';
 export { createEnv, EnvValidationError } from './env.ts';
-export type { EventBus, Subscription } from './events/bus.ts';
+export {
+  AUDIT_LOG_EVENT_TYPES,
+  type AuditLogEventPayload,
+  type AuditLogEventType,
+  auditLogEventPayloadSchema,
+  isAuditLogEventType,
+  requiresAuditLog,
+} from './events/audit-log.ts';
+export type {
+  EventBus,
+  GroupStartId,
+  SubscribeOptions,
+  Subscription,
+} from './events/bus.ts';
 export {
   DLQ_PREFIX,
   dlqKey,
@@ -192,6 +209,7 @@ export {
   type RuleFacts,
 } from './rules/facts.ts';
 export {
+  crossedKeyFor,
   RATE_WINDOW_GUILD_SCOPE,
   RATE_WINDOW_PREFIX,
   type RateWindowHit,

@@ -4,6 +4,7 @@ import { toMessageLogEntries } from '../src/events.ts';
 import {
   AUTHOR,
   CHANNEL,
+  EDITED_AT,
   GUILD,
   MESSAGE,
   messageBulkDeleted,
@@ -35,9 +36,18 @@ describe('message.updated', () => {
     expect(toMessageLogEntries(messageUpdated(), optedIn)[0]?.contentBefore).toBeNull();
   });
 
+  /**
+   * The row id is the event id, so a redelivery writes the same row rather than
+   * a second one (I4). The event id itself is the normaliser's, which carries
+   * `edited_timestamp` — without it an edit would collide with the post it
+   * edits, and two successive edits with each other.
+   */
   test('reuses the event id, so a redelivery collides with itself (I4)', () => {
     expect(toMessageLogEntries(messageUpdated(), optedIn)[0]?.id).toBe(
-      `message.updated:${MESSAGE}`,
+      `message.updated:${MESSAGE}:${EDITED_AT}`,
+    );
+    expect(toMessageLogEntries(messageUpdated(), optedIn)[0]?.id).toBe(
+      toMessageLogEntries(messageUpdated(), optedIn)[0]?.id ?? '',
     );
   });
 

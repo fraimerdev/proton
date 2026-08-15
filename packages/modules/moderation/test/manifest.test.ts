@@ -13,7 +13,7 @@ describe('moderation manifest', () => {
     const registry = new ModuleRegistry();
 
     expect(() => registry.register(moderationModule)).not.toThrow();
-    expect(registry.get('moderation')?.commands).toHaveLength(8);
+    expect(registry.get('moderation')?.commands).toHaveLength(9);
   });
 
   test('command names match their registration payloads', () => {

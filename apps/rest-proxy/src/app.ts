@@ -1,7 +1,21 @@
-import type { InternalRequest, REST, RequestMethod, RouteLike } from '@discordjs/rest';
+import type { InternalRequest, RawFile, REST, RequestMethod, RouteLike } from '@discordjs/rest';
 import { Hono } from 'hono';
 
 const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'DELETE']);
+
+interface BlobLike {
+  name?: string;
+  type?: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+function isBlobLike(value: unknown): value is BlobLike {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as BlobLike).arrayBuffer === 'function'
+  );
+}
 
 /**
  * Discord REST egress for every Proton process (PLAN.md I2).
@@ -30,13 +44,60 @@ export function createProxyApp(rest: REST): Hono {
     const method = c.req.method as RequestMethod;
 
     let body: unknown;
+    let files: RawFile[] | undefined;
+
     if (!BODYLESS_METHODS.has(c.req.method)) {
-      const raw = await c.req.text();
-      if (raw) {
-        try {
-          body = JSON.parse(raw);
-        } catch {
-          return c.json({ error: 'invalid JSON body' }, 400);
+      /**
+       * Two encodings, because Discord accepts two.
+       *
+       * Anything with an attachment — a rank card, a welcome card — arrives as
+       * `multipart/form-data` with the JSON in a `payload_json` field and the
+       * bytes in `files[n]` parts. Reading that as text and running `JSON.parse`
+       * over it, which is what this did before Phase 3, produces a 400 naming
+       * the multipart boundary as invalid JSON: a confusing error for a request
+       * that was perfectly well-formed.
+       *
+       * `@discordjs/rest` re-encodes the multipart body itself from `body` plus
+       * `files`, so the boundary this proxy received is not the one Discord
+       * sees. That is fine and in fact necessary — the parts have to be rebuilt
+       * anyway once the route and headers are attached.
+       */
+      if (c.req.header('content-type')?.includes('multipart/form-data')) {
+        const form = await c.req.formData().catch(() => null);
+        if (!form) return c.json({ error: 'invalid multipart body' }, 400);
+
+        const payload = form.get('payload_json');
+        if (typeof payload === 'string' && payload) {
+          try {
+            body = JSON.parse(payload);
+          } catch {
+            return c.json({ error: 'invalid JSON in payload_json' }, 400);
+          }
+        }
+
+        files = [];
+        for (const [key, value] of form.entries()) {
+          if (key === 'payload_json') continue;
+          // Duck-typed rather than `instanceof File`: Hono types a form entry as
+          // a string, so a class check narrows to `never` and the branch is
+          // dropped. The runtime value is a Blob whenever a part carried bytes.
+          const part = value as unknown;
+          if (!isBlobLike(part)) continue;
+
+          files.push({
+            name: part.name || key,
+            data: Buffer.from(await part.arrayBuffer()),
+            contentType: part.type || 'application/octet-stream',
+          });
+        }
+      } else {
+        const raw = await c.req.text();
+        if (raw) {
+          try {
+            body = JSON.parse(raw);
+          } catch {
+            return c.json({ error: 'invalid JSON body' }, 400);
+          }
         }
       }
     }
@@ -56,6 +117,7 @@ export function createProxyApp(rest: REST): Hono {
         method,
         query: url.searchParams,
         ...(body !== undefined ? { body } : {}),
+        ...(files && files.length > 0 ? { files } : {}),
         ...(userAuth ? { auth: false, headers: { Authorization: userAuth } } : {}),
       };
 

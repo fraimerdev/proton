@@ -3,8 +3,8 @@ import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { ApiClient } from '../lib/api-client.ts';
-import { auth } from '../lib/auth.ts';
 import { fetchGuildChannels, fetchGuildRoles, fetchUserGuilds } from '../lib/discord.ts';
+import { getDiscordAccessToken } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { administrableGuilds } from '../lib/guild-access.ts';
 import {
@@ -32,13 +32,12 @@ async function ipHash(): Promise<string | undefined> {
 
 export const listGuilds = createServerFn({ method: 'GET' })
   .middleware([requireSession])
-  .handler(async () => {
-    const accounts = await auth.api.listUserAccounts({ headers: getRequest().headers });
-    const token = (
-      accounts?.find((a) => a.providerId === 'discord') as { accessToken?: string } | undefined
-    )?.accessToken;
-
-    if (!token) return { guilds: [] };
+  .handler(async ({ context }) => {
+    // No `return { guilds: [] }` on failure. Reporting "you administer no
+    // servers" to someone who administers five is worse than an error, because
+    // it looks like a settled answer and sends them looking at their Discord
+    // permissions instead of at us. Let it throw.
+    const token = await getDiscordAccessToken(getRequest().headers, context.session.user.id);
 
     return { guilds: administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token)) };
   });

@@ -1,0 +1,35 @@
+{
+  "t": "VOICE_STATE_UPDATE",
+  "s": 31,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000009",
+    "user_id": "100000000000000001",
+    "session_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "deaf": false,
+    "mute": false,
+    "self_deaf": false,
+    "self_mute": false,
+    "self_stream": false,
+    "self_video": false,
+    "suppress": false,
+    "request_to_speak_timestamp": null,
+    "member": {
+      "user": {
+        "id": "100000000000000001",
+        "username": "tester",
+        "discriminator": "0",
+        "global_name": "Tester",
+        "avatar": null,
+        "bot": false
+      },
+      "roles": [],
+      "joined_at": "2026-08-14T09:00:00.000000+00:00",
+      "deaf": false,
+      "mute": false,
+      "flags": 0,
+      "communication_disabled_until": null
+    }
+  }
+}

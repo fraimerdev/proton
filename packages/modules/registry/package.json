@@ -12,10 +12,24 @@
   },
   "dependencies": {
     "@proton/core": "workspace:*",
+    "@proton/module-antinuke": "workspace:*",
+    "@proton/module-antiraid": "workspace:*",
+    "@proton/module-autorole": "workspace:*",
+    "@proton/module-backup": "workspace:*",
     "@proton/module-cases": "workspace:*",
+    "@proton/module-leveling": "workspace:*",
     "@proton/module-logging": "workspace:*",
     "@proton/module-moderation": "workspace:*",
     "@proton/module-permissions": "workspace:*",
-    "@proton/module-ping": "workspace:*"
+    "@proton/module-phishing": "workspace:*",
+    "@proton/module-ping": "workspace:*",
+    "@proton/module-rolemenu": "workspace:*",
+    "@proton/module-starboard": "workspace:*",
+    "@proton/module-verification": "workspace:*",
+    "@proton/module-welcome": "workspace:*"
+  },
+  "devDependencies": {
+    "@proton/gateway": "workspace:*",
+    "discord-api-types": "^0.38.53"
   }
 }

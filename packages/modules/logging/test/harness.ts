@@ -1,4 +1,5 @@
 import type { ActionExecutor, Logger, ModuleContext, ProtonEvent } from '@proton/core';
+import { normalise, type RawDispatch } from '@proton/gateway/normaliser';
 import type { LoggingConfig } from '../src/config.ts';
 import { loggingDefaultConfig } from '../src/config.ts';
 import { partitionName } from '../src/partitions.ts';
@@ -95,33 +96,50 @@ interface EventOverrides {
   payload?: Record<string, unknown>;
 }
 
+export const EDITED_AT = '2026-08-14T13:45:12.000Z';
+
+/**
+ * Build the event by running a raw dispatch through the **real** normaliser.
+ *
+ * These used to be hand-written, with ids like `message.updated:<messageId>` and
+ * `message.bulk_deleted:<id>,<id>,<id>`. Production emits neither: an update's
+ * key carries `edited_timestamp` so successive edits stay distinct, and a bulk
+ * delete's is a hashed digest of the sorted id set. So every assertion about a
+ * row id was pinning a shape nothing sends, and the whole module was tested
+ * against a vocabulary of its own — which is how it shipped a listener wired to
+ * three event types the gateway did not emit at all, with a green suite.
+ *
+ * Going through `normalise` costs a devDependency on `@proton/gateway` and buys
+ * the guarantee that if the gateway changes shape, these tests fail rather than
+ * quietly describing a past.
+ */
 function event(
-  type: ProtonEvent['type'],
-  naturalKey: string,
+  raw: RawDispatch,
   payload: Record<string, unknown>,
   overrides: EventOverrides,
 ): ProtonEvent {
+  const normalised = normalise({ ...raw, d: { ...raw.d, ...payload } });
+  if (!normalised) throw new Error(`the normaliser produced nothing for ${raw.t}`);
+
   return {
-    // Same shape the gateway derives: deterministic, so a redelivery reuses it.
-    id: overrides.id ?? `${type}:${naturalKey}`,
-    type,
-    guildId: overrides.guildId === undefined ? GUILD : overrides.guildId,
+    ...normalised,
+    ...(overrides.id !== undefined ? { id: overrides.id } : {}),
+    ...(overrides.guildId !== undefined ? { guildId: overrides.guildId } : {}),
     occurredAt: overrides.occurredAt ?? OCCURRED_AT,
-    payload: { ...payload, ...overrides.payload },
+    payload: { ...(normalised.payload as Record<string, unknown>), ...overrides.payload },
   };
 }
 
 export function messageUpdated(overrides: EventOverrides = {}): ProtonEvent {
   return event(
-    'message.updated',
-    MESSAGE,
+    { t: 'MESSAGE_UPDATE', s: 1, op: 0, d: {} },
     {
       id: MESSAGE,
       channel_id: CHANNEL,
       guild_id: GUILD,
       author: { id: AUTHOR },
       content: 'the edited text',
-      edited_timestamp: '2026-08-14T13:45:12.000Z',
+      edited_timestamp: EDITED_AT,
     },
     overrides,
   );
@@ -129,8 +147,7 @@ export function messageUpdated(overrides: EventOverrides = {}): ProtonEvent {
 
 export function messageDeleted(overrides: EventOverrides = {}): ProtonEvent {
   return event(
-    'message.deleted',
-    MESSAGE,
+    { t: 'MESSAGE_DELETE', s: 1, op: 0, d: {} },
     { id: MESSAGE, channel_id: CHANNEL, guild_id: GUILD },
     overrides,
   );
@@ -138,8 +155,7 @@ export function messageDeleted(overrides: EventOverrides = {}): ProtonEvent {
 
 export function messageBulkDeleted(ids: string[], overrides: EventOverrides = {}): ProtonEvent {
   return event(
-    'message.bulk_deleted',
-    ids.join(','),
+    { t: 'MESSAGE_DELETE_BULK', s: 1, op: 0, d: {} },
     { ids, channel_id: CHANNEL, guild_id: GUILD },
     overrides,
   );

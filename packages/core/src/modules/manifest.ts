@@ -26,6 +26,28 @@ export interface ModuleContext<C = unknown> {
   config: C;
   executor: ActionExecutor;
   logger: Logger;
+  /**
+   * Emit one of the event types this module declares in `emits`.
+   *
+   * The narrowest thing that makes `xp.level_gained` (§4-P1) possible without
+   * handing a module the bus. Three properties are what keep it a port rather
+   * than a hole in I3:
+   *
+   *  - **The runtime stamps the guild.** A module cannot publish into a guild
+   *    other than the one its context is for.
+   *  - **The runtime derives the id** from the type, the guild and the module's
+   *    `naturalKey`, so a redelivered cause produces a redelivered effect and
+   *    the executor dedupes it (I4). A module cannot mint a random id and defeat
+   *    that.
+   *  - **`emits` is an allowlist**, enforced at registration. A module cannot
+   *    publish another module's event type, so nothing can forge a
+   *    `moderation.warned` to drive someone else's escalation ladder.
+   *
+   * Optional because a module that emits nothing should not have to think about
+   * it, and because `apps/api` and the dashboard build the same manifests with
+   * no bus in reach.
+   */
+  publish?(type: EventType, naturalKey: string, payload: unknown): Promise<void>;
 }
 
 export interface CommandContext<C = unknown> extends ModuleContext<C> {
@@ -99,6 +121,17 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   dependsOn?: string[];
   commands?: CommandDefinition<z.infer<C>>[];
   listeners?: EventListener<z.infer<C>>[];
+  /**
+   * Event types this module may publish through `ModuleContext.publish`.
+   *
+   * An allowlist, checked at registration and again at runtime. Declaring a type
+   * here is also what tells the emission assertion in
+   * `packages/modules/registry` that the type has a producer — without it, a
+   * module subscribing to `xp.level_gained` would be reported as listening for
+   * something nothing emits, which is exactly the check that caught `logging`
+   * being dead for a whole phase.
+   */
+  emits?: EventType[];
   /**
    * Preset rules and recurring jobs the module ships with (§4-P2).
    *

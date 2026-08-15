@@ -17,6 +17,21 @@ export interface GuildRole {
    * members whose highest role sits strictly below its own.
    */
   position: number;
+  /**
+   * Discord owns this role — a booster role, an integration's role, another
+   * bot's role.
+   *
+   * Permission computation ignores it, like `position`. It matters to anything
+   * that *assigns* roles: Discord answers 403 for a managed role regardless of
+   * hierarchy, so attempting one spends a rate-limit token to be told no, and the
+   * 403 names neither the role nor the reason. Sticky-role restore checks it.
+   *
+   * Optional because a `GuildState` built before this field existed, or from a
+   * payload that omitted it, should read as "not known to be managed" rather than
+   * failing to parse — the check that consumes it fails open, and a role that is
+   * genuinely managed still fails at Discord with the behaviour it had before.
+   */
+  managed?: boolean;
 }
 
 export interface PermissionContext {

@@ -116,11 +116,19 @@ class FakeRest implements RestProxyClient {
   }
 }
 
+export interface PublishedEvent {
+  type: string;
+  naturalKey: string;
+  payload: unknown;
+}
+
 export interface Harness {
   rest: FakeRest;
   recorder: MemoryRecorder;
   scheduled: Array<{ request: ActionRequest; caseId: string }>;
   logs: Array<{ level: string; message: string }>;
+  /** What the command published through the `emits` port, in order. */
+  published: PublishedEvent[];
   /** REST calls that are not the interaction acknowledgement. */
   discordCalls(): RestRequestOptions[];
   /** Recorded cases, minus the one every reply writes. */
@@ -160,6 +168,7 @@ export function harness(): Harness {
   const recorder = new MemoryRecorder();
   const scheduled: Array<{ request: ActionRequest; caseId: string }> = [];
   const logs: Array<{ level: string; message: string }> = [];
+  const published: PublishedEvent[] = [];
   // Shared across runs so a redelivered interaction meets the claim the first
   // delivery made (I4).
   const dedupe = new MemoryDedupe();
@@ -183,6 +192,7 @@ export function harness(): Harness {
     recorder,
     scheduled,
     logs,
+    published,
     discordCalls,
     replyContent,
     cases: () => recorder.recorded.filter((c) => c.kind !== 'interaction_reply'),
@@ -232,6 +242,11 @@ export function harness(): Harness {
         options: createCommandOptions(options),
         interaction: { id: '600000000000000001', token: 'interaction-token' },
         idempotencyKey: overrides.idempotencyKey ?? newId(),
+        // What `ModuleListenerRuntime` binds in production, minus the allowlist
+        // check — that belongs to the runtime and is tested against the registry.
+        publish: async (type, naturalKey, payload) => {
+          published.push({ type, naturalKey, payload });
+        },
       };
 
       await definition.handler(ctx);

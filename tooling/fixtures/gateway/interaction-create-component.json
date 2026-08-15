@@ -1,0 +1,42 @@
+{
+  "t": "INTERACTION_CREATE",
+  "s": 51,
+  "op": 0,
+  "d": {
+    "id": "1500000000000000002",
+    "application_id": "800000000000000001",
+    "type": 3,
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000001",
+    "token": "component-interaction-token",
+    "version": 1,
+    "app_permissions": "563603924254720",
+    "data": {
+      "custom_id": "proton:rolemenu:colours:red",
+      "component_type": 2
+    },
+    "message": {
+      "id": "1400000000000000009",
+      "channel_id": "500000000000000001",
+      "type": 0,
+      "content": "Pick a colour",
+      "flags": 0
+    },
+    "member": {
+      "user": {
+        "id": "100000000000000002",
+        "username": "newcomer",
+        "discriminator": "0",
+        "global_name": "Newcomer",
+        "avatar": null,
+        "bot": false
+      },
+      "roles": ["700000000000000001"],
+      "joined_at": "2026-08-14T09:00:00.000000+00:00",
+      "deaf": false,
+      "mute": false,
+      "flags": 0,
+      "communication_disabled_until": null
+    }
+  }
+}

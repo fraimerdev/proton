@@ -1,0 +1,445 @@
+{
+  "_comment": "PLAN.md §12 Gate 2's literal acceptance input: 20 channel deletions by one actor inside 5 seconds. The entry ids are real snowflakes 240ms apart, so the first and last differ by 4560ms — the window is in the ids themselves, not in a field a test can quietly widen. Every entry carries the same user_id (200000000000000009), a compromised admin; anti-nuke keys on that actor plus the window and never on arrival order, because audit-log delivery is unordered (§15).",
+  "dispatches": [
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 120,
+      "op": 0,
+      "d": {
+        "id": "1537751140794499072",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001100",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-01"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 121,
+      "op": 0,
+      "d": {
+        "id": "1537751141801132033",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001101",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-02"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 122,
+      "op": 0,
+      "d": {
+        "id": "1537751142807764994",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001102",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-03"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 123,
+      "op": 0,
+      "d": {
+        "id": "1537751143814397955",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001103",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-04"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 124,
+      "op": 0,
+      "d": {
+        "id": "1537751144821030916",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001104",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-05"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 125,
+      "op": 0,
+      "d": {
+        "id": "1537751145827663877",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001105",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-06"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 126,
+      "op": 0,
+      "d": {
+        "id": "1537751146834296838",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001106",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-07"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 127,
+      "op": 0,
+      "d": {
+        "id": "1537751147840929799",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001107",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-08"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 128,
+      "op": 0,
+      "d": {
+        "id": "1537751148847562760",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001108",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-09"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 129,
+      "op": 0,
+      "d": {
+        "id": "1537751149854195721",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001109",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-10"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 130,
+      "op": 0,
+      "d": {
+        "id": "1537751150860828682",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001110",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-11"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 131,
+      "op": 0,
+      "d": {
+        "id": "1537751151867461643",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001111",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-12"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 132,
+      "op": 0,
+      "d": {
+        "id": "1537751152874094604",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001112",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-13"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 133,
+      "op": 0,
+      "d": {
+        "id": "1537751153880727565",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001113",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-14"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 134,
+      "op": 0,
+      "d": {
+        "id": "1537751154887360526",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001114",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-15"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 135,
+      "op": 0,
+      "d": {
+        "id": "1537751155893993487",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001115",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-16"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 136,
+      "op": 0,
+      "d": {
+        "id": "1537751156900626448",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001116",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-17"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 137,
+      "op": 0,
+      "d": {
+        "id": "1537751157907259409",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001117",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-18"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 138,
+      "op": 0,
+      "d": {
+        "id": "1537751158913892370",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001118",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-19"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    },
+    {
+      "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+      "s": 139,
+      "op": 0,
+      "d": {
+        "id": "1537751159920525331",
+        "guild_id": "900000000000000001",
+        "action_type": 12,
+        "user_id": "200000000000000009",
+        "target_id": "500000000000001119",
+        "changes": [
+          {
+            "key": "name",
+            "old_value": "channel-20"
+          },
+          {
+            "key": "type",
+            "old_value": 0
+          }
+        ]
+      }
+    }
+  ]
+}

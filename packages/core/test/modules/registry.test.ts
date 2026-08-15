@@ -207,6 +207,39 @@ describe('ModuleRegistry gating', () => {
     expect(status.disabledReason?.humanReason).toContain('Server Settings');
   });
 
+  /**
+   * The audit-log path specifically (§8 Phase 2). Discord delivers
+   * GUILD_AUDIT_LOG_ENTRY_CREATE only to bots holding VIEW_AUDIT_LOG and only
+   * under the GUILD_MODERATION intent, and it signals neither refusal — a
+   * security module without them looks exactly like a peaceful guild. This is
+   * the only place that difference can be made visible, so it is pinned here
+   * rather than left to the generic permission case above.
+   */
+  test('disables an audit-log consumer that lacks VIEW_AUDIT_LOG or GUILD_MODERATION', () => {
+    const registry = new ModuleRegistry();
+    registry.register(
+      manifest({
+        name: 'Anti-Nuke',
+        requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildModeration],
+        requiredPermissions: [Permissions.ViewAuditLog],
+      }),
+    );
+
+    const noIntent = registry.evaluate('ping', env);
+
+    expect(noIntent.disabledReason?.code).toBe('missing_intent');
+    expect(noIntent.disabledReason?.humanReason).toContain('GuildModeration');
+
+    const withIntent = registry.evaluate('ping', {
+      ...env,
+      grantedIntents: env.grantedIntents | GatewayIntentBits.GuildModeration,
+    });
+
+    expect(withIntent.disabledReason?.code).toBe('missing_permission');
+    expect(withIntent.disabledReason?.humanReason).toContain('ViewAuditLog');
+    expect(withIntent.disabledReason?.humanReason).toContain('Server Settings');
+  });
+
   test('disables a module whose dependency is not loaded', () => {
     const registry = new ModuleRegistry();
     registry.register(manifest({ dependsOn: ['cases'] }));
@@ -267,5 +300,64 @@ describe('aggregate requirements', () => {
 
     expect(registry.all().map((m) => m.id)).toEqual(['ping', 'echo']);
     expect(registry.evaluate('echo', env).enabled).toBe(true);
+  });
+});
+
+/**
+ * The `emits` allowlist — the narrow opening in I3 that lets a module publish
+ * `xp.level_gained` without being handed the bus.
+ *
+ * What is being protected here is not the ability to publish, which is
+ * harmless in itself, but the ability to publish *someone else's* event type. A
+ * module that could forge `moderation.warned` could drive another guild's
+ * escalation ladder into banning people, and nothing downstream would be able to
+ * tell the forged event from a real one — they are the same shape by design.
+ */
+describe('emits allowlist', () => {
+  test('a module may publish only what it declares', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ id: 'leveling', emits: ['xp.level_gained'] }));
+
+    expect(registry.mayEmit('leveling', 'xp.level_gained')).toBe(true);
+    expect(registry.mayEmit('leveling', 'moderation.warned')).toBe(false);
+  });
+
+  test('a module declaring nothing may publish nothing', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest());
+
+    expect(registry.mayEmit('ping', 'xp.level_gained')).toBe(false);
+  });
+
+  test('an unregistered module may publish nothing', () => {
+    expect(new ModuleRegistry().mayEmit('ghost', 'xp.level_gained')).toBe(false);
+  });
+
+  /**
+   * This is the set the gateway's `NORMALISED_EVENT_TYPES` is unioned with, so
+   * that a listener on an internal event is not reported as subscribing to
+   * something nothing emits.
+   */
+  test('collects every declared type across modules, without duplicates', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ id: 'leveling', emits: ['xp.level_gained'] }));
+    registry.register(manifest({ id: 'cases', emits: ['moderation.warned', 'xp.level_gained'] }));
+
+    expect(new Set(registry.emittedTypes())).toEqual(
+      new Set(['xp.level_gained', 'moderation.warned']),
+    );
+    expect(registry.emittedTypes()).toHaveLength(2);
+  });
+
+  /**
+   * Harmless at runtime but always a mistake, and invisible in `emittedTypes()`
+   * because that is a union. Caught where it can name the module.
+   */
+  test('refuses a manifest that lists the same type twice', () => {
+    const registry = new ModuleRegistry();
+
+    expect(() =>
+      registry.register(manifest({ emits: ['xp.level_gained', 'xp.level_gained'] })),
+    ).toThrow(ModuleRegistrationError);
   });
 });

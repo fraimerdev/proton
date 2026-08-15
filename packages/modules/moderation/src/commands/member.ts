@@ -86,6 +86,78 @@ export const banCommand: Command = {
   },
 };
 
+/**
+ * A warning: a `cases` row and nothing else.
+ *
+ * `warn` is the one action kind that issues no REST call — Discord has no
+ * endpoint for "this member has been warned" — so it runs through the executor
+ * for what the executor provides rather than for what it sends: the I8
+ * prechecks (Proton should no more warn the owner than ban them), the
+ * idempotency key, and the ledger row. See `LEDGER_ONLY_KINDS` in core.
+ *
+ * The command's second job is the one that makes escalation work at all. After
+ * the case is recorded it publishes `moderation.warned`, which is what the
+ * `cases` module's compiled ladder triggers on. Until slice 3.A that event had
+ * no publisher — `cases` recorded it as a known blocker — so every guild's
+ * escalation ladder sat in the rules table and could never fire.
+ */
+export const warnCommand: Command = {
+  name: 'warn',
+  description: 'Record a warning against a member.',
+
+  data: new SlashCommandBuilder()
+    .setName('warn')
+    .setDescription('Record a warning against a member.')
+    .setContexts(InteractionContextType.Guild)
+    .setDefaultMemberPermissions(Permissions.ModerateMembers)
+    .addUserOption((option) =>
+      option.setName('user').setDescription('The member to warn.').setRequired(true),
+    )
+    .addStringOption((option) =>
+      option
+        .setName('reason')
+        .setDescription('Shown in the case and to the member.')
+        .setMaxLength(REASON_MAX),
+    )
+    .toJSON(),
+
+  async handler(ctx) {
+    const userId = ctx.options.getUserId('user');
+    if (!userId) return perform(ctx, { refusal: 'I need a user to warn.' });
+
+    const reason = ctx.options.getString('reason');
+
+    await perform(ctx, {
+      kind: 'warn',
+      targetId: userId,
+      payload: { userId, ...(reason ? { note: reason } : {}) },
+      ...(reason ? { reason } : {}),
+      success: `Warned <@${userId}>.`,
+      /**
+       * Published only once the warn is genuinely recorded.
+       *
+       * `perform` calls this after the executor returns `executed`, so a warn
+       * refused by a precheck — the guild owner, someone above Proton — raises
+       * no event and advances no ladder. A rung that fired on a warning that
+       * never happened would time out a member for nothing.
+       *
+       * The natural key is the idempotency key, so a redelivered interaction
+       * republishes under the same event id and the ladder's rate window counts
+       * it once (I4). The payload matches `internalMemberEventSchema` in
+       * `apps/worker/src/rule-facts.ts`: `userId` is the member the event is
+       * *about*, never the moderator who typed the command — counting the
+       * moderator would point the ladder at staff.
+       */
+      async onRecorded() {
+        await ctx.publish?.('moderation.warned', `${ctx.idempotencyKey}:warn`, {
+          userId,
+          channelId: ctx.channelId,
+        });
+      },
+    });
+  },
+};
+
 export const unbanCommand: Command = {
   name: 'unban',
   description: 'Lift a ban on a user.',
@@ -254,11 +326,12 @@ export const untimeoutCommand: Command = {
   },
 };
 
-/** The five commands that act on a member, and so face the hierarchy prechecks. */
+/** The commands that act on a member, and so face the hierarchy prechecks. */
 export const memberCommands: Command[] = [
   banCommand,
   unbanCommand,
   kickCommand,
   timeoutCommand,
   untimeoutCommand,
+  warnCommand,
 ];

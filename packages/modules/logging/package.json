@@ -16,5 +16,8 @@
     "discord-api-types": "^0.38.53",
     "drizzle-orm": "^0.45.2",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@proton/gateway": "workspace:*"
   }
 }

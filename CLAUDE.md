@@ -32,6 +32,24 @@ bun run db:migrate        # drizzle-kit
 bun run build
 ```
 
+## Running the integration suites
+
+`bun test` runs everything, but every `*.integration.test.ts` needs Docker via Testcontainers,
+and **they do not run on this Windows host**: Bun cannot open Windows named pipes, so
+Testcontainers cannot reach Docker Desktop even when `docker version` works from the same shell.
+`DOCKER_HOST=npipe:...` does not help — it is the same pipe.
+
+They fail with `Could not find a working container runtime strategy`, which in a CI log is
+indistinguishable from a real regression. **A skipped suite is not a passing suite.** Before
+claiming a phase gate, run them somewhere Docker is reachable and show the output:
+
+```bash
+DOCKER_HOST=tcp://localhost:2375 bun test
+```
+
+That needs Docker Desktop → Settings → General → "Expose daemon on tcp://localhost:2375 without
+TLS" (Bun handles TCP fine). Otherwise run them in CI, or in WSL with Bun installed.
+
 ## Architecture invariants (full list: PLAN.md §3)
 
 - All state-changing Discord operations go through `ActionExecutor` — never call `guild.ban()`,

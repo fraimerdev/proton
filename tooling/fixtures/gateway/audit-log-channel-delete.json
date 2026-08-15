@@ -1,0 +1,22 @@
+{
+  "t": "GUILD_AUDIT_LOG_ENTRY_CREATE",
+  "s": 118,
+  "op": 0,
+  "_comment": "An audit log entry object with the extra guild_id key. action_type 12 is CHANNEL_DELETE. user_id is the actor — the only attribution Discord gives for a channel deletion, since CHANNEL_DELETE itself names no one. Delivered only to bots holding VIEW_AUDIT_LOG, and only under the GUILD_MODERATION intent (1<<2). `id` is a snowflake, so it carries the moment of the deletion and is stable across a RESUME redelivery.",
+  "d": {
+    "id": "1537750759112835075",
+    "guild_id": "900000000000000001",
+    "action_type": 12,
+    "user_id": "200000000000000009",
+    "target_id": "500000000000000042",
+    "reason": "spring cleaning",
+    "changes": [
+      { "key": "name", "old_value": "announcements" },
+      { "key": "type", "old_value": 0 },
+      { "key": "permission_overwrites", "old_value": [] },
+      { "key": "nsfw", "old_value": false },
+      { "key": "rate_limit_per_user", "old_value": 0 },
+      { "key": "flags", "old_value": 0 }
+    ]
+  }
+}

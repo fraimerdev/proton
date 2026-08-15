@@ -1,5 +1,6 @@
 import { GatewayIntentBits } from 'discord-api-types/v10';
 import { type FieldDescriptor, zodToDescriptors } from '../config/descriptor.ts';
+import type { EventType } from '../events/types.ts';
 import { combinePermissions, missing, permissionNames } from '../permissions/bits.ts';
 import type { ModuleManifest } from './manifest.ts';
 
@@ -93,6 +94,18 @@ export class ModuleRegistry {
       }
     }
 
+    // A duplicated emit is harmless at runtime but always a mistake — usually a
+    // copy-paste while adding a second event — and `emittedTypes()` is a union,
+    // so the duplicate would be invisible there. Say it here instead.
+    const emits = manifest.emits ?? [];
+    const duplicated = emits.filter((type, index) => emits.indexOf(type) !== index);
+    if (duplicated.length > 0) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `emits lists ${[...new Set(duplicated)].join(', ')} more than once`,
+      );
+    }
+
     // The dashboard must be able to render it. Failing now turns an unsupported
     // schema into a failing unit test instead of a blank form.
     this.#descriptors.set(
@@ -117,6 +130,23 @@ export class ModuleRegistry {
   /** Union of every registered module's permissions — the invite URL integer (§10.3). */
   invitePermissions(): bigint {
     return combinePermissions(this.all().flatMap((m) => m.requiredPermissions));
+  }
+
+  /**
+   * Every event type some registered module may publish.
+   *
+   * The second half of "which types does anything actually emit" — the first is
+   * the gateway's `NORMALISED_EVENT_TYPES`. A listener subscribing to a type in
+   * neither set can never fire, which is the failure `packages/modules/registry`
+   * asserts against.
+   */
+  emittedTypes(): EventType[] {
+    return [...new Set(this.all().flatMap((m) => m.emits ?? []))];
+  }
+
+  /** Whether this module declared it may publish this type (I3's allowlist). */
+  mayEmit(moduleId: string, type: EventType): boolean {
+    return (this.#modules.get(moduleId)?.emits ?? []).includes(type);
   }
 
   /** Union of every registered module's intents — the gateway Identify bitfield. */

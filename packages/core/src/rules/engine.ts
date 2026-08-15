@@ -108,6 +108,9 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'remove_role':
       return facts.actorId ? { userId: facts.actorId } : {};
 
+    case 'warn':
+      return facts.actorId ? { userId: facts.actorId } : {};
+
     case 'send':
     case 'purge':
     case 'slowmode':
@@ -115,8 +118,21 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'unlock':
       return facts.channelId ? { channelId: facts.channelId } : {};
 
-    // An interaction reply needs a token nothing in an event can supply.
+    /**
+     * These name a specific message, and `RuleFacts` deliberately does not carry
+     * one — it describes who and where, not which message, because most events a
+     * rule triggers on have no message at all. A rule that edits, deletes or
+     * reacts to something must say which something in its own `payload`, the
+     * same way `add_role` must name the role.
+     */
+    case 'edit_message':
+    case 'delete_message':
+    case 'add_reaction':
+      return facts.channelId ? { channelId: facts.channelId } : {};
+
+    // An interaction reply or follow-up needs a token nothing in an event can supply.
     case 'interaction_reply':
+    case 'interaction_followup':
       return {};
   }
 }

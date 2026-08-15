@@ -15,6 +15,26 @@ export const envSchema = z.object({
   /** Guild role/channel snapshots backing the I8 prechecks. */
   REDIS_DB_STATE: z.coerce.number().int().min(0).max(15).default(5),
   /**
+   * Module-owned data: the sliding-window counters `proton:rate:*` that anti-nuke
+   * and anti-raid share, anti-nuke's maintenance flag, the phishing blocklist
+   * cache, verification's quarantine records and the guild layout backing
+   * backups. Their key prefixes are disjoint, so one logical DB is safe.
+   *
+   * Deliberately not DEDUPE: losing a dedupe key replays an action (I4), so that
+   * DB must never be shared with caches anything might reasonably flush. Not BUS
+   * either — the streams are the one thing whose loss is unrecoverable.
+   */
+  REDIS_DB_MODULES: z.coerce.number().int().min(0).max(15).default(4),
+  /**
+   * How long the worker may reuse a module's config before re-reading it.
+   *
+   * A listener reads config once per *event*, so this is what stops phishing
+   * turning every Discord message into an API round trip. The cost of the cache
+   * is staleness: a toggle saved in the dashboard takes up to this long to reach
+   * the worker, which at a few seconds nobody notices. Set 0 to disable.
+   */
+  CONFIG_CACHE_TTL_MS: z.coerce.number().int().min(0).default(5_000),
+  /**
    * How often to look for temporary actions that are due to be reversed.
    *
    * This is the worst-case lateness of an unban, so it trades REST chatter
