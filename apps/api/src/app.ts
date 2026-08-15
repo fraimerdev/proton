@@ -2,6 +2,7 @@ import { caseQuerySchema, type ModuleRegistry } from '@proton/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { CaseQueryService } from './cases/service.ts';
+import type { GuildService } from './guilds/service.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 
 const updateBodySchema = z.object({
@@ -12,9 +13,16 @@ const updateBodySchema = z.object({
   ipHash: z.string().optional(),
 });
 
+const ensureGuildBodySchema = z.object({
+  name: z.string().min(1),
+  locale: z.string().optional(),
+  shardId: z.number().int().min(0).optional(),
+});
+
 export interface ApiDeps {
   modules: ModuleConfigService;
   cases: CaseQueryService;
+  guilds: GuildService;
   registry: ModuleRegistry;
   sharedSecret: string;
 }
@@ -43,6 +51,35 @@ export function createApiApp(deps: ApiDeps): Hono {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
+
+  /**
+   * Register a guild the bot is in. Called by the worker on every
+   * `guild.available`, so it must be idempotent — GUILD_CREATE arrives on every
+   * connect and every RESUME.
+   */
+  app.put('/guilds/:guildId', async (c) => {
+    if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
+      return c.json({ error: 'unauthorised' }, 401);
+    }
+
+    const parsed = ensureGuildBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    await deps.guilds.ensureGuild({ guildId: c.req.param('guildId'), ...parsed.data });
+    return c.json({ ok: true });
+  });
+
+  /** The bot was removed. Soft-marks `left_at`; never deletes the history. */
+  app.delete('/guilds/:guildId', async (c) => {
+    if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
+      return c.json({ error: 'unauthorised' }, 401);
+    }
+
+    await deps.guilds.markLeft(c.req.param('guildId'));
+    return c.json({ ok: true });
+  });
 
   // Service-to-service only. The browser never talks to this app.
   app.use('/guilds/*', async (c, next) => {

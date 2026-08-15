@@ -14,6 +14,7 @@ import { createModuleRegistry } from '@proton/modules';
 import Redis from 'ioredis';
 import { HttpConfigProvider } from './config-provider.ts';
 import { loadEnv } from './env.ts';
+import { HttpGuildRegistrar } from './guild-registrar.ts';
 import { GuildStateConsumer } from './guild-state-consumer.ts';
 import { registerCommands } from './registrar.ts';
 import { startReversalJobs } from './reversal-jobs.ts';
@@ -94,6 +95,7 @@ console.log(`registered ${registered.count} command(s) at ${registered.path}`);
 const stateConsumer = new GuildStateConsumer({
   bus,
   store: guildState,
+  registrar: new HttpGuildRegistrar(env.API_URL, env.API_SHARED_SECRET),
   botUserId: env.DISCORD_APPLICATION_ID,
   logger: console,
 });
