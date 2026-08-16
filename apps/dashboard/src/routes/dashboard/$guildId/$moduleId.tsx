@@ -20,7 +20,7 @@ import {
   updateModuleConfig,
 } from '../../../server/modules.ts';
 
-export const Route = createFileRoute('/guilds/$guildId/$moduleId')({
+export const Route = createFileRoute('/dashboard/$guildId/$moduleId')({
   loader: async ({ params }) => {
     const [modules, view, channels, roles] = await Promise.all([
       listModules({ data: { guildId: params.guildId } }),

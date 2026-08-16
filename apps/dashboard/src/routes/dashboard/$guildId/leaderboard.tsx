@@ -5,7 +5,7 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import type { ReactElement } from 'react';
 import { searchLeaderboard } from '../../../server/modules.ts';
 
-export const Route = createFileRoute('/guilds/$guildId/leaderboard')({
+export const Route = createFileRoute('/dashboard/$guildId/leaderboard')({
   validateSearch: zodValidator(leaderboardQuerySchema),
   loaderDeps: ({ search }) => search,
   loader: ({ params, deps }) => searchLeaderboard({ data: { guildId: params.guildId, ...deps } }),

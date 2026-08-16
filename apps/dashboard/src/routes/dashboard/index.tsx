@@ -2,7 +2,7 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { listGuilds } from '../../server/modules.ts';
 
-export const Route = createFileRoute('/guilds/')({
+export const Route = createFileRoute('/dashboard/')({
   loader: async () => {
     try {
       return await listGuilds();

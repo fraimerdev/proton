@@ -13,7 +13,7 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import { type ReactElement, useRef } from 'react';
 import { searchCases } from '../../../server/modules.ts';
 
-export const Route = createFileRoute('/guilds/$guildId/cases')({
+export const Route = createFileRoute('/dashboard/$guildId/cases')({
   validateSearch: zodValidator(caseQuerySchema),
 
   loaderDeps: ({ search }) => search,
