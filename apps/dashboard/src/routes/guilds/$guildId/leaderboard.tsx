@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-table';
 import { zodValidator } from '@tanstack/zod-adapter';
 import type { ReactElement } from 'react';
-import { searchLeaderboard } from '../server/modules.ts';
+import { searchLeaderboard } from '../../../server/modules.ts';
 
 export const Route = createFileRoute('/guilds/$guildId/leaderboard')({
   validateSearch: zodValidator(leaderboardQuerySchema),

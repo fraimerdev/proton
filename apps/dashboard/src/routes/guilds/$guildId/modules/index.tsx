@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { listModules } from '../server/modules.ts';
+import { listModules } from '../../../../server/modules.ts';
 
 export const Route = createFileRoute('/guilds/$guildId/modules/')({
   loader: ({ params }) => listModules({ data: { guildId: params.guildId } }),

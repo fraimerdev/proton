@@ -11,7 +11,7 @@ import { createColumnHelper, tableFeatures, useTable } from '@tanstack/react-tab
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { type ReactElement, useRef } from 'react';
-import { searchCases } from '../server/modules.ts';
+import { searchCases } from '../../../server/modules.ts';
 
 export const Route = createFileRoute('/guilds/$guildId/cases')({
   validateSearch: zodValidator(caseQuerySchema),
