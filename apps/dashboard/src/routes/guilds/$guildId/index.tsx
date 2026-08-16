@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { listModules } from '../../../../server/modules.ts';
+import { listModules } from '../../../server/modules.ts';
 
-export const Route = createFileRoute('/guilds/$guildId/modules/')({
+export const Route = createFileRoute('/guilds/$guildId/')({
   loader: ({ params }) => listModules({ data: { guildId: params.guildId } }),
   component: ModuleList,
 });
@@ -27,7 +27,7 @@ function ModuleList(): ReactElement {
       <ul className="module-list">
         {modules.map((module) => (
           <li key={module.id}>
-            <Link to="/guilds/$guildId/modules/$moduleId" params={{ guildId, moduleId: module.id }}>
+            <Link to="/guilds/$guildId/$moduleId" params={{ guildId, moduleId: module.id }}>
               {module.name}
             </Link>
             <span className="field-description">

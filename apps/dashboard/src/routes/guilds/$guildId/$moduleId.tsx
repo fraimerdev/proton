@@ -7,20 +7,20 @@ import type { RolemenuMenu } from '@proton/module-rolemenu';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useMemo, useState } from 'react';
 import { z } from 'zod';
-import { EscalationLadderEditor } from '../../../../components/cases/escalation-ladder.tsx';
-import { GeneratedForm } from '../../../../components/form/generated-form.tsx';
-import { RoleRewardsEditor } from '../../../../components/leveling/role-rewards.tsx';
-import { RolemenuEditor } from '../../../../components/rolemenu/menus.tsx';
-import { toConfig, toFormValues } from '../../../../lib/config-paths.ts';
+import { EscalationLadderEditor } from '../../../components/cases/escalation-ladder.tsx';
+import { GeneratedForm } from '../../../components/form/generated-form.tsx';
+import { RoleRewardsEditor } from '../../../components/leveling/role-rewards.tsx';
+import { RolemenuEditor } from '../../../components/rolemenu/menus.tsx';
+import { toConfig, toFormValues } from '../../../lib/config-paths.ts';
 import {
   getGuildChannels,
   getGuildRoles,
   getModuleConfig,
   listModules,
   updateModuleConfig,
-} from '../../../../server/modules.ts';
+} from '../../../server/modules.ts';
 
-export const Route = createFileRoute('/guilds/$guildId/modules/$moduleId')({
+export const Route = createFileRoute('/guilds/$guildId/$moduleId')({
   loader: async ({ params }) => {
     const [modules, view, channels, roles] = await Promise.all([
       listModules({ data: { guildId: params.guildId } }),
@@ -91,7 +91,7 @@ function ModuleSettings(): ReactElement {
     <section className="panel">
       <h1>{module.name}</h1>
       <p>
-        <Link to="/guilds/$guildId/modules" params={{ guildId }}>
+        <Link to="/guilds/$guildId" params={{ guildId }}>
           All modules
         </Link>
         {' · '}
