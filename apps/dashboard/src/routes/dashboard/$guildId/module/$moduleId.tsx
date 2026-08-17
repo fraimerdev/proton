@@ -4,23 +4,25 @@ import type { EscalationRung } from '@proton/module-cases';
 import type { RoleReward } from '@proton/module-leveling/config';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
 import type { RolemenuMenu } from '@proton/module-rolemenu/config';
+import type { LogEventOverride } from '@proton/module-serverlog';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useMemo, useState } from 'react';
 import { z } from 'zod';
-import { EscalationLadderEditor } from '../../../components/cases/escalation-ladder.tsx';
-import { GeneratedForm } from '../../../components/form/generated-form.tsx';
-import { RoleRewardsEditor } from '../../../components/leveling/role-rewards.tsx';
-import { RolemenuEditor } from '../../../components/rolemenu/menus.tsx';
-import { toConfig, toFormValues } from '../../../lib/config-paths.ts';
+import { EscalationLadderEditor } from '../../../../components/cases/escalation-ladder.tsx';
+import { GeneratedForm } from '../../../../components/form/generated-form.tsx';
+import { RoleRewardsEditor } from '../../../../components/leveling/role-rewards.tsx';
+import { RolemenuEditor } from '../../../../components/rolemenu/menus.tsx';
+import { LogEventMatrix } from '../../../../components/serverlog/event-matrix.tsx';
+import { toConfig, toFormValues } from '../../../../lib/config-paths.ts';
 import {
   getGuildChannels,
   getGuildRoles,
   getModuleConfig,
   listModules,
   updateModuleConfig,
-} from '../../../server/modules.ts';
+} from '../../../../server/modules.ts';
 
-export const Route = createFileRoute('/dashboard/$guildId/$moduleId')({
+export const Route = createFileRoute('/dashboard/$guildId/module/$moduleId')({
   loader: async ({ params }) => {
     const [modules, view, channels, roles] = await Promise.all([
       listModules({ data: { guildId: params.guildId } }),
@@ -69,6 +71,16 @@ function ModuleSettings(): ReactElement {
   const [menus, setMenus] = useState<RolemenuMenu[]>(
     () => (view.config.menus ?? []) as unknown as RolemenuMenu[],
   );
+  const [logEvents, setLogEvents] = useState<Record<string, LogEventOverride>>(
+    () => (view.config.events ?? {}) as Record<string, LogEventOverride>,
+  );
+
+  // The matrix shows where each log will actually land, so it reads routing from the generated
+  // form's live values rather than from the saved config.
+  const liveConfig = useMemo(
+    () => toConfig(descriptors, values, view.config),
+    [descriptors, values, view.config],
+  );
 
   async function save(): Promise<void> {
     setStatus('Saving…');
@@ -77,6 +89,7 @@ function ModuleSettings(): ReactElement {
       if (moduleId === 'cases') config.escalationLadder = ladder;
       if (moduleId === 'leveling') config.roleRewards = rewards;
       if (moduleId === 'rolemenu') config.menus = menus;
+      if (moduleId === 'serverlog') config.events = logEvents;
       if (moduleId === 'permissions') config.overrides = pruneOverrides(config.overrides);
 
       await updateModuleConfig({ data: { guildId, moduleId, enabled, config } });
@@ -95,7 +108,7 @@ function ModuleSettings(): ReactElement {
           All modules
         </Link>
         {' · '}
-        <Link to="/dashboard" params={{ guildId }} search={{}}>
+        <Link to="/dashboard/$guildId/cases" params={{ guildId }} search={{}}>
           Cases
         </Link>
       </p>
@@ -113,11 +126,18 @@ function ModuleSettings(): ReactElement {
         />
       </label>
 
+      {module.status && !module.status.enabled && module.status.disabledReason ? (
+        <p className="status" role="alert">
+          {module.status.disabledReason.humanReason}
+        </p>
+      ) : null}
+
       <GeneratedForm
         descriptors={descriptors}
         values={values}
         channels={channels}
         roles={roles}
+        sections={module.dashboard?.sections}
         onChange={(path, value) => setValues((prev) => ({ ...prev, [path]: value }))}
       />
 
@@ -139,6 +159,20 @@ function ModuleSettings(): ReactElement {
         <section className="subsection">
           <h2>Role menus</h2>
           <RolemenuEditor menus={menus} roles={roles} channels={channels} onChange={setMenus} />
+        </section>
+      ) : null}
+
+      {moduleId === 'serverlog' ? (
+        <section className="subsection">
+          <h2>Individual logs</h2>
+          <LogEventMatrix
+            events={logEvents}
+            channels={channels}
+            defaultChannelId={String(liveConfig.defaultChannelId ?? '')}
+            categoryChannels={(liveConfig.categoryChannels ?? {}) as Record<string, string>}
+            categories={(liveConfig.categories ?? {}) as Record<string, boolean>}
+            onChange={setLogEvents}
+          />
         </section>
       ) : null}
 

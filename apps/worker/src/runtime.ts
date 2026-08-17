@@ -235,7 +235,7 @@ export class ModuleRuntime {
 
   #settingsUrl(guildId: string, moduleId: string): string {
     const base = (this.#deps.dashboardUrl ?? DEFAULT_DASHBOARD_URL).replace(/\/$/, '');
-    return `<${base}/dashboard/${guildId}/${moduleId}>`;
+    return `<${base}/dashboard/${guildId}/module/${moduleId}>`;
   }
 
   async #tell(ctx: {

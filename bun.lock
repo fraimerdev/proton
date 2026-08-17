@@ -21,6 +21,7 @@
       "dependencies": {
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
+        "@proton/gateway": "workspace:*",
         "@proton/module-cases": "workspace:*",
         "@proton/module-leveling": "workspace:*",
         "@proton/module-ping": "workspace:*",

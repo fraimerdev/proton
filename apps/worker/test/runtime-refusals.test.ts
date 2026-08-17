@@ -92,7 +92,7 @@ function manifest(): ModuleManifest {
 }
 
 function commandEvent(): ProtonEvent {
-  const event = normalise(dispatch('interactionCreatePing'));
+  const event = normalise(dispatch('interactionCreatePing'))[0];
   if (!event) throw new Error('interactionCreatePing did not normalise');
   return event;
 }
@@ -149,7 +149,7 @@ describe('a command that cannot run still answers', () => {
     const content = replyContent(executor);
     expect(content).toContain('Ping');
     expect(content).toContain('switched off');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
+    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/module/ping`);
     expect(content).toContain('Module enabled');
   });
 
@@ -160,7 +160,7 @@ describe('a command that cannot run still answers', () => {
 
     const content = replyContent(executor);
     expect(content).toContain('switched off');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
+    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/module/ping`);
   });
 
   test('a disabled module never reaches its handler', async () => {
@@ -196,7 +196,7 @@ describe('a command that cannot run still answers', () => {
     const content = replyContent(executor);
     expect(content).toContain('Ping');
     expect(content).toContain('Save');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
+    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/module/ping`);
   });
 
   test('invalid stored settings name the field that is wrong', async () => {

@@ -1,3 +1,4 @@
+import { ALL_PERMISSIONS } from '@proton/core';
 import { createDb, DrizzleGuildRuleStore } from '@proton/db';
 import { createModuleRegistry } from '@proton/modules';
 import { createApiApp } from './app.ts';
@@ -26,6 +27,12 @@ const app = createApiApp({
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),
   registry,
+  // Intents are reported truthfully; permissions are not. A module's Discord permissions are
+  // per-guild and live in the worker's guild-state cache, which this process cannot reach, so
+  // passing ALL_PERMISSIONS makes that half of the check a no-op rather than a claim we cannot
+  // substantiate. Missing-intent reasons are exact; missing-permission ones still surface at the
+  // executor's precheck, naming the permission and the channel.
+  environment: () => ({ grantedIntents: env.GATEWAY_INTENTS, botPermissions: ALL_PERMISSIONS }),
   sharedSecret: env.API_SHARED_SECRET,
 });
 

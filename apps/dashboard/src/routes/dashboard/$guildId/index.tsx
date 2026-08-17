@@ -27,7 +27,10 @@ function ModuleList(): ReactElement {
       <ul className="module-list">
         {modules.map((module) => (
           <li key={module.id}>
-            <Link to="/dashboard/$guildId/$moduleId" params={{ guildId, moduleId: module.id }}>
+            <Link
+              to="/dashboard/$guildId/module/$moduleId"
+              params={{ guildId, moduleId: module.id }}
+            >
               {module.name}
             </Link>
             <span className="field-description">

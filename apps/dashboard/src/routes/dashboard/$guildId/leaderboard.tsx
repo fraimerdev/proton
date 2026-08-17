@@ -40,7 +40,7 @@ function Leaderboard(): ReactElement {
           All modules
         </Link>
         {' · '}
-        <Link to="/dashboard/$guildId/$moduleId" params={{ guildId, moduleId: 'leveling' }}>
+        <Link to="/dashboard/$guildId/module/$moduleId" params={{ guildId, moduleId: 'leveling' }}>
           Leveling settings
         </Link>
       </p>

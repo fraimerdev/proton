@@ -31,6 +31,18 @@ export interface ModuleConfigView {
   schemaVersion: number;
 }
 
+export interface ModuleSection {
+  id: string;
+  title: string;
+  fields: string[];
+}
+
+export interface ModuleStatusView {
+  id: string;
+  enabled: boolean;
+  disabledReason?: { code: string; humanReason: string };
+}
+
 export interface ModuleSummary {
   id: string;
   name: string;
@@ -38,6 +50,8 @@ export interface ModuleSummary {
   descriptors: JsonFieldDescriptor[];
 
   commands: string[];
+  dashboard: { icon: string; sections: ModuleSection[] } | null;
+  status: ModuleStatusView | null;
 }
 
 export class ApiClient {

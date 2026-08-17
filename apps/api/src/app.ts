@@ -1,4 +1,9 @@
-import { caseQuerySchema, leaderboardQuerySchema, type ModuleRegistry } from '@proton/core';
+import {
+  caseQuerySchema,
+  leaderboardQuerySchema,
+  type ModuleRegistry,
+  type RegistryEnvironment,
+} from '@proton/core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { CaseQueryService } from './cases/service.ts';
@@ -26,6 +31,9 @@ export interface ApiDeps {
   leaderboard: LeaderboardService;
   guilds: GuildService;
   registry: ModuleRegistry;
+  // What the bot actually has, for `registry.evaluate`. A function because intents come from the
+  // gateway's identify and permissions from the guild, neither of which is known at construction.
+  environment?: () => RegistryEnvironment;
   sharedSecret: string;
 }
 
@@ -95,6 +103,11 @@ export function createApiApp(deps: ApiDeps): Hono {
       descriptors: deps.registry.descriptors(m.id),
 
       commands: (m.commands ?? []).map((command) => command.name),
+      // Both were populated by every module and read by nobody. Without `dashboard` the settings
+      // page is one undifferentiated wall of fields, and without `status` §7's promise that a
+      // module says why it is disabled was never kept.
+      dashboard: m.dashboard ?? null,
+      status: deps.environment ? deps.registry.evaluate(m.id, deps.environment()) : null,
     }));
     return c.json({ modules });
   });
