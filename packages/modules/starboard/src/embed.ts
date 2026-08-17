@@ -52,14 +52,3 @@ export function buildBoardMessage(input: BoardMessageInput): BoardMessage {
     embeds: [embed],
   };
 }
-
-export function boardPostMatches(rawMessage: unknown, link: string): boolean {
-  if (typeof rawMessage !== 'object' || rawMessage === null) return false;
-  const embeds = (rawMessage as { embeds?: unknown }).embeds;
-  if (!Array.isArray(embeds)) return false;
-
-  return embeds.some(
-    (embed) =>
-      typeof embed === 'object' && embed !== null && (embed as { url?: unknown }).url === link,
-  );
-}

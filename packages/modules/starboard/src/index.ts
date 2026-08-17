@@ -29,7 +29,6 @@ export {
 } from './decide.ts';
 export {
   type BindResult,
-  type BoardPostQuery,
   type BoundStarboardDeps,
   bindDeps,
   describeUnbound,
@@ -39,7 +38,6 @@ export {
 export {
   type BoardMessage,
   type BoardMessageInput,
-  boardPostMatches,
   buildBoardMessage,
   DESCRIPTION_MAX,
   jumpUrl,

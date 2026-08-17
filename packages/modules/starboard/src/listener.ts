@@ -161,17 +161,14 @@ async function create(count: number, input: ApplyInput): Promise<void> {
     return;
   }
 
-  const link = jumpUrl(ctx.guildId, message.channelId, message.id);
-  const boardMessageId = await deps.resolveBoardPost({
-    boardChannelId,
-    sourceMessageId: message.id,
-    jumpUrl: link,
-  });
+  // Straight off the create's own response. This used to re-read the board channel's last 25
+  // messages and match a jump link, which silently duplicated on a board busier than that.
+  const boardMessageId = sentMessageId(result);
 
   if (boardMessageId === null) {
     ctx.logger.error(
-      `The starboard posted ${message.id} to <#${boardChannelId}> but could not find that ` +
-        'post again, so its star count will not update yet. It is retried on the next star.',
+      `The starboard posted ${message.id} to <#${boardChannelId}> but Discord's reply carried no ` +
+        'message id, so its star count will not update yet. It is retried on the next star.',
       { guildId: ctx.guildId, moduleId: MODULE_ID, messageId: message.id },
     );
     return;
@@ -252,6 +249,13 @@ async function forgetVanishedPost(boardMessageId: string, input: ApplyInput): Pr
 
 export function createKey(guildId: string, sourceMessageId: string): string {
   return `${MODULE_ID}:${guildId}:${sourceMessageId}:create`;
+}
+
+function sentMessageId(result: ActionResult): string | null {
+  const body = result.body;
+  if (typeof body !== 'object' || body === null) return null;
+  const id = (body as { id?: unknown }).id;
+  return typeof id === 'string' ? id : null;
 }
 
 function failed(result: ActionResult): boolean {

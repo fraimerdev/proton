@@ -1,8 +1,8 @@
 import { newId } from '@proton/core';
-
-export const MODULE_ID = 'backup';
 import type { GuildLayout } from './snapshot.ts';
 import type { BackupStore } from './store.ts';
+
+export const MODULE_ID = 'backup';
 
 export interface BackupDeps {
   store?: BackupStore;
