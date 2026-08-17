@@ -1,6 +1,6 @@
 import type { DbHandle } from '@proton/db';
 import { guilds } from '@proton/db/schema';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 export interface EnsureGuildInput {
   guildId: string;
@@ -38,5 +38,17 @@ export class GuildService {
 
   async markLeft(guildId: string): Promise<void> {
     await this.#db.db.update(guilds).set({ leftAt: new Date() }).where(eq(guilds.id, guildId));
+  }
+
+  async presentIn(guildIds: readonly string[]): Promise<string[]> {
+    // `inArray` with an empty list compiles to invalid SQL, so the guard is load-bearing.
+    if (guildIds.length === 0) return [];
+
+    const rows = await this.#db.db
+      .select({ id: guilds.id })
+      .from(guilds)
+      .where(and(inArray(guilds.id, [...guildIds]), isNull(guilds.leftAt)));
+
+    return rows.map((row) => row.id);
   }
 }

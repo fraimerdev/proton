@@ -7,6 +7,7 @@ import {
   administrableGuilds,
   type DiscordUserGuild,
   resolveGuildAccess,
+  withPresence,
 } from '../src/lib/guild-access.ts';
 
 const OWNED: DiscordUserGuild = {
@@ -79,6 +80,30 @@ describe('resolveGuildAccess', () => {
 
   test('the picker offers only administrable guilds', () => {
     expect(administrableGuilds(GUILDS).map((g) => g.id)).toEqual([OWNED.id, MANAGED.id]);
+  });
+});
+
+/**
+ * The bug this closes: the picker listed every guild the user could administer as a link, so a
+ * server Proton had never joined opened a settings page that wrote config nothing would ever read,
+ * under an empty state that claimed it only listed servers Proton was in.
+ */
+describe('withPresence', () => {
+  test('marks only the guilds Proton is in as joined', () => {
+    const result = withPresence(administrableGuilds(GUILDS), new Set([OWNED.id]));
+
+    expect(result.find((g) => g.id === OWNED.id)?.joined).toBe(true);
+    expect(result.find((g) => g.id === MANAGED.id)?.joined).toBe(false);
+  });
+
+  test('an empty presence set marks nothing joined rather than everything', () => {
+    expect(withPresence(administrableGuilds(GUILDS), new Set()).every((g) => !g.joined)).toBe(true);
+  });
+
+  test('presence for a guild the user cannot administer does not add it back', () => {
+    const result = withPresence(administrableGuilds(GUILDS), new Set([MEMBER_ONLY.id]));
+
+    expect(result.map((g) => g.id)).toEqual([OWNED.id, MANAGED.id]);
   });
 });
 

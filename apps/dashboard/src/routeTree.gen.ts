@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApiAuthSignoutRouteImport } from './routes/api/auth/signout'
 import { Route as DashboardGuildIdIndexRouteImport } from './routes/dashboard/$guildId/index'
 import { Route as DashboardGuildIdCasesRouteImport } from './routes/dashboard/$guildId/cases'
 import { Route as DashboardGuildIdLeaderboardRouteImport } from './routes/dashboard/$guildId/leaderboard'
@@ -37,6 +38,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignoutRoute = ApiAuthSignoutRouteImport.update({
+  id: '/api/auth/signout',
+  path: '/api/auth/signout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardGuildIdIndexRoute = DashboardGuildIdIndexRouteImport.update({
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
   '/dashboard/$guildId/leaderboard': typeof DashboardGuildIdLeaderboardRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
   '/dashboard/$guildId/leaderboard': typeof DashboardGuildIdLeaderboardRoute
   '/dashboard/$guildId': typeof DashboardGuildIdIndexRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/auth/signout': typeof ApiAuthSignoutRoute
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
   '/dashboard/$guildId/leaderboard': typeof DashboardGuildIdLeaderboardRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/dashboard/'
     | '/api/auth/$'
+    | '/api/auth/signout'
     | '/dashboard/$guildId/cases'
     | '/dashboard/$guildId/leaderboard'
     | '/dashboard/$guildId/'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/dashboard'
     | '/api/auth/$'
+    | '/api/auth/signout'
     | '/dashboard/$guildId/cases'
     | '/dashboard/$guildId/leaderboard'
     | '/dashboard/$guildId'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/dashboard/'
     | '/api/auth/$'
+    | '/api/auth/signout'
     | '/dashboard/$guildId/cases'
     | '/dashboard/$guildId/leaderboard'
     | '/dashboard/$guildId/'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiAuthSignoutRoute: typeof ApiAuthSignoutRoute
   DashboardGuildIdCasesRoute: typeof DashboardGuildIdCasesRoute
   DashboardGuildIdLeaderboardRoute: typeof DashboardGuildIdLeaderboardRoute
   DashboardGuildIdIndexRoute: typeof DashboardGuildIdIndexRoute
@@ -177,6 +190,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/signout': {
+      id: '/api/auth/signout'
+      path: '/api/auth/signout'
+      fullPath: '/api/auth/signout'
+      preLoaderRoute: typeof ApiAuthSignoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/$guildId/': {
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiAuthSignoutRoute: ApiAuthSignoutRoute,
   DashboardGuildIdCasesRoute: DashboardGuildIdCasesRoute,
   DashboardGuildIdLeaderboardRoute: DashboardGuildIdLeaderboardRoute,
   DashboardGuildIdIndexRoute: DashboardGuildIdIndexRoute,

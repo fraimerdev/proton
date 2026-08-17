@@ -6,7 +6,7 @@ import { ApiClient } from '../lib/api-client.ts';
 import { fetchGuildChannels, fetchGuildRoles, fetchUserGuilds } from '../lib/discord.ts';
 import { getDiscordAccessToken, getDiscordUserId } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
-import { administrableGuilds } from '../lib/guild-access.ts';
+import { administrableGuilds, withPresence } from '../lib/guild-access.ts';
 import {
   requireGuildAccess,
   requireManageGuild,
@@ -34,7 +34,10 @@ export const listGuilds = createServerFn({ method: 'GET' })
   .handler(async ({ context }) => {
     const token = await getDiscordAccessToken(getRequest().headers, context.session.user.id);
 
-    return { guilds: administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token)) };
+    const administrable = administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token));
+    const { present } = await api.guildPresence(administrable.map((g) => g.id));
+
+    return { guilds: withPresence(administrable, new Set(present)) };
   });
 
 export const listModules = createServerFn({ method: 'GET' })

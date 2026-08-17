@@ -81,6 +81,13 @@ export class ApiClient {
     return (await response.json()) as T;
   }
 
+  guildPresence(guildIds: readonly string[]): Promise<{ present: string[] }> {
+    return this.#request('/guilds/presence', {
+      method: 'POST',
+      body: JSON.stringify({ guildIds }),
+    });
+  }
+
   listModules(guildId: string): Promise<{ modules: ModuleSummary[] }> {
     return this.#request(`/guilds/${guildId}/modules`);
   }

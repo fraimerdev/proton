@@ -26,6 +26,10 @@ const ensureGuildBodySchema = z.object({
   shardId: z.number().int().min(0).optional(),
 });
 
+const presenceBodySchema = z.object({
+  guildIds: z.array(z.string().min(1)).max(500),
+});
+
 export interface ApiDeps {
   modules: ModuleConfigService;
   cases: CaseQueryService;
@@ -95,6 +99,15 @@ export function createApiApp(deps: ApiDeps): Hono {
       return c.json({ error: 'unauthorised' }, 401);
     }
     return next();
+  });
+
+  app.post('/guilds/presence', async (c) => {
+    const parsed = presenceBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return c.json({ present: await deps.guilds.presentIn(parsed.data.guildIds) });
   });
 
   app.get('/guilds/:guildId/modules', (c) => {

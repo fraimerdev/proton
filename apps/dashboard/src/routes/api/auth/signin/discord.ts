@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { auth } from '../../../../lib/auth.ts';
+import { SIGN_IN_CALLBACK_URL } from '../../../../lib/auth-redirects.ts';
 
 export const Route = createFileRoute('/api/auth/signin/discord')({
   server: {
     handlers: {
       GET: async ({ request }) => {
         const response = await auth.api.signInSocial({
-          body: { provider: 'discord', callbackURL: '/guilds' },
+          body: { provider: 'discord', callbackURL: SIGN_IN_CALLBACK_URL },
           headers: request.headers,
           asResponse: true,
         });
