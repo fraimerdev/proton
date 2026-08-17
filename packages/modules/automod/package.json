@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./native": "./src/native.ts",
+    "./regex-compat": "./src/regex-compat.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

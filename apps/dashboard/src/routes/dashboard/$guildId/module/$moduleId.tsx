@@ -1,5 +1,6 @@
 import type { FieldDescriptor } from '@proton/core';
 import { zodToDescriptors } from '@proton/core';
+import type { AutomodConfig } from '@proton/module-automod/config';
 import type { EscalationRung } from '@proton/module-cases';
 import type { RoleReward } from '@proton/module-leveling/config';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
@@ -8,6 +9,7 @@ import type { LogEventOverride } from '@proton/module-serverlog';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useMemo, useState } from 'react';
 import { z } from 'zod';
+import { EnforcementPanel } from '../../../../components/automod/enforcement.tsx';
 import { EscalationLadderEditor } from '../../../../components/cases/escalation-ladder.tsx';
 import { GeneratedForm } from '../../../../components/form/generated-form.tsx';
 import { RoleRewardsEditor } from '../../../../components/leveling/role-rewards.tsx';
@@ -159,6 +161,13 @@ function ModuleSettings(): ReactElement {
         <section className="subsection">
           <h2>Role menus</h2>
           <RolemenuEditor menus={menus} roles={roles} channels={channels} onChange={setMenus} />
+        </section>
+      ) : null}
+
+      {moduleId === 'automod' ? (
+        <section className="subsection">
+          <h2>Who enforces what</h2>
+          <EnforcementPanel config={liveConfig as unknown as AutomodConfig} />
         </section>
       ) : null}
 
