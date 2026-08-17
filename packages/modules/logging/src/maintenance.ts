@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MESSAGE_LOG_RETENTION_DAYS } from './config.ts';
+import { MESSAGE_LOG_RETENTION_DAYS } from './constants.ts';
 import {
   partitionName,
   partitionsToDrop,

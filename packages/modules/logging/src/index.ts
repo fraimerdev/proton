@@ -1,11 +1,7 @@
 import { type ModuleManifest, Permissions } from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
-import {
-  LOGGING_SCHEMA_VERSION,
-  loggingConfigSchema,
-  loggingDefaultConfig,
-  MESSAGE_LOG_RETENTION_DAYS,
-} from './config.ts';
+import { LOGGING_SCHEMA_VERSION, loggingConfigSchema, loggingDefaultConfig } from './config.ts';
+import { MESSAGE_LOG_RETENTION_DAYS } from './constants.ts';
 import { createMessageLogListener, type LoggingDeps } from './listeners.ts';
 import { PARTITION_MAINTENANCE_CRON, PARTITION_MAINTENANCE_JOB_ID } from './maintenance.ts';
 
@@ -15,9 +11,8 @@ export {
   loggingConfigSchema,
   loggingDefaultConfig,
   MESSAGE_CACHE_DEFAULT_RETENTION,
-  MESSAGE_CACHE_FALLBACK_TTL_MS,
-  MESSAGE_LOG_RETENTION_DAYS,
 } from './config.ts';
+export { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from './constants.ts';
 export { type CachedMessages, messageIdsOf, toMessageLogEntries } from './events.ts';
 export {
   createMessageLogListener,

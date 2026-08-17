@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { zodToDescriptors } from '@proton/core';
+import { MESSAGE_CACHE_DEFAULT_TTL_MS, zodToDescriptors } from '@proton/core';
 import {
   LOGGING_SCHEMA_VERSION,
   loggingConfigSchema,
   loggingDefaultConfig,
-  MESSAGE_LOG_RETENTION_DAYS,
 } from '../src/config.ts';
+import { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from '../src/constants.ts';
 
 describe('logging config', () => {
   test('is disabled by default — the Gate 1 opt-in requirement', () => {
@@ -32,6 +32,10 @@ describe('logging config', () => {
 
   test('retention is the owner-recorded 30 days', () => {
     expect(MESSAGE_LOG_RETENTION_DAYS).toBe(30);
+  });
+
+  test('the fallback TTL restated in constants.ts is still the default the cache applies', () => {
+    expect(MESSAGE_CACHE_FALLBACK_TTL_MS).toBe(MESSAGE_CACHE_DEFAULT_TTL_MS);
   });
 
   test('has a schema version to migrate from', () => {

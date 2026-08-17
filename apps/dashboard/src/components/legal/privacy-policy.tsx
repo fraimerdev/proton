@@ -1,4 +1,7 @@
-import { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
+import {
+  MESSAGE_CACHE_FALLBACK_TTL_MS,
+  MESSAGE_LOG_RETENTION_DAYS,
+} from '@proton/module-logging/constants';
 
 const MESSAGE_CACHE_DEFAULT_RETENTION_HOURS = MESSAGE_CACHE_FALLBACK_TTL_MS / 3_600_000;
 

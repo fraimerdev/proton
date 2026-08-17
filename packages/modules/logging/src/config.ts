@@ -1,7 +1,6 @@
-import { durationStringSchema, MESSAGE_CACHE_DEFAULT_TTL_MS, protonFields } from '@proton/core';
+import { durationStringSchema, protonFields } from '@proton/core';
 import { z } from 'zod';
-
-export const MESSAGE_LOG_RETENTION_DAYS = 30;
+import { MESSAGE_LOG_RETENTION_DAYS } from './constants.ts';
 
 export const MESSAGE_CACHE_DEFAULT_RETENTION = '24h';
 
@@ -72,5 +71,3 @@ export const loggingDefaultConfig: LoggingConfig = {
 // Bumped for the message-content cache. No SQL migration: the new keys carry defaults, so
 // ModuleConfigService.get() fills them in when it parses an existing row.
 export const LOGGING_SCHEMA_VERSION = 2;
-
-export const MESSAGE_CACHE_FALLBACK_TTL_MS = MESSAGE_CACHE_DEFAULT_TTL_MS;

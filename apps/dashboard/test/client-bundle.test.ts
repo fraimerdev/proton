@@ -99,11 +99,23 @@ function workspaceManifests(): Map<string, { dir: string; manifest: PackageManif
   return found;
 }
 
-function carriesNative(name: string, packages: ReturnType<typeof workspaceManifests>): boolean {
+function carriesDependency(
+  name: string,
+  packages: ReturnType<typeof workspaceManifests>,
+  leaves: readonly string[],
+): boolean {
   const entry = packages.get(name);
-  if (!entry) return NATIVE_DEPS.includes(name);
+  if (!entry) {
+    return leaves.some((leaf) => name === leaf || name.startsWith(`${leaf}/`));
+  }
 
-  return Object.keys(entry.manifest.dependencies ?? {}).some((dep) => carriesNative(dep, packages));
+  return Object.keys(entry.manifest.dependencies ?? {}).some((dep) =>
+    carriesDependency(dep, packages, leaves),
+  );
+}
+
+function carriesNative(name: string, packages: ReturnType<typeof workspaceManifests>): boolean {
+  return carriesDependency(name, packages, NATIVE_DEPS);
 }
 
 function resolveSpecifier(
@@ -127,8 +139,11 @@ function importsOf(file: string): string[] {
   return [...source.matchAll(/from\s+'([^']+)'/g)].map((match) => match[1] ?? '');
 }
 
-/** Every workspace file the dashboard's own sources can reach, following package exports. */
-function reachableFromDashboard(packages: ReturnType<typeof workspaceManifests>): {
+/** Every workspace file the given dashboard sources can reach, following package exports. */
+function reachableFrom(
+  roots: readonly string[],
+  packages: ReturnType<typeof workspaceManifests>,
+): {
   files: Set<string>;
   edges: Map<string, string>;
 } {
@@ -136,11 +151,13 @@ function reachableFromDashboard(packages: ReturnType<typeof workspaceManifests>)
   const edges = new Map<string, string>();
   const queue: Array<{ file: string; from: string }> = [];
 
-  for (const file of sourceFiles(SRC)) {
-    for (const specifier of importsOf(file)) {
-      const resolved = resolveSpecifier(specifier, packages);
-      if (resolved)
-        queue.push({ file: resolved, from: `${file.replace(SRC, 'src')} → ${specifier}` });
+  for (const root of roots) {
+    for (const file of sourceFiles(root)) {
+      for (const specifier of importsOf(file)) {
+        const resolved = resolveSpecifier(specifier, packages);
+        if (resolved)
+          queue.push({ file: resolved, from: `${file.replace(SRC, 'src')} → ${specifier}` });
+      }
     }
   }
 
@@ -190,7 +207,7 @@ describe('native addons stay out of the dashboard', () => {
   });
 
   test('no file the dashboard can reach imports a package carrying a native addon', () => {
-    const { files, edges } = reachableFromDashboard(packages);
+    const { files, edges } = reachableFrom([SRC], packages);
     const offenders: string[] = [];
 
     for (const file of files) {
@@ -203,5 +220,51 @@ describe('native addons stay out of the dashboard', () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * drizzle-orm is the third category: server-only, but neither discord.js nor a native addon, so
+ * neither check above fires on it. Nothing errors — it resolves, bundles, and ships, and the only
+ * symptom is a signed-out visitor to /privacy downloading the ORM.
+ *
+ * Only components/ and routes/ are walked: they render in the browser. Server-side data access
+ * lives in src/server, src/lib and src/middleware, where reaching the ORM is the point.
+ */
+const CLIENT_TREE = [join(SRC, 'components'), join(SRC, 'routes')];
+
+const SERVER_ONLY_DEPS = ['drizzle-orm'];
+
+describe('the ORM stays out of the browser-rendered tree', () => {
+  const packages = workspaceManifests();
+  const carriesOrm = (name: string): boolean => carriesDependency(name, packages, SERVER_ONLY_DEPS);
+
+  test('some module barrel really does carry the ORM, or this proves nothing', () => {
+    const barrels = [...packages.keys()].filter((name) => name.startsWith('@proton/module-'));
+
+    expect(barrels.filter(carriesOrm).length).toBeGreaterThan(0);
+  });
+
+  test('@proton/module-logging exposes its disclosure constants without its tables', () => {
+    const logging = packages.get('@proton/module-logging');
+
+    expect(logging?.manifest.exports?.['./constants']).toBe('./src/constants.ts');
+    expect(importsOf(join(logging?.dir ?? '', 'src', 'constants.ts'))).toEqual([]);
+  });
+
+  test('no file a component or route can reach imports the ORM', () => {
+    const { files, edges } = reachableFrom(CLIENT_TREE, packages);
+    const offenders = new Set<string>();
+
+    for (const file of files) {
+      for (const specifier of importsOf(file)) {
+        if (specifier.startsWith('.')) continue;
+        if (!carriesOrm(specifier)) continue;
+
+        offenders.add(`${edges.get(file) ?? file} → ${specifier} — use a subpath export`);
+      }
+    }
+
+    expect([...offenders]).toEqual([]);
   });
 });

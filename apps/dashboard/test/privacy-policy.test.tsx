@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
+import {
+  MESSAGE_CACHE_FALLBACK_TTL_MS,
+  MESSAGE_LOG_RETENTION_DAYS,
+} from '@proton/module-logging/constants';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PrivacyPolicy } from '../src/components/legal/privacy-policy.tsx';
 
