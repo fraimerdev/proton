@@ -127,13 +127,10 @@ export function createAutomodModule(
       GatewayIntentBits.AutoModerationExecution,
     ],
 
-    // ManageGuild is the whole auto-moderation surface, reads included; without it the native half
-    // is invisible rather than merely read-only.
-    requiredPermissions: [
-      Permissions.ViewChannel,
-      Permissions.ManageMessages,
-      Permissions.ManageGuild,
-    ],
+    // Only what screening a message needs. Manage Messages and Manage Server are each required by
+    // one half, and hard-gating the module on either switches off the half that still works —
+    // the executor precheck and the sync both name the missing permission where it actually bites.
+    requiredPermissions: [Permissions.ViewChannel],
 
     emits: ['moderation.warned'],
 
