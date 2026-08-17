@@ -16,6 +16,12 @@ export interface GuildState {
   botRoleIds: string[];
   channels: Map<string, ChannelState>;
 
+  // Both come from GUILD_CREATE, which is the only dispatch carrying them. Optional because a
+  // snapshot written before this field existed has neither, and a welcome message saying
+  // "this server" is better than one saying "undefined".
+  name?: string;
+  memberCount?: number;
+
   updatedAt: number;
 }
 
@@ -24,7 +30,10 @@ export type GuildStatePatch =
   | { kind: 'role.delete'; roleId: string }
   | { kind: 'channel.upsert'; channel: ChannelState }
   | { kind: 'channel.delete'; channelId: string }
-  | { kind: 'bot.roles'; roleIds: string[] };
+  | { kind: 'bot.roles'; roleIds: string[] }
+  // GUILD_CREATE's member_count is a point-in-time reading, so joins and leaves nudge it rather
+  // than re-fetching. It re-baselines on every reconnect, which is what keeps the drift bounded.
+  | { kind: 'member.count'; delta: number };
 
 export interface GuildStateStore {
   get(guildId: string): Promise<GuildState | null>;

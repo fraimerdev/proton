@@ -59,8 +59,6 @@ export function createAntiraidModule(
 
     listeners: [createJoinListener(deps)],
 
-    migrations: [],
-
     dashboard: {
       icon: 'shield-alert',
       sections: [

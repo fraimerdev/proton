@@ -1,4 +1,4 @@
-import type { CommandContext } from '@proton/core';
+import type { Attachment, CommandContext } from '@proton/core';
 import type { LevelingConfig } from './config.ts';
 
 export const MODULE_ID = 'leveling';
@@ -8,7 +8,7 @@ export const LEVELING_ACTOR = 'proton:leveling';
 export async function reply(
   ctx: CommandContext<LevelingConfig>,
   content: string,
-  options: { ephemeral?: boolean } = {},
+  options: { ephemeral?: boolean; files?: Attachment[] } = {},
 ): Promise<void> {
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
@@ -25,6 +25,7 @@ export async function reply(
 
       content: content.slice(0, 2000),
       ephemeral: options.ephemeral ?? false,
+      ...(options.files?.length ? { files: options.files } : {}),
     },
   });
 

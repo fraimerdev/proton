@@ -143,6 +143,13 @@ export class RedisGuildStateStore implements GuildStateStore {
       case 'bot.roles':
         state.botRoleIds = patch.roleIds;
         break;
+      case 'member.count':
+        // Floored at zero: a leave seen without its matching join would otherwise render a
+        // welcome message counting a negative number of members.
+        if (state.memberCount !== undefined) {
+          state.memberCount = Math.max(0, state.memberCount + patch.delta);
+        }
+        break;
     }
 
     state.updatedAt = Date.now();

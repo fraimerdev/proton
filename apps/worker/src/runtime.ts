@@ -22,6 +22,9 @@ import type { ModulePublisherFactory } from './module-publish.ts';
 export interface ModuleConfigSnapshot {
   enabled: boolean;
   config: unknown;
+  // The API already returns this; the worker just never carried it. Optional so a provider that
+  // predates the field still satisfies the port.
+  schemaVersion?: number;
 }
 
 export interface ConfigProvider {

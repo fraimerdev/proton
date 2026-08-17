@@ -37,7 +37,6 @@ export const casesModule: ModuleManifest<typeof casesConfigSchema> = {
   requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
   rules: casesPresetRules,
   compileRules: (config) => escalationRules(config),
-  migrations: [],
   dashboard: {
     icon: 'gavel',
     sections: [

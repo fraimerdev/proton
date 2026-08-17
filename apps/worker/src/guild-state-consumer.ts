@@ -7,7 +7,14 @@ import {
   type Subscription,
 } from '@proton/core';
 
-const TYPES: EventType[] = ['guild.available', 'guild.unavailable'];
+const TYPES: EventType[] = [
+  'guild.available',
+  'guild.unavailable',
+  // Only to keep member_count current. GUILD_CREATE's reading is a point in time, and a welcome
+  // message that says "#0" is the visible cost of not tracking it.
+  'member.joined',
+  'member.left',
+];
 
 export interface GuildRegistrar {
   ensure(
@@ -45,6 +52,15 @@ export class GuildStateConsumer {
 
   async handle(event: { type: string; guildId: string | null; payload: unknown }): Promise<void> {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
+
+    if (event.type === 'member.joined' || event.type === 'member.left') {
+      if (!event.guildId) return;
+      await this.#store.patch(event.guildId, {
+        kind: 'member.count',
+        delta: event.type === 'member.joined' ? 1 : -1,
+      });
+      return;
+    }
 
     if (event.type === 'guild.unavailable') {
       if (!event.guildId) return;

@@ -110,6 +110,7 @@ export const interactionReplyPayloadSchema = z
     content: z.string().max(2000).optional(),
     embeds: embedsSchema.optional(),
     components: componentsSchema.optional(),
+    files: z.array(attachmentSchema).max(10).optional(),
     ephemeral: z.boolean().default(false),
 
     callbackType: z

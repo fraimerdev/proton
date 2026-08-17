@@ -14,9 +14,11 @@ export {
   type LoggingConfig,
   loggingConfigSchema,
   loggingDefaultConfig,
+  MESSAGE_CACHE_DEFAULT_RETENTION,
+  MESSAGE_CACHE_FALLBACK_TTL_MS,
   MESSAGE_LOG_RETENTION_DAYS,
 } from './config.ts';
-export { toMessageLogEntries } from './events.ts';
+export { type CachedMessages, messageIdsOf, toMessageLogEntries } from './events.ts';
 export {
   createMessageLogListener,
   LOGGED_EVENT_TYPES,
@@ -77,12 +79,15 @@ export function createLoggingModule(
       },
     ],
 
-    migrations: [],
-
     dashboard: {
       icon: 'scroll-text',
       sections: [
         { id: 'general', title: 'General', fields: ['enabled', 'logEdits', 'logDeletes'] },
+        {
+          id: 'cache',
+          title: 'Recent message text',
+          fields: ['cacheMessageContent', 'cacheRetention'],
+        },
         { id: 'privacy', title: 'Privacy', fields: ['ignoredChannels'] },
       ],
     },

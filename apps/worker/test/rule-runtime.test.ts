@@ -50,7 +50,6 @@ function manifest(id: string, rules: RuleDefinition[]): ModuleManifest {
     requiredIntents: [],
     requiredPermissions: [Permissions.ViewChannel],
     rules,
-    migrations: [],
   } as unknown as ModuleManifest;
 }
 

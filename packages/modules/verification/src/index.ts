@@ -85,8 +85,6 @@ export function createVerificationModule(
     commands: verificationCommands(deps),
     listeners: [createJoinGateListener(deps)],
 
-    migrations: [],
-
     dashboard: {
       icon: 'shield-check',
       sections: [

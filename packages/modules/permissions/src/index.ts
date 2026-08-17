@@ -37,7 +37,6 @@ export const permissionsModule: ModuleManifest<typeof permissionsConfigSchema> =
   requiredIntents: [GatewayIntentBits.Guilds],
 
   requiredPermissions: [Permissions.ViewChannel],
-  migrations: [],
   dashboard: {
     icon: 'lock',
     sections: [

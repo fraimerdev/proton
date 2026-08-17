@@ -88,7 +88,7 @@ function event(
   payload: Record<string, unknown>,
   overrides: EventOverrides,
 ): ProtonEvent {
-  const normalised = normalise({ ...raw, d: { ...raw.d, ...payload } });
+  const normalised = normalise({ ...raw, d: { ...raw.d, ...payload } })[0];
   if (!normalised) throw new Error(`the normaliser produced nothing for ${raw.t}`);
 
   return {

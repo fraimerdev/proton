@@ -98,6 +98,9 @@ export function buildGuildState(
     break;
   }
 
+  const name = str(payload.name);
+  const memberCount = payload.member_count;
+
   return {
     guildId,
     ownerId,
@@ -106,6 +109,8 @@ export function buildGuildState(
     roles,
     botRoleIds,
     channels,
+    ...(name ? { name } : {}),
+    ...(typeof memberCount === 'number' ? { memberCount } : {}),
     updatedAt: now,
   };
 }

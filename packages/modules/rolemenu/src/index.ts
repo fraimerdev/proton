@@ -113,8 +113,6 @@ export function createRolemenuModule(
     commands: rolemenuCommands,
     listeners: [createReactionListener(deps), createComponentListener(deps)],
 
-    migrations: [],
-
     dashboard: {
       icon: 'list-checks',
       sections: [

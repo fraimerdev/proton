@@ -41,7 +41,6 @@ export function createWelcomeModule(
     requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
 
     listeners: [createGreetingListener(deps)],
-    migrations: [],
 
     dashboard: {
       icon: 'hand-wave',

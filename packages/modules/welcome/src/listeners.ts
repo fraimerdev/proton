@@ -19,6 +19,8 @@ export interface WelcomeDeps {
   cards?: CardDeps;
 
   render?: (input: CardDescriptorInput, deps: CardDeps) => Promise<Uint8Array>;
+  // The same snapshot the executor's prechecks read, for the guild's name and member count.
+  guildState?: { get(guildId: string): Promise<GuildSummary | null> };
 }
 
 function str(value: unknown): string | null {
@@ -35,7 +37,18 @@ export interface GreetingTarget extends GreetingFacts {
   avatarHash: string | null;
 }
 
-export function readGreetingTarget(payload: unknown): GreetingTarget | null {
+export interface GuildSummary {
+  name?: string | undefined;
+  memberCount?: number | undefined;
+}
+
+// Neither GUILD_MEMBER_ADD nor GUILD_MEMBER_REMOVE carries the guild's name or member count, so
+// they come from the guild-state cache instead. Both stay optional: a template rendering
+// "this server" is wrong-ish, one rendering "undefined" is broken.
+export function readGreetingTarget(
+  payload: unknown,
+  guild: GuildSummary = {},
+): GreetingTarget | null {
   const user = nested(payload, 'user');
   const userId = str(nested(user, 'id'));
   if (!userId) return null;
@@ -45,11 +58,8 @@ export function readGreetingTarget(payload: unknown): GreetingTarget | null {
   return {
     userId,
     username,
-    guildName: str(nested(payload, 'guild_name')) ?? 'this server',
-    memberCount:
-      typeof nested(payload, 'member_count') === 'number'
-        ? (nested(payload, 'member_count') as number)
-        : 0,
+    guildName: guild.name ?? 'this server',
+    memberCount: guild.memberCount ?? 0,
     avatarHash: str(nested(user, 'avatar')),
   };
 }
@@ -66,7 +76,8 @@ export function createGreetingListener(deps: WelcomeDeps = {}): EventListener<We
 
       if (!channelId) return;
 
-      const target = readGreetingTarget(event.payload);
+      const guild = (await deps.guildState?.get(ctx.guildId)) ?? {};
+      const target = readGreetingTarget(event.payload, guild);
       if (!target) {
         ctx.logger.warn(`${event.type} carried no user, so nobody could be greeted`, {
           guildId: ctx.guildId,

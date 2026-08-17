@@ -1,11 +1,15 @@
 import {
+  createUserResolver,
   DatabaseReversalScheduler,
   DefaultActionExecutor,
   HttpRestProxyClient,
+  RedisCorrelationStore,
   RedisDedupeStore,
   RedisGuildStateStore,
+  RedisMessageContentCache,
   RedisRateWindow,
   RedisStreamsEventBus,
+  RedisUserProfileCache,
   type ResolveContextHints,
   ReversalSweeper,
   RuleEngine,
@@ -19,28 +23,37 @@ import {
   DrizzleScheduledActionStore,
 } from '@proton/db';
 import { RedisMaintenanceStore } from '@proton/module-antinuke';
-import { DrizzleStickyRoleStore } from '@proton/module-autorole';
 import { DrizzleBackupStore } from '@proton/module-backup';
+import { DrizzleStickyRoleStore, RedisPendingGrantStore } from '@proton/module-joinroles';
 import { levelForXp, MAX_XP, RedisVoiceSessionStore } from '@proton/module-leveling';
 import { PostgresMessageLogStore, runMessageLogMaintenance } from '@proton/module-logging';
 import { RedisBlocklistStore, refreshBlocklist } from '@proton/module-phishing';
+import {
+  SERVERLOG_ACTOR,
+  SERVERLOG_MODULE_ID,
+  type ServerlogDeps,
+  serverlogConfigSchema,
+} from '@proton/module-serverlog';
 import { DrizzleStarboardStore } from '@proton/module-starboard';
 import { RedisQuarantineStore } from '@proton/module-verification';
 import { createModuleRegistry } from '@proton/modules';
 import Redis from 'ioredis';
 import { CachingConfigProvider, HttpConfigProvider } from './config-provider.ts';
+import { verifyApplicationEmojis } from './emoji-check.ts';
 import { loadEnv } from './env.ts';
 import { GuildLayoutConsumer, RedisGuildLayoutStore } from './guild-layout.ts';
 import { HttpGuildRegistrar } from './guild-registrar.ts';
 import { GuildStateConsumer } from './guild-state-consumer.ts';
 import { ModuleListenerRuntime } from './listener-runtime.ts';
 import { createFetchMemberRoles } from './member-roles.ts';
+import { MessageCacheConsumer } from './message-cache.ts';
 import { assertHandlersCoverJobs, startModuleJobs } from './module-jobs.ts';
 import { createModulePublisher } from './module-publish.ts';
 import { registerCommands } from './registrar.ts';
 import { startReversalJobs } from './reversal-jobs.ts';
 import { RuleCronScheduler, RuleDispatchRuntime, RulePresetSeeder } from './rule-runtime.ts';
 import { ModuleRuntime } from './runtime.ts';
+import { type ServerlogFlushJobs, startServerlogFlush } from './serverlog-flush.ts';
 import { createStarboardSource } from './starboard-source.ts';
 
 const env = loadEnv();
@@ -50,6 +63,8 @@ const dedupeRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_DEDUPE });
 const stateRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_STATE });
 
 const moduleRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_MODULES });
+const userRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_USERS });
+const messageRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_MESSAGES });
 const handle = createDb(env.DATABASE_URL);
 
 const rest = new HttpRestProxyClient(env.REST_PROXY_URL);
@@ -106,6 +121,43 @@ const fetchMemberRoles = createFetchMemberRoles(rest, {
 const rateWindow = new RedisRateWindow(moduleRedis);
 const blocklist = new RedisBlocklistStore(moduleRedis);
 const messageLogStore = new PostgresMessageLogStore(handle);
+const messageCache = new RedisMessageContentCache(messageRedis);
+
+const correlation = new RedisCorrelationStore(moduleRedis);
+const users = createUserResolver({
+  cache: new RedisUserProfileCache(userRedis),
+  rest,
+  pseudoActors: { [SERVERLOG_ACTOR]: { username: 'Proton', avatarUrl: null } },
+  onUnavailable: (userId, status) => {
+    console.warn(
+      `could not read ${userId}'s profile: the REST proxy answered ${status}. The log that ` +
+        'needed it names the executor as Unknown rather than being dropped.',
+      { userId, status },
+    );
+  },
+});
+
+const logEmojis = await verifyApplicationEmojis(
+  rest,
+  env.DISCORD_APPLICATION_ID,
+  { stemId: env.PROTON_EMOJI_STEM, replyId: env.PROTON_EMOJI_REPLY },
+  console,
+);
+
+let flushJobs: ServerlogFlushJobs | null = null;
+
+const serverlogDeps: ServerlogDeps = {
+  correlation,
+  users,
+  emojis: logEmojis,
+  burst: rateWindow,
+
+  botUserId: env.DISCORD_APPLICATION_ID,
+
+  scheduleFlush: async (request) => {
+    await flushJobs?.schedule(request);
+  },
+};
 
 const executor = new DefaultActionExecutor({
   dedupe: new RedisDedupeStore(dedupeRedis),
@@ -157,22 +209,27 @@ const registry = createModuleRegistry({
 
     botUserId: env.DISCORD_APPLICATION_ID,
   },
-  logging: { store: messageLogStore },
+  logging: { store: messageLogStore, cache: messageCache },
+  serverlog: serverlogDeps,
 
   leveling: {
     xp: new DrizzleMemberXpStore(handle, { levelForXp, maxXp: MAX_XP }),
     sessions: new RedisVoiceSessionStore(moduleRedis),
   },
-  autorole: {
+  joinroles: {
     store: new DrizzleStickyRoleStore(handle),
+    pending: new RedisPendingGrantStore(moduleRedis),
 
     guildState,
+
+    botUserId: env.DISCORD_APPLICATION_ID,
   },
   rolemenu: {
     applicationId: env.DISCORD_APPLICATION_ID,
 
     botUserId: env.DISCORD_APPLICATION_ID,
   },
+  welcome: { guildState },
   starboard: {
     store: new DrizzleStarboardStore(handle),
     ...createStarboardSource(rest, {
@@ -261,6 +318,14 @@ const stateConsumer = new GuildStateConsumer({
 
 const layoutConsumer = new GuildLayoutConsumer({ bus, store: layoutStore, logger: console });
 
+const messageCacheConsumer = new MessageCacheConsumer({
+  bus,
+  cache: messageCache,
+  config,
+  botUserId: env.DISCORD_APPLICATION_ID,
+  logger: console,
+});
+
 const moduleJobHandlers = {
   'phishing:refresh-blocklist': () => refreshBlocklist({ store: blocklist, logger: console }),
   'logging:partition-maintenance': (payload: Record<string, unknown>) =>
@@ -271,6 +336,7 @@ assertHandlersCoverJobs(registry, moduleJobHandlers, console);
 const subscriptions = [
   stateConsumer.start(),
   layoutConsumer.start(),
+  messageCacheConsumer.start(),
   runtime.start(),
   ...listeners.start(),
   ...ruleDispatch.start(),
@@ -306,6 +372,22 @@ const reversalJobs = startReversalJobs({
   logger: console,
 });
 
+flushJobs = startServerlogFlush({
+  connection: { url: env.REDIS_URL, db: env.REDIS_DB_JOBS, maxRetriesPerRequest: null },
+  serverlog: serverlogDeps,
+  logger: console,
+
+  contextFor: async (guildId) => {
+    const snapshot = await config.get(guildId, SERVERLOG_MODULE_ID);
+    if (!snapshot.enabled) return null;
+
+    const parsed = serverlogConfigSchema.safeParse(snapshot.config);
+    if (!parsed.success) return null;
+
+    return { guildId, config: parsed.data, executor, logger: console };
+  },
+});
+
 const moduleJobs = startModuleJobs({
   connection: { url: env.REDIS_URL, db: env.REDIS_DB_JOBS, maxRetriesPerRequest: null },
   registry,
@@ -325,6 +407,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
           ...subscriptions.map((s) => s.close()),
           reversalJobs.close(),
           moduleJobs.close(),
+          flushJobs?.close() ?? Promise.resolve(),
           ruleCron.close(),
         ]);
         busRedis.disconnect();

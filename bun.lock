@@ -226,6 +226,7 @@
       "name": "@proton/module-leveling",
       "version": "0.0.0",
       "dependencies": {
+        "@proton/cards": "workspace:*",
         "@proton/core": "workspace:*",
         "discord-api-types": "^0.38.53",
         "discord.js": "^14.27.0",

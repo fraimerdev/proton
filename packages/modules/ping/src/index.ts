@@ -22,7 +22,6 @@ export const pingModule: ModuleManifest<typeof pingConfigSchema> = {
   requiredIntents: [GatewayIntentBits.Guilds],
   requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
   commands: [pingCommand],
-  migrations: [],
   dashboard: {
     icon: 'activity',
     sections: [{ id: 'general', title: 'General', fields: [] }],

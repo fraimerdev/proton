@@ -106,8 +106,13 @@ export {
 export { createEnv, EnvValidationError } from './env.ts';
 export {
   AUDIT_LOG_EVENT_TYPES,
+  type AuditChange,
+  type AuditEntry,
   type AuditLogEventPayload,
   type AuditLogEventType,
+  auditChange,
+  auditChangeSchema,
+  auditEntrySchema,
   auditLogEventPayloadSchema,
   isAuditLogEventType,
   requiresAuditLog,
@@ -119,6 +124,24 @@ export type {
   Subscription,
 } from './events/bus.ts';
 export {
+  CORRELATION_GRACE_MS,
+  CORRELATION_PREFIX,
+  CORRELATION_TTL_MS,
+  type CorrelationStore,
+  type CorrelationStoreOptions,
+  type PendingLog,
+  RedisCorrelationStore,
+} from './events/correlation.ts';
+export {
+  diffKeys,
+  type ProtonActionExecuted,
+  type ProtonConfigChanged,
+  type ProtonSecurityTripped,
+  protonActionExecutedSchema,
+  protonConfigChangedSchema,
+  protonSecurityTrippedSchema,
+} from './events/proton.ts';
+export {
   DLQ_PREFIX,
   dlqKey,
   RedisStreamsEventBus,
@@ -126,7 +149,14 @@ export {
   STREAM_PREFIX,
   streamKey,
 } from './events/redis-streams.ts';
-export { EVENT_TYPES, type EventType, isEventType, type ProtonEvent } from './events/types.ts';
+export {
+  EVENT_TYPES,
+  type EventType,
+  isEventType,
+  type ProtonEvent,
+  SERVICE_EMITTED_EVENT_TYPES,
+  type ServiceEmittedEventType,
+} from './events/types.ts';
 export { buildGuildState, parseChannel, parseOverwrites, parseRole } from './guild-state/build.ts';
 export { GUILD_STATE_PREFIX, RedisGuildStateStore } from './guild-state/redis.ts';
 export {
@@ -146,12 +176,28 @@ export {
   type LeaderboardRow,
   leaderboardQuerySchema,
 } from './leaderboard.ts';
+export {
+  type CachedAttachment,
+  type CachedMessage,
+  cachedAttachmentSchema,
+  cachedMessageSchema,
+  clampCacheTtl,
+  MESSAGE_CACHE_ATTACHMENTS_MAX,
+  MESSAGE_CACHE_CONTENT_MAX,
+  MESSAGE_CACHE_DEFAULT_TTL_MS,
+  MESSAGE_CACHE_MAX_TTL_MS,
+  MESSAGE_CACHE_MIN_TTL_MS,
+  MESSAGE_CACHE_PREFIX,
+  type MessageContentCache,
+  RedisMessageContentCache,
+  type RedisMessageContentCacheOptions,
+  toCachedMessage,
+} from './messages/content-cache.ts';
 export type {
   CommandContext,
   CommandDefinition,
   EventListener,
   Logger,
-  Migration,
   ModuleCategory,
   ModuleContext,
   ModuleManifest,
@@ -239,3 +285,21 @@ export {
   ruleTriggerSchema,
   type ScheduledJob,
 } from './rules/types.ts';
+export {
+  avatarUrl,
+  CDN_BASE,
+  RedisUserProfileCache,
+  toUserProfile,
+  USER_PROFILE_PREFIX,
+  USER_PROFILE_TTL_MS,
+  type UserProfile,
+  type UserProfileCache,
+  userProfileSchema,
+} from './users/profile-cache.ts';
+export {
+  createUserResolver,
+  isPseudoActor,
+  PSEUDO_ACTOR_PREFIX,
+  type UserResolver,
+  type UserResolverDeps,
+} from './users/resolver.ts';

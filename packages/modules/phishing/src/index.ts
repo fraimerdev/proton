@@ -104,8 +104,6 @@ export function createPhishingModule(
       },
     ],
 
-    migrations: [],
-
     dashboard: {
       icon: 'fish',
       sections: [

@@ -44,7 +44,7 @@ function burstEvents(
   dispatches: readonly RawDispatch[] = dispatchSequence('auditLogChannelDeleteBurst'),
 ) {
   return dispatches.map((raw) => {
-    const event = normalise(raw);
+    const event = normalise(raw)[0];
     if (!event) throw new Error(`the normaliser produced nothing for ${raw.t}`);
     return event;
   });

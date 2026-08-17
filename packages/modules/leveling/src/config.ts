@@ -4,6 +4,7 @@ import {
   snowflakeSchema,
   tryParseDuration,
 } from '@proton/core';
+import { CARD_PRESETS } from '@proton/cards';
 import { z } from 'zod';
 import { MAX_LEVEL } from './curve.ts';
 
@@ -67,6 +68,16 @@ const levelingShape = {
       'How long after earning XP before a member can earn it again. Shorter rewards ' +
       'flooding; this is the one setting that decides whether the leaderboard measures ' +
       'participation or typing speed.',
+  }),
+
+  rankCard: z.boolean().default(false).register(protonFields, {
+    label: 'Rank card',
+    description: 'Attach a rendered image to /rank instead of replying with text alone.',
+  }),
+
+  cardPreset: z.enum(CARD_PRESETS).default('midnight').register(protonFields, {
+    label: 'Card style',
+    description: 'Which of the three built-in card designs /rank renders.',
   }),
 
   levelUpMessage: z
@@ -169,6 +180,8 @@ export const levelingFormSchema = z.object(levelingShape).omit({ roleRewards: tr
 export const levelingDefaultConfig: LevelingConfig = {
   enabled: false,
   xpPerMessageMin: 15,
+  rankCard: false,
+  cardPreset: 'midnight',
   xpPerMessageMax: 25,
   messageCooldown: '60s',
   levelUpMessage: DEFAULT_LEVEL_UP_MESSAGE,

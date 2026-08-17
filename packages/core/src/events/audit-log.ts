@@ -40,3 +40,25 @@ export const auditLogEventPayloadSchema = z.object({
 });
 
 export type AuditLogEventPayload = z.infer<typeof auditLogEventPayloadSchema>;
+
+export const auditChangeSchema = z.object({
+  key: z.string().max(100),
+  old_value: z.unknown().optional(),
+  new_value: z.unknown().optional(),
+});
+
+export type AuditChange = z.infer<typeof auditChangeSchema>;
+
+// `changes` and `options` are the only before/after Discord gives for guild, channel, role and
+// member updates. Without them an "updated" log can say that something changed but not what.
+export const auditEntrySchema = auditLogEventPayloadSchema.extend({
+  changes: z.array(auditChangeSchema).max(64).default([]),
+
+  options: z.record(z.string(), z.unknown()).nullable().default(null),
+});
+
+export type AuditEntry = z.infer<typeof auditEntrySchema>;
+
+export function auditChange(entry: AuditEntry, key: string): AuditChange | undefined {
+  return entry.changes.find((change) => change.key === key);
+}

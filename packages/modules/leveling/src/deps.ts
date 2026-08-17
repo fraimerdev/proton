@@ -1,6 +1,8 @@
 import type { MemberXpStore } from './store.ts';
 import type { VoiceSessionStore } from './voice-session.ts';
 
+import type { CardDeps, CardDescriptorInput } from '@proton/cards';
+
 export interface LevelingDeps {
   xp?: MemberXpStore;
 
@@ -9,6 +11,11 @@ export interface LevelingDeps {
   now?: () => number;
 
   random?: () => number;
+  cards?: CardDeps;
+  renderCard?: (input: CardDescriptorInput, deps: CardDeps) => Promise<Uint8Array>;
+  userProfile?: (
+    userId: string,
+  ) => Promise<{ displayName: string; avatarHash: string | null } | null>;
 }
 
 const PORT_HINTS: Record<string, string> = {

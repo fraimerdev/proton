@@ -78,7 +78,6 @@ export function createAntinukeModule(
 
     commands: createAntinukeCommands(deps),
     listeners: [createAntinukeListener(deps)],
-    migrations: [],
 
     dashboard: {
       icon: 'shield-alert',

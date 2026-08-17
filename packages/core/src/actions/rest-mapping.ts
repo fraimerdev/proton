@@ -155,6 +155,8 @@ export function toRestCall(request: ActionRequest): PayloadResult {
       const p = interactionReplyPayloadSchema.safeParse(request.payload);
       if (!p.success) return issues(request, p.error.issues);
 
+      const { files, descriptors } = toFiles(p.data.files);
+
       const data = isDeferral(p.data.callbackType)
         ? p.data.ephemeral
           ? { flags: MESSAGE_FLAG_EPHEMERAL }
@@ -163,6 +165,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             content: p.data.content,
             embeds: p.data.embeds,
             components: p.data.components,
+            attachments: descriptors,
             flags: p.data.ephemeral ? MESSAGE_FLAG_EPHEMERAL : undefined,
           });
 
@@ -171,6 +174,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
           method: 'POST',
           path: `/interactions/${p.data.interactionId}/${p.data.interactionToken}/callback`,
           body: present({ type: p.data.callbackType, data }),
+          ...(files ? { files } : {}),
         },
       };
     }

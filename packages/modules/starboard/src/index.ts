@@ -99,8 +99,6 @@ export function createStarboardModule(
 
     listeners: [createStarboardListener(deps)],
 
-    migrations: [],
-
     dashboard: {
       icon: 'star',
       sections: [

@@ -17,6 +17,23 @@ export const envSchema = z.object({
 
   REDIS_DB_MODULES: z.coerce.number().int().min(0).max(15).default(4),
 
+  REDIS_DB_USERS: z.coerce.number().int().min(0).max(15).default(6),
+
+  // The one dataset where allkeys-lru eviction is acceptable, unlike the rate windows and voice
+  // sessions sharing REDIS_DB_MODULES.
+  REDIS_DB_MESSAGES: z.coerce.number().int().min(0).max(15).default(7),
+
+  // Application emoji, not guild emoji: a guild emoji id renders as broken text in every other
+  // server. Left unset, logs fall back to plain box-drawing characters.
+  PROTON_EMOJI_STEM: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
+  PROTON_EMOJI_REPLY: z
+    .string()
+    .regex(/^\d{17,20}$/)
+    .optional(),
+
   CONFIG_CACHE_TTL_MS: z.coerce.number().int().min(0).default(5_000),
 
   REVERSAL_SWEEP_INTERVAL_MS: z.coerce.number().int().min(1000).default(15_000),

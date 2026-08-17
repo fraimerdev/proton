@@ -6,6 +6,7 @@ import { levelProgress, MAX_XP } from './curve.ts';
 import { bindXp, clockOf, describeUnbound, type LevelingDeps } from './deps.ts';
 import { applyLevelUp } from './level-up.ts';
 import { MODULE_ID, reply } from './perform.ts';
+import { renderRankCard } from './rank-card.ts';
 import type { MemberXpStore, XpAdjustment } from './store.ts';
 
 type Command = CommandDefinition<LevelingConfig>;
@@ -84,11 +85,23 @@ export function rankCommand(deps: LevelingDeps): Command {
           : `${count(progress.remaining)} XP to level ${progress.level + 1} ` +
             `(${count(progress.into)}/${count(progress.span)}).`;
 
-      await reply(
-        ctx,
+      const text =
         `**<@${userId}>** — level ${progress.level}, ${count(record.xp)} XP, ` +
-          `rank #${count(record.rank)}.\n${next}`,
-      );
+        `rank #${count(record.rank)}.\n${next}`;
+
+      const card = ctx.config.rankCard
+        ? await renderRankCard(ctx, deps, {
+            userId,
+            preset: ctx.config.cardPreset,
+            level: progress.level,
+            rank: record.rank,
+            totalXp: record.xp,
+            into: progress.into,
+            span: progress.span,
+          })
+        : null;
+
+      await reply(ctx, text, card ? { files: [card] } : {});
     },
   };
 }

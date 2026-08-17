@@ -79,8 +79,6 @@ export function createBackupModule(
 
     commands: createBackupCommands(deps),
 
-    migrations: [],
-
     dashboard: {
       icon: 'archive',
       sections: [

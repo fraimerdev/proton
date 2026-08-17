@@ -53,7 +53,6 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
   commands: [...memberCommands, ...channelCommands],
 
   emits: ['moderation.warned'],
-  migrations: [],
   dashboard: {
     icon: 'shield',
     sections: [

@@ -35,7 +35,7 @@ describe('logging config', () => {
   });
 
   test('has a schema version to migrate from', () => {
-    expect(LOGGING_SCHEMA_VERSION).toBe(1);
+    expect(LOGGING_SCHEMA_VERSION).toBe(2);
   });
 });
 
@@ -44,7 +44,14 @@ describe('dashboard descriptors', () => {
   const byPath = new Map(descriptors.map((d) => [d.path, d]));
 
   test('every field is renderable by the v1 form generator (§9)', () => {
-    expect([...byPath.keys()]).toEqual(['enabled', 'logEdits', 'logDeletes', 'ignoredChannels']);
+    expect([...byPath.keys()]).toEqual([
+      'enabled',
+      'logEdits',
+      'logDeletes',
+      'ignoredChannels',
+      'cacheMessageContent',
+      'cacheRetention',
+    ]);
   });
 
   test('the opt-in toggle carries a description naming what is stored', () => {

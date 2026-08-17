@@ -1,6 +1,6 @@
-import type { EventListener, EventType } from '@proton/core';
+import type { EventListener, EventType, MessageContentCache } from '@proton/core';
 import type { LoggingConfig } from './config.ts';
-import { toMessageLogEntries } from './events.ts';
+import { messageIdsOf, toMessageLogEntries } from './events.ts';
 import type { MessageLogStore } from './store.ts';
 
 export const LOGGED_EVENT_TYPES: EventType[] = [
@@ -11,6 +11,7 @@ export const LOGGED_EVENT_TYPES: EventType[] = [
 
 export interface LoggingDeps {
   store?: MessageLogStore;
+  cache?: MessageContentCache;
 }
 
 const UNBOUND_STORE =
@@ -25,7 +26,14 @@ export function createMessageLogListener(deps: LoggingDeps): EventListener<Loggi
     async handler(event, ctx) {
       if (!ctx.config.enabled) return;
 
-      const entries = toMessageLogEntries(event, ctx.config);
+      // Ids are resolved here rather than inside toMessageLogEntries so that function stays pure
+      // and testable with a hand-built Map.
+      const cached =
+        deps.cache && ctx.config.cacheMessageContent
+          ? await deps.cache.getMany(ctx.guildId, messageIdsOf(event))
+          : undefined;
+
+      const entries = toMessageLogEntries(event, ctx.config, cached);
       if (entries.length === 0) return;
 
       if (!deps.store) {

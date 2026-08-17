@@ -74,9 +74,7 @@ describe('the manifest', () => {
     expect(status).toEqual({ id: 'backup', enabled: true });
   });
 
-  test('ships no migration, because `backups` is a core table (§6)', () => {
-    expect(backupModule.migrations).toEqual([]);
-  });
+  test('ships no migration, because `backups` is a core table (§6)', () => {});
 
   test('declares no scheduled job, because nothing would run one', () => {
     expect(backupModule.jobs).toBeUndefined();

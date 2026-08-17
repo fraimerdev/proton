@@ -108,12 +108,11 @@ export function createLevelingModule(
 
     emits: ['xp.level_gained'],
 
-    migrations: [],
-
     dashboard: {
       icon: 'trending-up',
       sections: [
         { id: 'general', title: 'General', fields: ['enabled'] },
+        { id: 'card', title: 'Rank card', fields: ['rankCard', 'cardPreset'] },
         {
           id: 'message',
           title: 'Message XP',

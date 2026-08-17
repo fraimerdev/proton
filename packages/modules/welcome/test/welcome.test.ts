@@ -63,7 +63,7 @@ function config(overrides: Partial<WelcomeConfig> = {}): WelcomeConfig {
 }
 
 function joinEvent(): ProtonEvent {
-  const event = normalise(dispatch('guildMemberAdd'));
+  const event = normalise(dispatch('guildMemberAdd'))[0];
   if (!event) throw new Error('guildMemberAdd did not normalise');
   return event;
 }
@@ -71,7 +71,7 @@ function joinEvent(): ProtonEvent {
 function leaveEvent(): ProtonEvent {
   const raw = dispatch('guildMemberAdd');
   raw.t = 'GUILD_MEMBER_REMOVE';
-  const event = normalise(raw);
+  const event = normalise(raw)[0];
   if (!event) throw new Error('GUILD_MEMBER_REMOVE did not normalise');
   return event;
 }
@@ -112,7 +112,16 @@ describe('readGreetingTarget', () => {
     expect(target?.username).toBe('Newcomer');
   });
 
-  test('degrades gracefully when the guild name is absent', () => {
+  // The bug this closes: these came off the dispatch, which carries neither, so every guild's
+  // welcome said "this server" and "#0" no matter what.
+  test('takes the guild name and member count from the guild-state cache', () => {
+    const target = readGreetingTarget(joinEvent().payload, { name: 'Proton', memberCount: 42 });
+
+    expect(target?.guildName).toBe('Proton');
+    expect(target?.memberCount).toBe(42);
+  });
+
+  test('degrades gracefully when the cache has nothing yet', () => {
     const target = readGreetingTarget(joinEvent().payload);
 
     expect(target?.guildName).toBe('this server');

@@ -45,11 +45,6 @@ export interface EventListener<C = unknown> {
   handler(event: ProtonEvent, ctx: ModuleContext<C>): Promise<void>;
 }
 
-export interface Migration {
-  id: string;
-  sql: string;
-}
-
 export interface SectionDescriptor {
   id: string;
   title: string;
@@ -83,6 +78,5 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   // Pure and returning data, so what it produces is still inspectable and diffable.
   compileRules?(config: z.infer<C>): RuleDefinition[];
   jobs?: ScheduledJob[];
-  migrations: Migration[];
   dashboard?: { icon: string; sections: SectionDescriptor[] };
 }
