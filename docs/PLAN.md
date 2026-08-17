@@ -192,7 +192,11 @@ Framework-enforced behaviour: a module missing a required intent **disables itse
 - **Phase 1 (moderation core):** `cases`, `logging`, `permissions`, `rules` (preset rules), standard mod commands (ban/kick/timeout/purge/slowmode/lockdown), temp actions with auto-reversal, warn escalation, dashboard v1.
 - **Phase 2 (security):** anti-nuke (per-actor sliding windows on channel/role/webhook/emoji delete + mass ban/kick; circuit breaker strips roles first, investigates after; maintenance-mode bypass for legit bulk admin work), anti-raid (join-rate, account-age, avatarless heuristics), verification gate, quarantine, backup/restore (**obfuscation-aware from day one**, §10), phishing-link detection via community blocklist feeds.
 - **Phase 3 (engagement):** leveling + XP curves, rank cards (Satori/Resvg — not headless Chrome), role rewards, leaderboards, welcome/goodbye cards, autorole, sticky roles, reaction/button/dropdown roles, starboard.
-- **Phase 4 (utility):** tickets, giveaways, tags, suggestions, embed builder, scheduled announcements, reminders, temp VCs, counters. Native Discord polls, native AutoMod delegation for keyword/mention-spam (runs at Discord's edge, zero intent cost).
+- **Phase 4 (utility):** tickets, giveaways, tags, suggestions, embed builder, scheduled announcements, reminders, temp VCs, counters. Native Discord polls.
+  - **Landed early, after Phase 3:** the `automod` module — in-house screening (flood, duplicates,
+    mass mentions, invites, blocked domains, attachments, patterns, zalgo, caps, emoji, walls) plus
+    native AutoMod delegation. One config; Proton pushes what Discord's edge can enforce into real
+    rules it owns by `creator_id`, and enforces the rest itself. Both halves feed one case history.
 - **Phase 5 (commercial):** entitlements/billing, premium gating, sharding hardening, App Verification, privileged intent application, SLOs, status page.
 - **After engine is stable, high priority:** visual rule builder — worth more than any three modules.
 

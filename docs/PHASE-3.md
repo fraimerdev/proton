@@ -1,10 +1,11 @@
 # Phase 3 — Engagement (plan)
 
-> **Implementation status — 2026-08-15.** Slices 3.A–3.G are built. The repo is
-> green on `bun run typecheck` (25/25), `bun run lint` (clean) and `bun test` (**1179 pass, 22 fail —
-> every failure is a `*.integration.test.ts` reporting "Could not find a working container runtime
-> strategy"**). Sixteen modules register. See §7 below for what is *not* done, and read §0 first:
-> **no gate can be claimed from this host**, because the integration suites have never executed.
+> **Implementation status — 2026-08-17.** Slices 3.A–3.G are built, the ten unfinished surfaces in
+> §7 are closed, and the `automod` module has landed on top (see §8). The repo is green on
+> `bun run typecheck` (27/27), `bun run lint` (clean) and `bun test` (**1715 pass, 24 fail — every
+> failure is a `*.integration.test.ts` reporting "Could not find a working container runtime
+> strategy"**). Seventeen modules register. Read §0 first: **no gate can be claimed from this host**,
+> because the integration suites have never executed.
 
 
 Companion to `docs/PLAN.md`. Planned against the codebase **as it actually exists**, per PLAN.md §0
@@ -412,13 +413,52 @@ Two additions to `packages/core` that the plan did not anticipate:
    integration suites. Nothing in §4 should be treated as demonstrated.
 3. **No card preview in the dashboard.** Rendering lives in `apps/worker` by decision, so the
    settings page names the preset but cannot show it.
-4. **`manifest.migrations` still runs nowhere** (R5). Phase 3 added two more tables to the core
-   drizzle set — `0004_leveling.sql` and `0005_starboard.sql` — via `logging`'s workaround. That is
-   now three modules deep and should be closed rather than repeated a fourth time.
-5. **`ActionResult` discards Discord's response body**, so a module cannot learn the id of a message
-   it just sent. Starboard works around this by re-reading the board channel and matching on the
-   embed's jump-link URL (`resolveBoardPost`). It is the ugliest thing in the phase and the fix
-   belongs in `packages/core`.
+3. **No card preview in the dashboard** — unchanged.
+
+Items 4 and 5 as first written are now closed: `manifest.migrations` was deleted in favour of the
+core drizzle set that four modules already used, and `ActionResult.body` carries Discord's response
+on success, which retired starboard's `resolveBoardPost` lookback.
+
+## 8. Automod (landed after Phase 3)
+
+PLAN.md §8 files automod under Phase 4 and §10.5 says "use, don't rebuild: native AutoMod". It is
+built now, and it does both.
+
+**One config, Proton routes.** The admin describes what to block once. Everything Discord's own
+AutoMod can enforce is pushed into real rules at its edge — blocked words, its maintained presets, a
+mention limit, its spam heuristic — and Proton enforces the rest itself: flood, duplicates, mass
+mentions, invites, blocked domains, attachment extensions, custom patterns, zalgo, shouting, emoji
+spam, walls of text. The dashboard's enforcement panel names which half owns what, including each
+regex Rust's engine cannot run and why, because that promise is otherwise unverifiable.
+
+Decisions worth knowing before changing anything here:
+
+| Decision | Why |
+|---|---|
+| Every check is a **severity**, not a boolean | Eleven checks with a separate enabled flag is twenty-two fields to keep consistent. `off` is a severity. |
+| **Highest severity wins**, the rest are reported | First-match-wins makes the punishment depend on array order; summing recreates antiraid's join scoring and makes "why was I timed out" unanswerable. |
+| Both **stateful checks run first and unconditionally** | Flood and duplicate must observe every message. Short-circuiting them behind an earlier match under-counts silently. |
+| Native rules **block and alert, never punish** | Discord's TIMEOUT action only exists on KEYWORD and MENTION_SPAM, so the same word list would punish differently depending on which rule it landed in. Punishment stays in the severity ladder. |
+| Ownership by **`creator_id`**, name prefix only as fallback | An admin naming their own rule `Proton: blocked words` must not hand it over. Nothing Proton did not create is ever updated or deleted. |
+| Sync is **stateless list-diff-apply** | Nothing to drift, and a rule deleted by hand in Discord's UI comes back on the next reconcile. |
+| Rule writes go through **`ActionExecutor`** (I1), with `record: false` | A rule edit is configuration, not moderation, so it is prechecked and audited but stays out of the case ledger. |
+| Automod **publishes `moderation.warned` itself** | The `warn` *action* is ledger-only and publishes nothing — only `/warn` does. Without this seam the escalation ladder never fires for a repeat offender. Not after a kick or ban: the member is gone. |
+| The **execution listener** warns and escalates too | A natively blocked message produces no `MESSAGE_CREATE`, so without it a member could live on the blocked-word list without reaching a single rung. |
+
+Two seams outside the module were needed:
+
+- **`automod.executed`** and both AutoMod intents (non-privileged, and only delivered to a bot
+  already holding Manage Server). Executions carry no id, and `message_id` is absent when the
+  message was blocked outright — so the natural key falls back to a digest of what matched, and an
+  identical blocked message posted twice collapses to one event. Correct for a log; the same trade
+  the reaction arm already makes.
+- **`proton.config_changed` now reaches a disabled module.** The listener runtime gates every
+  listener on the module switch, so a module turned off never heard that it was — and automod's
+  Discord rules would have gone on blocking with nothing left running to take them down.
+
+Still unproven from this host: the integration paths (config save → rules reconciled; a hand-made
+rule left untouched; a replayed execution recording exactly one case). They are the same Docker
+problem as everything else in §7.
 
 ## 6. Questions for the owner (§14 style — answer before executing)
 
