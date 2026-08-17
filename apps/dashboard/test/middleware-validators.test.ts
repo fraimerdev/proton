@@ -17,17 +17,17 @@ describe('server-function middleware validators', () => {
 
     expect(
       chain([guildAccessValidator, getModuleConfig], {
-        guildId: '1450209710199279760',
+        guildId: '1400000000000000001',
         moduleId: 'cases',
       }),
-    ).toEqual({ guildId: '1450209710199279760', moduleId: 'cases' });
+    ).toEqual({ guildId: '1400000000000000001', moduleId: 'cases' });
   });
 
   test('case-search filters survive the middleware instead of being silently dropped', () => {
     const searchCases = caseQuerySchema.extend({ guildId: z.string().min(1) });
 
     const result = chain([guildAccessValidator, searchCases], {
-      guildId: '1450209710199279760',
+      guildId: '1400000000000000001',
       type: 'ban',
       page: 3,
       sort: 'createdAt',
@@ -49,13 +49,13 @@ describe('server-function middleware validators', () => {
 
     expect(
       chain([guildAccessValidator, updateModuleConfig], {
-        guildId: '1450209710199279760',
+        guildId: '1400000000000000001',
         moduleId: 'antinuke',
         enabled: true,
         config: { channelDeleteLimit: 3 },
       }),
     ).toEqual({
-      guildId: '1450209710199279760',
+      guildId: '1400000000000000001',
       moduleId: 'antinuke',
       enabled: true,
       config: { channelDeleteLimit: 3 },
