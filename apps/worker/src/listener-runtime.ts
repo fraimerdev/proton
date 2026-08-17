@@ -79,7 +79,10 @@ export class ModuleListenerRuntime {
     const snapshot = await this.#snapshot(guildId, manifest, event);
     if (snapshot === null) return;
 
-    if (!snapshot.enabled) return;
+    // A module that has just been switched off still gets its own config_changed, so it can undo
+    // what it owns outside Proton. Automod's Discord AutoMod rules would otherwise keep blocking
+    // messages after the admin turned the module off, with nothing left running to remove them.
+    if (!snapshot.enabled && event.type !== 'proton.config_changed') return;
 
     const parsed = manifest.configSchema.safeParse(snapshot.config);
     if (!parsed.success) {

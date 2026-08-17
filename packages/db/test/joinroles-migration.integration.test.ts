@@ -130,6 +130,39 @@ describe('0006_joinroles', () => {
     expect(left[0]?.n).toBe(0);
   });
 
+  test('a guild that already reconfigured Join Roles keeps the newer row', async () => {
+    await seedLegacy({ enabled: true, autoroleIds: [ROLE] });
+    await handle.client`
+      insert into guild_modules (guild_id, module_id, enabled, config, schema_version)
+      values (
+        ${GUILD}, 'joinroles', true,
+        ${JSON.stringify({
+          enabled: true,
+          memberRoleIds: [ROLE, STICKY],
+          botRoleIds: [ROLE],
+          grantWhenScreeningPasses: true,
+          stickyEnabled: true,
+          stickyRoleIds: [],
+        })}::jsonb,
+        2
+      )
+    `;
+
+    await applyRename();
+
+    // Renaming onto the existing row would violate the (guild_id, module_id) primary key, so the
+    // newer row wins and the legacy one is dropped rather than the migration failing.
+    const config = (await joinrolesRow())?.config as Record<string, unknown>;
+    expect(config.memberRoleIds).toEqual([ROLE, STICKY]);
+    expect(config.botRoleIds).toEqual([ROLE]);
+
+    const left = (await handle.client`
+      select count(*)::int as n from guild_modules where module_id = 'autorole'
+    `) as unknown as Array<{ n: number }>;
+
+    expect(left[0]?.n).toBe(0);
+  });
+
   test('stale autorole rules are cleared so the dispatcher stops complaining about them', async () => {
     await handle.client`
       insert into rules (id, guild_id, module_id, trigger, conditions, actions, enabled, priority)

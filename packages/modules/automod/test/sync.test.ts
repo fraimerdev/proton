@@ -191,6 +191,40 @@ describe('createAutomodSyncListener', () => {
     expect(h.executor.kinds()).toEqual(['automod_rule_delete']);
   });
 
+  test('switching the module off takes them down too, config untouched', async () => {
+    const h = harness(config({ blockedWords: ['scam'] }));
+    const listener = createAutomodSyncListener({
+      botUserId: BOT,
+      async readNativeRules() {
+        return ruleList();
+      },
+    });
+
+    await listener.handler(
+      protonEvent('proton.config_changed', { moduleId: 'automod', enabledAfter: false }),
+      h.ctx,
+    );
+
+    expect(h.executor.kinds()).toEqual(['automod_rule_delete']);
+  });
+
+  test('switching it back on restores them', async () => {
+    const h = harness(config({ blockedWords: ['scam'] }));
+    const listener = createAutomodSyncListener({
+      botUserId: BOT,
+      async readNativeRules() {
+        return [];
+      },
+    });
+
+    await listener.handler(
+      protonEvent('proton.config_changed', { moduleId: 'automod', enabledAfter: true }),
+      h.ctx,
+    );
+
+    expect(h.executor.kinds()).toEqual(['automod_rule_create']);
+  });
+
   test('an unbound port says the native half is not running', async () => {
     const h = harness(config({ blockedWords: ['scam'] }));
     const listener = createAutomodSyncListener({});

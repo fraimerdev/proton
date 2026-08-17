@@ -8,6 +8,9 @@ export interface SyncInput {
   botUserId: string;
   readNativeRules(guildId: string): Promise<unknown>;
   reason?: string;
+  // The module-level switch, which the config schema knows nothing about. False means take
+  // everything down rather than reconcile toward it.
+  active?: boolean;
 }
 
 export interface SyncOutcome {
@@ -83,7 +86,9 @@ export async function syncNativeRules(input: SyncInput): Promise<SyncOutcome> {
     return outcome;
   }
 
-  const plan = planNativeRules(ctx.config);
+  const plan = planNativeRules(
+    input.active === false ? { ...ctx.config, enabled: false } : ctx.config,
+  );
   const diff = diffNativeRules(plan.desired, parseNativeRules(raw), input.botUserId);
 
   outcome.unchanged = diff.unchanged.length;

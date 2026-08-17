@@ -246,6 +246,20 @@ describe('dispatch', () => {
     expect(logs).toEqual([]);
   });
 
+  test('a module switched off still hears about it, so it can undo what it owns', async () => {
+    const seen: Seen[] = [];
+    const manifest = testModule({ id: 'alpha', types: ['proton.config_changed'], seen });
+    const { runtime } = build([manifest], {
+      async get() {
+        return { enabled: false, config: { enabled: true, label: 'x' } };
+      },
+    });
+
+    await runtime.handleFor(manifest, event('proton.config_changed'));
+
+    expect(seen).toHaveLength(1);
+  });
+
   test('an event with no guild is dropped before the config is even read', async () => {
     const seen: Seen[] = [];
     const manifest = testModule({ id: 'alpha', types: ['message.created'], seen });

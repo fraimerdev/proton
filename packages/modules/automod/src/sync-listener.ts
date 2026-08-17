@@ -5,12 +5,10 @@ import { syncNativeRules } from './sync.ts';
 
 export const AUTOMOD_SYNC_EVENT_TYPES: EventType[] = ['proton.config_changed', 'guild.available'];
 
-function isOurConfigChange(payload: unknown): boolean {
-  return (
-    typeof payload === 'object' &&
-    payload !== null &&
-    (payload as { moduleId?: unknown }).moduleId === MODULE_ID
-  );
+function field(payload: unknown, key: string): unknown {
+  return typeof payload === 'object' && payload !== null
+    ? (payload as Record<string, unknown>)[key]
+    : undefined;
 }
 
 export function createAutomodSyncListener(deps: AutomodDeps): EventListener<AutomodConfig> {
@@ -18,8 +16,9 @@ export function createAutomodSyncListener(deps: AutomodDeps): EventListener<Auto
     types: AUTOMOD_SYNC_EVENT_TYPES,
 
     async handler(event, ctx) {
+      const ourChange = event.type === 'proton.config_changed';
       if (event.guildId === null) return;
-      if (event.type === 'proton.config_changed' && !isOurConfigChange(event.payload)) return;
+      if (ourChange && field(event.payload, 'moduleId') !== MODULE_ID) return;
 
       const { botUserId, readNativeRules } = deps;
       if (!botUserId || !readNativeRules) {
@@ -34,10 +33,12 @@ export function createAutomodSyncListener(deps: AutomodDeps): EventListener<Auto
         return;
       }
 
-      // Deliberately not gated on ctx.config.enabled: disabling automod must take its rules down
-      // rather than abandon them, and planNativeRules returns nothing for a disabled config, which
-      // makes the diff a delete of everything Proton owns.
-      const outcome = await syncNativeRules({ ctx, botUserId, readNativeRules });
+      // Deliberately not gated on being enabled: switching automod off must take its Discord rules
+      // down rather than abandon them still enforcing. The module-level switch is not in the config
+      // schema, so it can only be read off the event that announced the change.
+      const active = ourChange ? field(event.payload, 'enabledAfter') !== false : true;
+
+      const outcome = await syncNativeRules({ ctx, botUserId, readNativeRules, active });
 
       for (const failure of outcome.failures) {
         ctx.logger.error(`automod native sync: ${failure}`, {
