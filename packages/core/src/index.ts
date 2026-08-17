@@ -286,6 +286,18 @@ export {
   type ScheduledJob,
 } from './rules/types.ts';
 export {
+  DOMAIN_MAX_LENGTH,
+  domainCandidates,
+  extractHosts,
+  firstMatch,
+  type HostCandidates,
+  MAX_HOSTS_PER_MESSAGE,
+  MAX_SUFFIXES_PER_HOST,
+  messageCandidates,
+  normaliseDomain,
+  toDomainSet,
+} from './text/domains.ts';
+export {
   avatarUrl,
   CDN_BASE,
   RedisUserProfileCache,

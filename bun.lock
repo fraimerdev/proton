@@ -28,6 +28,7 @@
         "@proton/modules": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "hono": "^4.13.2",
+        "ioredis": "^6.0.0",
         "zod": "^4.4.3",
       },
     },
@@ -179,6 +180,19 @@
       "devDependencies": {
         "@proton/fixtures": "workspace:*",
         "ioredis": "^6.0.0",
+      },
+    },
+    "packages/modules/automod": {
+      "name": "@proton/module-automod",
+      "version": "0.0.0",
+      "dependencies": {
+        "@proton/core": "workspace:*",
+        "discord-api-types": "^0.38.53",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@proton/fixtures": "workspace:*",
+        "@proton/gateway": "workspace:*",
       },
     },
     "packages/modules/backup": {
@@ -630,6 +644,8 @@
     "@proton/module-antinuke": ["@proton/module-antinuke@workspace:packages/modules/antinuke"],
 
     "@proton/module-antiraid": ["@proton/module-antiraid@workspace:packages/modules/antiraid"],
+
+    "@proton/module-automod": ["@proton/module-automod@workspace:packages/modules/automod"],
 
     "@proton/module-backup": ["@proton/module-backup@workspace:packages/modules/backup"],
 

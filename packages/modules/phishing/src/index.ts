@@ -6,6 +6,18 @@ import type { PhishingDeps } from './deps.ts';
 import { createPhishingListener } from './listener.ts';
 import { BLOCKLIST_REFRESH_CRON, BLOCKLIST_REFRESH_JOB_ID } from './refresh.ts';
 
+export {
+  DOMAIN_MAX_LENGTH,
+  domainCandidates,
+  extractHosts,
+  firstMatch,
+  type HostCandidates,
+  MAX_HOSTS_PER_MESSAGE,
+  MAX_SUFFIXES_PER_HOST,
+  messageCandidates,
+  normaliseDomain,
+  toDomainSet,
+} from '@proton/core';
 export { createPhishingStatusCommand } from './commands.ts';
 export {
   PHISHING_ACTIONS,
@@ -30,18 +42,6 @@ export {
   type PhishingVerdict,
   readMessage,
 } from './detect.ts';
-export {
-  DOMAIN_MAX_LENGTH,
-  domainCandidates,
-  extractHosts,
-  firstMatch,
-  type HostCandidates,
-  MAX_HOSTS_PER_MESSAGE,
-  MAX_SUFFIXES_PER_HOST,
-  messageCandidates,
-  normaliseDomain,
-  toDomainSet,
-} from './domains.ts';
 export {
   type BlocklistFeedOptions,
   type BlocklistFetch,

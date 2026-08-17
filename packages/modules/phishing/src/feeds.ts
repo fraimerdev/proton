@@ -1,5 +1,5 @@
 import type { Logger } from '@proton/core';
-import { normaliseDomain } from './domains.ts';
+import { normaliseDomain } from '@proton/core';
 
 export const DEFAULT_BLOCKLIST_FEEDS: readonly string[] = [
   'https://raw.githubusercontent.com/Discord-AntiScam/scam-links/main/list.json',

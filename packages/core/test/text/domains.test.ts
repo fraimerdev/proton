@@ -5,7 +5,7 @@ import {
   MAX_HOSTS_PER_MESSAGE,
   MAX_SUFFIXES_PER_HOST,
   normaliseDomain,
-} from '../src/domains.ts';
+} from '../../src/text/domains.ts';
 
 describe('normaliseDomain', () => {
   test('reduces the shapes a feed actually ships to one comparable domain', () => {

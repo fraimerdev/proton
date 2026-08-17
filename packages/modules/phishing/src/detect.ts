@@ -1,5 +1,5 @@
+import { firstMatch, messageCandidates, toDomainSet } from '@proton/core';
 import type { PhishingConfig } from './config.ts';
-import { firstMatch, messageCandidates, toDomainSet } from './domains.ts';
 
 export interface InspectedMessage {
   messageId: string;
