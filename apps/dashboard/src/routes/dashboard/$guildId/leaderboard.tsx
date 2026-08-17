@@ -36,11 +36,11 @@ function Leaderboard(): ReactElement {
     <section className="panel">
       <h1>Leaderboard</h1>
       <p>
-        <Link to="/guilds/$guildId/modules" params={{ guildId }}>
+        <Link to="/dashboard/$guildId/modules" params={{ guildId }}>
           All modules
         </Link>
         {' · '}
-        <Link to="/guilds/$guildId/$moduleId" params={{ guildId, moduleId: 'leveling' }}>
+        <Link to="/dashboard/$guildId/$moduleId" params={{ guildId, moduleId: 'leveling' }}>
           Leveling settings
         </Link>
       </p>

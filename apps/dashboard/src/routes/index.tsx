@@ -14,7 +14,7 @@ function Home(): ReactElement {
         Sign in with Discord
       </a>
       <p>
-        <Link to="/guilds">Your servers</Link>
+        <Link to="/dashboard">Your servers</Link>
       </p>
 
       <p className="field-description">

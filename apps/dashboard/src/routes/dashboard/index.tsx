@@ -34,7 +34,7 @@ function GuildPicker(): ReactElement {
       <ul className="guild-list">
         {guilds.map((guild) => (
           <li key={guild.id}>
-            <Link to="/guilds/$guildId/modules" params={{ guildId: guild.id }}>
+            <Link to="/dashboard/$guildId" params={{ guildId: guild.id }}>
               {guild.name}
             </Link>
           </li>

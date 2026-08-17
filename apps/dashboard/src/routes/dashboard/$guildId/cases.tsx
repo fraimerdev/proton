@@ -102,7 +102,7 @@ function CaseBrowser(): ReactElement {
     <section className="panel panel-wide">
       <h1>Cases</h1>
       <p>
-        <Link to="/guilds/$guildId/modules" params={{ guildId }}>
+        <Link to="/dashboard/$guildId" params={{ guildId }}>
           Module settings
         </Link>
       </p>

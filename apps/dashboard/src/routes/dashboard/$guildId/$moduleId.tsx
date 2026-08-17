@@ -91,11 +91,11 @@ function ModuleSettings(): ReactElement {
     <section className="panel">
       <h1>{module.name}</h1>
       <p>
-        <Link to="/guilds/$guildId" params={{ guildId }}>
+        <Link to="/dashboard/$guildId" params={{ guildId }}>
           All modules
         </Link>
         {' · '}
-        <Link to="/guilds/$guildId/cases" params={{ guildId }} search={{}}>
+        <Link to="/dashboard" params={{ guildId }} search={{}}>
           Cases
         </Link>
       </p>

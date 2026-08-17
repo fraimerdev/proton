@@ -15,11 +15,11 @@ function ModuleList(): ReactElement {
     <section className="panel">
       <h1>Modules</h1>
       <p>
-        <Link to="/guilds/$guildId/cases" params={{ guildId }} search={{}}>
+        <Link to="/dashboard/$guildId/cases" params={{ guildId }} search={{}}>
           Browse cases
         </Link>
         {' · '}
-        <Link to="/guilds/$guildId/leaderboard" params={{ guildId }} search={{}}>
+        <Link to="/dashboard/$guildId/leaderboard" params={{ guildId }} search={{}}>
           Leaderboard
         </Link>
       </p>
@@ -27,7 +27,7 @@ function ModuleList(): ReactElement {
       <ul className="module-list">
         {modules.map((module) => (
           <li key={module.id}>
-            <Link to="/guilds/$guildId/$moduleId" params={{ guildId, moduleId: module.id }}>
+            <Link to="/dashboard/$guildId/$moduleId" params={{ guildId, moduleId: module.id }}>
               {module.name}
             </Link>
             <span className="field-description">
