@@ -35,11 +35,34 @@ export interface ModuleRuntimeDeps {
   config: ConfigProvider;
   logger: Logger;
   group?: string;
+  /** Where a refusal points an admin to fix things. */
+  dashboardUrl?: string;
 
   publisherFor?: ModulePublisherFactory;
 }
 
 const SUBSCRIBED_TYPES: EventType[] = ['interaction.command'];
+
+export const DEFAULT_DASHBOARD_URL = 'http://localhost:3000';
+
+export type DisabledBy = 'module' | 'config';
+
+/**
+ * A guild can switch a module off in two places — the `guild_modules` row and the module's own
+ * `enabled` config field — and both read as "off" to a member. Deciding it here means every
+ * module gets the same answer instead of each one remembering to check.
+ */
+export function disabledReason(
+  snapshot: ModuleConfigSnapshot,
+  schema: { safeParse(value: unknown): { success: boolean; data?: unknown } },
+): DisabledBy | null {
+  if (!snapshot.enabled) return 'module';
+
+  const parsed = schema.safeParse(snapshot.config);
+  const config = parsed.success ? (parsed.data as Record<string, unknown> | undefined) : undefined;
+
+  return config?.enabled === false ? 'config' : null;
+}
 
 function str(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -101,18 +124,36 @@ export class ModuleRuntime {
       .all()
       .find((m) => m.commands?.some((c) => c.name === commandName));
 
-    if (!manifest) {
-      this.#deps.logger.warn(`no module owns the command '${commandName}'`, { guildId });
-      return;
-    }
-
-    const command = manifest.commands?.find((c) => c.name === commandName);
-    if (!command) return;
-
     const base = this.#deps.executor;
     const executor = isScopedActionExecutor(base)
       ? base.scoped({ channelId, appPermissions: appPermissionsOf(d) })
       : base;
+
+    const reply = (content: string, suffix: string, moduleId: string) =>
+      this.#tell({
+        guildId,
+        userId,
+        executor,
+        interaction: { id: interactionId, token: interactionToken },
+        eventId: event.id,
+        content,
+        suffix,
+        moduleId,
+      });
+
+    const command = manifest?.commands?.find((c) => c.name === commandName);
+
+    if (!manifest || !command) {
+      this.#deps.logger.warn(`no module owns the command '${commandName}'`, { guildId });
+      await reply(
+        `\`/${commandName}\` is registered with Discord but no Proton module claims it. That ` +
+          'usually means the bot was rolled back while the command stayed registered. It will ' +
+          'start working again after the next deploy — nothing in this server is broken.',
+        'unowned-command',
+        PERMISSIONS_MODULE_ID,
+      );
+      return;
+    }
 
     const refusal = await this.#commandOverrideRefusal(guildId, commandName, memberRoleIds(d));
     if (refusal) {
@@ -133,26 +174,45 @@ export class ModuleRuntime {
       if (error instanceof ConfigUnavailableError && error.permanent) {
         this.#deps.logger.error(
           `/${commandName} could not run because ${manifest.id}'s configuration could not be ` +
-            `read, and retrying will not help: ${error.message}. Open the module's settings in ` +
-            'the Proton dashboard and save them once to rewrite the stored config.',
+            `read, and retrying will not help: ${error.message}.`,
           { guildId, moduleId: manifest.id, status: error.status },
+        );
+        await reply(
+          `I couldn't read this server's **${manifest.name}** settings, so \`/${commandName}\` ` +
+            `did nothing. An admin can repair it by opening ${this.#settingsUrl(guildId, manifest.id)} ` +
+            'and pressing Save once, which rewrites the stored settings.',
+          'config-unreadable',
+          manifest.id,
         );
         return;
       }
       throw error;
     }
 
-    if (!snapshot.enabled) {
-      this.#deps.logger.info(`${manifest.id} is disabled in this guild`, { guildId });
+    const disabled = disabledReason(snapshot, manifest.configSchema);
+    if (disabled) {
+      this.#deps.logger.info(`${manifest.id} is disabled in this guild`, { guildId, disabled });
+      await reply(
+        `**${manifest.name}** is switched off in this server, so \`/${commandName}\` did nothing.\n\n` +
+          `A server admin can turn it on at ${this.#settingsUrl(guildId, manifest.id)} — ` +
+          `${disabled === 'module' ? 'tick **Module enabled**' : 'tick **Enabled**'} and press Save.`,
+        'module-disabled',
+        manifest.id,
+      );
       return;
     }
 
     const parsed = manifest.configSchema.safeParse(snapshot.config);
     if (!parsed.success) {
-      this.#deps.logger.error(`invalid stored config for ${manifest.id}`, {
-        guildId,
-        issues: parsed.error.issues.map((i) => `${i.path.map(String).join('.')} ${i.message}`),
-      });
+      const issues = parsed.error.issues.map((i) => `${i.path.map(String).join('.')} ${i.message}`);
+      this.#deps.logger.error(`invalid stored config for ${manifest.id}`, { guildId, issues });
+      await reply(
+        `This server's **${manifest.name}** settings are not valid, so \`/${commandName}\` did ` +
+          `nothing: ${issues.join('; ')}.\n\nAn admin can fix it at ` +
+          `${this.#settingsUrl(guildId, manifest.id)}.`,
+        'config-invalid',
+        manifest.id,
+      );
       return;
     }
 
@@ -171,6 +231,46 @@ export class ModuleRuntime {
 
       idempotencyKey: event.id,
     });
+  }
+
+  #settingsUrl(guildId: string, moduleId: string): string {
+    const base = (this.#deps.dashboardUrl ?? DEFAULT_DASHBOARD_URL).replace(/\/$/, '');
+    return `<${base}/dashboard/${guildId}/${moduleId}>`;
+  }
+
+  async #tell(ctx: {
+    guildId: string;
+    userId: string;
+    executor: ActionExecutor;
+    interaction: { id: string; token: string };
+    eventId: string;
+    content: string;
+    suffix: string;
+    moduleId: string;
+  }): Promise<void> {
+    const result = await ctx.executor.execute({
+      guildId: ctx.guildId,
+      moduleId: ctx.moduleId,
+      kind: 'interaction_reply',
+      actorId: ctx.userId,
+      idempotencyKey: `${ctx.eventId}:${ctx.suffix}`,
+      dryRun: false,
+      payload: {
+        interactionId: ctx.interaction.id,
+        interactionToken: ctx.interaction.token,
+        content: ctx.content.slice(0, 2000),
+        ephemeral: true,
+      },
+    });
+
+    if (result.status === 'failed_precheck' || result.status === 'failed_api') {
+      this.#deps.logger.error(
+        `could not tell ${ctx.userId} why the command did not run: ${
+          result.failure?.humanReason ?? 'unknown reason'
+        }`,
+        { guildId: ctx.guildId, code: result.failure?.code },
+      );
+    }
   }
 
   async #commandOverrideRefusal(

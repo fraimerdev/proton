@@ -1,7 +1,7 @@
 import type { LeaderboardQuery, LeaderboardResult } from '@proton/core';
 import type { DbHandle } from '@proton/db';
 import { members } from '@proton/db/schema';
-import { levelForXp } from '@proton/module-leveling';
+import { levelForXp } from '@proton/module-leveling/curve';
 import { and, count, desc, eq, gt } from 'drizzle-orm';
 
 export class LeaderboardService {

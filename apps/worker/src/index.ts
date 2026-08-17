@@ -201,6 +201,7 @@ const runtime = new ModuleRuntime({
   config,
   logger: console,
   publisherFor,
+  dashboardUrl: env.DASHBOARD_URL,
 });
 const listeners = new ModuleListenerRuntime({
   bus,

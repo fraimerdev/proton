@@ -24,6 +24,9 @@ export const envSchema = z.object({
   REST_PROXY_URL: z.string().min(1).default('http://localhost:3001'),
   API_URL: z.string().min(1).default('http://localhost:3002'),
   API_SHARED_SECRET: z.string().min(16),
+  // Never called, only linked: a refusal that names the settings page is the difference
+  // between "the bot did nothing" and a fix the admin can perform.
+  DASHBOARD_URL: z.string().min(1).default('http://localhost:3000'),
 });
 
 export type WorkerEnv = z.infer<typeof envSchema>;

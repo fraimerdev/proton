@@ -91,13 +91,4 @@ describe('/warn', () => {
     expect(h.published).toEqual([]);
     expect(h.replyContent()).toContain('requires a reason');
   });
-
-  test('is refused when the module is switched off', async () => {
-    const h = harness();
-
-    await h.run('warn', [userOption('user', MEMBER)], { config: { enabled: false } });
-
-    expect(h.cases()).toEqual([]);
-    expect(h.published).toEqual([]);
-  });
 });

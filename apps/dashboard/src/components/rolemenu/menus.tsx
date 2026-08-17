@@ -8,7 +8,7 @@ import {
   type RolemenuMenu,
   type RolemenuMode,
   rolemenuMenusSchema,
-} from '@proton/module-rolemenu';
+} from '@proton/module-rolemenu/config';
 import type { ReactElement } from 'react';
 
 export interface GuildRole {

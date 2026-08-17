@@ -5,7 +5,9 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./curve": "./src/curve.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

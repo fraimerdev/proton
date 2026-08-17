@@ -1,4 +1,5 @@
-import { MAX_LEVEL, type RoleReward, roleRewardsSchema } from '@proton/module-leveling';
+import { type RoleReward, roleRewardsSchema } from '@proton/module-leveling/config';
+import { MAX_LEVEL } from '@proton/module-leveling/curve';
 import type { ReactElement } from 'react';
 
 export interface GuildRole {

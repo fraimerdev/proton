@@ -59,15 +59,6 @@ export async function perform(
   ctx: CommandContext<ModerationConfig>,
   plan: PlanResult,
 ): Promise<void> {
-  if (!ctx.config.enabled) {
-    await reply(
-      ctx,
-      'Moderation commands are switched off in this server. An admin can turn the ' +
-        'Moderation module back on from the Proton dashboard.',
-    );
-    return;
-  }
-
   if (isRefusal(plan)) {
     await reply(ctx, plan.refusal);
     return;

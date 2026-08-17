@@ -1,9 +1,9 @@
 import type { FieldDescriptor } from '@proton/core';
 import { zodToDescriptors } from '@proton/core';
 import type { EscalationRung } from '@proton/module-cases';
-import type { RoleReward } from '@proton/module-leveling';
+import type { RoleReward } from '@proton/module-leveling/config';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
-import type { RolemenuMenu } from '@proton/module-rolemenu';
+import type { RolemenuMenu } from '@proton/module-rolemenu/config';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useMemo, useState } from 'react';
 import { z } from 'zod';

@@ -15,21 +15,15 @@ export interface BreakerInput {
   nukeClass: NukeClass;
   count: number;
   limit: number;
-
   window: string;
-
   eventId: string;
 }
 
 export interface BreakerReport {
   strippedRoleIds: string[];
-
   attempted: ActionKind[];
-
   failures: string[];
-
   ownerExempt: boolean;
-
   summary: string;
 }
 

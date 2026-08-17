@@ -374,15 +374,6 @@ describe('module policy', () => {
     expect(h.discordCalls()).toHaveLength(1);
   });
 
-  test('a disabled module answers instead of leaving the interaction hanging', async () => {
-    const h = harness();
-
-    await h.run('ban', [userOption('user', MEMBER)], { config: { enabled: false } });
-
-    expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('switched off');
-  });
-
   test('replies are ephemeral unless the guild asks for announcements', async () => {
     const quiet = harness();
     await quiet.run('unlock', []);
