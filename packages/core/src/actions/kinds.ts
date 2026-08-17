@@ -19,6 +19,8 @@ export const ACTION_KINDS = [
   'slowmode',
   'lockdown',
   'unlock',
+  'create_channel',
+  'create_role',
 ] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -56,6 +58,9 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
 
   lockdown: Permissions.ManageRoles,
   unlock: Permissions.ManageRoles,
+
+  create_channel: Permissions.ManageChannels,
+  create_role: Permissions.ManageRoles,
 };
 
 export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
@@ -81,6 +86,9 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   slowmode: false,
   lockdown: false,
   unlock: false,
+
+  create_channel: false,
+  create_role: false,
 };
 
 export const REVERSAL_OF: Partial<Record<ActionKind, ActionKind>> = {
@@ -122,6 +130,11 @@ export function isLedgerOnly(kind: ActionKind): boolean {
 export function dryRunFor(
   kind: ActionKind,
   env: string | undefined = process.env.NODE_ENV,
+  allowDestructive: string | undefined = process.env.PROTON_ALLOW_DESTRUCTIVE,
 ): boolean {
-  return isDestructive(kind) && env !== 'production';
+  if (!isDestructive(kind)) return false;
+  if (env === 'production') return false;
+  // The deliberate escape hatch: exercising a real ban against the test guild needs I12 off for
+  // one run, and flipping NODE_ENV to do it changes far more than the dry-run rail.
+  return allowDestructive !== 'true';
 }

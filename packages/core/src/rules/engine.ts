@@ -104,6 +104,11 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'interaction_reply':
     case 'interaction_followup':
       return {};
+
+    // A restore names the channel or role it is recreating; no fact can supply one.
+    case 'create_channel':
+    case 'create_role':
+      return {};
   }
 }
 

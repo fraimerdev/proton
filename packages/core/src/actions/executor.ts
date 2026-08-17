@@ -87,12 +87,12 @@ export class DefaultActionExecutor implements ActionExecutor {
     try {
       if (request.dryRun) {
         const { caseId } = await this.#record(request);
-        return { caseId, status: 'dry_run' };
+        return { ...(caseId ? { caseId } : {}), status: 'dry_run' };
       }
 
       if ('ledgerOnly' in payload) {
         const { caseId } = await this.#record(request);
-        return { caseId, status: 'executed' };
+        return { ...(caseId ? { caseId } : {}), status: 'executed' };
       }
 
       const response = await this.#deps.rest.request(payload.call);
@@ -110,7 +110,7 @@ export class DefaultActionExecutor implements ActionExecutor {
 
       const { caseId } = await this.#record(request);
 
-      if (request.expiresAt) {
+      if (request.expiresAt && caseId) {
         try {
           await this.#deps.scheduleReversal?.(request, caseId);
         } catch (error) {
@@ -128,7 +128,11 @@ export class DefaultActionExecutor implements ActionExecutor {
         }
       }
 
-      return { caseId, status: 'executed' };
+      return {
+        ...(caseId ? { caseId } : {}),
+        status: 'executed',
+        ...(response.body !== undefined ? { body: response.body } : {}),
+      };
     } catch (error) {
       await this.#deps.dedupe.release(request.idempotencyKey);
       return {
@@ -147,7 +151,11 @@ export class DefaultActionExecutor implements ActionExecutor {
     return { status: 'failed_precheck', failure: { code, humanReason } };
   }
 
-  async #record(request: ActionRequest): Promise<{ caseId: string }> {
+  async #record(request: ActionRequest): Promise<{ caseId?: string }> {
+    // A case is a moderation ledger entry. Modules whose actions are not moderation — a log post,
+    // for one — opt out rather than filling the ledger with rows nobody will ever read.
+    if (request.record === false) return {};
+
     return this.#deps.recorder.record({
       guildId: request.guildId,
       moduleId: request.moduleId,

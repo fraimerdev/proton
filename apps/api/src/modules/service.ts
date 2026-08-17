@@ -1,5 +1,5 @@
 import { type ModuleRegistry, newId } from '@proton/core';
-import type { DbHandle } from '@proton/db';
+import type { DbHandle, GuildRuleStore } from '@proton/db';
 import { auditTrail, guildModules } from '@proton/db/schema';
 import { and, eq } from 'drizzle-orm';
 
@@ -32,13 +32,20 @@ export class ModuleConfigError extends Error {
   }
 }
 
+export interface ModuleConfigServiceOptions {
+  rules?: GuildRuleStore;
+  onRecompileFailed?(guildId: string, moduleId: string, detail: string): void;
+}
+
 export class ModuleConfigService {
   readonly #db: DbHandle;
   readonly #registry: ModuleRegistry;
+  readonly #options: ModuleConfigServiceOptions;
 
-  constructor(db: DbHandle, registry: ModuleRegistry) {
+  constructor(db: DbHandle, registry: ModuleRegistry, options: ModuleConfigServiceOptions = {}) {
     this.#db = db;
     this.#registry = registry;
+    this.#options = options;
   }
 
   #manifest(moduleId: string) {
@@ -155,6 +162,31 @@ export class ModuleConfigService {
       });
     });
 
+    await this.#recompileRules(input.guildId, input.moduleId, nextConfig);
+
     return { before, after };
+  }
+
+  // After the commit, never inside it. The config is the source of truth and the rules are derived
+  // from it, so a recompile that fails must not roll back a save the admin already saw succeed —
+  // the next save, or the next `guild.available`, re-derives them.
+  async #recompileRules(
+    guildId: string,
+    moduleId: string,
+    config: Record<string, unknown>,
+  ): Promise<void> {
+    const store = this.#options.rules;
+    const manifest = this.#registry.get(moduleId);
+    if (!store || !manifest?.compileRules) return;
+
+    try {
+      await store.replaceModuleRules(guildId, moduleId, manifest.compileRules(config));
+    } catch (error) {
+      this.#options.onRecompileFailed?.(
+        guildId,
+        moduleId,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 }

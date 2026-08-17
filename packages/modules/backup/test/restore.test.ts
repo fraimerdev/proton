@@ -243,11 +243,11 @@ describe('refusals', () => {
 });
 
 describe('I12', () => {
-  test('a restore is a dry run everywhere but production', () => {
-    expect(restoreIsDryRun('development')).toBe(true);
-    expect(restoreIsDryRun('test')).toBe(true);
-    expect(restoreIsDryRun(undefined)).toBe(true);
-    expect(restoreIsDryRun('production')).toBe(false);
+  // The invoker decides, not the deployment: an unconfirmed restore previews everywhere,
+  // including production, and a confirmed one applies everywhere, including development.
+  test('a restore is a dry run until the invoker confirms it', () => {
+    expect(restoreIsDryRun(false)).toBe(true);
+    expect(restoreIsDryRun(true)).toBe(false);
   });
 
   test('says so in the report, rather than leaving the admin to assume', () => {

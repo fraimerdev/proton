@@ -21,6 +21,7 @@
       "dependencies": {
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
+        "@proton/module-cases": "workspace:*",
         "@proton/module-leveling": "workspace:*",
         "@proton/module-ping": "workspace:*",
         "@proton/modules": "workspace:*",
@@ -43,6 +44,7 @@
         "@proton/module-permissions": "workspace:*",
         "@proton/module-ping": "workspace:*",
         "@proton/module-rolemenu": "workspace:*",
+        "@proton/module-serverlog": "workspace:*",
         "@tanstack/react-form": "1.33.5",
         "@tanstack/react-query": "5.101.4",
         "@tanstack/react-router": "1.170.28",
@@ -97,13 +99,14 @@
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
-        "@proton/module-autorole": "workspace:*",
         "@proton/module-backup": "workspace:*",
+        "@proton/module-joinroles": "workspace:*",
         "@proton/module-leveling": "workspace:*",
         "@proton/module-logging": "workspace:*",
         "@proton/module-permissions": "workspace:*",
         "@proton/module-phishing": "workspace:*",
         "@proton/module-ping": "workspace:*",
+        "@proton/module-serverlog": "workspace:*",
         "@proton/module-starboard": "workspace:*",
         "@proton/module-verification": "workspace:*",
         "@proton/modules": "workspace:*",
@@ -177,21 +180,6 @@
         "ioredis": "^6.0.0",
       },
     },
-    "packages/modules/autorole": {
-      "name": "@proton/module-autorole",
-      "version": "0.0.0",
-      "dependencies": {
-        "@proton/core": "workspace:*",
-        "@proton/db": "workspace:*",
-        "discord-api-types": "^0.38.53",
-        "drizzle-orm": "^0.45.2",
-        "zod": "^4.4.3",
-      },
-      "devDependencies": {
-        "@proton/fixtures": "workspace:*",
-        "@proton/gateway": "workspace:*",
-      },
-    },
     "packages/modules/backup": {
       "name": "@proton/module-backup",
       "version": "0.0.0",
@@ -215,6 +203,22 @@
         "@proton/core": "workspace:*",
         "discord-api-types": "^0.38.53",
         "zod": "^4.4.3",
+      },
+    },
+    "packages/modules/joinroles": {
+      "name": "@proton/module-joinroles",
+      "version": "0.0.0",
+      "dependencies": {
+        "@proton/core": "workspace:*",
+        "@proton/db": "workspace:*",
+        "discord-api-types": "^0.38.53",
+        "drizzle-orm": "^0.45.2",
+        "ioredis": "^6.0.0",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@proton/fixtures": "workspace:*",
+        "@proton/gateway": "workspace:*",
       },
     },
     "packages/modules/leveling": {
@@ -295,9 +299,9 @@
         "@proton/core": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
         "@proton/module-antiraid": "workspace:*",
-        "@proton/module-autorole": "workspace:*",
         "@proton/module-backup": "workspace:*",
         "@proton/module-cases": "workspace:*",
+        "@proton/module-joinroles": "workspace:*",
         "@proton/module-leveling": "workspace:*",
         "@proton/module-logging": "workspace:*",
         "@proton/module-moderation": "workspace:*",
@@ -305,6 +309,7 @@
         "@proton/module-phishing": "workspace:*",
         "@proton/module-ping": "workspace:*",
         "@proton/module-rolemenu": "workspace:*",
+        "@proton/module-serverlog": "workspace:*",
         "@proton/module-starboard": "workspace:*",
         "@proton/module-verification": "workspace:*",
         "@proton/module-welcome": "workspace:*",
@@ -325,6 +330,20 @@
       },
       "devDependencies": {
         "@proton/fixtures": "workspace:*",
+      },
+    },
+    "packages/modules/serverlog": {
+      "name": "@proton/module-serverlog",
+      "version": "0.0.0",
+      "dependencies": {
+        "@proton/core": "workspace:*",
+        "discord-api-types": "^0.38.53",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@proton/fixtures": "workspace:*",
+        "@proton/gateway": "workspace:*",
+        "fast-check": "^4.9.0",
       },
     },
     "packages/modules/starboard": {
@@ -610,11 +629,11 @@
 
     "@proton/module-antiraid": ["@proton/module-antiraid@workspace:packages/modules/antiraid"],
 
-    "@proton/module-autorole": ["@proton/module-autorole@workspace:packages/modules/autorole"],
-
     "@proton/module-backup": ["@proton/module-backup@workspace:packages/modules/backup"],
 
     "@proton/module-cases": ["@proton/module-cases@workspace:packages/modules/cases"],
+
+    "@proton/module-joinroles": ["@proton/module-joinroles@workspace:packages/modules/joinroles"],
 
     "@proton/module-leveling": ["@proton/module-leveling@workspace:packages/modules/leveling"],
 
@@ -629,6 +648,8 @@
     "@proton/module-ping": ["@proton/module-ping@workspace:packages/modules/ping"],
 
     "@proton/module-rolemenu": ["@proton/module-rolemenu@workspace:packages/modules/rolemenu"],
+
+    "@proton/module-serverlog": ["@proton/module-serverlog@workspace:packages/modules/serverlog"],
 
     "@proton/module-starboard": ["@proton/module-starboard@workspace:packages/modules/starboard"],
 

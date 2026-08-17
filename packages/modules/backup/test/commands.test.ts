@@ -176,8 +176,7 @@ describe('/backup restore', () => {
     expect(reply).toContain('cannot be restored');
     expect(reply).toContain(`<#${HIDDEN_CHANNEL}>`);
 
-    expect(reply).toContain('cannot carry this plan out yet');
-    expect(reply).toContain('Manage Channels');
+    expect(reply).toContain('confirm: true');
   });
 
   test('does not leak another server’s snapshot to an id-guesser', async () => {

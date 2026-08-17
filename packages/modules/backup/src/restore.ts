@@ -63,8 +63,10 @@ export interface RestoreInput {
   everyoneRoleId?: string;
 }
 
-export function restoreIsDryRun(env: string | undefined = process.env.NODE_ENV): boolean {
-  return env !== 'production';
+// A restore is dry until the invoker says otherwise. It used to key on NODE_ENV, which made
+// "does this change anything" a property of the deployment rather than of the command.
+export function restoreIsDryRun(confirmed: boolean): boolean {
+  return !confirmed;
 }
 
 export function planRestore(input: RestoreInput): RestoreResult {
@@ -257,12 +259,7 @@ export function describeRestore(plan: RestorePlan): string[] {
 
   lines.push(...plan.warnings);
 
-  if (plan.dryRun) {
-    lines.push(
-      `This is a preview. Nothing was changed (NODE_ENV is '${process.env.NODE_ENV ?? 'unset'}', ` +
-        'not production, and Proton refuses destructive actions outside production).',
-    );
-  }
+  if (plan.dryRun) lines.push('This is a preview. Nothing was changed.');
 
   return lines;
 }

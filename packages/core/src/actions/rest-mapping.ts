@@ -4,6 +4,8 @@ import {
   type Attachment,
   addReactionPayloadSchema,
   banPayloadSchema,
+  createChannelPayloadSchema,
+  createRolePayloadSchema,
   deleteMessagePayloadSchema,
   editMessagePayloadSchema,
   interactionFollowupPayloadSchema,
@@ -97,6 +99,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             embeds: p.data.embeds,
             components: p.data.components,
             attachments: descriptors,
+            allowed_mentions: p.data.allowedMentions,
 
             message_reference: p.data.replyToMessageId
               ? { message_id: p.data.replyToMessageId, fail_if_not_exists: false }
@@ -331,6 +334,44 @@ export function toRestCall(request: ActionRequest): PayloadResult {
           method: 'PUT',
           path: `/channels/${p.data.channelId}/permissions/${p.data.roleId}`,
           body: { type: 0, allow: p.data.restoreAllow, deny: p.data.restoreDeny },
+        }),
+      };
+    }
+
+    case 'create_channel': {
+      const p = createChannelPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'POST',
+          path: `/guilds/${guild}/channels`,
+          body: present({
+            name: p.data.name,
+            type: p.data.type,
+            parent_id: p.data.parentId,
+            position: p.data.position,
+            topic: p.data.topic,
+            nsfw: p.data.nsfw,
+            rate_limit_per_user: p.data.rateLimitPerUser,
+          }),
+        }),
+      };
+    }
+
+    case 'create_role': {
+      const p = createRolePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'POST',
+          path: `/guilds/${guild}/roles`,
+          body: present({
+            name: p.data.name,
+            permissions: p.data.permissions,
+            color: p.data.color,
+            hoist: p.data.hoist,
+            mentionable: p.data.mentionable,
+          }),
         }),
       };
     }

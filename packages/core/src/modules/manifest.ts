@@ -77,6 +77,11 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   emits?: EventType[];
 
   rules?: RuleDefinition[];
+
+  // The same rules recompiled from a guild's own config, run on every save. `rules` alone is
+  // seeded once from defaults, so without this an edited escalation ladder changes nothing.
+  // Pure and returning data, so what it produces is still inspectable and diffable.
+  compileRules?(config: z.infer<C>): RuleDefinition[];
   jobs?: ScheduledJob[];
   migrations: Migration[];
   dashboard?: { icon: string; sections: SectionDescriptor[] };

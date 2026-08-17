@@ -1,8 +1,15 @@
 import { type CommandContext, type CommandDefinition, Permissions } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
+import { applyRestore } from './apply.ts';
 import type { BackupConfig } from './config.ts';
-import { type BackupDeps, type BoundBackupDeps, bindDeps, describeUnbound } from './deps.ts';
+import {
+  type BackupDeps,
+  type BoundBackupDeps,
+  bindDeps,
+  describeUnbound,
+  MODULE_ID,
+} from './deps.ts';
 import {
   describeRestore,
   isRestoreRefusal,
@@ -13,7 +20,7 @@ import {
 import { buildSnapshot, coverageOf, describeCapture, SNAPSHOT_VERSION } from './snapshot.ts';
 import type { BackupRecord } from './store.ts';
 
-export const MODULE_ID = 'backup';
+export { MODULE_ID };
 
 const CONTENT_MAX = 2000;
 
@@ -26,11 +33,8 @@ const NO_LAYOUT =
   'That list arrives when the gateway connects to the server — try again in a moment. Nothing ' +
   'has been saved.';
 
-const CANNOT_APPLY =
-  'Proton cannot carry this plan out yet: creating a channel or a role is not something its ' +
-  'action layer can do, and a module is never allowed to call Discord directly around it. So ' +
-  '`/backup restore` shows you exactly what a restore would do and changes nothing. When it can ' +
-  'act, it will need the Manage Channels and Manage Roles permissions in this server.';
+const PREVIEW_ONLY =
+  'Nothing was changed. Run the same command with `confirm: true` to carry this out.';
 
 export function createBackupCommands(deps: BackupDeps): CommandDefinition<BackupConfig>[] {
   return [
@@ -54,13 +58,18 @@ export function createBackupCommands(deps: BackupDeps): CommandDefinition<Backup
         .addSubcommand((sub) =>
           sub
             .setName('restore')
-            .setDescription('Show what restoring a snapshot would do. Nothing is changed.')
+            .setDescription('Recreate the channels and roles from a snapshot.')
             .addStringOption((option) =>
               option
                 .setName('backup_id')
                 .setDescription('The id from /backup list.')
                 .setRequired(true)
                 .setMaxLength(64),
+            )
+            .addBooleanOption((option) =>
+              option
+                .setName('confirm')
+                .setDescription('Actually carry it out. Leave off to preview the plan first.'),
             ),
         )
         .toJSON(),
@@ -219,23 +228,50 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
   const layout = await ports.readLayout(ctx.guildId);
   if (!layout) return reply(ctx, [NO_LAYOUT]);
 
+  const confirmed = ctx.options.getBoolean('confirm') === true;
+
   const planned = planRestore({
     backupId: record.id,
     snapshot: record.snapshot,
     present: layout,
-    dryRun: restoreIsDryRun(),
+    dryRun: restoreIsDryRun(confirmed),
   });
 
   if (isRestoreRefusal(planned)) return reply(ctx, [planned.refusal]);
 
   const counts = summariseRestore(planned);
+
+  if (!confirmed) {
+    ctx.logger.info(
+      `restore preview of backup ${record.id} in guild ${ctx.guildId}: ${counts.roles} role(s) ` +
+        `and ${counts.channels} channel(s) to recreate, ${planned.skipped.length} skipped`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+    return reply(ctx, [...describeRestore(planned), PREVIEW_ONLY]);
+  }
+
   ctx.logger.info(
-    `restore preview of backup ${record.id} in guild ${ctx.guildId}: ${counts.roles} role(s) and ` +
-      `${counts.channels} channel(s) to recreate, ${planned.skipped.length} skipped`,
+    `restoring backup ${record.id} in guild ${ctx.guildId}: ${counts.roles} role(s) and ` +
+      `${counts.channels} channel(s)`,
     { guildId: ctx.guildId, moduleId: MODULE_ID },
   );
 
-  await reply(ctx, [...describeRestore(planned), CANNOT_APPLY]);
+  const applied = await applyRestore(ctx, ctx.executor, record.id, planned.ops);
+
+  const lines = [
+    `Restored ${applied.createdRoles} role(s) and ${applied.createdChannels} channel(s) from ` +
+      `\`${record.id}\`.`,
+    ...describeRestore({ ...planned, ops: [] }).slice(1),
+  ];
+
+  if (applied.failures.length > 0) {
+    lines.push(
+      `${applied.failures.length} did not go through:`,
+      ...applied.failures.map((failure) => `• ${failure}`),
+    );
+  }
+
+  await reply(ctx, lines);
 }
 
 async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]): Promise<void> {

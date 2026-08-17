@@ -14,6 +14,8 @@ export interface ActionRequest {
   expiresAt?: Date;
   dryRun: boolean;
   idempotencyKey: string;
+
+  record?: boolean;
 }
 
 export type ActionStatus =
@@ -32,6 +34,9 @@ export interface ActionFailure {
 export interface ActionResult {
   caseId?: string;
   status: ActionStatus;
+  // Discord's response, on `executed` only. A create returns the id of what it made, and without
+  // this the only way back to it is to list and guess — which is what starboard used to do.
+  body?: unknown;
 
   failure?: ActionFailure;
 }
@@ -59,6 +64,8 @@ export const actionRequestSchema = z.object({
   expiresAt: z.date().optional(),
   dryRun: z.boolean(),
   idempotencyKey: z.string().min(1),
+
+  record: z.boolean().optional(),
 });
 
 export * from './payloads.ts';

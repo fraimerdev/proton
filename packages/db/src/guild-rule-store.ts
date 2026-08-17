@@ -42,6 +42,12 @@ export interface GuildRuleStore {
     moduleId: string,
     presets: readonly RuleDefinition[],
   ): Promise<number>;
+
+  replaceModuleRules(
+    guildId: string,
+    moduleId: string,
+    compiled: readonly RuleDefinition[],
+  ): Promise<number>;
 }
 
 const issuesOf = (error: ZodError): string =>
@@ -123,6 +129,79 @@ export class DrizzleGuildRuleStore implements GuildRuleStore {
       .returning({ id: rules.id });
 
     return inserted.length;
+  }
+
+  // Config → rules, run on every save. `seedPresets` cannot do this: it is insert-only, so an
+  // edited escalation ladder would leave the original rules in place and change nothing.
+  async replaceModuleRules(
+    guildId: string,
+    moduleId: string,
+    compiled: readonly RuleDefinition[],
+  ): Promise<number> {
+    const values = this.#toRows(guildId, moduleId, compiled);
+
+    return this.#handle.db.transaction(async (tx) => {
+      // A guild's decision to switch a rung off must survive a recompile, so the existing enabled
+      // flags are read before the delete and reapplied by id. A rule whose id changed is new and
+      // takes the compiler's default.
+      const existing = await tx
+        .select({ id: rules.id, enabled: rules.enabled })
+        .from(rules)
+        .where(and(eq(rules.guildId, guildId), eq(rules.moduleId, moduleId)));
+
+      const wasEnabled = new Map(existing.map((row) => [row.id, row.enabled]));
+
+      await tx.delete(rules).where(and(eq(rules.guildId, guildId), eq(rules.moduleId, moduleId)));
+
+      if (values.length === 0) return 0;
+
+      const withPriorState = values.map((row) => ({
+        ...row,
+        enabled: wasEnabled.get(row.id) ?? row.enabled,
+      }));
+
+      const inserted = await tx.insert(rules).values(withPriorState).returning({ id: rules.id });
+      return inserted.length;
+    });
+  }
+
+  #toRows(
+    guildId: string,
+    moduleId: string,
+    definitions: readonly RuleDefinition[],
+  ): (typeof rules.$inferInsert)[] {
+    const values: (typeof rules.$inferInsert)[] = [];
+
+    for (const [index, definition] of definitions.entries()) {
+      const parsed = ruleDefinitionSchema.safeParse(definition);
+      if (!parsed.success) {
+        this.#options.onInvalidRule?.(
+          {
+            guildId,
+            moduleId,
+            ruleId: typeof definition?.id === 'string' ? definition.id : `#${index}`,
+            source: 'preset',
+          },
+          issuesOf(parsed.error),
+        );
+        continue;
+      }
+
+      const rule = parsed.data;
+      values.push({
+        id: guildRuleRowId(guildId, moduleId, rule.id),
+        guildId,
+        moduleId,
+        trigger: rule.trigger,
+        conditions: rule.conditions,
+        actions: rule.actions,
+        enabled: rule.enabled,
+        priority: rule.priority,
+        createdBy: PRESET_CREATED_BY,
+      });
+    }
+
+    return values;
   }
 
   #parse(found: (typeof rules.$inferSelect)[]): GuildRule[] {

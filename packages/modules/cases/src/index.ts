@@ -6,7 +6,7 @@ import {
   casesDefaultConfig,
   casesFormSchema,
 } from './config.ts';
-import { casesPresetRules } from './escalation.ts';
+import { casesPresetRules, escalationRules } from './escalation.ts';
 
 export {
   CASES_SCHEMA_VERSION,
@@ -36,6 +36,7 @@ export const casesModule: ModuleManifest<typeof casesConfigSchema> = {
 
   requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
   rules: casesPresetRules,
+  compileRules: (config) => escalationRules(config),
   migrations: [],
   dashboard: {
     icon: 'gavel',

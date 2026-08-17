@@ -54,6 +54,19 @@ function hasSomethingToSend(value: {
 const NOTHING_TO_SEND =
   'a message needs content, an embed, a component or a file — this one has none of them.';
 
+export const MENTION_PARSE_KINDS = ['roles', 'users', 'everyone'] as const;
+
+// Any message built from names a member controls — a channel name, a nickname, an audit-log
+// value — can otherwise ping the server. `{ parse: [] }` still renders <@id>/<#id> as links.
+export const allowedMentionsSchema = z.object({
+  parse: z.array(z.enum(MENTION_PARSE_KINDS)).max(MENTION_PARSE_KINDS.length),
+  roles: z.array(snowflakeSchema).max(100).optional(),
+  users: z.array(snowflakeSchema).max(100).optional(),
+  replied_user: z.boolean().optional(),
+});
+
+export type AllowedMentions = z.infer<typeof allowedMentionsSchema>;
+
 export const sendPayloadSchema = z
   .object({
     channelId: snowflakeSchema,
@@ -62,6 +75,8 @@ export const sendPayloadSchema = z
     embeds: embedsSchema.optional(),
     components: componentsSchema.optional(),
     files: z.array(attachmentSchema).max(10).optional(),
+
+    allowedMentions: allowedMentionsSchema.optional(),
 
     replyToMessageId: snowflakeSchema.optional(),
   })
@@ -173,6 +188,28 @@ export const lockdownPayloadSchema = z.object({
   previousDeny: z.string().default('0'),
 });
 
+// Restore recreates what a backup snapshotted, so these mirror the snapshot's own shape rather
+// than Discord's full create bodies — anything a restore cannot faithfully reproduce is reported
+// as skipped instead of being guessed at.
+export const createChannelPayloadSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.number().int().min(0).max(16),
+  parentId: snowflakeSchema.optional(),
+  position: z.number().int().min(0).optional(),
+  topic: z.string().max(1024).optional(),
+  nsfw: z.boolean().optional(),
+  rateLimitPerUser: z.number().int().min(0).max(MAX_SLOWMODE_SECONDS).optional(),
+});
+
+export const createRolePayloadSchema = z.object({
+  name: z.string().min(1).max(100),
+  // A decimal string, never a number: role permissions exceed Number.MAX_SAFE_INTEGER.
+  permissions: z.string().regex(/^\d+$/).optional(),
+  color: z.number().int().min(0).max(0xffffff).optional(),
+  hoist: z.boolean().optional(),
+  mentionable: z.boolean().optional(),
+});
+
 export const unlockPayloadSchema = z.object({
   channelId: snowflakeSchema,
   roleId: snowflakeSchema,
@@ -191,3 +228,5 @@ export type BanPayload = z.infer<typeof banPayloadSchema>;
 export type TimeoutPayload = z.infer<typeof timeoutPayloadSchema>;
 export type PurgePayload = z.infer<typeof purgePayloadSchema>;
 export type LockdownPayload = z.infer<typeof lockdownPayloadSchema>;
+export type CreateChannelPayload = z.infer<typeof createChannelPayloadSchema>;
+export type CreateRolePayload = z.infer<typeof createRolePayloadSchema>;

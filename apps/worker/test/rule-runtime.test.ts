@@ -135,6 +135,8 @@ function fakeStore(
         seeded.push([guildId, moduleId, presets.length]);
         return presets.length;
       },
+      // Config-driven recompiles come from the API, not the worker; the runtime never calls this.
+      replaceModuleRules: async (_guildId, _moduleId, compiled) => compiled.length,
     },
   };
 }

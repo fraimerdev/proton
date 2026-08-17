@@ -1,4 +1,4 @@
-import { createDb } from '@proton/db';
+import { createDb, DrizzleGuildRuleStore } from '@proton/db';
 import { createModuleRegistry } from '@proton/modules';
 import { createApiApp } from './app.ts';
 import { CaseQueryService } from './cases/service.ts';
@@ -15,7 +15,14 @@ const registry = createModuleRegistry();
 
 const app = createApiApp({
   guilds: new GuildService(handle),
-  modules: new ModuleConfigService(handle, registry),
+  modules: new ModuleConfigService(handle, registry, {
+    rules: new DrizzleGuildRuleStore(handle),
+    onRecompileFailed: (guildId, moduleId, detail) =>
+      console.error(
+        `${moduleId}'s config was saved for guild ${guildId} but its rules could not be ` +
+          `recompiled, so the old ones are still in force: ${detail}`,
+      ),
+  }),
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),
   registry,
