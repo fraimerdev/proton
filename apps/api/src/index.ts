@@ -1,6 +1,7 @@
-import { ALL_PERMISSIONS } from '@proton/core';
+import { ALL_PERMISSIONS, RedisStreamsEventBus } from '@proton/core';
 import { createDb, DrizzleGuildRuleStore } from '@proton/db';
 import { createModuleRegistry } from '@proton/modules';
+import Redis from 'ioredis';
 import { createApiApp } from './app.ts';
 import { CaseQueryService } from './cases/service.ts';
 import { loadEnv } from './env.ts';
@@ -14,10 +15,22 @@ const handle = createDb(env.DATABASE_URL);
 
 const registry = createModuleRegistry();
 
+const busRedis = env.REDIS_URL ? new Redis(env.REDIS_URL, { db: env.REDIS_DB_BUS }) : null;
+const bus = busRedis ? new RedisStreamsEventBus(busRedis) : undefined;
+
+if (!bus) {
+  console.warn(
+    'REDIS_URL is not set for the api, so module config changes will not be published and ' +
+      'Server Logs will show nothing under its Proton category. Everything else works.',
+  );
+}
+
 const app = createApiApp({
   guilds: new GuildService(handle),
   modules: new ModuleConfigService(handle, registry, {
     rules: new DrizzleGuildRuleStore(handle),
+    ...(bus ? { bus } : {}),
+    logger: console,
     onRecompileFailed: (guildId, moduleId, detail) =>
       console.error(
         `${moduleId}'s config was saved for guild ${guildId} but its rules could not be ` +
@@ -44,6 +57,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     void (async () => {
       await server.stop(true);
       await handle.close();
+      busRedis?.disconnect();
       process.exit(0);
     })();
   });

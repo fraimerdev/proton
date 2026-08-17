@@ -315,6 +315,7 @@
         "@proton/core": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
         "@proton/module-antiraid": "workspace:*",
+        "@proton/module-automod": "workspace:*",
         "@proton/module-backup": "workspace:*",
         "@proton/module-cases": "workspace:*",
         "@proton/module-joinroles": "workspace:*",

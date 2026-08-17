@@ -1,0 +1,14 @@
+{
+  "t": "THREAD_UPDATE",
+  "s": 56,
+  "op": 0,
+  "d": {
+    "id": "600000000000000001",
+    "guild_id": "900000000000000001",
+    "parent_id": "500000000000000001",
+    "owner_id": "100000000000000002",
+    "name": "release checklist (locked)",
+    "type": 11,
+    "thread_metadata": { "archived": true, "auto_archive_duration": 1440, "locked": true }
+  }
+}

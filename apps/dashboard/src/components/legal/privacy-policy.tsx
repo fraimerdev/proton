@@ -1,4 +1,7 @@
-import { MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
+import { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
+
+const MESSAGE_CACHE_DEFAULT_RETENTION_HOURS = MESSAGE_CACHE_FALLBACK_TTL_MS / 3_600_000;
+
 import type { ReactElement } from 'react';
 
 export function PrivacyPolicy(): ReactElement {
@@ -67,6 +70,39 @@ export function PrivacyPolicy(): ReactElement {
       <p>
         Server admins who enable this are processing their members’ personal data and are
         responsible for telling their members that it is on.
+      </p>
+
+      <h2>Remembering recent message text</h2>
+      <p>
+        Separately from the {MESSAGE_LOG_RETENTION_DAYS}-day archive above, a server admin may
+        switch on <strong>Remember recent message text</strong>. This is a second, independent
+        opt-in and is <strong>off unless a server admin turns it on</strong>. While it is on, Proton
+        keeps the text of recent messages, their author’s user id, and the file names and links of
+        any attachments <strong>in memory</strong> for{' '}
+        <strong>{MESSAGE_CACHE_DEFAULT_RETENTION_HOURS} hours</strong> by default, configurable
+        between one hour and seven days.
+      </p>
+      <p>
+        It exists so that an edit log can show what the text was before the edit, and a deletion log
+        can show what was removed and who wrote it — neither of which Discord sends. Nothing here is
+        written to disk, attachment <em>contents</em> are never copied, and switching the option off
+        deletes the server’s remembered text immediately rather than waiting for it to expire.
+      </p>
+
+      <h2>Server logs posted into Discord</h2>
+      <p>
+        Server Logs is a separate module, also{' '}
+        <strong>off unless a server admin turns it on</strong>. When it is on, Proton writes an
+        embed into a log channel that the admin chooses. Those embeds can contain personal data —
+        message text, nicknames, user ids, and the name of whoever performed an action.
+      </p>
+      <p>
+        <strong>
+          Anything posted into a log channel is visible to anyone who can read that channel
+        </strong>{' '}
+        for as long as the message exists there. That audience is chosen by the server’s admins;
+        Proton neither controls it nor can revoke it afterwards, and deleting data from Proton does
+        not delete embeds already posted into Discord.
       </p>
 
       <h2>What Proton never does</h2>

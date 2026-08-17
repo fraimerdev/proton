@@ -22,7 +22,6 @@ function moduleWithJobs(id: string, jobIds: string[]): ModuleManifest {
     requiredIntents: [],
     requiredPermissions: [Permissions.ViewChannel],
     jobs: jobIds.map((jobId) => ({ id: jobId, cron: '0 * * * *' })),
-    migrations: [],
   } as unknown as ModuleManifest;
 }
 

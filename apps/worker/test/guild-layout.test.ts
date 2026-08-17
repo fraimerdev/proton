@@ -59,7 +59,7 @@ function build(): {
 describe('GuildLayoutConsumer', () => {
   test('stores the channels and roles from guild.available', async () => {
     const { consumer, store } = build();
-    const event = normalise(dispatch('guildCreate'));
+    const event = normalise(dispatch('guildCreate'))[0];
 
     await consumer.handle(event as NonNullable<typeof event>);
 
@@ -71,7 +71,7 @@ describe('GuildLayoutConsumer', () => {
 
   test('an obfuscated channel survives the round trip with its flag intact', async () => {
     const { consumer, store } = build();
-    const event = normalise(dispatch('channelObfuscated'));
+    const event = normalise(dispatch('channelObfuscated'))[0];
 
     await consumer.handle(event as NonNullable<typeof event>);
     const layout = await store.get(GUILD);
@@ -90,7 +90,7 @@ describe('GuildLayoutConsumer', () => {
   test('the capture report names the hidden channels a human has to know about', async () => {
     const { consumer, store } = build();
 
-    await consumer.handle(normalise(dispatch('channelObfuscated')) as never);
+    await consumer.handle(normalise(dispatch('channelObfuscated'))[0] as never);
     const captured = buildSnapshot((await store.get(GUILD)) as GuildLayout, 1_770_000_000_000);
 
     expect(captured.report.obfuscatedChannelIds).toEqual([HIDDEN_CHANNEL]);
@@ -102,7 +102,7 @@ describe('GuildLayoutConsumer', () => {
 
   test('a guild the bot was removed from has its layout dropped', async () => {
     const { consumer, store } = build();
-    await consumer.handle(normalise(dispatch('guildCreate')) as never);
+    await consumer.handle(normalise(dispatch('guildCreate'))[0] as never);
 
     await consumer.handle({
       type: 'guild.unavailable',
@@ -116,7 +116,7 @@ describe('GuildLayoutConsumer', () => {
 
   test('an outage does not drop the layout', async () => {
     const { consumer, store } = build();
-    await consumer.handle(normalise(dispatch('guildCreate')) as never);
+    await consumer.handle(normalise(dispatch('guildCreate'))[0] as never);
 
     await consumer.handle({
       type: 'guild.unavailable',
@@ -145,7 +145,8 @@ describe('GuildLayoutConsumer', () => {
 
   test('a removal older than the stored layout does not delete it', async () => {
     const { consumer, store, logs } = build();
-    const created = normalise(dispatch('guildCreate')) as NonNullable<ReturnType<typeof normalise>>;
+    const [created] = normalise(dispatch('guildCreate'));
+    if (!created) throw new Error('guildCreate did not normalise');
     await consumer.handle(created);
 
     await consumer.handle({
@@ -162,9 +163,8 @@ describe('GuildLayoutConsumer', () => {
 
   test('a stale guild.available does not overwrite a newer layout', async () => {
     const { consumer, store } = build();
-    const current = normalise(dispatch('channelObfuscated')) as NonNullable<
-      ReturnType<typeof normalise>
-    >;
+    const [current] = normalise(dispatch('channelObfuscated'));
+    if (!current) throw new Error('channelObfuscated did not normalise');
     await consumer.handle(current);
 
     await consumer.handle({

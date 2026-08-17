@@ -14,7 +14,7 @@ describe('the normaliser emits payloads the logging module can read', () => {
   };
 
   test('an edit becomes one edit row carrying the new content and the author', () => {
-    const event = normalise(dispatch('messageUpdate'));
+    const event = normalise(dispatch('messageUpdate'))[0];
     const rows = toMessageLogEntries(event as NonNullable<typeof event>, config);
 
     expect(rows).toHaveLength(1);
@@ -28,7 +28,7 @@ describe('the normaliser emits payloads the logging module can read', () => {
   });
 
   test('a deletion becomes one delete row', () => {
-    const event = normalise(dispatch('messageDelete'));
+    const event = normalise(dispatch('messageDelete'))[0];
     const rows = toMessageLogEntries(event as NonNullable<typeof event>, config);
 
     expect(rows).toHaveLength(1);
@@ -37,7 +37,7 @@ describe('the normaliser emits payloads the logging module can read', () => {
   });
 
   test('a bulk delete becomes one row per message, each deterministically keyed', () => {
-    const event = normalise(dispatch('messageDeleteBulk'));
+    const event = normalise(dispatch('messageDeleteBulk'))[0];
     const rows = toMessageLogEntries(event as NonNullable<typeof event>, config);
 
     expect(rows).toHaveLength(3);
@@ -47,8 +47,8 @@ describe('the normaliser emits payloads the logging module can read', () => {
   });
 
   test('replaying the same dispatch produces identical row ids', () => {
-    const first = toMessageLogEntries(normalise(dispatch('messageUpdate')) as never, config);
-    const second = toMessageLogEntries(normalise(dispatch('messageUpdate')) as never, config);
+    const first = toMessageLogEntries(normalise(dispatch('messageUpdate'))[0] as never, config);
+    const second = toMessageLogEntries(normalise(dispatch('messageUpdate'))[0] as never, config);
 
     expect(first.map((r) => r.id)).toEqual(second.map((r) => r.id));
   });
@@ -58,11 +58,11 @@ describe('the normaliser emits payloads the logging module can read', () => {
 
     raw.d.edited_timestamp = null;
 
-    expect(toMessageLogEntries(normalise(raw) as never, config)).toEqual([]);
+    expect(toMessageLogEntries(normalise(raw)[0] as never, config)).toEqual([]);
   });
 
   test('a guild that opted out of edit logging gets no edit rows', () => {
-    const rows = toMessageLogEntries(normalise(dispatch('messageUpdate')) as never, {
+    const rows = toMessageLogEntries(normalise(dispatch('messageUpdate'))[0] as never, {
       ...config,
       logEdits: false,
     });
@@ -73,7 +73,7 @@ describe('the normaliser emits payloads the logging module can read', () => {
 
 describe('the normaliser emits payloads the phishing module can read', () => {
   test('a created message yields an inspectable message', () => {
-    const event = normalise(dispatch('messageCreate'));
+    const event = normalise(dispatch('messageCreate'))[0];
     const message = readMessage((event as NonNullable<typeof event>).payload);
 
     expect(message?.messageId).toBe('1400000000000000001');
@@ -83,7 +83,7 @@ describe('the normaliser emits payloads the phishing module can read', () => {
   });
 
   test('an edited message yields the NEW content, so the edit is what gets checked', () => {
-    const event = normalise(dispatch('messageUpdate'));
+    const event = normalise(dispatch('messageUpdate'))[0];
     const message = readMessage((event as NonNullable<typeof event>).payload);
 
     expect(message?.content).toContain('https://discord-nitro-gift.example.com/claim');
@@ -92,7 +92,7 @@ describe('the normaliser emits payloads the phishing module can read', () => {
   test('a partial update with no author or content is declined, not thrown on', () => {
     const raw = dispatch('messageUpdate');
     raw.d = { id: raw.d.id, channel_id: raw.d.channel_id, guild_id: raw.d.guild_id };
-    const event = normalise(raw);
+    const event = normalise(raw)[0];
 
     expect(event?.type).toBe('message.updated');
     expect(() => readMessage((event as NonNullable<typeof event>).payload)).not.toThrow();
@@ -104,7 +104,7 @@ describe('the normaliser emits payloads the phishing module can read', () => {
     raw.d = { id: raw.d.id, channel_id: raw.d.channel_id, guild_id: raw.d.guild_id };
 
     expect(
-      toMessageLogEntries(normalise(raw) as never, {
+      toMessageLogEntries(normalise(raw)[0] as never, {
         ...loggingDefaultConfig,
         enabled: true,
         logEdits: true,

@@ -34,7 +34,7 @@ async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 
 }
 
 function pingEvent(): ProtonEvent {
-  const event = normalise(dispatch('interactionCreatePing'));
+  const event = normalise(dispatch('interactionCreatePing'))[0];
   if (!event) throw new Error('fixture did not normalise');
   return event;
 }

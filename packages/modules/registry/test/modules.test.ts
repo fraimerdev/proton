@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { SERVICE_EMITTED_EVENT_TYPES } from '@proton/core';
 import { DEFAULT_INTENTS } from '@proton/gateway/env';
 import { NORMALISED_EVENT_TYPES } from '@proton/gateway/normaliser';
 import { GatewayIntentBits } from 'discord-api-types/v10';
@@ -9,6 +10,7 @@ const SHIPPED_MODULE_IDS = [
   'cases',
   'moderation',
   'logging',
+  'serverlog',
   'permissions',
 
   'antinuke',
@@ -16,9 +18,10 @@ const SHIPPED_MODULE_IDS = [
   'verification',
   'backup',
   'phishing',
+  'automod',
 
   'leveling',
-  'autorole',
+  'joinroles',
   'rolemenu',
   'starboard',
   'welcome',
@@ -104,6 +107,7 @@ describe('shipped module registry', () => {
   test('every listener subscribes to an event something actually emits', () => {
     const emitted = new Set<string>([
       ...NORMALISED_EVENT_TYPES,
+      ...SERVICE_EMITTED_EVENT_TYPES,
       ...MODULES.flatMap((manifest) => manifest.emits ?? []),
     ]);
 

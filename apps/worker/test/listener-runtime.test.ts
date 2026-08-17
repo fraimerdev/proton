@@ -60,7 +60,6 @@ function testModule(options: {
     requiredIntents: [],
     requiredPermissions: [Permissions.ViewChannel],
     listeners,
-    migrations: [],
   } as unknown as ModuleManifest;
 }
 
@@ -189,7 +188,6 @@ describe('subscription shape', () => {
       schemaVersion: 1,
       requiredIntents: [],
       requiredPermissions: [Permissions.ViewChannel],
-      migrations: [],
     } as unknown as ModuleManifest;
 
     const { runtime, calls } = build([bare], enabled);

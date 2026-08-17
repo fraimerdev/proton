@@ -1,0 +1,23 @@
+{
+  "t": "AUTO_MODERATION_ACTION_EXECUTION",
+  "s": 44,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "action": {
+      "type": 1,
+      "metadata": {
+        "custom_message": "Blocked by this server’s automod."
+      }
+    },
+    "rule_id": "800000000000000001",
+    "rule_trigger_type": 1,
+    "user_id": "100000000000000002",
+    "channel_id": "500000000000000001",
+    "message_id": "1400000000000000005",
+    "alert_system_message_id": null,
+    "content": "free nitro at scam.example click here",
+    "matched_keyword": "free nitro",
+    "matched_content": "free nitro"
+  }
+}

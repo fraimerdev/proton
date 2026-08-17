@@ -43,6 +43,13 @@
       "when": 1786880100000,
       "tag": "0005_starboard",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786890000000,
+      "tag": "0006_joinroles",
+      "breakpoints": true
     }
   ]
 }

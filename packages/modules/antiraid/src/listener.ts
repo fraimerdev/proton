@@ -75,6 +75,37 @@ async function announceRaid(
   }
 }
 
+async function publishRaid(
+  ctx: ModuleContext<AntiraidConfig>,
+  event: ProtonEvent,
+  joinsInWindow: number,
+): Promise<void> {
+  if (!ctx.publish) return;
+
+  try {
+    await ctx.publish('proton.security_tripped', event.id, {
+      guildId: ctx.guildId,
+      moduleId: ANTIRAID_MODULE_ID,
+      trigger: 'join-rate',
+      actorId: null,
+      summary:
+        `${joinsInWindow} accounts joined within ${ctx.config.joinWindow}, at or above this ` +
+        `server's threshold of ${ctx.config.joinThreshold}.`,
+      actionsTaken: [
+        `joins scoring ${ctx.config.scoreThreshold} or higher are ${ctx.config.response}`,
+      ],
+      ownerExempt: false,
+    });
+  } catch (error) {
+    ctx.logger.error(
+      `anti-raid tripped but could not publish it, so no Proton log was posted: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { guildId: ctx.guildId, moduleId: ANTIRAID_MODULE_ID },
+    );
+  }
+}
+
 export function createJoinListener(deps: AntiraidDeps): EventListener<AntiraidConfig> {
   return {
     types: ANTIRAID_EVENT_TYPES,
@@ -129,7 +160,10 @@ export function createJoinListener(deps: AntiraidDeps): EventListener<AntiraidCo
         parsed.settings,
       );
 
-      if (tripped) await announceRaid(ctx, event, count);
+      if (tripped) {
+        await announceRaid(ctx, event, count);
+        await publishRaid(ctx, event, count);
+      }
 
       if (score.score < ctx.config.scoreThreshold) {
         if (score.burst) {

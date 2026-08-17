@@ -7,7 +7,7 @@ import { factsFor } from '../src/rule-facts.ts';
 const GUILD = '900000000000000001';
 
 function fromDispatch(name: Parameters<typeof dispatch>[0]): ProtonEvent {
-  const event = normalise(dispatch(name));
+  const event = normalise(dispatch(name))[0];
   if (!event) throw new Error(`the normaliser produced nothing for ${name}`);
   return event;
 }
@@ -103,7 +103,7 @@ describe('audit-derived events', () => {
   test('an entry with no actor resolves no facts at all', () => {
     const raw = dispatch('auditLogChannelDelete');
     raw.d.user_id = null;
-    const event = normalise(raw);
+    const event = normalise(raw)[0];
 
     expect(factsFor(event as ProtonEvent)).toEqual({});
   });

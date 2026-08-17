@@ -1,7 +1,6 @@
+import type { CardDeps, CardDescriptorInput } from '@proton/cards';
 import type { MemberXpStore } from './store.ts';
 import type { VoiceSessionStore } from './voice-session.ts';
-
-import type { CardDeps, CardDescriptorInput } from '@proton/cards';
 
 export interface LevelingDeps {
   xp?: MemberXpStore;

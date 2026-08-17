@@ -46,13 +46,17 @@ export async function tripBreaker(
       'cannot. Recover the account, then transfer ownership or enable server-wide 2FA.';
     ctx.logger.warn(summary, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: input.actorId });
     await announce(ctx, input.eventId, summary);
-    return {
+
+    const ownerReport: BreakerReport = {
       strippedRoleIds: [],
       attempted: [],
       failures: [],
       ownerExempt: true,
       summary,
     };
+    await publishTrip(ctx, input, ownerReport);
+
+    return ownerReport;
   }
 
   const reason = `Anti-nuke: ${detected}`.slice(0, REASON_MAX);
@@ -130,7 +134,16 @@ export async function tripBreaker(
 
   await announce(ctx, input.eventId, summary);
 
-  return { strippedRoleIds: stripped, attempted, failures, ownerExempt: false, summary };
+  const report: BreakerReport = {
+    strippedRoleIds: stripped,
+    attempted,
+    failures,
+    ownerExempt: false,
+    summary,
+  };
+  await publishTrip(ctx, input, report);
+
+  return report;
 }
 
 function collect(failures: string[], result: ActionResult, what: string): void {
@@ -172,6 +185,36 @@ function summarise(
   }
 
   return lines.join('\n').slice(0, MESSAGE_MAX);
+}
+
+export async function publishTrip(
+  ctx: ModuleContext<AntinukeConfig>,
+  input: BreakerInput,
+  report: BreakerReport,
+): Promise<void> {
+  if (!ctx.publish) return;
+
+  try {
+    await ctx.publish('proton.security_tripped', input.eventId, {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      trigger: input.nukeClass,
+      actorId: input.actorId,
+      summary: report.summary.slice(0, 1024),
+      actionsTaken: [
+        ...report.strippedRoleIds.map((roleId) => `stripped role ${roleId}`),
+        ...report.attempted,
+      ].slice(0, 20),
+      ownerExempt: report.ownerExempt,
+    });
+  } catch (error) {
+    ctx.logger.error(
+      `Anti-nuke acted but could not publish the trip, so no Proton log was posted: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+  }
 }
 
 export async function announce(

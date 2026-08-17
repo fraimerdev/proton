@@ -1,0 +1,18 @@
+{
+  "t": "GUILD_ROLE_UPDATE",
+  "s": 59,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "role": {
+      "id": "700000000000000011",
+      "name": "Senior Moderator",
+      "color": 15844367,
+      "hoist": true,
+      "position": 14,
+      "permissions": "8194",
+      "managed": false,
+      "mentionable": true
+    }
+  }
+}

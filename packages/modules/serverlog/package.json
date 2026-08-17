@@ -1,24 +1,25 @@
 {
-  "name": "@proton/module-autorole",
+  "name": "@proton/module-serverlog",
   "version": "0.0.0",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./catalogue": "./src/catalogue.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@proton/core": "workspace:*",
-    "@proton/db": "workspace:*",
     "discord-api-types": "^0.38.53",
-    "drizzle-orm": "^0.45.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@proton/fixtures": "workspace:*",
-    "@proton/gateway": "workspace:*"
+    "@proton/gateway": "workspace:*",
+    "fast-check": "^4.9.0"
   }
 }

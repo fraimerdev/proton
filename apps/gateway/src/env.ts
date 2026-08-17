@@ -9,7 +9,10 @@ export const DEFAULT_INTENTS =
   GatewayIntentBits.GuildModeration |
   GatewayIntentBits.MessageContent |
   GatewayIntentBits.GuildMessageReactions |
-  GatewayIntentBits.GuildVoiceStates;
+  GatewayIntentBits.GuildVoiceStates |
+  // Both non-privileged, and both only ever deliver to a bot already holding Manage Server.
+  GatewayIntentBits.AutoModerationConfiguration |
+  GatewayIntentBits.AutoModerationExecution;
 
 export const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1),

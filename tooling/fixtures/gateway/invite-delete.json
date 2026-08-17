@@ -1,0 +1,10 @@
+{
+  "t": "INVITE_DELETE",
+  "s": 64,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000001",
+    "code": "protonInv"
+  }
+}

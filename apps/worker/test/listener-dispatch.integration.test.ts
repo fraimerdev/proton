@@ -60,7 +60,7 @@ async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 
 
 function burst(): ProtonEvent[] {
   return dispatchSequence('auditLogChannelDeleteBurst').map((raw) => {
-    const event = normalise(raw);
+    const event = normalise(raw)[0];
     if (!event) throw new Error(`the normaliser produced nothing for ${raw.t}`);
     return event;
   });
@@ -231,7 +231,6 @@ function probeModule(id: string, seen: string[], throws = false): ModuleManifest
         },
       },
     ],
-    migrations: [],
   } as unknown as ModuleManifest;
 }
 

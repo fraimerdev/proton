@@ -307,3 +307,32 @@ a {
 .prose li {
   margin-bottom: 0.35rem;
 }
+
+.log-category {
+  border-bottom: 1px solid var(--border);
+  padding: 0.25rem 0;
+}
+
+.log-category > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+  cursor: pointer;
+  padding: 0.5rem 0;
+}
+
+.log-category-title {
+  font-weight: 600;
+}
+
+.log-category-summary {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.log-event-label {
+  flex: 1;
+  min-width: 12rem;
+  font-size: 0.9rem;
+}

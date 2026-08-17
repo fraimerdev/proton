@@ -1,0 +1,17 @@
+{
+  "t": "CHANNEL_CREATE",
+  "s": 51,
+  "op": 0,
+  "d": {
+    "id": "500000000000000021",
+    "guild_id": "900000000000000001",
+    "name": "announcements",
+    "type": 0,
+    "position": 4,
+    "parent_id": "500000000000000009",
+    "nsfw": false,
+    "rate_limit_per_user": 0,
+    "topic": null,
+    "permission_overwrites": []
+  }
+}

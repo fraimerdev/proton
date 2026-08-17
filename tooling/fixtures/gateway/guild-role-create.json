@@ -1,0 +1,18 @@
+{
+  "t": "GUILD_ROLE_CREATE",
+  "s": 58,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "role": {
+      "id": "700000000000000011",
+      "name": "Moderator",
+      "color": 3447003,
+      "hoist": true,
+      "position": 12,
+      "permissions": "8192",
+      "managed": false,
+      "mentionable": false
+    }
+  }
+}

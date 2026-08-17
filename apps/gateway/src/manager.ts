@@ -27,11 +27,11 @@ export function createGatewayManager(options: GatewayManagerOptions): WebSocketM
 
   manager.on(WebSocketShardEvents.Dispatch, (payload) => {
     const raw = payload as unknown as RawDispatch;
-    const event = normalise(raw);
-    if (!event) return;
 
-    options.onEvent?.(event.type);
-    void options.bus.publish(event);
+    for (const event of normalise(raw)) {
+      options.onEvent?.(event.type);
+      void options.bus.publish(event);
+    }
   });
 
   return manager;

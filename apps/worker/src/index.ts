@@ -38,6 +38,8 @@ import { DrizzleStarboardStore } from '@proton/module-starboard';
 import { RedisQuarantineStore } from '@proton/module-verification';
 import { createModuleRegistry } from '@proton/modules';
 import Redis from 'ioredis';
+import { PublishingCaseRecorder, publishableCase } from './action-events.ts';
+import { readNativeAutomodRules } from './automod-rules.ts';
 import { CachingConfigProvider, HttpConfigProvider } from './config-provider.ts';
 import { verifyApplicationEmojis } from './emoji-check.ts';
 import { loadEnv } from './env.ts';
@@ -162,7 +164,12 @@ const serverlogDeps: ServerlogDeps = {
 const executor = new DefaultActionExecutor({
   dedupe: new RedisDedupeStore(dedupeRedis),
   rest,
-  recorder: new DrizzleCaseRecorder(handle),
+  recorder: new PublishingCaseRecorder({
+    inner: new DrizzleCaseRecorder(handle),
+    bus,
+    logger: console,
+    publishFor: publishableCase,
+  }),
 
   scheduleReversal: (request, caseId) => reversals.schedule(request, caseId),
 
@@ -208,6 +215,12 @@ const registry = createModuleRegistry({
     blocklist,
 
     botUserId: env.DISCORD_APPLICATION_ID,
+  },
+  automod: {
+    rateWindow,
+    guildState,
+    botUserId: env.DISCORD_APPLICATION_ID,
+    readNativeRules: (guildId) => readNativeAutomodRules(rest, guildId),
   },
   logging: { store: messageLogStore, cache: messageCache },
   serverlog: serverlogDeps,

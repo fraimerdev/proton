@@ -1,0 +1,20 @@
+{
+  "t": "AUTO_MODERATION_ACTION_EXECUTION",
+  "s": 45,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "action": {
+      "type": 1,
+      "metadata": {}
+    },
+    "rule_id": "800000000000000002",
+    "rule_trigger_type": 4,
+    "user_id": "100000000000000002",
+    "channel_id": "500000000000000001",
+    "alert_system_message_id": null,
+    "content": "a message Discord refused to post",
+    "matched_keyword": null,
+    "matched_content": "refused"
+  }
+}

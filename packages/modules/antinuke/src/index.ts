@@ -77,6 +77,8 @@ export function createAntinukeModule(
     requiredPermissions: [Permissions.ViewAuditLog, Permissions.ManageRoles],
 
     commands: createAntinukeCommands(deps),
+    emits: ['proton.security_tripped'],
+
     listeners: [createAntinukeListener(deps)],
 
     dashboard: {

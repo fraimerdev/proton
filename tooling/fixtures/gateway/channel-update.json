@@ -1,0 +1,17 @@
+{
+  "t": "CHANNEL_UPDATE",
+  "s": 52,
+  "op": 0,
+  "d": {
+    "id": "500000000000000021",
+    "guild_id": "900000000000000001",
+    "name": "announcements-v2",
+    "type": 0,
+    "position": 4,
+    "parent_id": "500000000000000009",
+    "nsfw": true,
+    "rate_limit_per_user": 30,
+    "topic": "Read only",
+    "permission_overwrites": []
+  }
+}

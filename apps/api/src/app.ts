@@ -1,5 +1,6 @@
 import {
   caseQuerySchema,
+  type EventBus,
   leaderboardQuerySchema,
   type ModuleRegistry,
   type RegistryEnvironment,
@@ -31,6 +32,7 @@ export interface ApiDeps {
   leaderboard: LeaderboardService;
   guilds: GuildService;
   registry: ModuleRegistry;
+  bus?: EventBus;
   // What the bot actually has, for `registry.evaluate`. A function because intents come from the
   // gateway's identify and permissions from the guild, neither of which is known at construction.
   environment?: () => RegistryEnvironment;

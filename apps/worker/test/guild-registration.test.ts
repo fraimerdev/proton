@@ -53,7 +53,7 @@ describe('guild registration on GUILD_CREATE', () => {
   test('registers the guild in the database, not only the Redis cache', async () => {
     const { registrar, ensured } = recordingRegistrar();
     const { store, states } = memoryStore();
-    const event = normalise(dispatch('guildCreate'));
+    const event = normalise(dispatch('guildCreate'))[0];
     if (!event) throw new Error('fixture did not normalise');
 
     await consumer(registrar, store).handle(event);
@@ -68,7 +68,7 @@ describe('guild registration on GUILD_CREATE', () => {
   test('carries the guild’s locale through', async () => {
     const { registrar, ensured } = recordingRegistrar();
     const { store } = memoryStore();
-    const event = normalise(dispatch('guildCreate'));
+    const event = normalise(dispatch('guildCreate'))[0];
     if (!event) throw new Error('fixture did not normalise');
 
     await consumer(registrar, store).handle(event);
@@ -79,7 +79,7 @@ describe('guild registration on GUILD_CREATE', () => {
   test('re-registers without complaint on redelivery', async () => {
     const { registrar, ensured } = recordingRegistrar();
     const { store } = memoryStore();
-    const event = normalise(dispatch('guildCreate'));
+    const event = normalise(dispatch('guildCreate'))[0];
     if (!event) throw new Error('fixture did not normalise');
 
     const c = consumer(registrar, store);
@@ -97,7 +97,7 @@ describe('guild registration on GUILD_CREATE', () => {
       markLeft: async () => {},
     };
     const { store, states } = memoryStore();
-    const event = normalise(dispatch('guildCreate'));
+    const event = normalise(dispatch('guildCreate'))[0];
     if (!event) throw new Error('fixture did not normalise');
 
     await expect(consumer(failing, store).handle(event)).rejects.toThrow('api down');

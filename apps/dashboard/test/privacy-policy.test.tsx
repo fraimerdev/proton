@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
+import { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PrivacyPolicy } from '../src/components/legal/privacy-policy.tsx';
 
@@ -42,5 +42,30 @@ describe('the privacy policy says what the code does', () => {
   test('explains the one erasure limit rather than promising deletion it will not do', () => {
     expect(html).toContain('may be retained against');
     expect(html).toContain('legitimate interest');
+  });
+});
+
+describe('the message-content cache and server logs are disclosed separately', () => {
+  test('discloses the short-lived cache, its own opt-in, and that it is memory only', () => {
+    expect(MESSAGE_CACHE_FALLBACK_TTL_MS / 3_600_000).toBe(24);
+
+    expect(html).toContain('Remember recent message text');
+    expect(html).toContain('<strong>24 hours</strong>');
+    expect(html).toContain('in memory');
+    expect(html).toContain('second, independent');
+  });
+
+  test('says switching the cache off deletes rather than waiting for expiry', () => {
+    expect(html).toContain('deletes the server’s remembered text immediately');
+  });
+
+  test('discloses that log embeds copy personal data into a channel Proton does not control', () => {
+    expect(html).toContain('log channel');
+    expect(html).toContain('visible to anyone who can read that channel');
+    expect(html).toContain('neither controls it nor can revoke it');
+  });
+
+  test('is honest that deleting from Proton does not unpost an embed', () => {
+    expect(html).toContain('does not delete embeds already posted');
   });
 });

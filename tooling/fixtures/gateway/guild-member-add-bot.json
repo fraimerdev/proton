@@ -1,0 +1,23 @@
+{
+  "t": "GUILD_MEMBER_ADD",
+  "s": 8,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "user": {
+      "id": "100000000000000003",
+      "username": "helperbot",
+      "discriminator": "0",
+      "global_name": "Helper Bot",
+      "avatar": null,
+      "bot": true
+    },
+    "roles": [],
+    "joined_at": "2026-08-14T09:05:00.000000+00:00",
+    "deaf": false,
+    "mute": false,
+    "pending": false,
+    "flags": 0,
+    "communication_disabled_until": null
+  }
+}

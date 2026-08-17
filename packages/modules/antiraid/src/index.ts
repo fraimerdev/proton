@@ -57,6 +57,8 @@ export function createAntiraidModule(
 
     requiredPermissions: [Permissions.ManageRoles, Permissions.KickMembers],
 
+    emits: ['proton.security_tripped'],
+
     listeners: [createJoinListener(deps)],
 
     dashboard: {

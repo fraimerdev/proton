@@ -36,7 +36,6 @@ function manifest(id: string, emits?: ModuleManifest['emits']): ModuleManifest {
     schemaVersion: 1,
     requiredIntents: [GatewayIntentBits.Guilds],
     requiredPermissions: [],
-    migrations: [],
     ...(emits ? { emits } : {}),
   } as ModuleManifest;
 }

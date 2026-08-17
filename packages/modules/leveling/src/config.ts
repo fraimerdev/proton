@@ -1,10 +1,12 @@
+// /presets, not the barrel: the barrel re-exports the resvg rasteriser, a native addon
+// that the dashboard's bundler cannot load. Config is read in the browser.
+import { CARD_PRESETS } from '@proton/cards/presets';
 import {
   durationStringSchema,
   protonFields,
   snowflakeSchema,
   tryParseDuration,
 } from '@proton/core';
-import { CARD_PRESETS } from '@proton/cards';
 import { z } from 'zod';
 import { MAX_LEVEL } from './curve.ts';
 

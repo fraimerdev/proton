@@ -65,7 +65,6 @@ function manifest(): ModuleManifest {
     schemaVersion: 1,
     requiredIntents: [GatewayIntentBits.Guilds],
     requiredPermissions: [],
-    migrations: [],
     commands: [
       {
         name: 'ping',

@@ -61,3 +61,147 @@ describe('dashboard client bundle', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+const WORKSPACE = join(import.meta.dir, '..', '..', '..', 'packages');
+
+/**
+ * Packages carrying a native addon. Vite's dependency optimizer tries to parse the `.node`
+ * binary as UTF-8 and fails the dev server with an error that names the binary, not the import
+ * that reached it — so the reachability is worth asserting here rather than rediscovering.
+ */
+const NATIVE_DEPS = ['@resvg/resvg-js', 'zlib-sync', 'bufferutil', 'utf-8-validate'];
+
+interface PackageManifest {
+  name: string;
+  exports?: Record<string, string>;
+  dependencies?: Record<string, string>;
+}
+
+function workspaceManifests(): Map<string, { dir: string; manifest: PackageManifest }> {
+  const found = new Map<string, { dir: string; manifest: PackageManifest }>();
+
+  const roots = [WORKSPACE, MODULES];
+  for (const root of roots) {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = join(root, entry.name);
+      try {
+        const manifest = JSON.parse(
+          readFileSync(join(dir, 'package.json'), 'utf8'),
+        ) as PackageManifest;
+        found.set(manifest.name, { dir, manifest });
+      } catch {
+        // not a package directory
+      }
+    }
+  }
+
+  return found;
+}
+
+function carriesNative(name: string, packages: ReturnType<typeof workspaceManifests>): boolean {
+  const entry = packages.get(name);
+  if (!entry) return NATIVE_DEPS.includes(name);
+
+  return Object.keys(entry.manifest.dependencies ?? {}).some((dep) => carriesNative(dep, packages));
+}
+
+function resolveSpecifier(
+  specifier: string,
+  packages: ReturnType<typeof workspaceManifests>,
+): string | null {
+  for (const [name, { dir, manifest }] of packages) {
+    if (specifier !== name && !specifier.startsWith(`${name}/`)) continue;
+
+    const subpath = specifier === name ? '.' : `./${specifier.slice(name.length + 1)}`;
+    const target = manifest.exports?.[subpath];
+
+    return target ? join(dir, target) : null;
+  }
+
+  return null;
+}
+
+function importsOf(file: string): string[] {
+  const source = readFileSync(file, 'utf8');
+  return [...source.matchAll(/from\s+'([^']+)'/g)].map((match) => match[1] ?? '');
+}
+
+/** Every workspace file the dashboard's own sources can reach, following package exports. */
+function reachableFromDashboard(packages: ReturnType<typeof workspaceManifests>): {
+  files: Set<string>;
+  edges: Map<string, string>;
+} {
+  const files = new Set<string>();
+  const edges = new Map<string, string>();
+  const queue: Array<{ file: string; from: string }> = [];
+
+  for (const file of sourceFiles(SRC)) {
+    for (const specifier of importsOf(file)) {
+      const resolved = resolveSpecifier(specifier, packages);
+      if (resolved)
+        queue.push({ file: resolved, from: `${file.replace(SRC, 'src')} → ${specifier}` });
+    }
+  }
+
+  while (queue.length > 0) {
+    const next = queue.pop();
+    if (!next || files.has(next.file)) continue;
+
+    files.add(next.file);
+    edges.set(next.file, next.from);
+
+    let nested: string[];
+    try {
+      nested = importsOf(next.file);
+    } catch {
+      continue;
+    }
+
+    for (const specifier of nested) {
+      if (specifier.startsWith('.')) {
+        const relative = join(next.file, '..', specifier);
+        if (!files.has(relative)) queue.push({ file: relative, from: next.from });
+        continue;
+      }
+
+      const resolved = resolveSpecifier(specifier, packages);
+      if (resolved && !files.has(resolved)) {
+        queue.push({ file: resolved, from: `${next.from} → ${specifier}` });
+      }
+    }
+  }
+
+  return { files, edges };
+}
+
+describe('native addons stay out of the dashboard', () => {
+  const packages = workspaceManifests();
+
+  test('some workspace package really does carry a native addon, or this proves nothing', () => {
+    expect([...packages.keys()].some((name) => carriesNative(name, packages))).toBe(true);
+  });
+
+  test('@proton/cards exposes its presets without its rasteriser', () => {
+    const cards = packages.get('@proton/cards');
+
+    expect(cards?.manifest.exports?.['./presets']).toBe('./src/presets.ts');
+    expect(importsOf(join(cards?.dir ?? '', 'src', 'presets.ts'))).toEqual([]);
+  });
+
+  test('no file the dashboard can reach imports a package carrying a native addon', () => {
+    const { files, edges } = reachableFromDashboard(packages);
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      for (const specifier of importsOf(file)) {
+        if (specifier.startsWith('.')) continue;
+        if (!carriesNative(specifier, packages)) continue;
+
+        offenders.push(`${edges.get(file) ?? file} → ${specifier} (carries a native addon)`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});

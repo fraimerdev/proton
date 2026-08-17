@@ -261,10 +261,18 @@ Rank card, welcome card, goodbye card. Three presets each. `renderCard(descripto
 Rendering must be deterministic enough to assert in CI without network access — that is what makes
 criterion 6 testable.
 
-### 3.D — Autorole, role rewards, sticky roles
+### 3.D — Join Roles, role rewards, sticky roles
 
-- **Autorole → preset rules.** `member.joined` + `add_role`, compiled from config the way
-  `cases/escalation.ts` compiles the ladder. This is the slice that proves 3.A's wiring end to end.
+- **Join Roles → a listener, *not* preset rules. Superseded 2026-08-17.** The original design
+  compiled `member.joined` + `add_role` into `ModuleManifest.rules` the way `cases/escalation.ts`
+  compiles the ladder. It could never work: `rules` is a static array evaluated at module
+  construction, so it saw only `defaultConfig` — an empty role list — which meant no rule was ever
+  seeded and the dispatcher never subscribed to `member.joined`. Nothing recompiled it per guild,
+  and `seedPresets` is deliberately `onConflictDoNothing`, so a config-derived rule set could never
+  reconcile on removal either. The module now grants from a listener that reads `ctx.config` at
+  event time, with separate role lists for people and bots and an option to hold roles until
+  Membership Screening passes. 3.A's end-to-end proof is the `cases` warn-escalation ladder
+  (Gate 3 criterion 5).
 - **Role rewards → module logic, *not* rules.** *Deviation from §4-P2's literal wording, stated
   openly:* rewards are keyed on "the member reached level N", and §4-P2's predicate set is
   deliberately closed with no numeric comparison in it. Widening it to fit would open exactly the
@@ -336,8 +344,9 @@ Patterned on Gates 0–2. Every criterion proven by command output, not assertio
    award **once** (integration test, real Postgres).
 3. A level-up publishes `xp.level_gained` and grants the configured reward; a reward role positioned
    above the bot fails with a named precheck reason. *(happy path + permission-failure path)*
-4. An autorole preset rule is seeded into `rules` for the guild and fires on a replayed
-   `member.joined`. *(proves 3.A)*
+4. A configured Join Role produces exactly one `add_role` on a replayed `member.joined`, and a role
+   positioned above the bot fails with a named precheck reason. *(3.A's end-to-end proof is now
+   criterion 5 — see 3.D)*
 5. N warns inside the escalation window fire the ladder rung. *(retires the open Gate 1 item)*
 6. A rank card renders to a PNG in CI with no network access.
 7. `reaction.added` grants a role and `reaction.removed` revokes it; a component interaction is
@@ -378,7 +387,7 @@ Patterned on Gates 0–2. Every criterion proven by command output, not assertio
 | 3.A framework | done | 5 event types, 5 action kinds, multipart, rule wiring, publish port |
 | 3.B leveling | done | curve + property tests, single-statement award, message XP, voice XP, `/rank` `/leaderboard` `/xp` |
 | 3.C cards | done | satori + `@resvg/resvg-js` **work under Bun** — R1 did not materialise. Inter (OFL) checked into `packages/cards/assets` |
-| 3.D autorole + sticky | done | autorole as preset rules, sticky roles as a listener; `restore.ts` refuses `@everyone`, managed roles, roles at-or-above the bot, and anything off the allowlist |
+| 3.D join roles + sticky | done | `joinroles` grants from a listener (people and bots, screening-aware); sticky roles in the same listener; `grant.ts`/`restore.ts` refuse `@everyone`, managed roles, roles at-or-above the bot, and anything off the allowlist |
 | 3.E rolemenu | done | reaction, button and select menus; deferred ack then follow-up |
 | 3.F starboard | done | recompute-never-increment; create keyed on `(guild, message)` not the event |
 | welcome | done | greeting + optional card; a failed render never costs the message |

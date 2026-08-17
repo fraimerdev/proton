@@ -4,7 +4,7 @@ import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { ApiClient } from '../lib/api-client.ts';
 import { fetchGuildChannels, fetchGuildRoles, fetchUserGuilds } from '../lib/discord.ts';
-import { getDiscordAccessToken } from '../lib/discord-token.ts';
+import { getDiscordAccessToken, getDiscordUserId } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { administrableGuilds } from '../lib/guild-access.ts';
 import {
@@ -84,12 +84,15 @@ export const updateModuleConfig = createServerFn({ method: 'POST' })
     }),
   )
   .handler(async ({ data, context }) => {
-    const hash = await ipHash();
+    const [hash, actorId] = await Promise.all([
+      ipHash(),
+      getDiscordUserId(context.session.user.id),
+    ]);
 
     return api.updateModule(data.guildId, data.moduleId, {
       enabled: data.enabled,
       config: data.config,
-      actorId: context.session.user.id,
+      actorId,
       source: 'dashboard',
       ipHash: hash,
     });

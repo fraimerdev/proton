@@ -1,0 +1,16 @@
+{
+  "t": "GUILD_BAN_REMOVE",
+  "s": 62,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "user": {
+      "id": "100000000000000007",
+      "username": "spammer",
+      "discriminator": "0",
+      "global_name": "Spammer",
+      "avatar": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+      "bot": false
+    }
+  }
+}

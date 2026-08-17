@@ -5,7 +5,8 @@
   "license": "UNLICENSED",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./presets": "./src/presets.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

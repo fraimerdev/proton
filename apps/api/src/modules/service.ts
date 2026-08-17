@@ -1,4 +1,4 @@
-import { type ModuleRegistry, newId } from '@proton/core';
+import { diffKeys, type EventBus, type Logger, type ModuleRegistry, newId } from '@proton/core';
 import type { DbHandle, GuildRuleStore } from '@proton/db';
 import { auditTrail, guildModules } from '@proton/db/schema';
 import { and, eq } from 'drizzle-orm';
@@ -35,6 +35,10 @@ export class ModuleConfigError extends Error {
 export interface ModuleConfigServiceOptions {
   rules?: GuildRuleStore;
   onRecompileFailed?(guildId: string, moduleId: string, detail: string): void;
+
+  bus?: EventBus;
+  logger?: Logger;
+  now?(): number;
 }
 
 export class ModuleConfigService {
@@ -127,6 +131,10 @@ export class ModuleConfigService {
       migrated: false,
     };
 
+    // Hoisted out of the transaction so the published event can carry the same id as the durable
+    // audit row it describes.
+    const auditId = newId();
+
     await this.#db.db.transaction(async (tx) => {
       await tx
         .insert(guildModules)
@@ -151,7 +159,7 @@ export class ModuleConfigService {
         });
 
       await tx.insert(auditTrail).values({
-        id: newId(),
+        id: auditId,
         guildId: input.guildId,
         actorId: input.actorId,
         source: input.source,
@@ -163,8 +171,53 @@ export class ModuleConfigService {
     });
 
     await this.#recompileRules(input.guildId, input.moduleId, nextConfig);
+    await this.#publishChange(auditId, input, before, after);
 
     return { before, after };
+  }
+
+  // After the commit, never inside it: an event for a rolled-back write is a lie, and a Redis
+  // round trip inside the transaction would hold the row lock for the length of it.
+  async #publishChange(
+    auditId: string,
+    input: UpdateModuleConfigInput,
+    before: ModuleConfigView,
+    after: ModuleConfigView,
+  ): Promise<void> {
+    const bus = this.#options.bus;
+    if (!bus) return;
+
+    const changedKeys = diffKeys(before.config, after.config);
+    if (changedKeys.length === 0 && before.enabled === after.enabled) return;
+
+    try {
+      await bus.publish({
+        id: `proton.config_changed:${input.guildId}:${auditId}`,
+        type: 'proton.config_changed',
+        guildId: input.guildId,
+        occurredAt: this.#options.now?.() ?? Date.now(),
+        payload: {
+          auditId,
+          guildId: input.guildId,
+          moduleId: input.moduleId,
+          moduleName: this.#registry.get(input.moduleId)?.name ?? input.moduleId,
+          actorId: input.actorId,
+          source: input.source,
+          enabledBefore: before.enabled,
+          enabledAfter: after.enabled,
+          changedKeys,
+        },
+      });
+    } catch (error) {
+      // The audit_trail row is the durable record; the log post is best effort and must never
+      // fail an admin's save.
+      this.#options.logger?.error(
+        `${input.moduleId}'s config was saved for guild ${input.guildId} but the change could ` +
+          `not be published, so no Proton log was posted for it: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+    }
   }
 
   // After the commit, never inside it. The config is the source of truth and the rules are derived

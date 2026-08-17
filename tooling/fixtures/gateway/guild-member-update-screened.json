@@ -1,0 +1,25 @@
+{
+  "t": "GUILD_MEMBER_UPDATE",
+  "s": 42,
+  "op": 0,
+  "d": {
+    "guild_id": "900000000000000001",
+    "user": {
+      "id": "100000000000000004",
+      "username": "screenee",
+      "discriminator": "0",
+      "global_name": "Screenee",
+      "avatar": null,
+      "bot": false
+    },
+    "roles": [],
+    "nick": null,
+    "joined_at": "2026-08-14T09:10:00.000000+00:00",
+    "premium_since": null,
+    "deaf": false,
+    "mute": false,
+    "pending": false,
+    "flags": 0,
+    "communication_disabled_until": null
+  }
+}

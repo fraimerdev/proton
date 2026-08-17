@@ -51,6 +51,8 @@ export const EVENT_TYPES = [
 
   'moderation.warned',
 
+  'automod.executed',
+
   'xp.level_gained',
 
   'proton.config_changed',

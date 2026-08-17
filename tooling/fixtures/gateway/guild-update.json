@@ -1,0 +1,15 @@
+{
+  "t": "GUILD_UPDATE",
+  "s": 50,
+  "op": 0,
+  "d": {
+    "id": "900000000000000001",
+    "name": "Proton Test",
+    "owner_id": "100000000000000009",
+    "verification_level": 2,
+    "explicit_content_filter": 1,
+    "afk_timeout": 300,
+    "premium_tier": 0,
+    "vanity_url_code": null
+  }
+}

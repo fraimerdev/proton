@@ -144,7 +144,7 @@ function pingBy(roleIds: string[]): ProtonEvent {
   const raw = dispatch('interactionCreatePing');
   (raw.d.member as { roles: string[] }).roles = roleIds;
 
-  const event = normalise(raw);
+  const event = normalise(raw)[0];
   if (!event) throw new Error('fixture did not normalise');
   return event;
 }
