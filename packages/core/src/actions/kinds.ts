@@ -21,6 +21,9 @@ export const ACTION_KINDS = [
   'unlock',
   'create_channel',
   'create_role',
+  'automod_rule_create',
+  'automod_rule_update',
+  'automod_rule_delete',
 ] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -61,6 +64,12 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
 
   create_channel: Permissions.ManageChannels,
   create_role: Permissions.ManageRoles,
+
+  // Not ManageMessages: Discord gates the whole auto-moderation surface, reads included, on
+  // Manage Server alone.
+  automod_rule_create: Permissions.ManageGuild,
+  automod_rule_update: Permissions.ManageGuild,
+  automod_rule_delete: Permissions.ManageGuild,
 };
 
 export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
@@ -89,6 +98,10 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
 
   create_channel: false,
   create_role: false,
+
+  automod_rule_create: false,
+  automod_rule_update: false,
+  automod_rule_delete: false,
 };
 
 export const REVERSAL_OF: Partial<Record<ActionKind, ActionKind>> = {

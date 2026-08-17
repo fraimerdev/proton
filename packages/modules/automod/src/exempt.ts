@@ -2,13 +2,7 @@ import type { GuildState } from '@proton/core';
 import type { AutomodConfig } from './config.ts';
 import { isHumanMessage, type MessageFacts } from './message.ts';
 
-export const EXEMPT_REASONS = [
-  'self',
-  'bot',
-  'channel',
-  'role',
-  'not_a_human_message',
-] as const;
+export const EXEMPT_REASONS = ['self', 'bot', 'channel', 'role', 'not_a_human_message'] as const;
 
 export type ExemptReason = (typeof EXEMPT_REASONS)[number];
 
@@ -38,9 +32,7 @@ export function isExempt(input: ExemptInput): ExemptReason | null {
   const parentId = state?.channels.get(facts.channelId)?.parentId;
   if (parentId && config.exemptChannelIds.includes(parentId)) return 'channel';
 
-  if (facts.roleIds && facts.roleIds.some((id) => config.exemptRoleIds.includes(id))) {
-    return 'role';
-  }
+  if (facts.roleIds?.some((id) => config.exemptRoleIds.includes(id))) return 'role';
 
   return null;
 }

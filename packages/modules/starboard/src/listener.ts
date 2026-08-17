@@ -9,7 +9,7 @@ import {
 import type { StarboardConfig } from './config.ts';
 import { countStars, decide, eligibility, type StarboardDecision } from './decide.ts';
 import { type BoundStarboardDeps, bindDeps, describeUnbound, type StarboardDeps } from './deps.ts';
-import { buildBoardMessage, jumpUrl } from './embed.ts';
+import { buildBoardMessage } from './embed.ts';
 import {
   type EmojiRef,
   emojiRestForm,

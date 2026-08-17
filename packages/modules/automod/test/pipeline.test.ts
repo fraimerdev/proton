@@ -3,7 +3,7 @@ import type { GuildState, RateWindowHit, RateWindowResult, RateWindowStore } fro
 import { type AutomodConfig, automodConfigSchema, readSettings } from '../src/config.ts';
 import { isExempt } from '../src/exempt.ts';
 import { type MessageFacts, normaliseForMatching } from '../src/message.ts';
-import { duplicateFingerprint, screen, type ScreenInput } from '../src/pipeline.ts';
+import { duplicateFingerprint, type ScreenInput, screen } from '../src/pipeline.ts';
 
 function config(overrides: Record<string, unknown> = {}): AutomodConfig {
   return automodConfigSchema.parse({ enabled: true, ...overrides });
@@ -63,7 +63,9 @@ function input(cfg: AutomodConfig, window: RateWindowStore, over: Partial<Screen
 describe('screen', () => {
   test('no enabled check means no verdict', async () => {
     const cfg = config();
-    const verdict = await screen(input(cfg, new CountingWindow(), { facts: facts({ content: 'HELLO EVERYONE!!!' }) }));
+    const verdict = await screen(
+      input(cfg, new CountingWindow(), { facts: facts({ content: 'HELLO EVERYONE!!!' }) }),
+    );
 
     expect(verdict.matched).toBe(false);
   });
@@ -102,7 +104,12 @@ describe('screen', () => {
   });
 
   test('the stateful checks still run when a stateless one already matched', async () => {
-    const cfg = config({ floodSeverity: 'low', duplicateSeverity: 'low', capsSeverity: 'high', capsRatio: 50 });
+    const cfg = config({
+      floodSeverity: 'low',
+      duplicateSeverity: 'low',
+      capsSeverity: 'high',
+      capsRatio: 50,
+    });
     const window = new CountingWindow();
 
     await screen(
@@ -116,7 +123,9 @@ describe('screen', () => {
     const cfg = config({ floodSeverity: 'off', duplicateSeverity: 'off' });
     const window = new CountingWindow();
 
-    await screen(input(cfg, window, { facts: facts({ content: 'a message long enough to count' }) }));
+    await screen(
+      input(cfg, window, { facts: facts({ content: 'a message long enough to count' }) }),
+    );
 
     expect(window.calls).toHaveLength(0);
   });
@@ -158,7 +167,9 @@ describe('screen', () => {
     const cfg = config({ duplicateSeverity: 'medium', duplicateCount: 2 });
     const window = new CountingWindow();
 
-    await screen(input(cfg, window, { facts: facts({ content: 'the first thing said' }), eventId: 'a' }));
+    await screen(
+      input(cfg, window, { facts: facts({ content: 'the first thing said' }), eventId: 'a' }),
+    );
     const second = await screen(
       input(cfg, window, { facts: facts({ content: 'a different thing said' }), eventId: 'b' }),
     );
@@ -206,7 +217,10 @@ describe('isExempt', () => {
     roles: new Map(),
     botRoleIds: [],
     channels: new Map([
-      ['600000000000000001', { id: '600000000000000001', parentId: '500000000000000002', overwrites: [] }],
+      [
+        '600000000000000001',
+        { id: '600000000000000001', parentId: '500000000000000002', overwrites: [] },
+      ],
     ]),
     updatedAt: 0,
   };
@@ -229,7 +243,9 @@ describe('isExempt', () => {
   });
 
   test('replies are screened', () => {
-    expect(isExempt({ facts: facts({ type: 19 }), config: config(), botUserId, state: null })).toBeNull();
+    expect(
+      isExempt({ facts: facts({ type: 19 }), config: config(), botUserId, state: null }),
+    ).toBeNull();
   });
 
   test('other bots are exempt only while exemptBots is on', () => {

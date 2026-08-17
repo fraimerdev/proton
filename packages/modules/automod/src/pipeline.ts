@@ -1,9 +1,8 @@
 import type { RateWindowStore } from '@proton/core';
 import { type AutomodHit, STATELESS_CHECKS } from './checks.ts';
 import { type AutomodConfig, type AutomodSettings, outranks, severityOf } from './config.ts';
+import { MODULE_ID } from './deps.ts';
 import type { MessageFacts } from './message.ts';
-
-export const MODULE_ID = 'automod';
 
 export type AutomodVerdict =
   | { matched: false }

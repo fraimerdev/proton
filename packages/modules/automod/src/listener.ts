@@ -1,10 +1,10 @@
 import { dryRunFor, type EventListener, type EventType } from '@proton/core';
 import type { AutomodHit } from './checks.ts';
 import { type AutomodConfig, readSettings } from './config.ts';
-import { type AutomodDeps, bindDeps, describeUnbound } from './deps.ts';
+import { type AutomodDeps, bindDeps, describeUnbound, MODULE_ID } from './deps.ts';
 import { isExempt } from './exempt.ts';
 import { readMessage } from './message.ts';
-import { MODULE_ID, screen } from './pipeline.ts';
+import { screen } from './pipeline.ts';
 import { respond } from './respond.ts';
 
 export const AUTOMOD_EVENT_TYPES: EventType[] = ['message.created', 'message.updated'];

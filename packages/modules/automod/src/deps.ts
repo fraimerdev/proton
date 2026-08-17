@@ -1,28 +1,22 @@
 import type { GuildState, RateWindowStore } from '@proton/core';
 
-export interface NativeRule {
-  id: string;
-  name: string;
-  creatorId: string | null;
-  triggerType: number;
-  enabled: boolean;
-  exemptRoles: string[];
-  exemptChannels: string[];
-}
+export const MODULE_ID = 'automod';
 
 export interface AutomodDeps {
   rateWindow?: RateWindowStore;
   guildState?: { get(guildId: string): Promise<GuildState | null> };
   // Proton's own user id. Without it automod screens its own alerts and acts on itself.
   botUserId?: string;
-  // Reads only. Writes go through the executor so every rule change lands in the case ledger.
-  readNativeRules?(guildId: string): Promise<NativeRule[] | null>;
+  // Reads only, returning the raw list body. Writes go through the executor, so a rule change is
+  // prechecked and audited like every other Discord write.
+  readNativeRules?(guildId: string): Promise<unknown>;
 }
 
 export interface BoundAutomodDeps {
   rateWindow: RateWindowStore;
   guildState: { get(guildId: string): Promise<GuildState | null> };
   botUserId: string;
+  readNativeRules?(guildId: string): Promise<unknown>;
 }
 
 export type BindResult = { deps: BoundAutomodDeps } | { unbound: string[] };
@@ -43,7 +37,14 @@ export function bindDeps(deps: AutomodDeps): BindResult {
   if (!botUserId) unbound.push('botUserId');
 
   if (!rateWindow || !guildState || !botUserId) return { unbound };
-  return { deps: { rateWindow, guildState, botUserId } };
+  return {
+    deps: {
+      rateWindow,
+      guildState,
+      botUserId,
+      ...(deps.readNativeRules ? { readNativeRules: deps.readNativeRules } : {}),
+    },
+  };
 }
 
 export function describeUnbound(unbound: readonly string[]): string {

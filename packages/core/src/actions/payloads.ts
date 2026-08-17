@@ -218,6 +218,116 @@ export const unlockPayloadSchema = z.object({
   restoreDeny: z.string().default('0'),
 });
 
+export const AUTOMOD_EVENT_MESSAGE_SEND = 1 as const;
+export const AUTOMOD_EVENT_MEMBER_UPDATE = 2 as const;
+
+export const AUTOMOD_TRIGGER_KEYWORD = 1 as const;
+export const AUTOMOD_TRIGGER_SPAM = 3 as const;
+export const AUTOMOD_TRIGGER_KEYWORD_PRESET = 4 as const;
+export const AUTOMOD_TRIGGER_MENTION_SPAM = 5 as const;
+export const AUTOMOD_TRIGGER_MEMBER_PROFILE = 6 as const;
+
+export const AUTOMOD_ACTION_BLOCK_MESSAGE = 1 as const;
+export const AUTOMOD_ACTION_SEND_ALERT = 2 as const;
+export const AUTOMOD_ACTION_TIMEOUT = 3 as const;
+export const AUTOMOD_ACTION_BLOCK_INTERACTION = 4 as const;
+
+export const AUTOMOD_PRESET_PROFANITY = 1 as const;
+export const AUTOMOD_PRESET_SEXUAL_CONTENT = 2 as const;
+export const AUTOMOD_PRESET_SLURS = 3 as const;
+
+// Discord's own caps, mirrored so a rule is rejected here with a readable message rather than by
+// the API with an index into an array.
+export const AUTOMOD_MAX_KEYWORDS = 1000;
+export const AUTOMOD_MAX_KEYWORD_LENGTH = 60;
+export const AUTOMOD_MAX_REGEX_PATTERNS = 10;
+export const AUTOMOD_MAX_REGEX_LENGTH = 260;
+export const AUTOMOD_MAX_ALLOW_LIST = 1000;
+export const AUTOMOD_MAX_MENTIONS = 50;
+export const AUTOMOD_MAX_CUSTOM_MESSAGE = 150;
+export const AUTOMOD_MAX_TIMEOUT_SECONDS = 2_419_200;
+export const AUTOMOD_MAX_EXEMPT_ROLES = 20;
+export const AUTOMOD_MAX_EXEMPT_CHANNELS = 50;
+export const AUTOMOD_MAX_KEYWORD_RULES = 6;
+
+const automodActionSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal(AUTOMOD_ACTION_BLOCK_MESSAGE),
+    customMessage: z.string().max(AUTOMOD_MAX_CUSTOM_MESSAGE).optional(),
+  }),
+  z.object({ type: z.literal(AUTOMOD_ACTION_SEND_ALERT), channelId: snowflakeSchema }),
+  z.object({
+    type: z.literal(AUTOMOD_ACTION_TIMEOUT),
+    durationSeconds: z.number().int().min(1).max(AUTOMOD_MAX_TIMEOUT_SECONDS),
+  }),
+  z.object({ type: z.literal(AUTOMOD_ACTION_BLOCK_INTERACTION) }),
+]);
+
+export type AutomodRuleAction = z.infer<typeof automodActionSchema>;
+
+const automodTriggerMetadataSchema = z.object({
+  keywordFilter: z
+    .array(z.string().min(1).max(AUTOMOD_MAX_KEYWORD_LENGTH))
+    .max(AUTOMOD_MAX_KEYWORDS)
+    .optional(),
+  // Rust syntax, not JavaScript's: no lookaround and no backreferences. Whatever builds this has
+  // already decided the pattern survives the translation.
+  regexPatterns: z
+    .array(z.string().min(1).max(AUTOMOD_MAX_REGEX_LENGTH))
+    .max(AUTOMOD_MAX_REGEX_PATTERNS)
+    .optional(),
+  presets: z
+    .array(
+      z.union([
+        z.literal(AUTOMOD_PRESET_PROFANITY),
+        z.literal(AUTOMOD_PRESET_SEXUAL_CONTENT),
+        z.literal(AUTOMOD_PRESET_SLURS),
+      ]),
+    )
+    .max(3)
+    .optional(),
+  allowList: z
+    .array(z.string().min(1).max(AUTOMOD_MAX_KEYWORD_LENGTH))
+    .max(AUTOMOD_MAX_ALLOW_LIST)
+    .optional(),
+  mentionTotalLimit: z.number().int().min(1).max(AUTOMOD_MAX_MENTIONS).optional(),
+  mentionRaidProtectionEnabled: z.boolean().optional(),
+});
+
+export type AutomodTriggerMetadata = z.infer<typeof automodTriggerMetadataSchema>;
+
+const automodRuleSpecShape = {
+  name: z.string().min(1).max(100),
+  eventType: z
+    .union([z.literal(AUTOMOD_EVENT_MESSAGE_SEND), z.literal(AUTOMOD_EVENT_MEMBER_UPDATE)])
+    .default(AUTOMOD_EVENT_MESSAGE_SEND),
+  triggerMetadata: automodTriggerMetadataSchema.default({}),
+  actions: z.array(automodActionSchema).min(1).max(3),
+  enabled: z.boolean().default(true),
+  exemptRoles: z.array(snowflakeSchema).max(AUTOMOD_MAX_EXEMPT_ROLES).default([]),
+  exemptChannels: z.array(snowflakeSchema).max(AUTOMOD_MAX_EXEMPT_CHANNELS).default([]),
+};
+
+export const automodRuleCreatePayloadSchema = z.object({
+  ...automodRuleSpecShape,
+  triggerType: z.union([
+    z.literal(AUTOMOD_TRIGGER_KEYWORD),
+    z.literal(AUTOMOD_TRIGGER_SPAM),
+    z.literal(AUTOMOD_TRIGGER_KEYWORD_PRESET),
+    z.literal(AUTOMOD_TRIGGER_MENTION_SPAM),
+    z.literal(AUTOMOD_TRIGGER_MEMBER_PROFILE),
+  ]),
+});
+
+// No triggerType: Discord rejects a PATCH that carries it, so changing a rule's trigger means
+// deleting it and creating a new one.
+export const automodRuleUpdatePayloadSchema = z.object({
+  ...automodRuleSpecShape,
+  ruleId: snowflakeSchema,
+});
+
+export const automodRuleDeletePayloadSchema = z.object({ ruleId: snowflakeSchema });
+
 export type SendPayload = z.infer<typeof sendPayloadSchema>;
 export type EditMessagePayload = z.infer<typeof editMessagePayloadSchema>;
 export type DeleteMessagePayload = z.infer<typeof deleteMessagePayloadSchema>;
@@ -231,3 +341,6 @@ export type PurgePayload = z.infer<typeof purgePayloadSchema>;
 export type LockdownPayload = z.infer<typeof lockdownPayloadSchema>;
 export type CreateChannelPayload = z.infer<typeof createChannelPayloadSchema>;
 export type CreateRolePayload = z.infer<typeof createRolePayloadSchema>;
+export type AutomodRuleCreatePayload = z.infer<typeof automodRuleCreatePayloadSchema>;
+export type AutomodRuleUpdatePayload = z.infer<typeof automodRuleUpdatePayloadSchema>;
+export type AutomodRuleDeletePayload = z.infer<typeof automodRuleDeletePayloadSchema>;

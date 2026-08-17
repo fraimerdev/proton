@@ -105,9 +105,13 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'interaction_followup':
       return {};
 
-    // A restore names the channel or role it is recreating; no fact can supply one.
+    // A restore names the channel or role it is recreating, and an automod rule names itself; no
+    // fact can supply either.
     case 'create_channel':
     case 'create_role':
+    case 'automod_rule_create':
+    case 'automod_rule_update':
+    case 'automod_rule_delete':
       return {};
   }
 }

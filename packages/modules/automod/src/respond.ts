@@ -14,8 +14,8 @@ import {
   deletesAt,
   responseFor,
 } from './config.ts';
+import { MODULE_ID } from './deps.ts';
 import type { MessageFacts } from './message.ts';
-import { MODULE_ID } from './pipeline.ts';
 
 export interface RespondInput {
   ctx: ModuleContext<AutomodConfig>;
@@ -86,7 +86,10 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
   const kind: ActionKind = response;
   const payload: Record<string, unknown> =
     response === 'timeout'
-      ? { userId: facts.authorId, until: new Date(input.now + timeoutMs(input.settings, hit.severity)) }
+      ? {
+          userId: facts.authorId,
+          until: new Date(input.now + timeoutMs(input.settings, hit.severity)),
+        }
       : { userId: facts.authorId };
 
   const result = await ctx.executor.execute({

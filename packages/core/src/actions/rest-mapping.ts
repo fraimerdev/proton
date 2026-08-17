@@ -2,7 +2,15 @@ import type { z } from 'zod';
 import type { ActionKind } from './kinds.ts';
 import {
   type Attachment,
+  AUTOMOD_ACTION_BLOCK_MESSAGE,
+  AUTOMOD_ACTION_SEND_ALERT,
+  AUTOMOD_ACTION_TIMEOUT,
+  type AutomodRuleAction,
+  type AutomodTriggerMetadata,
   addReactionPayloadSchema,
+  automodRuleCreatePayloadSchema,
+  automodRuleDeletePayloadSchema,
+  automodRuleUpdatePayloadSchema,
   banPayloadSchema,
   createChannelPayloadSchema,
   createRolePayloadSchema,
@@ -71,6 +79,35 @@ function issues(request: ActionRequest, list: z.core.$ZodIssue[]): { error: stri
       .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
       .join('; ')}`,
   };
+}
+
+function automodActions(actions: readonly AutomodRuleAction[]): unknown[] {
+  return actions.map((action) => {
+    switch (action.type) {
+      case AUTOMOD_ACTION_BLOCK_MESSAGE:
+        return {
+          type: action.type,
+          metadata: present({ custom_message: action.customMessage }),
+        };
+      case AUTOMOD_ACTION_SEND_ALERT:
+        return { type: action.type, metadata: { channel_id: action.channelId } };
+      case AUTOMOD_ACTION_TIMEOUT:
+        return { type: action.type, metadata: { duration_seconds: action.durationSeconds } };
+      default:
+        return { type: action.type };
+    }
+  });
+}
+
+function automodMetadata(metadata: AutomodTriggerMetadata): Record<string, unknown> {
+  return present({
+    keyword_filter: metadata.keywordFilter,
+    regex_patterns: metadata.regexPatterns,
+    presets: metadata.presets,
+    allow_list: metadata.allowList,
+    mention_total_limit: metadata.mentionTotalLimit,
+    mention_raid_protection_enabled: metadata.mentionRaidProtectionEnabled,
+  });
 }
 
 function auditHeaders(request: ActionRequest): Record<string, string> | undefined {
@@ -376,6 +413,58 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             hoist: p.data.hoist,
             mentionable: p.data.mentionable,
           }),
+        }),
+      };
+    }
+
+    case 'automod_rule_create': {
+      const p = automodRuleCreatePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'POST',
+          path: `/guilds/${guild}/auto-moderation/rules`,
+          body: {
+            name: p.data.name,
+            event_type: p.data.eventType,
+            trigger_type: p.data.triggerType,
+            trigger_metadata: automodMetadata(p.data.triggerMetadata),
+            actions: automodActions(p.data.actions),
+            enabled: p.data.enabled,
+            exempt_roles: p.data.exemptRoles,
+            exempt_channels: p.data.exemptChannels,
+          },
+        }),
+      };
+    }
+
+    case 'automod_rule_update': {
+      const p = automodRuleUpdatePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'PATCH',
+          path: `/guilds/${guild}/auto-moderation/rules/${p.data.ruleId}`,
+          body: {
+            name: p.data.name,
+            event_type: p.data.eventType,
+            trigger_metadata: automodMetadata(p.data.triggerMetadata),
+            actions: automodActions(p.data.actions),
+            enabled: p.data.enabled,
+            exempt_roles: p.data.exemptRoles,
+            exempt_channels: p.data.exemptChannels,
+          },
+        }),
+      };
+    }
+
+    case 'automod_rule_delete': {
+      const p = automodRuleDeletePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'DELETE',
+          path: `/guilds/${guild}/auto-moderation/rules/${p.data.ruleId}`,
         }),
       };
     }
