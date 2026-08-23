@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
-    "./curve": "./src/curve.ts"
+    "./curve": "./src/curve.ts",
+    "./activity-store": "./src/activity-store.ts",
+    "./activity-table": "./src/activity-table.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -15,13 +17,14 @@
   "dependencies": {
     "@proton/cards": "workspace:*",
     "@proton/core": "workspace:*",
+    "@proton/db": "workspace:*",
     "discord-api-types": "^0.38.53",
     "discord.js": "^14.27.0",
+    "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@proton/db": "workspace:*",
     "@proton/fixtures": "workspace:*",
     "fast-check": "^4.9.0"
   }

@@ -1,3 +1,4 @@
+import type { EntitlementTier } from '@proton/core';
 import type { ConfigProvider, ModuleConfigSnapshot } from './runtime.ts';
 
 export class ConfigUnavailableError extends Error {
@@ -60,8 +61,19 @@ export class HttpConfigProvider implements ConfigProvider {
       });
     }
 
-    const body = (await response.json()) as { enabled: boolean; config: unknown };
-    return { enabled: body.enabled, config: body.config };
+    const body = (await response.json()) as {
+      enabled: boolean;
+      config: unknown;
+      schemaVersion?: number;
+      tier?: EntitlementTier;
+    };
+
+    return {
+      enabled: body.enabled,
+      config: body.config,
+      ...(body.schemaVersion === undefined ? {} : { schemaVersion: body.schemaVersion }),
+      ...(body.tier === undefined ? {} : { tier: body.tier }),
+    };
   }
 }
 

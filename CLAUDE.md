@@ -18,6 +18,10 @@ decisions below, which the project owner has taken since PLAN.md was written.
 - **Privileged intents**: Server Members + Message Content. Presence is not used.
 - **Message-log retention**: opt-in, 30 days.
 - **`@tanstack/react-table` is v9**, not §2's v8 — not a dependency until Gate 1.
+- **No environment rail on destructive actions.** This replaces §3's I12: Proton performs every
+  action for real in every environment, however destructive. Nothing reads `NODE_ENV` to decide
+  whether Discord is called, and `PROTON_ALLOW_DESTRUCTIVE` is gone. The only remaining dry run is
+  the one the invoker asks for — `/backup restore` previews until it is confirmed.
 
 ## Commands
 
@@ -94,7 +98,8 @@ TLS" (Bun handles TCP fine). Otherwise run them in CI, or in WSL with Bun instal
 - The real bot token exists only in gitignored `.env` files — never in code, fixtures, tests, logs.
 - New module = integration test for its happy path AND its permission-failure path, minimum.
 - Permission math changes require accompanying property tests (fast-check).
-- Destructive actions default to `dry_run: true` in development.
+- Destructive actions are performed for real in every environment; a test that wants them withheld
+  must say so in the request, not in the environment.
 
 ## Safety rails for the agent
 

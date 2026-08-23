@@ -43,7 +43,7 @@ describe('/antinuke maintenance', () => {
     expect(alert).toContain(ADMIN);
     expect(alert).toContain('re-arms by itself');
 
-    expect(h.recorder.recorded.some((c) => c.kind === 'interaction_reply')).toBe(true);
+    expect(h.recorder.recorded.map((c) => c.kind)).toEqual(['send']);
   });
 
   test('refuses a window longer than the guild allows, and says both numbers', async () => {

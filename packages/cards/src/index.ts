@@ -1,13 +1,13 @@
 export {
-  AVATAR_MAX_BYTES,
-  AVATAR_TIMEOUT_MS,
-  type AvatarFetcher,
   discordAvatarUrl,
   type FetchLike,
-  HttpAvatarFetcher,
-  type HttpAvatarFetcherOptions,
-  nullAvatarFetcher,
-  toDataUri,
+  HttpImageFetcher,
+  type HttpImageFetcherOptions,
+  IMAGE_MAX_BYTES,
+  IMAGE_TIMEOUT_MS,
+  type ImageFetcher,
+  isRenderableImage,
+  nullImageFetcher,
 } from './avatar.ts';
 export {
   CARD_SIZES,
@@ -24,19 +24,22 @@ export {
   type WelcomeCard,
   welcomeCardSchema,
 } from './descriptor.ts';
-export { FONT_FAMILY, FONT_LICENCE, type LoadedFont, loadFonts } from './fonts.ts';
-export { buildLayout, type CardNode, monogram, sanitiseText } from './layout.ts';
+export { accentOf, type CardImages, CORNER_RADIUS, drawCard, highlightOf } from './draw.ts';
+export {
+  FALLBACK_FONT_FAMILY,
+  FONT_FAMILY,
+  FONT_LICENCE,
+  FONT_STACK,
+  registeredFamilies,
+  registerFonts,
+} from './fonts.ts';
 export {
   CARD_PRESETS,
   type CardPreset,
   PRESET_PALETTES,
   type PresetPalette,
   paletteFor,
+  toHexColour,
 } from './presets.ts';
-export {
-  type CardDeps,
-  renderCard,
-  renderCardSvg,
-  resvgRasteriser,
-  type SvgRasteriser,
-} from './render.ts';
+export { type CardDeps, renderCard } from './render.ts';
+export { abbreviate, group, monogram, sanitiseText } from './text.ts';

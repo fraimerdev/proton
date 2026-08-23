@@ -116,7 +116,7 @@ function harness(options: Options = {}) {
       botUserId: BOT,
       botHighestRolePosition: 10,
       botChannelPermissions: Permissions.ViewChannel | Permissions.SendMessages,
-      requiredPermissions: requiredPermissionsFor(request.kind),
+      requiredPermissions: requiredPermissionsFor(request.kind, request.payload),
       channelId: CHANNEL,
     }),
   });
@@ -232,7 +232,7 @@ describe('guild command overrides', () => {
           botUserId: BOT,
           botHighestRolePosition: 10,
           botChannelPermissions: Permissions.ViewChannel | Permissions.SendMessages,
-          requiredPermissions: requiredPermissionsFor(request.kind),
+          requiredPermissions: requiredPermissionsFor(request.kind, request.payload),
           channelId: CHANNEL,
         }),
       }),

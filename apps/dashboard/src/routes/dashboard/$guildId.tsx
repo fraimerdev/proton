@@ -1,0 +1,132 @@
+import type { ModuleSummary } from '@proton/core';
+import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
+import { type ReactElement, useState } from 'react';
+import { AppShell } from '../../components/shell/app-shell.tsx';
+import { Icon } from '../../components/shell/icon.tsx';
+
+import { isAccessError } from '../../lib/errors.ts';
+import { modulesQuery, sessionQuery } from '../../lib/queries.ts';
+import { queryKeys } from '../../lib/query-keys.ts';
+import { updateModuleConfig } from '../../server/modules.ts';
+
+export const Route = createFileRoute('/dashboard/$guildId')({
+  loader: async ({ context, params }) => {
+    // fetchQuery, not ensureQueryData: ensureQueryData resolves from the cache at any age and
+    // revalidates through prefetchQuery, which swallows the rejection — so a revoked admin would
+    // keep rendering the shell instead of reaching the redirect below.
+    try {
+      await Promise.all([
+        context.queryClient.fetchQuery(sessionQuery()),
+        context.queryClient.fetchQuery(modulesQuery(params.guildId)),
+      ]);
+    } catch (error) {
+      if (isAccessError(error)) throw redirect({ to: '/dashboard' });
+
+      throw error;
+    }
+  },
+  component: GuildShell,
+  errorComponent: ShellError,
+});
+
+function flip(
+  index: { modules: ModuleSummary[] } | undefined,
+  moduleId: string,
+  enabled: boolean,
+): { modules: ModuleSummary[] } | undefined {
+  return (
+    index && {
+      ...index,
+      modules: index.modules.map((module) =>
+        module.id === moduleId ? { ...module, enabled } : module,
+      ),
+    }
+  );
+}
+
+function GuildShell(): ReactElement {
+  const { guildId } = Route.useParams();
+  const { guilds, user } = useSuspenseQuery(sessionQuery()).data;
+  const { modules } = useSuspenseQuery(modulesQuery(guildId)).data;
+
+  const queryClient = useQueryClient();
+  const modulesKey = modulesQuery(guildId).queryKey;
+
+  // Held here rather than read off toggle.error: one useMutation backs every module in the
+  // sidebar, and its observer only ever reports the newest call — so a slow switch that fails
+  // after a later one succeeded would flip back with no banner naming what went wrong.
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const toggle = useMutation({
+    mutationFn: ({ module, enabled }: { module: ModuleSummary; enabled: boolean }) =>
+      updateModuleConfig({ data: { guildId, moduleId: module.id, enabled } }),
+
+    onMutate: async ({ module, enabled }) => {
+      setFailure(null);
+      await queryClient.cancelQueries({ queryKey: modulesKey });
+      queryClient.setQueryData(modulesKey, (current) => flip(current, module.id, enabled));
+    },
+
+    // Flipped back one module at a time rather than restored from a snapshot: a second switch
+    // thrown while this one was in flight has already written its own optimistic value here.
+    onError: (error, { module, enabled }) => {
+      queryClient.setQueryData(modulesKey, (current) => flip(current, module.id, !enabled));
+      setFailure(`${module.name} was not switched ${enabled ? 'on' : 'off'}: ${error.message}`);
+    },
+
+    onSettled: (_data, _error, { module }) => {
+      void queryClient.invalidateQueries({ queryKey: modulesKey });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.moduleConfig(guildId, module.id) });
+    },
+  });
+
+  return (
+    <AppShell
+      guildId={guildId}
+      guilds={guilds}
+      user={user}
+      modules={modules}
+      onToggleModule={(module, enabled) => toggle.mutate({ module, enabled })}
+    >
+      <div aria-live="assertive">
+        {failure ? (
+          <div className="alert-banner">
+            <Icon name="warning-circle" weight="fill" />
+            <span className="alert-banner-text">{failure}</span>
+          </div>
+        ) : null}
+      </div>
+
+      <Outlet />
+    </AppShell>
+  );
+}
+
+function ShellError({ error }: { error: Error }): ReactElement {
+  return (
+    <main className="main">
+      <div className="page">
+        <div className="page-head">
+          <div className="page-heading">
+            <h1 className="page-title">This server did not load</h1>
+          </div>
+        </div>
+        <div className="gap-card">
+          <div className="gap-body">
+            <span className="gap-head">
+              <Icon name="warning-circle" weight="fill" className="state-blocked" />
+              <span className="gap-name">Proton could not open this server</span>
+            </span>
+            <p className="gap-text" role="alert">
+              {error.message}
+            </p>
+          </div>
+          <Link to="/dashboard" className="button button-quiet">
+            Back to your servers
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}

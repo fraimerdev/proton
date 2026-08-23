@@ -56,6 +56,7 @@ export function createAntiraidModule(
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 
     requiredPermissions: [Permissions.ManageRoles, Permissions.KickMembers],
+    actionKinds: ['add_role', 'kick', 'send'],
 
     emits: ['proton.security_tripped'],
 

@@ -1,14 +1,55 @@
 import { z } from 'zod';
 import { parseDuration } from './duration.ts';
+import { type JsonValue, jsonValueSchema } from './json.ts';
 
-export type FieldKind =
-  | 'boolean'
-  | 'string'
-  | 'number'
-  | 'enum'
-  | 'channel-id'
-  | 'role-id'
-  | 'duration';
+const fieldBaseSchema = z.object({
+  path: z.string(),
+  label: z.string(),
+  description: z.string().optional(),
+  optional: z.boolean(),
+  defaultValue: jsonValueSchema.optional(),
+
+  array: z.boolean().optional(),
+
+  maxItems: z.number().int().optional(),
+});
+
+type FieldBase = z.infer<typeof fieldBaseSchema>;
+
+export const fieldDescriptorSchema = z.discriminatedUnion('kind', [
+  fieldBaseSchema.extend({ kind: z.literal('boolean') }),
+  fieldBaseSchema.extend({
+    kind: z.literal('string'),
+    minLength: z.number().int().optional(),
+    maxLength: z.number().int().optional(),
+  }),
+  fieldBaseSchema.extend({
+    kind: z.literal('number'),
+    min: z.number().optional(),
+    max: z.number().optional(),
+  }),
+  fieldBaseSchema.extend({ kind: z.literal('colour') }),
+  fieldBaseSchema.extend({ kind: z.literal('enum'), options: z.array(z.string()) }),
+  fieldBaseSchema.extend({
+    kind: z.literal('channel-id'),
+    channelTypes: z.array(z.number().int()).optional(),
+  }),
+  fieldBaseSchema.extend({ kind: z.literal('role-id') }),
+  fieldBaseSchema.extend({ kind: z.literal('duration') }),
+]);
+
+export type FieldDescriptor = z.infer<typeof fieldDescriptorSchema>;
+
+export type FieldKind = FieldDescriptor['kind'];
+
+export type BooleanField = Extract<FieldDescriptor, { kind: 'boolean' }>;
+export type StringField = Extract<FieldDescriptor, { kind: 'string' }>;
+export type NumberField = Extract<FieldDescriptor, { kind: 'number' }>;
+export type ColourField = Extract<FieldDescriptor, { kind: 'colour' }>;
+export type EnumField = Extract<FieldDescriptor, { kind: 'enum' }>;
+export type ChannelIdField = Extract<FieldDescriptor, { kind: 'channel-id' }>;
+export type RoleIdField = Extract<FieldDescriptor, { kind: 'role-id' }>;
+export type DurationField = Extract<FieldDescriptor, { kind: 'duration' }>;
 
 export interface FieldMetadata {
   field?: FieldKind;
@@ -20,57 +61,8 @@ export interface FieldMetadata {
 
 export const protonFields = z.registry<FieldMetadata>();
 
-interface FieldBase {
-  path: string;
-  label: string;
-  description?: string;
-  optional: boolean;
-  defaultValue?: unknown;
-
-  array?: boolean;
-
-  maxItems?: number;
-}
-
-export interface BooleanField extends FieldBase {
-  kind: 'boolean';
-}
-export interface StringField extends FieldBase {
-  kind: 'string';
-  minLength?: number;
-  maxLength?: number;
-}
-export interface NumberField extends FieldBase {
-  kind: 'number';
-  min?: number;
-  max?: number;
-}
-export interface EnumField extends FieldBase {
-  kind: 'enum';
-  options: string[];
-}
-export interface ChannelIdField extends FieldBase {
-  kind: 'channel-id';
-  channelTypes?: number[];
-}
-export interface RoleIdField extends FieldBase {
-  kind: 'role-id';
-}
-export interface DurationField extends FieldBase {
-  kind: 'duration';
-}
-
-export type FieldDescriptor =
-  | BooleanField
-  | StringField
-  | NumberField
-  | EnumField
-  | ChannelIdField
-  | RoleIdField
-  | DurationField;
-
 const V1_SCOPE =
-  'The v1 generator supports string, number, boolean, enum, channel-id, role-id, ' +
+  'The v1 generator supports string, number, boolean, colour, enum, channel-id, role-id, ' +
   'duration and flat arrays of those, with objects nesting one level (PLAN.md §9). ' +
   'Richer shapes — discriminated unions, recursion — need a bespoke UI.';
 
@@ -191,7 +183,9 @@ function leafField(
   }
 
   if (inner instanceof z.ZodNumber) {
-    assertHint(path, metadata, inner, ['number']);
+    assertHint(path, metadata, inner, ['number', 'colour']);
+
+    if (metadata.field === 'colour') return { ...base, kind: 'colour' };
     return { ...base, kind: 'number', ...numberConstraints(inner) };
   }
 
@@ -205,7 +199,9 @@ function leafField(
     return { ...base, kind: 'enum', options };
   }
 
-  if (inner instanceof z.ZodString) {
+  // ZodURL is a string at runtime but not a ZodString subclass, so without naming it here a
+  // z.url() field fails schema registration rather than rendering as the text input it is.
+  if (inner instanceof z.ZodString || inner instanceof z.ZodURL) {
     assertHint(path, metadata, inner, ['string', 'channel-id', 'role-id', 'duration']);
 
     switch (metadata.field) {
@@ -228,6 +224,15 @@ function leafField(
   throw new UnsupportedSchemaError(path, `unsupported Zod type '${inner.constructor.name}'`);
 }
 
+// A default that cannot be written as JSON cannot reach the dashboard at all, so it is a v1-scope
+// limit like any other rather than something to discover as a blank field in the browser.
+function jsonDefault(path: string, value: unknown): JsonValue {
+  const parsed = jsonValueSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+
+  throw new UnsupportedSchemaError(path, `its default value is not JSON (${typeof value})`);
+}
+
 function describeField(key: string, schema: z.ZodType, prefix: string): FieldDescriptor[] {
   const path = prefix ? `${prefix}.${key}` : key;
   const { inner, optional, defaultValue, metadata } = unwrap(schema);
@@ -237,7 +242,7 @@ function describeField(key: string, schema: z.ZodType, prefix: string): FieldDes
     label: metadata.label ?? humanise(key),
     optional,
     ...(metadata.description !== undefined ? { description: metadata.description } : {}),
-    ...(defaultValue !== undefined ? { defaultValue } : {}),
+    ...(defaultValue !== undefined ? { defaultValue: jsonDefault(path, defaultValue) } : {}),
   };
 
   if (inner instanceof z.ZodObject) {

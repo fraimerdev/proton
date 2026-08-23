@@ -11,6 +11,7 @@ import {
   ModuleRegistry,
   Permissions,
   type ProtonEvent,
+  ProviderRegistry,
   type RateWindowStore,
   type RuleDefinition,
   RuleEngine,
@@ -26,9 +27,7 @@ import {
   RULE_DISPATCH_GROUP,
   RuleDispatchRuntime,
   RulePresetSeeder,
-  ruleIsDryRun,
   ruleTriggerEvents,
-  splitByDryRun,
 } from '../src/rule-runtime.ts';
 import type { ConfigProvider } from '../src/runtime.ts';
 
@@ -170,7 +169,6 @@ function build(options: {
   manifests?: ModuleManifest[];
   rules?: GuildRule[];
   config?: ConfigProvider;
-  nodeEnv?: string;
   storeThrows?: Error;
 }) {
   const registry = new ModuleRegistry();
@@ -190,8 +188,6 @@ function build(options: {
     store,
     config: options.config ?? allEnabled,
     logger,
-
-    nodeEnv: options.nodeEnv ?? 'production',
   });
 
   return { runtime, requests, lines, calls, reads, registry };
@@ -513,7 +509,6 @@ describe('failures are triaged, not treated alike', () => {
       store,
       config: allEnabled,
       logger,
-      nodeEnv: 'production',
     });
 
     await runtime.handle(event());
@@ -523,53 +518,25 @@ describe('failures are triaged, not treated alike', () => {
   });
 });
 
-describe('dry run (I12)', () => {
+describe('destructive rule actions', () => {
   const banRule = rule({ actions: [{ kind: 'ban', reason: 'spam' }] });
 
-  test('a destructive action is withheld outside production', () => {
-    expect(ruleIsDryRun(banRule, 'development')).toBe(true);
-    expect(ruleIsDryRun(banRule, 'production')).toBe(false);
-  });
-
-  test('a non-destructive rule runs for real everywhere', () => {
-    expect(ruleIsDryRun(rule(), 'development')).toBe(false);
-  });
-
-  test('a rule mixing a ban with a mod-log line is dry-run as a whole', () => {
-    const ladder = rule({
-      actions: [
-        { kind: 'ban', reason: 'spam' },
-        { kind: 'send', payload: { content: 'banned for spam' } },
-      ],
-    });
-
-    expect(ruleIsDryRun(ladder, 'development')).toBe(true);
-  });
-
-  test('rules are partitioned so one destructive rule does not mute the others', () => {
-    const groups = splitByDryRun([rule(), banRule], 'development');
-
-    expect(groups).toEqual([
-      [false, [rule()]],
-      [true, [banRule]],
-    ]);
-  });
-
-  test('in production everything lands in one group, so priority ordering is exact', () => {
-    const groups = splitByDryRun([rule(), banRule], 'production');
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.[0]).toBe(false);
-    expect(groups[0]?.[1]).toHaveLength(2);
-  });
-
-  test('the flag reaches the executor, so the action is recorded and not performed', async () => {
-    const { runtime, requests } = build({ rules: [banRule], nodeEnv: 'development' });
+  test('reach the executor for real, with no environment withholding them', async () => {
+    const { runtime, requests } = build({ rules: [banRule] });
 
     await runtime.handle(event());
 
     expect(requests).toHaveLength(1);
-    expect(requests[0]?.dryRun).toBe(true);
+    expect(requests[0]?.dryRun).toBe(false);
+  });
+
+  test('run in one group with the rest, so priority ordering is exact', async () => {
+    const { runtime, requests } = build({ rules: [rule(), banRule] });
+
+    await runtime.handle(event());
+
+    expect(requests).toHaveLength(2);
+    expect(requests.every((request) => request.dryRun === false)).toBe(true);
   });
 });
 
@@ -715,7 +682,6 @@ describe('cron rules', () => {
         engine: new RuleEngine({ executor, rateWindow: trippingWindow }),
         store,
         logger,
-        nodeEnv: 'production',
       },
       {
         id: 'repeat:x:1770000000000',
@@ -744,7 +710,15 @@ describe('cron rules', () => {
     });
 
     await fireCronRule(
-      { engine: new RuleEngine({ executor, rateWindow: trippingWindow }), store, logger },
+      {
+        engine: new RuleEngine({
+          executor,
+          rateWindow: trippingWindow,
+          providers: new ProviderRegistry(),
+        }),
+        store,
+        logger,
+      },
       {
         id: 'j1',
         name: 'n',
@@ -754,7 +728,7 @@ describe('cron rules', () => {
     );
 
     expect(requests).toEqual([]);
-    expect(lines[0]?.message).toContain('roles are unknown');
+    expect(lines[0]?.message).toContain('named no member');
   });
 
   test('a schedule that outlived its rule no-ops and says how to remove it', async () => {

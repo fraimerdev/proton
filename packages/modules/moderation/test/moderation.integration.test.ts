@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { Permissions } from '@proton/core';
 import {
   ABOVE_BOT,
@@ -10,25 +10,18 @@ import {
   MEMBER,
   OWNER,
   stringOption,
+  subcommand,
   userOption,
 } from './harness.ts';
 
-const ORIGINAL_ENV = process.env.NODE_ENV;
-
-beforeEach(() => {
-  process.env.NODE_ENV = 'production';
-});
-
-afterAll(() => {
-  if (ORIGINAL_ENV === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = ORIGINAL_ENV;
-});
-
-describe('/ban', () => {
+describe('/ban add', () => {
   test('bans a member, records the case and confirms it', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER), stringOption('reason', 'raiding')]);
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('reason', 'raiding')]),
+    );
 
     expect(h.discordCalls()).toHaveLength(1);
     expect(h.discordCalls()[0]?.method).toBe('PUT');
@@ -44,7 +37,7 @@ describe('/ban', () => {
   test('refuses to ban the guild owner, and says why', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', OWNER)]);
+    await h.run('ban', subcommand('add', [userOption('user', OWNER)]));
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.cases()).toHaveLength(0);
@@ -54,7 +47,7 @@ describe('/ban', () => {
   test('refuses a member whose top role outranks the bot, and says how to fix it', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', ABOVE_BOT)]);
+    await h.run('ban', subcommand('add', [userOption('user', ABOVE_BOT)]));
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.cases()).toHaveLength(0);
@@ -66,7 +59,7 @@ describe('/ban', () => {
   test('names the missing permission when the bot cannot ban', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER)], {
+    await h.run('ban', subcommand('add', [userOption('user', MEMBER)]), {
       appPermissions: BOT_PERMISSIONS & ~Permissions.BanMembers,
     });
 
@@ -78,7 +71,10 @@ describe('/ban', () => {
   test('a duration makes the ban temporary and schedules the unban', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER), stringOption('duration', '2h')]);
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '2h')]),
+    );
 
     expect(h.discordCalls()).toHaveLength(1);
     expect(h.scheduled).toHaveLength(1);
@@ -90,11 +86,15 @@ describe('/ban', () => {
   test('reports a reversal that could not be scheduled', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER), stringOption('duration', '2h')], {
-      scheduleReversal: async () => {
-        throw new Error('database unavailable');
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '2h')]),
+      {
+        scheduleReversal: async () => {
+          throw new Error('database unavailable');
+        },
       },
-    });
+    );
 
     expect(h.discordCalls()).toHaveLength(1);
     expect(h.replyContent()).toContain('will not lift on its own');
@@ -103,14 +103,14 @@ describe('/ban', () => {
 
   test('passes the delete window through and defaults it from config', async () => {
     const explicit = harness();
-    await explicit.run('ban', [
-      userOption('user', MEMBER),
-      integerOption('delete_message_days', 7),
-    ]);
+    await explicit.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), integerOption('delete_message_days', 7)]),
+    );
     expect(explicit.discordCalls()[0]?.body).toEqual({ delete_message_seconds: 604_800 });
 
     const fromConfig = harness();
-    await fromConfig.run('ban', [userOption('user', MEMBER)], {
+    await fromConfig.run('ban', subcommand('add', [userOption('user', MEMBER)]), {
       config: { defaultBanDeleteDays: 1 },
     });
     expect(fromConfig.discordCalls()[0]?.body).toEqual({ delete_message_seconds: 86_400 });
@@ -119,7 +119,10 @@ describe('/ban', () => {
   test('an unreadable duration is refused before Discord is touched', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER), stringOption('duration', 'a fortnight')]);
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', 'a fortnight')]),
+    );
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.cases()).toHaveLength(0);
@@ -130,29 +133,42 @@ describe('/ban', () => {
   test('a zero duration is refused rather than banning until this instant', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER), stringOption('duration', '0s')]);
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '0s')]),
+    );
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.replyContent()).toContain('longer than zero');
   });
 
-  test('outside production the ban is recorded but never sent to Discord', async () => {
-    process.env.NODE_ENV = 'development';
+  // The id a moderator quotes to look the case up, so it has to be in the reply they can see.
+  test('the reply carries the case id, short enough to read off the screen', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER)]);
+    await h.run('ban', subcommand('add', [userOption('user', MEMBER)]));
 
-    expect(h.discordCalls()).toHaveLength(0);
+    const reply = h.replyContent() ?? '';
+    const quoted = /Case `([A-Za-z0-9]{7})`/.exec(reply);
+
+    expect(quoted).not.toBeNull();
+    expect(reply).toContain('-# Case');
+  });
+
+  test('the ban is sent to Discord, with no environment withholding it', async () => {
+    const h = harness();
+
+    await h.run('ban', subcommand('add', [userOption('user', MEMBER)]));
+
+    expect(h.discordCalls()).toHaveLength(1);
     expect(h.cases()).toHaveLength(1);
-    expect(h.cases()[0]?.dryRun).toBe(true);
-    expect(h.replyContent()).toContain('Dry run');
-
-    expect(h.replyContent()).toContain('nothing changed');
+    expect(h.cases()[0]?.dryRun).toBe(false);
+    expect(h.replyContent()).toContain('Banned');
   });
 
   test('a redelivered interaction bans once', async () => {
     const h = harness();
-    const options = [userOption('user', MEMBER)];
+    const options = subcommand('add', [userOption('user', MEMBER)]);
 
     await h.run('ban', options, { idempotencyKey: 'event-1' });
     await h.run('ban', options, { idempotencyKey: 'event-1' });
@@ -240,11 +256,11 @@ describe('/timeout and /untimeout', () => {
   });
 });
 
-describe('/unban', () => {
+describe('/ban remove', () => {
   test('lifts a ban by user id', async () => {
     const h = harness();
 
-    await h.run('unban', [stringOption('user_id', MEMBER)]);
+    await h.run('ban', subcommand('remove', [stringOption('user_id', MEMBER)]));
 
     expect(h.discordCalls()[0]?.method).toBe('DELETE');
     expect(h.discordCalls()[0]?.path).toBe(`/guilds/${GUILD}/bans/${MEMBER}`);
@@ -254,7 +270,7 @@ describe('/unban', () => {
   test('does not apply the hierarchy check to a user who is not a member', async () => {
     const h = harness();
 
-    await h.run('unban', [stringOption('user_id', '400000000000000777')]);
+    await h.run('ban', subcommand('remove', [stringOption('user_id', '400000000000000777')]));
 
     expect(h.discordCalls()).toHaveLength(1);
   });
@@ -262,7 +278,7 @@ describe('/unban', () => {
   test('explains how to find a user id when the option is not one', async () => {
     const h = harness();
 
-    await h.run('unban', [stringOption('user_id', 'that guy')]);
+    await h.run('ban', subcommand('remove', [stringOption('user_id', 'that guy')]));
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.replyContent()).toContain('Developer Mode');
@@ -358,7 +374,9 @@ describe('module policy', () => {
   test('requireReason refuses an action with no reason and says what to do', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER)], { config: { requireReason: true } });
+    await h.run('ban', subcommand('add', [userOption('user', MEMBER)]), {
+      config: { requireReason: true },
+    });
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.replyContent()).toContain('reason');
@@ -367,9 +385,13 @@ describe('module policy', () => {
   test('requireReason is satisfied by the reason option', async () => {
     const h = harness();
 
-    await h.run('ban', [userOption('user', MEMBER), stringOption('reason', 'spam')], {
-      config: { requireReason: true },
-    });
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('reason', 'spam')]),
+      {
+        config: { requireReason: true },
+      },
+    );
 
     expect(h.discordCalls()).toHaveLength(1);
   });
@@ -398,8 +420,8 @@ describe('module policy', () => {
 
   test('every command acknowledges the interaction', async () => {
     for (const [command, options] of [
-      ['ban', [userOption('user', ABOVE_BOT)]],
-      ['unban', [stringOption('user_id', MEMBER)]],
+      ['ban', subcommand('add', [userOption('user', ABOVE_BOT)])],
+      ['ban', subcommand('remove', [stringOption('user_id', MEMBER)])],
       ['kick', [userOption('user', MEMBER)]],
       ['timeout', [userOption('user', MEMBER)]],
       ['untimeout', [userOption('user', MEMBER)]],

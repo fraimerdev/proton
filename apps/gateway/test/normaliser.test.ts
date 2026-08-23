@@ -5,10 +5,11 @@ import {
   type ProtonEvent,
   snowflakeCreatedAt,
 } from '@proton/core';
-import { dispatch, dispatchSequence } from '@proton/fixtures';
+import { type DispatchName, dispatch, dispatchSequence } from '@proton/fixtures';
 import {
   AUDIT_LOG_ACTIONS,
   CHANNEL_OBFUSCATED,
+  INTERACTION_EVENT_TYPES,
   isObfuscatedChannel,
   NORMALISED_EVENT_TYPES,
   normalise,
@@ -90,13 +91,96 @@ describe('normalise', () => {
     );
   });
 
-  test('ignores interaction types no phase consumes yet', () => {
-    for (const type of [1, 4, 5]) {
+  test('ignores a PING interaction, and any type Discord adds after this was written', () => {
+    for (const type of [1, 6, 99]) {
       const raw = dispatch('interactionCreatePing');
       raw.d.type = type;
 
-      expect(normalise(raw)[0]).toBeUndefined();
+      expect(normalise(raw)).toEqual([]);
     }
+  });
+
+  test('ignores an interaction whose type is missing or not a number', () => {
+    const missing = dispatch('interactionCreatePing');
+
+    delete missing.d.type;
+    const stringly = dispatch('interactionCreatePing');
+    stringly.d.type = '2';
+
+    expect(normalise(missing)).toEqual([]);
+    expect(normalise(stringly)).toEqual([]);
+  });
+
+  test('maps INTERACTION_CREATE (modal submit) to interaction.modal', () => {
+    const events = normalise(dispatch('interactionCreateModal'));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe('interaction.modal');
+    expect(events[0]?.guildId).toBe('900000000000000001');
+    expect(events[0]?.id).toBe('interaction.modal:1500000000000000003');
+  });
+
+  test('maps INTERACTION_CREATE (autocomplete) to interaction.autocomplete', () => {
+    const events = normalise(dispatch('interactionCreateAutocomplete'));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe('interaction.autocomplete');
+    expect(events[0]?.guildId).toBe('900000000000000001');
+    expect(events[0]?.id).toBe('interaction.autocomplete:1500000000000000004');
+  });
+
+  test('a modal submit keeps the value the member typed, Label wrapper and all', () => {
+    const payload = normalise(dispatch('interactionCreateModal'))[0]?.payload as {
+      data: {
+        custom_id: string;
+        components: Array<{ type: number; component: { custom_id: string; value: string } }>;
+      };
+    };
+
+    expect(payload.data.custom_id).toBe('proton:verification:appeal');
+    expect(payload.data.components[0]?.type).toBe(18);
+    expect(payload.data.components[0]?.component).toMatchObject({
+      type: 4,
+      custom_id: 'appeal_reason',
+    });
+  });
+
+  test('an autocomplete carries the focused option so a handler knows what to complete', () => {
+    const payload = normalise(dispatch('interactionCreateAutocomplete'))[0]?.payload as {
+      data: { options: Array<{ options: Array<{ name: string; focused?: boolean }> }> };
+    };
+
+    expect(payload.data.options[0]?.options[0]).toMatchObject({
+      name: 'reference',
+      focused: true,
+    });
+  });
+
+  test('all four interaction arms key on the interaction id, so a RESUME redelivers one event', () => {
+    for (const name of [
+      'interactionCreatePing',
+      'interactionCreateComponent',
+      'interactionCreateModal',
+      'interactionCreateAutocomplete',
+    ] as const) {
+      const replayed = dispatch(name);
+      replayed.s = 9999;
+
+      expect(normalise(replayed)[0]?.id).toBe(normalise(dispatch(name))[0]?.id);
+    }
+  });
+
+  test('the four interaction kinds never collide with one another', () => {
+    const ids = (
+      [
+        'interactionCreatePing',
+        'interactionCreateComponent',
+        'interactionCreateModal',
+        'interactionCreateAutocomplete',
+      ] as const
+    ).map((name) => normalise(dispatch(name))[0]?.id);
+
+    expect(new Set(ids).size).toBe(4);
   });
 
   test('reaction ids distinguish emoji on the same message', () => {
@@ -111,6 +195,91 @@ describe('normalise', () => {
     expect(normalise(dispatch('messageReactionAdd'))[0]?.id).not.toBe(
       normalise(dispatch('messageReactionRemove'))[0]?.id,
     );
+  });
+
+  test('maps MESSAGE_POLL_VOTE_ADD to poll.voted', () => {
+    const events = normalise(dispatch('messagePollVoteAdd'));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe('poll.voted');
+    expect(events[0]?.guildId).toBe('900000000000000001');
+    expect(events[0]?.id).toBe(
+      'poll.voted:500000000000000001:1400000000000000021:100000000000000002:2',
+    );
+  });
+
+  test('maps MESSAGE_POLL_VOTE_REMOVE to poll.vote_removed', () => {
+    const events = normalise(dispatch('messagePollVoteRemove'));
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe('poll.vote_removed');
+    expect(events[0]?.guildId).toBe('900000000000000001');
+    expect(events[0]?.id).toBe(
+      'poll.vote_removed:500000000000000001:1400000000000000021:100000000000000002:2',
+    );
+  });
+
+  test('a poll vote and its withdrawal are different events', () => {
+    expect(normalise(dispatch('messagePollVoteAdd'))[0]?.id).not.toBe(
+      normalise(dispatch('messagePollVoteRemove'))[0]?.id,
+    );
+  });
+
+  test('a poll vote redelivered on RESUME keeps its id, so a recount runs once', () => {
+    const replayed = dispatch('messagePollVoteAdd');
+    replayed.s = 9999;
+
+    expect(normalise(replayed)[0]?.id).toBe(normalise(dispatch('messagePollVoteAdd'))[0]?.id);
+  });
+
+  test('poll vote ids distinguish the answers of one poll', () => {
+    const other = dispatch('messagePollVoteAdd');
+    other.d.answer_id = 3;
+
+    expect(normalise(other)[0]?.id).not.toBe(normalise(dispatch('messagePollVoteAdd'))[0]?.id);
+  });
+
+  test('two members picking the same answer are two votes', () => {
+    const other = dispatch('messagePollVoteAdd');
+    other.d.user_id = '100000000000000009';
+
+    expect(normalise(other)[0]?.id).not.toBe(normalise(dispatch('messagePollVoteAdd'))[0]?.id);
+  });
+
+  test('answer_id zero is a real answer, not a missing one', () => {
+    const zero = dispatch('messagePollVoteAdd');
+    zero.d.answer_id = 0;
+
+    expect(normalise(zero)).toHaveLength(1);
+    expect(normalise(zero)[0]?.id).toEndWith(':0');
+  });
+
+  test('a poll vote outside a guild is emitted with a null guildId', () => {
+    const dm = dispatch('messagePollVoteAdd');
+
+    delete dm.d.guild_id;
+
+    expect(normalise(dm)[0]?.guildId).toBeNull();
+  });
+
+  test('drops a poll vote missing the ids the key is built from', () => {
+    for (const field of ['channel_id', 'message_id', 'user_id', 'answer_id']) {
+      const raw = dispatch('messagePollVoteAdd');
+
+      delete raw.d[field];
+
+      expect(normalise(raw)).toEqual([]);
+    }
+  });
+
+  test('the poll vote payload is the Discord object, untouched', () => {
+    expect(normalise(dispatch('messagePollVoteAdd'))[0]?.payload).toEqual({
+      user_id: '100000000000000002',
+      channel_id: '500000000000000001',
+      message_id: '1400000000000000021',
+      guild_id: '900000000000000001',
+      answer_id: 2,
+    });
   });
 
   test('an automod execution keys on the message it acted on', () => {
@@ -245,10 +414,14 @@ describe('normalise', () => {
           'messageDeleteBulk',
           'interactionCreatePing',
           'interactionCreateComponent',
+          'interactionCreateModal',
+          'interactionCreateAutocomplete',
           'auditLogChannelDelete',
           'guildMemberUpdate',
           'messageReactionAdd',
           'messageReactionRemove',
+          'messagePollVoteAdd',
+          'messagePollVoteRemove',
           'voiceStateJoin',
           'voiceStateLeave',
         ] as const
@@ -271,9 +444,13 @@ describe('normalise', () => {
         'messageDeleteBulk',
         'interactionCreatePing',
         'interactionCreateComponent',
+        'interactionCreateModal',
+        'interactionCreateAutocomplete',
         'guildMemberUpdate',
         'messageReactionAdd',
         'messageReactionRemove',
+        'messagePollVoteAdd',
+        'messagePollVoteRemove',
         'voiceStateJoin',
 
         'guildUpdate',
@@ -650,5 +827,91 @@ describe('member updates that only screening changed', () => {
     expect(normalise(pending)[0]?.id).not.toBe(
       normalise(dispatch('guildMemberUpdateScreened'))[0]?.id,
     );
+  });
+});
+
+describe('the modal, autocomplete and poll-vote dispatches', () => {
+  const added: DispatchName[] = [
+    'interactionCreateModal',
+    'interactionCreateAutocomplete',
+    'messagePollVoteAdd',
+    'messagePollVoteRemove',
+  ];
+
+  const interactions: DispatchName[] = ['interactionCreateModal', 'interactionCreateAutocomplete'];
+
+  test('interaction type numbers match Discord published values', () => {
+    expect([...INTERACTION_EVENT_TYPES.entries()].sort((a, b) => a[0] - b[0])).toEqual([
+      [2, 'interaction.command'],
+      [3, 'interaction.component'],
+      [4, 'interaction.autocomplete'],
+      [5, 'interaction.modal'],
+    ]);
+  });
+
+  test.each(added)('%s produces exactly one event', (name) => {
+    expect(normalise(dispatch(name))).toHaveLength(1);
+  });
+
+  test.each(added)('%s passes the Discord payload through untouched', (name) => {
+    const raw = dispatch(name);
+
+    expect(normalise(raw)[0]?.payload).toEqual(raw.d);
+  });
+
+  test.each(added)('%s is timed by the clock, not by a field on the payload', (name) => {
+    expect(normalise(dispatch(name), { now: () => 1_760_000_000_000 })[0]?.occurredAt).toBe(
+      1_760_000_000_000,
+    );
+  });
+
+  test.each(added)('%s keeps its id across a replay under a different clock', (name) => {
+    const replayed = dispatch(name);
+    replayed.s = 9999;
+
+    expect(normalise(replayed, { now: () => 1 })[0]?.id).toBe(
+      normalise(dispatch(name), { now: () => 2_000_000 })[0]?.id,
+    );
+  });
+
+  test.each(interactions)('drops %s with no interaction id, which is its whole key', (name) => {
+    const raw = dispatch(name);
+    delete raw.d.id;
+
+    expect(normalise(raw)).toEqual([]);
+  });
+
+  test.each(interactions)('%s outside a guild is emitted with a null guildId', (name) => {
+    const raw = dispatch(name);
+    delete raw.d.guild_id;
+
+    expect(normalise(raw)[0]?.guildId).toBeNull();
+  });
+
+  test('an interaction type this code predates yields nothing, not the modal arm', () => {
+    for (const type of [7, 42]) {
+      const raw = dispatch('interactionCreateModal');
+      raw.d.type = type;
+
+      expect(normalise(raw)).toEqual([]);
+    }
+  });
+
+  test('the same member voting on two polls in one channel is two events', () => {
+    const other = dispatch('messagePollVoteAdd');
+    other.d.message_id = '1400000000000000099';
+
+    expect(normalise(other)[0]?.id).not.toBe(normalise(dispatch('messagePollVoteAdd'))[0]?.id);
+  });
+
+  test('a poll vote and a reaction sharing a natural key are still two events', () => {
+    const vote = dispatch('messagePollVoteAdd');
+    const reaction = dispatch('messageReactionAdd');
+    reaction.d.channel_id = vote.d.channel_id;
+    reaction.d.message_id = vote.d.message_id;
+    reaction.d.user_id = vote.d.user_id;
+    reaction.d.emoji = { id: null, name: String(vote.d.answer_id) };
+
+    expect(normalise(reaction)[0]?.id).not.toBe(normalise(vote)[0]?.id);
   });
 });

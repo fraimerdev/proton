@@ -48,3 +48,9 @@ export const PRESET_PALETTES: Record<CardPreset, PresetPalette> = {
 export function paletteFor(preset: CardPreset): PresetPalette {
   return PRESET_PALETTES[preset];
 }
+
+export function toHexColour(value: number): string {
+  return `#${Math.max(0, Math.min(0xffffff, Math.trunc(value)))
+    .toString(16)
+    .padStart(6, '0')}`;
+}

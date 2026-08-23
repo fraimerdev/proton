@@ -18,6 +18,7 @@ export {
   MAX_BINDINGS_PER_MENU,
   MAX_MENUS,
   MENU_ID_MAX,
+  MODULE_ID,
   ROLEMENU_KINDS,
   ROLEMENU_MODES,
   ROLEMENU_SCHEMA_VERSION,
@@ -32,16 +33,8 @@ export {
   rolemenuFormSchema,
   rolemenuMenuSchema,
   rolemenuMenusSchema,
-} from './config.ts';
-export {
-  CUSTOM_ID_PREFIX,
-  CUSTOM_ID_SEPARATOR,
-  encodeCustomId,
-  hasRolemenuPrefix,
-  parseCustomId,
-  type RolemenuCustomId,
   SELECT_BINDING_KEY,
-} from './custom-id.ts';
+} from './config.ts';
 export {
   type BindResult,
   type BoundComponentDeps,
@@ -52,10 +45,10 @@ export {
   type RolemenuDeps,
 } from './deps.ts';
 export {
-  type ComponentFacts,
   type ComponentOutcome,
   handleComponent,
-  readComponent,
+  type MenuBinding,
+  readMenuBinding,
 } from './interactions.ts';
 export {
   COMPONENT_EVENT_TYPES,
@@ -68,12 +61,12 @@ export {
   buildButtonRows,
   buildComponents,
   buildSelectRow,
+  type ComponentsResult,
   type MessageComponent,
 } from './message.ts';
 export {
   describeReport,
   MESSAGE_MAX,
-  MODULE_ID,
   REASON_MAX,
   type RoleChangeReport,
   runRoleChanges,
@@ -109,6 +102,15 @@ export function createRolemenuModule(
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessageReactions],
 
     requiredPermissions: [Permissions.ManageRoles],
+    actionKinds: [
+      'add_role',
+      'remove_role',
+      'send',
+      'edit_message',
+      'add_reaction',
+      'interaction_reply',
+      'interaction_followup',
+    ],
 
     commands: rolemenuCommands,
     listeners: [createReactionListener(deps), createComponentListener(deps)],

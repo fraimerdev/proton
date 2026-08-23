@@ -1,8 +1,36 @@
+import { z } from 'zod';
 import { type GuildStateStore, highestRolePosition } from '../guild-state/types.ts';
 import { computeChannelPermissions } from '../permissions/compute.ts';
-import { requiredPermissionsFor, targetsMember } from './kinds.ts';
+import { isChannelScoped, requiredPermissionsFor, targetsMember } from './kinds.ts';
+import { snowflakeSchema, THREAD_TYPE_PRIVATE, THREAD_TYPE_PUBLIC } from './payloads.ts';
 import type { PrecheckInput } from './prechecks.ts';
 import type { ActionFailure, ActionRequest } from './types.ts';
+
+const channelScopedPayloadSchema = z.object({ channelId: snowflakeSchema });
+
+const THREAD_TYPE_ANNOUNCEMENT = 10;
+
+const THREAD_CHANNEL_TYPES: ReadonlySet<number> = new Set([
+  THREAD_TYPE_ANNOUNCEMENT,
+  THREAD_TYPE_PUBLIC,
+  THREAD_TYPE_PRIVATE,
+]);
+
+interface ChannelTypeCarrier {
+  id: string;
+  type?: number;
+}
+
+function isThread(channel: ChannelTypeCarrier | undefined): boolean {
+  return channel?.type !== undefined && THREAD_CHANNEL_TYPES.has(channel.type);
+}
+
+function actionChannelId(request: ActionRequest, hints: ResolveContextHints): string | undefined {
+  if (!isChannelScoped(request.kind)) return undefined;
+
+  const parsed = channelScopedPayloadSchema.safeParse(request.payload);
+  return parsed.success ? parsed.data.channelId : hints.channelId;
+}
 
 export interface ResolveContextDeps {
   store: GuildStateStore;
@@ -39,10 +67,21 @@ export async function resolvePrecheckContext(
     };
   }
 
-  const required = requiredPermissionsFor(request.kind);
+  const channelId = actionChannelId(request, hints);
+
+  // Not `channelId === hints.channelId` alone: with both undefined that is trivially true, and a
+  // guild-scoped action would be judged by the app_permissions of the channel it was typed in.
+  const appPermissions =
+    channelId !== undefined && channelId === hints.channelId ? hints.appPermissions : undefined;
+
+  const channel = channelId ? state.channels.get(channelId) : undefined;
+
+  const inThread = isThread(channel);
+  const required = requiredPermissionsFor(request.kind, request.payload, inThread);
+  const threadParentId = inThread ? (channel?.parentId ?? undefined) : undefined;
 
   const botChannelPermissions =
-    hints.appPermissions ??
+    appPermissions ??
     computeChannelPermissions(
       {
         guildOwnerId: state.ownerId,
@@ -51,11 +90,8 @@ export async function resolvePrecheckContext(
         memberRoleIds: state.botRoleIds,
         roles: state.roles,
       },
-      hints.channelId ? (state.channels.get(hints.channelId)?.overwrites ?? []) : [],
-      hints.channelId
-        ? (state.channels.get(state.channels.get(hints.channelId)?.parentId ?? '')?.overwrites ??
-            [])
-        : [],
+      channel?.overwrites ?? [],
+      state.channels.get(channel?.parentId ?? '')?.overwrites ?? [],
     );
 
   const context: PrecheckInput = {
@@ -65,7 +101,11 @@ export async function resolvePrecheckContext(
     botHighestRolePosition: highestRolePosition(state.roles, state.botRoleIds),
     botChannelPermissions,
     requiredPermissions: required,
-    ...(hints.channelId ? { channelId: hints.channelId } : {}),
+    ...(channelId ? { channelId } : {}),
+    ...(threadParentId ? { threadParentId } : {}),
+    ...(channelId && !channel && appPermissions === undefined
+      ? { channelOverwritesUnknown: true }
+      : {}),
   };
 
   if (!targetsMember(request.kind)) {

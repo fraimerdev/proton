@@ -22,41 +22,27 @@ const roleIdArray = () =>
 export const joinrolesConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Grant roles on join',
-    description:
-      'Give the roles below to everyone who joins. Turn this off to keep the lists but stop granting.',
   }),
 
   memberRoleIds: roleIdArray().max(MAX_MEMBER_ROLES).default([]).register(protonFields, {
     label: 'Roles for people',
-    description: 'Every person who joins receives these. Leave empty to grant nothing.',
   }),
 
   botRoleIds: roleIdArray().max(MAX_BOT_ROLES).default([]).register(protonFields, {
     label: 'Roles for bots',
-    description:
-      'Bots added to this server receive these instead of the list above. Leave empty to give bots nothing.',
   }),
 
-  grantWhenScreeningPasses: z
-    .boolean()
-    .default(true)
-    .register(protonFields, {
-      label: 'Wait for Membership Screening',
-      description:
-        'If this server uses Membership Screening, new members arrive before they have accepted the ' +
-        'rules. Leave this on to hold the roles back and grant them the moment they accept.',
-    }),
+  grantWhenScreeningPasses: z.boolean().default(true).register(protonFields, {
+    label: 'Wait for Membership Screening',
+  }),
 
   stickyEnabled: z.boolean().default(false).register(protonFields, {
     label: 'Restore roles on rejoin',
-    description:
-      'Remember each member’s roles while they are here, and give them back if they return.',
   }),
 
   stickyRoleIds: roleIdArray().max(MAX_STICKY_ROLES).default([]).register(protonFields, {
     label: 'Roles eligible for restoring',
-    description:
-      'Only these roles come back on rejoin. Leave empty to restore every role the member had.',
+    description: 'Empty restores every role the member had',
   }),
 });
 

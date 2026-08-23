@@ -10,6 +10,7 @@ import {
   type GuildState,
   type GuildStateStore,
   type Logger,
+  newCaseId,
   newId,
   OptionType,
   Permissions,
@@ -49,21 +50,21 @@ export const BOT_PERMISSIONS =
   Permissions.ManageChannels |
   Permissions.ManageRoles;
 
-function roles(): Map<string, GuildRole> {
+function roles(botPermissions: bigint): Map<string, GuildRole> {
   return new Map<string, GuildRole>([
     [EVERYONE_ROLE, { id: EVERYONE_ROLE, permissions: Permissions.ViewChannel, position: 0 }],
     [LOW_ROLE, { id: LOW_ROLE, permissions: 0n, position: 1 }],
-    [BOT_ROLE, { id: BOT_ROLE, permissions: BOT_PERMISSIONS, position: 5 }],
+    [BOT_ROLE, { id: BOT_ROLE, permissions: botPermissions, position: 5 }],
     [HIGH_ROLE, { id: HIGH_ROLE, permissions: 0n, position: 9 }],
   ]);
 }
 
-function guildState(): GuildState {
+function guildState(botPermissions: bigint): GuildState {
   return {
     guildId: GUILD,
     ownerId: OWNER,
     everyoneRoleId: EVERYONE_ROLE,
-    roles: roles(),
+    roles: roles(botPermissions),
     botRoleIds: [BOT_ROLE],
     channels: new Map([[CHANNEL, { id: CHANNEL, parentId: null, overwrites: [] }]]),
     updatedAt: Date.now(),
@@ -99,7 +100,7 @@ class MemoryRecorder implements CaseRecorder {
 
   async record(input: CaseInput): Promise<{ caseId: string }> {
     this.recorded.push(input);
-    return { caseId: newId() };
+    return { caseId: newCaseId() };
   }
 }
 
@@ -140,17 +141,23 @@ export interface RunOverrides {
 
   appPermissions: bigint;
 
+  // A guild-scoped kind never reads app_permissions, so taking a permission away from a ban or a
+  // kick means taking it off the bot's role.
+  botPermissions: bigint;
+
   idempotencyKey: string;
 
   scheduleReversal: (request: ActionRequest, caseId: string) => Promise<void>;
 }
 
-const store: GuildStateStore = {
-  get: async () => guildState(),
-  put: async () => undefined,
-  patch: async () => undefined,
-  delete: async () => undefined,
-};
+function stateStore(botPermissions: bigint): GuildStateStore {
+  return {
+    get: async () => guildState(botPermissions),
+    put: async () => undefined,
+    patch: async () => undefined,
+    delete: async () => undefined,
+  };
+}
 
 export function harness(): Harness {
   const rest = new FakeRest();
@@ -204,7 +211,7 @@ export function harness(): Harness {
         ): Promise<PrecheckInput | { failure: { code: string; humanReason: string } }> => {
           const resolved = await resolvePrecheckContext(
             {
-              store,
+              store: stateStore(overrides.botPermissions ?? BOT_PERMISSIONS),
               botUserId: BOT,
               fetchMemberRoles: async (_guildId, userId) => MEMBER_ROLES[userId] ?? null,
             },
@@ -250,4 +257,8 @@ export function stringOption(name: string, value: string): RawOption {
 
 export function integerOption(name: string, value: number): RawOption {
   return { name, type: OptionType.Integer, value };
+}
+
+export function subcommand(name: string, options: RawOption[]): RawOption[] {
+  return [{ name, type: OptionType.Subcommand, options }];
 }

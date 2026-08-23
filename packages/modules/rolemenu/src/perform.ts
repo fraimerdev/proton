@@ -1,16 +1,20 @@
 import {
+  type ActionRequest,
   type ActionResult,
-  dryRunFor,
-  INTERACTION_CALLBACK_CHANNEL_MESSAGE,
-  INTERACTION_CALLBACK_DEFERRED_MESSAGE,
+  deferEphemeral as buildDeferEphemeral,
+  followUp as buildFollowUp,
+  replyEphemeral as buildReplyEphemeral,
+  type InteractionRef,
+  MESSAGE_CONTENT_MAX,
   type ModuleContext,
+  type RespondTo,
 } from '@proton/core';
-import type { RolemenuConfig } from './config.ts';
+import { MODULE_ID, type RolemenuConfig } from './config.ts';
 
-export const MODULE_ID = 'rolemenu';
+export { MODULE_ID } from './config.ts';
 
 export const REASON_MAX = 512;
-export const MESSAGE_MAX = 2000;
+export const MESSAGE_MAX = MESSAGE_CONTENT_MAX;
 
 export function succeeded(result: ActionResult): boolean {
   return (
@@ -56,7 +60,7 @@ export async function runRoleChanges(
       targetId: input.userId,
       reason: `Role menu '${input.menuId}': the member chose this themselves.`.slice(0, REASON_MAX),
       payload: { userId: input.userId, roleId: step.roleId, menuId: input.menuId },
-      dryRun: dryRunFor(step.kind),
+      dryRun: false,
       idempotencyKey: `${MODULE_ID}:${input.idempotencyRoot}:${step.kind}:${step.roleId}`,
     });
 
@@ -73,9 +77,40 @@ export async function runRoleChanges(
   return report;
 }
 
-export interface InteractionRef {
-  id: string;
-  token: string;
+function respondTo(
+  ctx: ModuleContext<RolemenuConfig>,
+  interaction: InteractionRef,
+  actorId: string,
+  idempotencyRoot: string,
+): RespondTo {
+  return {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    actorId,
+    interaction,
+    idempotencyKey: `${MODULE_ID}:${idempotencyRoot}`,
+  };
+}
+
+async function run(
+  ctx: ModuleContext<RolemenuConfig>,
+  request: ActionRequest,
+  failed: string,
+): Promise<ActionResult> {
+  const result = await ctx.executor.execute(request);
+
+  if (!succeeded(result)) {
+    ctx.logger.warn(
+      `rolemenu could not ${failed}: ${result.failure?.humanReason ?? 'unknown reason'}`,
+      {
+        guildId: ctx.guildId,
+        moduleId: MODULE_ID,
+        code: result.failure?.code,
+      },
+    );
+  }
+
+  return result;
 }
 
 export async function deferEphemeral(
@@ -84,9 +119,11 @@ export async function deferEphemeral(
   actorId: string,
   idempotencyRoot: string,
 ): Promise<ActionResult> {
-  return acknowledge(ctx, interaction, actorId, idempotencyRoot, {
-    callbackType: INTERACTION_CALLBACK_DEFERRED_MESSAGE,
-  });
+  return run(
+    ctx,
+    buildDeferEphemeral(respondTo(ctx, interaction, actorId, idempotencyRoot)),
+    'acknowledge an interaction',
+  );
 }
 
 export async function replyEphemeral(
@@ -96,77 +133,31 @@ export async function replyEphemeral(
   idempotencyRoot: string,
   content: string,
 ): Promise<ActionResult> {
-  return acknowledge(ctx, interaction, actorId, idempotencyRoot, {
-    callbackType: INTERACTION_CALLBACK_CHANNEL_MESSAGE,
-    content: content.slice(0, MESSAGE_MAX),
-  });
-}
-
-async function acknowledge(
-  ctx: ModuleContext<RolemenuConfig>,
-  interaction: InteractionRef,
-  actorId: string,
-  idempotencyRoot: string,
-  data: { callbackType: number; content?: string },
-): Promise<ActionResult> {
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'interaction_reply',
-    actorId,
-
-    dryRun: false,
-
-    idempotencyKey: `${MODULE_ID}:${idempotencyRoot}:ack`,
-    payload: {
-      interactionId: interaction.id,
-      interactionToken: interaction.token,
-      ephemeral: true,
-      ...data,
-    },
-  });
-
-  if (!succeeded(result)) {
-    ctx.logger.warn(
-      `rolemenu could not acknowledge an interaction: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
-    );
-  }
-
-  return result;
+  return run(
+    ctx,
+    buildReplyEphemeral(respondTo(ctx, interaction, actorId, idempotencyRoot), content),
+    'acknowledge an interaction',
+  );
 }
 
 export async function followUp(
   ctx: ModuleContext<RolemenuConfig>,
-  target: { applicationId: string; interactionToken: string },
+  target: { applicationId: string; interaction: InteractionRef },
   actorId: string,
   idempotencyRoot: string,
   content: string,
 ): Promise<ActionResult> {
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'interaction_followup',
-    actorId,
-    dryRun: false,
-    idempotencyKey: `${MODULE_ID}:${idempotencyRoot}:followup`,
-    payload: {
-      applicationId: target.applicationId,
-      interactionToken: target.interactionToken,
-
-      content: content.slice(0, MESSAGE_MAX),
-      ephemeral: true,
-    },
-  });
-
-  if (!succeeded(result)) {
-    ctx.logger.warn(
-      `rolemenu could not tell the member what happened: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
-    );
-  }
-
-  return result;
+  return run(
+    ctx,
+    buildFollowUp(
+      {
+        ...respondTo(ctx, target.interaction, actorId, idempotencyRoot),
+        applicationId: target.applicationId,
+      },
+      content,
+    ),
+    'tell the member what happened',
+  );
 }
 
 export function describeReport(report: RoleChangeReport): string {

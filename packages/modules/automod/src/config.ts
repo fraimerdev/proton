@@ -34,8 +34,8 @@ export type Response = (typeof RESPONSES)[number];
 
 export const DELETE_FROM = ['low', 'medium', 'high', 'never'] as const;
 
-const severity = (label: string, description: string, fallback: Severity = 'off') =>
-  z.enum(SEVERITIES).default(fallback).register(protonFields, { label, description });
+const severity = (label: string, fallback: Severity = 'off') =>
+  z.enum(SEVERITIES).default(fallback).register(protonFields, { label });
 
 const KEYWORD_PRESETS = ['profanity', 'sexualContent', 'slurs'] as const;
 export type KeywordPreset = (typeof KEYWORD_PRESETS)[number];
@@ -43,7 +43,7 @@ export type KeywordPreset = (typeof KEYWORD_PRESETS)[number];
 const automodShape = {
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Screen messages, and keep this server’s Discord AutoMod rules in step.',
+    description: 'Also creates and deletes this server’s Discord AutoMod rules',
   }),
 
   exemptRoleIds: z
@@ -55,35 +55,30 @@ const automodShape = {
     .register(protonFields, {
       field: 'role-id',
       label: 'Exempt roles',
-      description: 'Members holding any of these are never acted on. Usually staff.',
     }),
 
   exemptChannelIds: z.array(snowflakeSchema).max(50).default([]).register(protonFields, {
     field: 'channel-id',
     label: 'Exempt channels',
-    description: 'Nothing posted in these channels is screened.',
   }),
 
   exemptBots: z.boolean().default(true).register(protonFields, {
     label: 'Exempt bots',
-    description: 'Leave other applications’ messages alone.',
   }),
 
   alertChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Alert channel',
-    description: 'Where automod reports what it acted on. Leave empty to act silently.',
     channelTypes: [0, 5, 11, 12],
   }),
 
   blockedWords: z.array(z.string().min(1).max(60)).max(1000).default([]).register(protonFields, {
     label: 'Blocked words',
-    description: 'Pushed to Discord’s AutoMod, which blocks them before Proton ever sees them.',
+    description: 'Blocked by Discord before Proton ever sees them',
   }),
 
   allowedWords: z.array(z.string().min(1).max(60)).max(100).default([]).register(protonFields, {
     label: 'Allowed words',
-    description: 'Exceptions to the blocked list and the presets.',
   }),
 
   presets: z
@@ -92,57 +87,50 @@ const automodShape = {
     .default([])
     .register(protonFields, {
       label: 'Discord word presets',
-      description: 'Discord’s own maintained lists: profanity, sexual content, slurs.',
     }),
 
   mentionLimit: z.number().int().min(0).max(50).default(0).register(protonFields, {
     label: 'Mention limit (Discord)',
-    description: 'Discord blocks messages with more than this many mentions. 0 disables it.',
+    description: '0 turns it off',
   }),
 
   nativeSpam: z.boolean().default(false).register(protonFields, {
     label: 'Discord spam filter',
-    description: 'Discord’s own spam heuristic, enforced at its edge for free.',
   }),
 
-  floodSeverity: severity('Message flood', 'Too many messages from one member too quickly.'),
+  floodSeverity: severity('Message flood'),
   floodCount: z.number().int().min(2).max(50).default(6).register(protonFields, {
     label: 'Flood: messages',
-    description: 'How many messages inside the window count as a flood.',
   }),
   floodWindow: durationStringSchema.default('5s').register(protonFields, {
     field: 'duration',
     label: 'Flood: window',
-    description: 'The window the count is measured over.',
   }),
 
-  duplicateSeverity: severity('Duplicate messages', 'The same text posted over and over.'),
+  duplicateSeverity: severity('Duplicate messages'),
   duplicateCount: z.number().int().min(2).max(50).default(3).register(protonFields, {
     label: 'Duplicate: repeats',
-    description: 'How many identical messages inside the window count as spam.',
   }),
   duplicateWindow: durationStringSchema.default('30s').register(protonFields, {
     field: 'duration',
     label: 'Duplicate: window',
-    description: 'The window repeats are measured over.',
   }),
 
-  mentionsSeverity: severity('Mass mentions', 'More mentions in one message than the limit.'),
+  mentionsSeverity: severity('Mass mentions'),
   mentionsLimit: z.number().int().min(1).max(50).default(8).register(protonFields, {
     label: 'Mentions: limit',
-    description: 'Unique mentions in one message before Proton acts.',
   }),
 
-  invitesSeverity: severity('Invite links', 'Links to other Discord servers.'),
+  invitesSeverity: severity('Invite links'),
 
-  linksSeverity: severity('Blocked links', 'Links to domains on the list below.'),
+  linksSeverity: severity('Blocked links'),
   linkBlockDomains: z
     .array(z.string().min(1).max(253))
     .max(200)
     .default([])
     .register(protonFields, {
       label: 'Blocked domains',
-      description: 'A domain here also covers its subdomains.',
+      description: 'Also blocks every subdomain',
     }),
   linkAllowDomains: z
     .array(z.string().min(1).max(253))
@@ -150,77 +138,60 @@ const automodShape = {
     .default([])
     .register(protonFields, {
       label: 'Allowed domains',
-      description: 'Checked first, so an allowed domain is never blocked.',
     }),
 
-  attachmentsSeverity: severity('Attachments', 'Files with a blocked extension.'),
+  attachmentsSeverity: severity('Attachments'),
   attachmentExtensions: z
     .array(z.string().min(1).max(16))
     .max(100)
     .default(['exe', 'scr', 'bat', 'cmd', 'com', 'pif', 'msi', 'vbs', 'jar', 'ps1', 'apk', 'lnk'])
     .register(protonFields, {
       label: 'Blocked file types',
-      description: 'Matched on the filename’s last extension, which is what Discord serves.',
+      description: 'Only the filename’s last extension is matched',
     }),
 
-  patternsSeverity: severity('Custom patterns', 'Messages matching a pattern below.'),
-  regexPatterns: z
-    .array(z.string().min(1).max(260))
-    .max(10)
-    .default([])
-    .register(protonFields, {
-      label: 'Patterns',
-      description:
-        'Regular expressions. Ones Discord’s engine also accepts are pushed to it; the rest ' +
-        'Proton runs itself.',
-    }),
+  patternsSeverity: severity('Custom patterns'),
+  regexPatterns: z.array(z.string().min(1).max(260)).max(10).default([]).register(protonFields, {
+    label: 'Regex patterns',
+  }),
 
-  zalgoSeverity: severity('Zalgo text', 'Stacked combining marks used to break layout.'),
-  capsSeverity: severity('Shouting', 'Messages that are mostly capital letters.'),
+  zalgoSeverity: severity('Zalgo text'),
+  capsSeverity: severity('Shouting'),
   capsRatio: z.number().int().min(50).max(100).default(70).register(protonFields, {
     label: 'Caps: percent',
-    description: 'How much of a message must be capitals before it counts as shouting.',
   }),
 
-  emojiSeverity: severity('Emoji spam', 'More emoji in one message than the limit.'),
+  emojiSeverity: severity('Emoji spam'),
   emojiLimit: z.number().int().min(1).max(100).default(12).register(protonFields, {
     label: 'Emoji: limit',
-    description: 'Emoji in one message before Proton acts.',
   }),
 
-  wallsSeverity: severity('Walls of text', 'Very long messages, or many blank lines.'),
+  wallsSeverity: severity('Walls of text'),
   wallMaxLines: z.number().int().min(2).max(200).default(15).register(protonFields, {
     label: 'Walls: lines',
-    description: 'Lines in one message before it counts as a wall.',
   }),
 
   deleteFrom: z.enum(DELETE_FROM).default('low').register(protonFields, {
     label: 'Delete from severity',
-    description: 'The lowest severity whose messages are deleted. "never" keeps every message.',
   }),
 
   lowResponse: z.enum(RESPONSES).default('none').register(protonFields, {
     label: 'Low severity response',
-    description: 'What happens to the member, beyond deleting the message.',
   }),
   mediumResponse: z.enum(RESPONSES).default('warn').register(protonFields, {
     label: 'Medium severity response',
-    description: 'What happens to the member, beyond deleting the message.',
   }),
   highResponse: z.enum(RESPONSES).default('timeout').register(protonFields, {
     label: 'High severity response',
-    description: 'What happens to the member, beyond deleting the message.',
   }),
 
   mediumTimeout: durationStringSchema.default('10m').register(protonFields, {
     field: 'duration',
     label: 'Medium timeout',
-    description: 'How long a medium-severity timeout lasts.',
   }),
   highTimeout: durationStringSchema.default('1h').register(protonFields, {
     field: 'duration',
     label: 'High timeout',
-    description: 'How long a high-severity timeout lasts.',
   }),
 };
 

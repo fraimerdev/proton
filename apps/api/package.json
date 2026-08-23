@@ -14,12 +14,15 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@proton/cards": "workspace:*",
     "@proton/core": "workspace:*",
     "@proton/db": "workspace:*",
     "@proton/gateway": "workspace:*",
     "@proton/module-cases": "workspace:*",
+    "@proton/module-giveaways": "workspace:*",
     "@proton/module-leveling": "workspace:*",
     "@proton/module-ping": "workspace:*",
+    "@proton/module-tags": "workspace:*",
     "@proton/modules": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.2",

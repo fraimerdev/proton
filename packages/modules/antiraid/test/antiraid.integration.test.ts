@@ -125,7 +125,7 @@ describe('the response ladder', () => {
     expect(h.memberCalls()[0]?.path).toContain(`/roles/${VERIFY_ROLE}`);
   });
 
-  test('kick is withheld outside production, and the alert says so', async () => {
+  test('kick is performed, whatever the environment', async () => {
     const h = harness();
     const config: Partial<AntiraidConfig> = {
       enabled: true,
@@ -135,12 +135,11 @@ describe('the response ladder', () => {
 
     for (let i = 0; i < 10; i++) await h.join(raider(i, RAID_START + i * 300), { config });
 
-    expect(h.memberCalls()).toHaveLength(0);
     const kick = h.cases().find((c) => c.kind === 'kick');
-    expect(kick?.dryRun).toBe(true);
+    expect(kick?.dryRun).toBe(false);
     expect(kick?.targetId).toBe(accountId(RAID_START - 3 * DAY + 9));
 
-    expect(h.alertContent()).toContain('Nothing is actually being removed');
+    expect(h.memberCalls()).toHaveLength(1);
   });
 
   test('a rung with no role configured names the setting and the page', async () => {

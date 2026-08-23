@@ -50,6 +50,90 @@
       "when": 1786890000000,
       "tag": "0006_joinroles",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786900000000,
+      "tag": "0007_scheduled_action_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786910000000,
+      "tag": "0008_scheduled_action_lock_token",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0009_tags",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787001000000,
+      "tag": "0010_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787001100000,
+      "tag": "0011_polls",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787001200000,
+      "tag": "0012_giveaways",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787001300000,
+      "tag": "0013_suggestions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787001400000,
+      "tag": "0014_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787001500000,
+      "tag": "0015_member_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787001600000,
+      "tag": "0016_giveaways_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787001700000,
+      "tag": "0017_messages_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1787001800000,
+      "tag": "0018_announcements_into_messages",
+      "breakpoints": true
     }
   ]
 }

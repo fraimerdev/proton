@@ -4,47 +4,25 @@ import { z } from 'zod';
 export const moderationConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
-    description: 'Answer moderation commands in this server.',
   }),
 
-  requireReason: z
-    .boolean()
-    .default(false)
-    .register(protonFields, {
-      label: 'Require a reason',
-      description:
-        'Refuse a moderation command that carries no reason. The reason is written to ' +
-        "Discord's audit log and to the case, so requiring it keeps both readable.",
-    }),
+  requireReason: z.boolean().default(false).register(protonFields, {
+    label: 'Require a reason',
+  }),
 
-  publicReplies: z
-    .boolean()
-    .default(false)
-    .register(protonFields, {
-      label: 'Announce outcomes in the channel',
-      description:
-        'Off means only the moderator who ran the command sees the outcome. Failures are ' +
-        'reported either way — Proton never fails silently.',
-    }),
+  publicReplies: z.boolean().default(false).register(protonFields, {
+    label: 'Announce outcomes in the channel',
+  }),
 
   defaultTimeoutDuration: durationStringSchema.default('1h').register(protonFields, {
     field: 'duration',
     label: 'Default timeout length',
-    description: 'Used when /timeout is run without a duration. Discord caps timeouts at 28 days.',
+    description: 'Discord caps timeouts at 28 days',
   }),
 
-  defaultBanDeleteDays: z
-    .number()
-    .int()
-    .min(0)
-    .max(7)
-    .default(0)
-    .register(protonFields, {
-      label: 'Default message deletion on ban (days)',
-      description:
-        "How much of a banned member's recent message history Discord deletes when " +
-        '/ban is run without the delete_message_days option. 0 keeps everything.',
-    }),
+  defaultBanDeleteDays: z.number().int().min(0).max(7).default(0).register(protonFields, {
+    label: 'Default message deletion on ban (days)',
+  }),
 });
 
 export type ModerationConfig = z.infer<typeof moderationConfigSchema>;

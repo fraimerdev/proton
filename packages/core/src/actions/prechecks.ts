@@ -10,17 +10,38 @@ export interface PrecheckInput {
   botChannelPermissions: bigint;
   requiredPermissions: bigint;
   channelId?: string;
+  channelOverwritesUnknown?: boolean;
+  threadParentId?: string;
   target?: { id: string; highestRolePosition: number };
+}
+
+function whereItIsMissing(input: PrecheckInput): string {
+  if (!input.channelId) return `guild ${input.guildId}`;
+
+  if (input.channelOverwritesUnknown) {
+    return (
+      `guild ${input.guildId}. I couldn't check channel ${input.channelId} itself — it is not in ` +
+      "my cached channel list, so that channel's own permission overwrites were not applied"
+    );
+  }
+
+  if (input.threadParentId) {
+    return (
+      `thread ${input.channelId} — a thread has no permission overwrites of its own, so grant it ` +
+      `in its parent channel ${input.threadParentId}`
+    );
+  }
+
+  return `channel ${input.channelId}`;
 }
 
 export function runPrechecks(input: PrecheckInput): ActionFailure | null {
   const lacking = missing(input.botChannelPermissions, input.requiredPermissions);
   if (lacking !== 0n) {
     const names = permissionNames(lacking).join(', ');
-    const where = input.channelId ? `channel ${input.channelId}` : `guild ${input.guildId}`;
     return {
       code: 'missing_permission',
-      humanReason: `I'm missing the ${names} permission in ${where}.`,
+      humanReason: `I'm missing the ${names} permission in ${whereItIsMissing(input)}.`,
     };
   }
 

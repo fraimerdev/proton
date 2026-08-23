@@ -1,8 +1,6 @@
 import {
   type ActionKind,
   type ActionResult,
-  dryRunFor,
-  isScopedActionExecutor,
   MAX_TIMEOUT_MS,
   type ModuleContext,
 } from '@proton/core';
@@ -53,22 +51,15 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
   const reason = `Automod: ${hit.humanReason}`;
   const key = `${MODULE_ID}:${ctx.guildId}:${facts.messageId}`;
 
-  // Bound to the channel the message is in. Without this the precheck computes guild-level
-  // permissions with no channel overwrites, so a channel where Proton lacks Manage Messages sails
-  // past it and comes back as a bare 403 instead of a named refusal.
-  const executor = isScopedActionExecutor(ctx.executor)
-    ? ctx.executor.scoped({ channelId: facts.channelId })
-    : ctx.executor;
-
   if (deletesAt(config, hit.severity)) {
-    const result = await executor.execute({
+    const result = await ctx.executor.execute({
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
       kind: 'delete_message',
       actorId: MODULE_ID,
       reason,
       idempotencyKey: `${key}:delete`,
-      dryRun: dryRunFor('delete_message'),
+      dryRun: false,
       // The message is gone either way; a case row per deleted spam message would bury the
       // ledger that moderators actually read.
       record: false,
@@ -100,7 +91,7 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
     targetId: facts.authorId,
     reason,
     idempotencyKey: `${key}:action`,
-    dryRun: dryRunFor(kind),
+    dryRun: false,
     payload,
   });
 

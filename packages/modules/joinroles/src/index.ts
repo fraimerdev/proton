@@ -51,6 +51,7 @@ export function createJoinRolesModule(
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 
     requiredPermissions: [Permissions.ManageRoles],
+    actionKinds: ['add_role'],
 
     listeners: [createJoinRolesListener(deps)],
 

@@ -13,9 +13,18 @@ import {
   automodRuleUpdatePayloadSchema,
   banPayloadSchema,
   createChannelPayloadSchema,
+  createDmPayloadSchema,
   createRolePayloadSchema,
+  createThreadPayloadSchema,
+  deleteChannelPayloadSchema,
   deleteMessagePayloadSchema,
+  editChannelPayloadSchema,
   editMessagePayloadSchema,
+  endPollPayloadSchema,
+  giveawayDrawPayloadSchema,
+  INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT,
+  INTERACTION_CALLBACK_MODAL,
+  type InteractionReplyPayload,
   interactionFollowupPayloadSchema,
   interactionReplyPayloadSchema,
   isDeferral,
@@ -23,6 +32,8 @@ import {
   lockdownPayloadSchema,
   MAX_TIMEOUT_MS,
   MESSAGE_FLAG_EPHEMERAL,
+  moveMemberPayloadSchema,
+  pinMessagePayloadSchema,
   purgePayloadSchema,
   roleChangePayloadSchema,
   sendPayloadSchema,
@@ -110,6 +121,37 @@ function automodMetadata(metadata: AutomodTriggerMetadata): Record<string, unkno
   });
 }
 
+function interactionCallbackData(
+  payload: InteractionReplyPayload,
+  descriptors: Array<{ id: number; filename: string; description?: string }> | undefined,
+): unknown {
+  const modal = payload.modal;
+  if (payload.callbackType === INTERACTION_CALLBACK_MODAL && modal) {
+    return { custom_id: modal.customId, title: modal.title, components: modal.components };
+  }
+
+  if (payload.callbackType === INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT) {
+    return { choices: payload.choices ?? [] };
+  }
+
+  if (isDeferral(payload.callbackType)) {
+    return payload.ephemeral ? { flags: MESSAGE_FLAG_EPHEMERAL } : undefined;
+  }
+
+  // Or'd, not overwritten: an ephemeral components-v2 reply needs both bits, and dropping either
+  // one makes Discord reject the whole callback.
+  const flags = (payload.ephemeral ? MESSAGE_FLAG_EPHEMERAL : 0) | (payload.flags ?? 0);
+
+  return present({
+    content: payload.content,
+    embeds: payload.embeds,
+    components: payload.components,
+    attachments: descriptors,
+    allowed_mentions: payload.allowedMentions,
+    flags: flags === 0 ? undefined : flags,
+  });
+}
+
 function auditHeaders(request: ActionRequest): Record<string, string> | undefined {
   if (!request.reason) return undefined;
 
@@ -136,6 +178,8 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             embeds: p.data.embeds,
             components: p.data.components,
             attachments: descriptors,
+            poll: p.data.poll,
+            flags: p.data.flags,
             allowed_mentions: p.data.allowedMentions,
 
             message_reference: p.data.replyToMessageId
@@ -158,6 +202,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             content: p.data.content,
             embeds: p.data.embeds,
             components: p.data.components,
+            flags: p.data.flags,
           }),
         },
       };
@@ -194,17 +239,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
 
       const { files, descriptors } = toFiles(p.data.files);
 
-      const data = isDeferral(p.data.callbackType)
-        ? p.data.ephemeral
-          ? { flags: MESSAGE_FLAG_EPHEMERAL }
-          : undefined
-        : present({
-            content: p.data.content,
-            embeds: p.data.embeds,
-            components: p.data.components,
-            attachments: descriptors,
-            flags: p.data.ephemeral ? MESSAGE_FLAG_EPHEMERAL : undefined,
-          });
+      const data = interactionCallbackData(p.data, descriptors);
 
       return {
         call: {
@@ -230,9 +265,34 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             embeds: p.data.embeds,
             components: p.data.components,
             attachments: descriptors,
+            allowed_mentions: p.data.allowedMentions,
             flags: p.data.ephemeral ? MESSAGE_FLAG_EPHEMERAL : undefined,
           }),
           ...(files ? { files } : {}),
+        },
+      };
+    }
+
+    // Ledger-only: it changes who won, not anything on Discord. The announcement that follows is
+    // an ordinary send with its own idempotency key. Still validated — an unreadable audit row is
+    // the one thing a draw record cannot be.
+    case 'giveaway_draw': {
+      const p = giveawayDrawPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return LEDGER_ONLY;
+    }
+
+    // Two calls make a DM: this opens the channel and returns its id in ActionResult.body, and
+    // the caller sends into it. Modelling it as one kind would need a two-step RestCall.
+    case 'create_dm': {
+      const p = createDmPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      return {
+        call: {
+          method: 'POST',
+          path: '/users/@me/channels',
+          body: { recipient_id: p.data.userId },
         },
       };
     }
@@ -394,6 +454,9 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             topic: p.data.topic,
             nsfw: p.data.nsfw,
             rate_limit_per_user: p.data.rateLimitPerUser,
+            permission_overwrites: p.data.permissionOverwrites,
+            user_limit: p.data.userLimit,
+            bitrate: p.data.bitrate,
           }),
         }),
       };
@@ -413,6 +476,86 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             hoist: p.data.hoist,
             mentionable: p.data.mentionable,
           }),
+        }),
+      };
+    }
+
+    case 'delete_channel': {
+      const p = deleteChannelPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({ method: 'DELETE', path: `/channels/${p.data.channelId}` }),
+      };
+    }
+
+    case 'edit_channel': {
+      const p = editChannelPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'PATCH',
+          path: `/channels/${p.data.channelId}`,
+          body: present({
+            name: p.data.name,
+            user_limit: p.data.userLimit,
+            bitrate: p.data.bitrate,
+            topic: p.data.topic,
+            parent_id: p.data.parentId,
+            rate_limit_per_user: p.data.rateLimitPerUser,
+            permission_overwrites: p.data.permissionOverwrites,
+          }),
+        }),
+      };
+    }
+
+    case 'create_thread': {
+      const p = createThreadPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'POST',
+          path: `/channels/${p.data.channelId}/threads`,
+          body: present({
+            name: p.data.name,
+            type: p.data.type,
+            auto_archive_duration: p.data.autoArchiveDuration,
+            invitable: p.data.invitable,
+            rate_limit_per_user: p.data.rateLimitPerUser,
+          }),
+        }),
+      };
+    }
+
+    case 'move_member': {
+      const p = moveMemberPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'PATCH',
+          path: `/guilds/${guild}/members/${p.data.userId}`,
+          body: { channel_id: p.data.channelId },
+        }),
+      };
+    }
+
+    case 'end_poll': {
+      const p = endPollPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: {
+          method: 'POST',
+          path: `/channels/${p.data.channelId}/polls/${p.data.messageId}/expire`,
+        },
+      };
+    }
+
+    case 'pin_message': {
+      const p = pinMessagePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return {
+        call: withAudit({
+          method: 'PUT',
+          path: `/channels/${p.data.channelId}/messages/pins/${p.data.messageId}`,
         }),
       };
     }

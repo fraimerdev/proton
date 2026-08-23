@@ -1,15 +1,14 @@
-import {
-  dryRunFor,
-  type EventBus,
-  type EventType,
-  type GuildRule,
-  type Logger,
-  type ModuleRegistry,
-  type ProtonEvent,
-  type RuleEngine,
-  type RuleEvaluationReport,
-  type RuleOutcome,
-  type Subscription,
+import type {
+  EventBus,
+  EventType,
+  GuildRule,
+  Logger,
+  ModuleRegistry,
+  ProtonEvent,
+  RuleEngine,
+  RuleEvaluationReport,
+  RuleOutcome,
+  Subscription,
 } from '@proton/core';
 import type { GuildRuleStore } from '@proton/db';
 import { type ConnectionOptions, type Job, Queue, Worker } from 'bullmq';
@@ -35,10 +34,6 @@ export function ruleTriggerEvents(registry: ModuleRegistry): EventType[] {
   ];
 }
 
-export function ruleIsDryRun(rule: GuildRule, nodeEnv?: string): boolean {
-  return rule.actions.some((action) => dryRunFor(action.kind, nodeEnv));
-}
-
 export interface RuleDispatchDeps {
   bus: EventBus;
   registry: ModuleRegistry;
@@ -49,8 +44,6 @@ export interface RuleDispatchDeps {
   logger: Logger;
 
   group?: string;
-
-  nodeEnv?: string;
 }
 
 export class RuleDispatchRuntime {
@@ -99,10 +92,8 @@ export class RuleDispatchRuntime {
 
     const facts = factsFor(event);
 
-    for (const [dryRun, group] of splitByDryRun(live, this.#deps.nodeEnv)) {
-      const report = await this.#deps.engine.evaluate({ event, facts, rules: group, dryRun });
-      this.#report(event, report, dryRun);
-    }
+    const report = await this.#deps.engine.evaluate({ event, facts, rules: live, dryRun: false });
+    this.#report(event, report);
   }
 
   async #enabledRules(
@@ -147,39 +138,21 @@ export class RuleDispatchRuntime {
     }
   }
 
-  #report(event: ProtonEvent, report: RuleEvaluationReport, dryRun: boolean): void {
+  #report(event: ProtonEvent, report: RuleEvaluationReport): void {
     for (const outcome of report.outcomes) {
       logOutcome(this.#deps.logger, outcome, {
         guildId: event.guildId,
         eventId: event.id,
         eventType: event.type,
-        dryRun,
       });
     }
   }
-}
-
-export function splitByDryRun(
-  rules: readonly GuildRule[],
-  nodeEnv?: string,
-): Array<[boolean, GuildRule[]]> {
-  const live: GuildRule[] = [];
-  const dry: GuildRule[] = [];
-  for (const rule of rules) {
-    (ruleIsDryRun(rule, nodeEnv) ? dry : live).push(rule);
-  }
-
-  const groups: Array<[boolean, GuildRule[]]> = [];
-  if (live.length > 0) groups.push([false, live]);
-  if (dry.length > 0) groups.push([true, dry]);
-  return groups;
 }
 
 interface OutcomeContext {
   guildId: string | null;
   eventId: string;
   eventType: string;
-  dryRun: boolean;
 }
 
 export function logOutcome(logger: Logger, outcome: RuleOutcome, context: OutcomeContext): void {
@@ -339,7 +312,6 @@ export interface CronTickDeps {
   engine: RuleEngine;
   store: GuildRuleStore;
   logger: Logger;
-  nodeEnv?: string;
   now?: () => number;
 }
 
@@ -377,18 +349,16 @@ export async function fireCronRule(deps: CronTickDeps, job: CronTick): Promise<v
 
   if (!rule.enabled) return;
 
-  const dryRun = ruleIsDryRun(rule, deps.nodeEnv);
   const outcome = await deps.engine.fire(rule, {
     event: cronEvent(parsed.data, job, deps.now?.() ?? Date.now()),
     facts: {},
-    dryRun,
+    dryRun: false,
   });
 
   logOutcome(deps.logger, outcome, {
     guildId,
     eventId: cronEventId(parsed.data, job),
     eventType: RULE_CRON_EVENT_TYPE,
-    dryRun,
   });
 }
 

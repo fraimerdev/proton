@@ -8,7 +8,7 @@ describe('moderation manifest', () => {
     const registry = new ModuleRegistry();
 
     expect(() => registry.register(moderationModule)).not.toThrow();
-    expect(registry.get('moderation')?.commands).toHaveLength(9);
+    expect(registry.get('moderation')?.commands).toHaveLength(8);
   });
 
   test('command names match their registration payloads', () => {
@@ -16,6 +16,14 @@ describe('moderation manifest', () => {
       expect(command.data.name).toBe(command.name);
       expect(command.data.description.length).toBeGreaterThan(0);
     }
+  });
+
+  test('ban carries its lift as a subcommand rather than a second command', () => {
+    const ban = moderationModule.commands?.find((c) => c.name === 'ban');
+    const subcommands = (ban?.data.options ?? []).map((o) => o.name);
+
+    expect(subcommands).toEqual(['add', 'remove']);
+    expect(moderationModule.commands?.some((c) => c.name === 'unban')).toBe(false);
   });
 
   test('command names are unique', () => {

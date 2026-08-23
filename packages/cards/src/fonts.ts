@@ -1,50 +1,54 @@
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { GlobalFonts } from '@napi-rs/canvas';
 
-export const FONT_FAMILY = 'Inter';
+export const FONT_FAMILY = 'Manrope';
+
+export const FALLBACK_FONT_FAMILY = 'Inter';
+
+// Manrope carries the design; Inter is behind it for the latin-1 glyphs Manrope's latin subset
+// leaves out, which would otherwise draw as tofu boxes.
+export const FONT_STACK = `${FONT_FAMILY}, ${FALLBACK_FONT_FAMILY}`;
 
 export const FONT_LICENCE = 'SIL Open Font License 1.1';
 
 const FONT_FILES = [
-  { weight: 400 as const, file: 'Inter-latin-400.ttf' },
-  { weight: 700 as const, file: 'Inter-latin-700.ttf' },
+  { family: FONT_FAMILY, file: 'Manrope-latin-400.woff2' },
+  { family: FONT_FAMILY, file: 'Manrope-latin-700.woff2' },
+  { family: FALLBACK_FONT_FAMILY, file: 'Inter-latin-400.ttf' },
+  { family: FALLBACK_FONT_FAMILY, file: 'Inter-latin-700.ttf' },
 ];
 
-export interface LoadedFont {
-  name: string;
-  data: ArrayBuffer;
-  weight: 400 | 700;
-  style: 'normal';
-}
+let registered = false;
 
-let cache: Promise<LoadedFont[]> | null = null;
+export function registerFonts(): void {
+  if (registered) return;
 
-async function read(): Promise<LoadedFont[]> {
-  return Promise.all(
-    FONT_FILES.map(async ({ weight, file }) => {
-      const url = new URL(`../assets/${file}`, import.meta.url);
-      const bytes = await readFile(url);
-      return {
-        name: FONT_FAMILY,
-
-        data: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-        weight,
-        style: 'normal' as const,
-      };
-    }),
-  );
-}
-
-export async function loadFonts(): Promise<LoadedFont[]> {
-  if (!cache) {
-    cache = read().catch((cause: unknown) => {
-      cache = null;
+  for (const { family, file } of FONT_FILES) {
+    const url = new URL(`../assets/${file}`, import.meta.url);
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(url);
+    } catch (cause) {
       throw new Error(
-        `@proton/cards could not read its embedded ${FONT_FAMILY} fonts from packages/cards/assets. ` +
-          'Cards cannot render without them and there is no network fallback by design. ' +
+        `@proton/cards could not read ${file} from packages/cards/assets. Cards cannot render ` +
+          'without their embedded fonts and there is no network fallback by design. ' +
           `Cause: ${cause instanceof Error ? cause.message : String(cause)}`,
         { cause },
       );
-    });
+    }
+
+    if (!GlobalFonts.register(bytes, family)) {
+      throw new Error(
+        `@proton/cards could not register ${file} as '${family}': @napi-rs/canvas rejected the ` +
+          'font binary. Replace it from the @fontsource package it came from.',
+      );
+    }
   }
-  return cache;
+
+  registered = true;
+}
+
+export function registeredFamilies(): string[] {
+  registerFonts();
+  return [...new Set(FONT_FILES.map(({ family }) => family))];
 }

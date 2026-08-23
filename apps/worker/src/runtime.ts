@@ -1,6 +1,7 @@
 import {
   type ActionExecutor,
   createCommandOptions,
+  type EntitlementTier,
   type EventBus,
   type EventType,
   isScopedActionExecutor,
@@ -17,7 +18,9 @@ import {
   permissionsConfigSchema,
 } from '@proton/module-permissions';
 import { ConfigUnavailableError } from './config-provider.ts';
+import { moduleExecutor } from './module-actions.ts';
 import type { ModulePublisherFactory } from './module-publish.ts';
+import type { ModuleSchedulerFactory } from './module-schedule.ts';
 
 export interface ModuleConfigSnapshot {
   enabled: boolean;
@@ -25,6 +28,8 @@ export interface ModuleConfigSnapshot {
   // The API already returns this; the worker just never carried it. Optional so a provider that
   // predates the field still satisfies the port.
   schemaVersion?: number;
+
+  tier?: EntitlementTier;
 }
 
 export interface ConfigProvider {
@@ -42,6 +47,7 @@ export interface ModuleRuntimeDeps {
   dashboardUrl?: string;
 
   publisherFor?: ModulePublisherFactory;
+  schedulerFor?: ModuleSchedulerFactory;
 }
 
 const SUBSCRIBED_TYPES: EventType[] = ['interaction.command'];
@@ -198,7 +204,7 @@ export class ModuleRuntime {
       await reply(
         `**${manifest.name}** is switched off in this server, so \`/${commandName}\` did nothing.\n\n` +
           `A server admin can turn it on at ${this.#settingsUrl(guildId, manifest.id)} — ` +
-          `${disabled === 'module' ? 'tick **Module enabled**' : 'tick **Enabled**'} and press Save.`,
+          `the switch beside **${manifest.name}** in the sidebar.`,
         'module-disabled',
         manifest.id,
       );
@@ -225,11 +231,15 @@ export class ModuleRuntime {
       userId,
       options: createCommandOptions((nested(d.data, 'options') as RawOption[] | undefined) ?? []),
       config: parsed.data,
-      executor,
+      tier: snapshot.tier ?? 'free',
+      // Not the same executor the refusal replies above use: those run under the permissions
+      // module's id on behalf of a module that never got to declare anything.
+      executor: moduleExecutor(this.#deps.registry, manifest.id, executor),
       logger: this.#deps.logger,
       ...(this.#deps.publisherFor
         ? { publish: this.#deps.publisherFor(manifest.id, guildId) }
         : {}),
+      ...(this.#deps.schedulerFor ? this.#deps.schedulerFor(manifest.id, guildId) : {}),
       interaction: { id: interactionId, token: interactionToken },
 
       idempotencyKey: event.id,
@@ -238,7 +248,7 @@ export class ModuleRuntime {
 
   #settingsUrl(guildId: string, moduleId: string): string {
     const base = (this.#deps.dashboardUrl ?? DEFAULT_DASHBOARD_URL).replace(/\/$/, '');
-    return `<${base}/dashboard/${guildId}/module/${moduleId}>`;
+    return `<${base}/dashboard/${guildId}/${moduleId}>`;
   }
 
   async #tell(ctx: {

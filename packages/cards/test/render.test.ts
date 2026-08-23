@@ -5,7 +5,6 @@ import {
   type CardDescriptorInput,
   type CardPreset,
   renderCard,
-  renderCardSvg,
 } from '../src/index.ts';
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -45,6 +44,8 @@ const welcome: CardDescriptorInput = {
 
 const goodbye: CardDescriptorInput = { ...welcome, kind: 'goodbye' };
 
+const CDN_IMAGE = 'https://cdn.discordapp.com/avatars/1/abc.png';
+
 describe('renderCard', () => {
   test.each([
     ['rank', rank],
@@ -81,20 +82,42 @@ describe('renderCard', () => {
     expect(new Set(rendered).size).toBe(CARD_PRESETS.length);
   });
 
-  test('a rank of zero progress still draws a track', async () => {
-    const svg = await renderCardSvg({ ...rank, xpIntoLevel: 0 });
-    expect(svg).toContain('<svg');
-    expect(svg.length).toBeGreaterThan(0);
+  test('a guild accent changes the picture, so the setting is not decorative', async () => {
+    const [plain, tinted] = await Promise.all([
+      renderCard({ ...welcome, preset: 'midnight' }),
+      renderCard({ ...welcome, preset: 'midnight', accent: '#ff5c8a' }),
+    ]);
+
+    expect(Buffer.from(plain).equals(Buffer.from(tinted))).toBe(false);
+  });
+
+  test.each([
+    ['showRank', { ...rank, showRank: false }],
+    ['showPercent', { ...rank, showPercent: false }],
+    ['showTotalXp', { ...rank, showTotalXp: false }],
+    ['showMemberCount', { ...welcome, showMemberCount: false }],
+  ] as const)('switching %s off changes the picture', async (_label, descriptor) => {
+    const base = descriptor.kind === 'rank' ? rank : welcome;
+    const [shown, hidden] = await Promise.all([renderCard(base), renderCard(descriptor)]);
+
+    expect(Buffer.from(shown).equals(Buffer.from(hidden))).toBe(false);
+  });
+
+  test('zero progress still draws the track rather than a naked card', async () => {
+    const [empty, some] = await Promise.all([
+      renderCard({ ...rank, xpIntoLevel: 0 }),
+      renderCard(rank),
+    ]);
+
+    expect(readPng(empty).magic).toEqual(PNG_MAGIC);
+    expect(Buffer.from(empty).equals(Buffer.from(some))).toBe(false);
   });
 
   test('an unreachable avatar degrades to the monogram rather than throwing', async () => {
     const skipped: string[] = [];
     const png = await renderCard(
-      { ...welcome, avatarUrl: 'https://cdn.discordapp.com/avatars/1/abc.png' },
-      {
-        avatars: { fetch: async () => null },
-        onAvatarSkipped: (reason) => skipped.push(reason),
-      },
+      { ...welcome, avatarUrl: CDN_IMAGE },
+      { images: { fetch: async () => null }, onImageSkipped: (reason) => skipped.push(reason) },
     );
     expect(readPng(png).magic).toEqual(PNG_MAGIC);
 
@@ -104,45 +127,67 @@ describe('renderCard', () => {
   test('a fetcher that throws is contained, and the card still renders', async () => {
     const skipped: string[] = [];
     const png = await renderCard(
-      { ...welcome, avatarUrl: 'https://cdn.discordapp.com/avatars/1/abc.png' },
+      { ...welcome, avatarUrl: CDN_IMAGE },
       {
-        avatars: {
+        images: {
           fetch: async () => {
             throw new Error('socket hang up');
           },
         },
-        onAvatarSkipped: (reason) => skipped.push(reason),
+        onImageSkipped: (reason) => skipped.push(reason),
       },
     );
     expect(readPng(png).magic).toEqual(PNG_MAGIC);
     expect(skipped[0]).toContain('socket hang up');
   });
 
-  test('avatar bytes that are not an image are rejected before satori sees them', async () => {
+  test('bytes that are not an image are rejected before the decoder sees them', async () => {
     const skipped: string[] = [];
     await renderCard(
-      { ...welcome, avatarUrl: 'https://cdn.discordapp.com/avatars/1/abc.png' },
+      { ...welcome, avatarUrl: CDN_IMAGE },
       {
-        avatars: { fetch: async () => new Uint8Array([1, 2, 3, 4]) },
-        onAvatarSkipped: (reason) => skipped.push(reason),
+        images: { fetch: async () => new Uint8Array([1, 2, 3, 4]) },
+        onImageSkipped: (reason) => skipped.push(reason),
       },
     );
     expect(skipped[0]).toContain('not a PNG');
   });
 
-  test('a real PNG avatar is embedded', async () => {
-    const avatarPng = await renderCard({ ...rank, preset: 'aurora' });
-    const svg = await renderCardSvg(
-      { ...welcome, avatarUrl: 'https://cdn.discordapp.com/avatars/1/abc.png' },
-      { avatars: { fetch: async () => avatarPng } },
-    );
-    expect(svg).toContain('data:image/png;base64,');
+  test('a real PNG avatar is drawn, not silently dropped', async () => {
+    const avatar = await renderCard({ ...rank, preset: 'aurora' });
+    const skipped: string[] = [];
+
+    const [plain, withAvatar] = await Promise.all([
+      renderCard(welcome),
+      renderCard(
+        { ...welcome, avatarUrl: CDN_IMAGE },
+        { images: { fetch: async () => avatar }, onImageSkipped: (r) => skipped.push(r) },
+      ),
+    ]);
+
+    expect(skipped).toEqual([]);
+    expect(Buffer.from(plain).equals(Buffer.from(withAvatar))).toBe(false);
   });
 
-  test('a descriptor the schema refuses never reaches satori', async () => {
+  test('a background image is drawn behind the card', async () => {
+    const backdrop = await renderCard({ ...rank, preset: 'parchment' });
+
+    const [plain, withBackground] = await Promise.all([
+      renderCard(welcome),
+      renderCard(
+        { ...welcome, backgroundUrl: CDN_IMAGE },
+        { images: { fetch: async () => backdrop } },
+      ),
+    ]);
+
+    expect(Buffer.from(plain).equals(Buffer.from(withBackground))).toBe(false);
+  });
+
+  test('a descriptor the schema refuses never reaches the canvas', async () => {
     await expect(
       renderCard({ ...rank, xpIntoLevel: 5_000, xpForNextLevel: 2_000 }),
     ).rejects.toThrow();
     await expect(renderCard({ ...welcome, displayName: '' })).rejects.toThrow();
+    await expect(renderCard({ ...welcome, accent: 'rebeccapurple' })).rejects.toThrow();
   });
 });

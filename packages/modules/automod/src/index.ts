@@ -131,6 +131,17 @@ export function createAutomodModule(
     // one half, and hard-gating the module on either switches off the half that still works —
     // the executor precheck and the sync both name the missing permission where it actually bites.
     requiredPermissions: [Permissions.ViewChannel],
+    actionKinds: [
+      'delete_message',
+      'warn',
+      'timeout',
+      'kick',
+      'ban',
+      'send',
+      'automod_rule_create',
+      'automod_rule_update',
+      'automod_rule_delete',
+    ],
 
     emits: ['moderation.warned'],
 

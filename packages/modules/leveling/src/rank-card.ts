@@ -3,6 +3,7 @@ import {
   type CardDescriptorInput,
   discordAvatarUrl,
   renderCard,
+  toHexColour,
 } from '@proton/cards';
 import type { Attachment, CommandContext } from '@proton/core';
 import type { LevelingConfig } from './config.ts';
@@ -33,7 +34,14 @@ export async function renderRankCard(
   input: RankCardInput,
 ): Promise<Attachment | null> {
   const render = deps.renderCard ?? renderCard;
-  const cards: CardDeps = deps.cards ?? {};
+  const cards: CardDeps = {
+    ...(deps.cards ?? {}),
+    onImageSkipped: (reason) =>
+      ctx.logger.warn(`the rank card dropped an image: ${reason}`, {
+        guildId: ctx.guildId,
+        moduleId: MODULE_ID,
+      }),
+  };
 
   const profile = await deps.userProfile?.(input.userId);
 
@@ -43,6 +51,7 @@ export async function renderRankCard(
         {
           kind: 'rank',
           preset: input.preset,
+          accent: toHexColour(ctx.config.cardAccent),
           displayName: profile?.displayName ?? 'Member',
           level: input.level,
           rank: input.rank,
@@ -51,9 +60,13 @@ export async function renderRankCard(
           // At the ceiling the span is zero, which the descriptor refuses because a bar wider than
           // its track is a curve bug. One is the honest floor for "no next level".
           xpForNextLevel: Math.max(1, input.span),
+          showRank: ctx.config.cardShowRank,
+          showPercent: ctx.config.cardShowPercent,
+          showTotalXp: ctx.config.cardShowTotalXp,
           ...(profile?.avatarHash
             ? { avatarUrl: discordAvatarUrl(input.userId, profile.avatarHash) }
             : {}),
+          ...(ctx.config.cardBackgroundUrl ? { backgroundUrl: ctx.config.cardBackgroundUrl } : {}),
         },
         cards,
       ),

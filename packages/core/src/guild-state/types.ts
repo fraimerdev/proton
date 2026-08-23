@@ -4,6 +4,11 @@ export interface ChannelState {
   id: string;
 
   parentId: string | null;
+  type?: number;
+
+  // Optional because a snapshot written before this field existed has none, and a counter that
+  // rewrites a name it cannot read is still correct — only wasteful.
+  name?: string;
   overwrites: Overwrite[];
 }
 

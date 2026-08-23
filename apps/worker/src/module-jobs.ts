@@ -1,5 +1,17 @@
-import type { Logger, ModuleRegistry, ScheduledJob } from '@proton/core';
+import type {
+  ActionExecutor,
+  Logger,
+  ModuleContext,
+  ModuleRegistry,
+  ScheduledJob,
+  ScheduledModuleJob,
+} from '@proton/core';
 import { type ConnectionOptions, Queue, Worker } from 'bullmq';
+import { ConfigUnavailableError } from './config-provider.ts';
+import { moduleExecutor } from './module-actions.ts';
+import type { ModulePublisherFactory } from './module-publish.ts';
+import type { ModuleSchedulerFactory } from './module-schedule.ts';
+import { type ConfigProvider, disabledReason, type ModuleConfigSnapshot } from './runtime.ts';
 
 export const MODULE_JOBS_QUEUE = 'proton-module-jobs';
 
@@ -61,6 +73,90 @@ export function assertHandlersCoverJobs(
       );
     }
   }
+}
+
+export interface ScheduledJobRunnerDeps {
+  registry: ModuleRegistry;
+  config: ConfigProvider;
+  executor: ActionExecutor;
+  logger: Logger;
+
+  publisherFor?: ModulePublisherFactory;
+  schedulerFor?: ModuleSchedulerFactory;
+}
+
+export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
+  return async function runModuleJob(job: ScheduledModuleJob): Promise<void> {
+    const label = `${job.moduleId}:${job.jobId}`;
+    const manifest = deps.registry.get(job.moduleId);
+
+    if (!manifest) {
+      throw new Error(
+        `no module '${job.moduleId}' is loaded in this worker, so the scheduled '${label}' job ` +
+          'cannot run. It is probably a schedule left behind by an older build.',
+      );
+    }
+
+    const handlers = manifest.scheduledHandlers ?? {};
+    // Object.hasOwn first: handlers['constructor'] is Object, which a plain lookup would call.
+    const handler = Object.hasOwn(handlers, job.jobId) ? handlers[job.jobId] : undefined;
+
+    if (typeof handler !== 'function') {
+      throw new Error(
+        `${manifest.name} declares no scheduled handler for '${job.jobId}', so the row scheduled ` +
+          'under it cannot run. Add it to `scheduledHandlers` in the manifest, or cancel the row.',
+      );
+    }
+
+    let snapshot: ModuleConfigSnapshot;
+    try {
+      snapshot = await deps.config.get(job.guildId, manifest.id);
+    } catch (error) {
+      if (error instanceof ConfigUnavailableError && error.permanent) {
+        deps.logger.error(
+          `the scheduled '${label}' job was dropped because this server's configuration could ` +
+            `not be read, and retrying will not help: ${error.message}. Open the module's ` +
+            'settings in the Proton dashboard and save them once to rewrite the stored config.',
+          { guildId: job.guildId, moduleId: manifest.id, jobId: job.jobId, status: error.status },
+        );
+        return;
+      }
+      throw error;
+    }
+
+    const disabled = disabledReason(snapshot, manifest.configSchema);
+    if (disabled) {
+      deps.logger.warn(
+        `${manifest.name} is switched off in this server, so its scheduled '${job.jobId}' job ` +
+          'did not run and has been dropped. Re-enable the module and schedule it again.',
+        { guildId: job.guildId, moduleId: manifest.id, jobId: job.jobId, disabled },
+      );
+      return;
+    }
+
+    const parsed = manifest.configSchema.safeParse(snapshot.config);
+    if (!parsed.success) {
+      throw new Error(
+        `this server's ${manifest.name} settings are not valid, so the scheduled '${job.jobId}' ` +
+          `job did not run: ${parsed.error.issues
+            .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
+            .join('; ')}`,
+      );
+    }
+
+    const ctx: ModuleContext<typeof parsed.data> = {
+      guildId: job.guildId,
+      config: parsed.data,
+      tier: snapshot.tier ?? 'free',
+      executor: moduleExecutor(deps.registry, manifest.id, deps.executor),
+      logger: deps.logger,
+
+      ...(deps.publisherFor ? { publish: deps.publisherFor(manifest.id, job.guildId) } : {}),
+      ...(deps.schedulerFor ? deps.schedulerFor(manifest.id, job.guildId, job) : {}),
+    };
+
+    await handler(job.data, ctx);
+  };
 }
 
 export function startModuleJobs(deps: ModuleJobsDeps): ModuleJobs {

@@ -75,6 +75,7 @@ export function createAntinukeModule(
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildModeration],
 
     requiredPermissions: [Permissions.ViewAuditLog, Permissions.ManageRoles],
+    actionKinds: ['remove_role', 'kick', 'ban', 'send', 'interaction_reply'],
 
     commands: createAntinukeCommands(deps),
     emits: ['proton.security_tripped'],

@@ -11,19 +11,15 @@ export const loggingConfigSchema = z.object({
     .default(false)
     .register(protonFields, {
       label: 'Enabled',
-      description:
-        `Record message edits and deletions in this server for ${MESSAGE_LOG_RETENTION_DAYS} days. ` +
-        'Off until you turn it on — stored message content is personal data you are responsible for.',
+      description: `Stores message content — personal data — for ${MESSAGE_LOG_RETENTION_DAYS} days`,
     }),
 
   logEdits: z.boolean().default(true).register(protonFields, {
     label: 'Log edits',
-    description: 'Record the new text when a member edits a message.',
   }),
 
   logDeletes: z.boolean().default(true).register(protonFields, {
     label: 'Log deletions',
-    description: 'Record which message was deleted, in which channel, and when.',
   }),
 
   ignoredChannels: z
@@ -33,7 +29,6 @@ export const loggingConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Ignored channels',
-      description: 'Edits and deletions in these channels are never recorded.',
 
       channelTypes: [0, 5, 11, 12],
     }),
@@ -43,10 +38,7 @@ export const loggingConfigSchema = z.object({
     .default(false)
     .register(protonFields, {
       label: 'Remember recent message text',
-      description:
-        'Keep the text of recent messages in memory so edit logs can show what changed, and delete ' +
-        'logs can show what was removed and who wrote it. Off until you turn it on — this is ' +
-        'personal data, and it is held separately from the 30-day archive above.',
+      description: `Personal data, held in memory apart from the ${MESSAGE_LOG_RETENTION_DAYS}-day archive`,
     }),
 
   cacheRetention: durationStringSchema
@@ -54,7 +46,6 @@ export const loggingConfigSchema = z.object({
     .register(protonFields, {
       field: 'duration',
       label: 'How long to remember',
-      description: 'Between 1 hour and 7 days. Held in memory only — nothing is written to disk.',
     }),
 });
 

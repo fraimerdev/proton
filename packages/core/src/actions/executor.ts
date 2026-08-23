@@ -1,6 +1,6 @@
 import type { CaseRecorder } from './case-recorder.ts';
 import type { DedupeStore } from './dedupe.ts';
-import { reversalOf } from './kinds.ts';
+import { isNeverRecorded, reversalOf } from './kinds.ts';
 import { type PrecheckInput, runPrechecks } from './prechecks.ts';
 import type { RestProxyClient } from './rest-client.ts';
 import { toRestCall } from './rest-mapping.ts';
@@ -152,9 +152,8 @@ export class DefaultActionExecutor implements ActionExecutor {
   }
 
   async #record(request: ActionRequest): Promise<{ caseId?: string }> {
-    // A case is a moderation ledger entry. Modules whose actions are not moderation — a log post,
-    // for one — opt out rather than filling the ledger with rows nobody will ever read.
-    if (request.record === false) return {};
+    // Ahead of request.record: no call site may opt an interaction acknowledgement into the ledger.
+    if (isNeverRecorded(request.kind) || request.record === false) return {};
 
     return this.#deps.recorder.record({
       guildId: request.guildId,
@@ -163,13 +162,37 @@ export class DefaultActionExecutor implements ActionExecutor {
       actorId: request.actorId,
       targetId: request.targetId,
       reason: request.reason,
-      payload: request.payload,
+      payload: redactSecrets(request.payload),
 
       expiresAt: request.expiresAt,
       dryRun: request.dryRun,
       idempotencyKey: request.idempotencyKey,
     });
   }
+}
+
+export const REDACTED = '[redacted]';
+
+const CREDENTIAL_KEY = /token|secret|password|credential|authorization/i;
+
+export function redactSecrets(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSecrets);
+  if (!isPlainObject(value)) return value;
+
+  const clean: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    clean[key] = CREDENTIAL_KEY.test(key) ? REDACTED : redactSecrets(entry);
+  }
+
+  return clean;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+
+  // Plain objects only: walking an attachment's Uint8Array would rewrite it as index keys.
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 function describeDiscordError(status: number, body: unknown): string {

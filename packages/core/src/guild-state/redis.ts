@@ -11,15 +11,15 @@ interface WireOverwrite {
   deny: string;
 }
 
-interface WireGuildState {
-  guildId: string;
-  ownerId: string;
-  everyoneRoleId: string;
-  roles: Array<{ id: string; permissions: string; position: number }>;
-  botRoleIds: string[];
-  channels: Array<{ id: string; parentId: string | null; overwrites: WireOverwrite[] }>;
-  updatedAt: number;
-}
+type WireRole = Omit<GuildRole, 'permissions'> & { permissions: string };
+
+type WireChannel = Omit<ChannelState, 'overwrites'> & { overwrites: WireOverwrite[] };
+
+// Derived from GuildState so a new field breaks this build instead of vanishing into Redis.
+type WireGuildState = Omit<GuildState, 'roles' | 'channels'> & {
+  roles: WireRole[];
+  channels: WireChannel[];
+};
 
 function encode(state: GuildState): string {
   const wire: WireGuildState = {
@@ -30,11 +30,13 @@ function encode(state: GuildState): string {
       id: r.id,
       permissions: r.permissions.toString(),
       position: r.position,
+      ...(r.managed === undefined ? {} : { managed: r.managed }),
     })),
     botRoleIds: state.botRoleIds,
     channels: [...state.channels.values()].map((c) => ({
       id: c.id,
       parentId: c.parentId,
+      ...(c.type === undefined ? {} : { type: c.type }),
       overwrites: c.overwrites.map((o) => ({
         id: o.id,
         type: o.type,
@@ -42,6 +44,8 @@ function encode(state: GuildState): string {
         deny: o.deny.toString(),
       })),
     })),
+    ...(state.name === undefined ? {} : { name: state.name }),
+    ...(state.memberCount === undefined ? {} : { memberCount: state.memberCount }),
     updatedAt: state.updatedAt,
   };
 
@@ -62,6 +66,7 @@ function decode(raw: string): GuildState | null {
       id: role.id,
       permissions: BigInt(role.permissions),
       position: role.position,
+      ...(role.managed === undefined ? {} : { managed: role.managed }),
     });
   }
 
@@ -70,6 +75,7 @@ function decode(raw: string): GuildState | null {
     channels.set(channel.id, {
       id: channel.id,
       parentId: channel.parentId,
+      ...(channel.type === undefined ? {} : { type: channel.type }),
       overwrites: (channel.overwrites ?? []).map(
         (o): Overwrite => ({
           id: o.id,
@@ -88,6 +94,8 @@ function decode(raw: string): GuildState | null {
     roles,
     botRoleIds: wire.botRoleIds ?? [],
     channels,
+    ...(wire.name === undefined ? {} : { name: wire.name }),
+    ...(wire.memberCount === undefined ? {} : { memberCount: wire.memberCount }),
     updatedAt: wire.updatedAt,
   };
 }

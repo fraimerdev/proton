@@ -8,8 +8,8 @@ import {
   rolemenuDefaultConfig,
   rolemenuFormSchema,
   rolemenuMenusSchema,
+  SELECT_BINDING_KEY,
 } from '../src/config.ts';
-import { SELECT_BINDING_KEY } from '../src/custom-id.ts';
 
 const CHANNEL = '500000000000000001';
 const MESSAGE = '1400000000000000001';

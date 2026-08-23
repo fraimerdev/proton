@@ -19,7 +19,6 @@ export {
   kickCommand,
   memberCommands,
   timeoutCommand,
-  unbanCommand,
   untimeoutCommand,
   warnCommand,
 } from './commands/member.ts';
@@ -49,6 +48,18 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
     Permissions.ManageChannels,
 
     Permissions.ManageRoles,
+  ],
+  actionKinds: [
+    'warn',
+    'ban',
+    'unban',
+    'kick',
+    'timeout',
+    'untimeout',
+    'slowmode',
+    'lockdown',
+    'unlock',
+    'interaction_reply',
   ],
   commands: [...memberCommands, ...channelCommands],
 

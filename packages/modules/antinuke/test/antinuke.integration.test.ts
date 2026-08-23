@@ -132,25 +132,17 @@ describe('Gate 2: 20 channel deletions in 5 seconds', () => {
   });
 
   test('bans only after the roles are already off', async () => {
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    const events = burstEvents();
+    const { h } = build(events[0]?.occurredAt ?? 0);
 
-    try {
-      const events = burstEvents();
-      const { h } = build(events[0]?.occurredAt ?? 0);
+    await replay(h, events, { afterStrip: 'ban', alertChannelId: ALERT_CHANNEL });
 
-      await replay(h, events, { afterStrip: 'ban', alertChannelId: ALERT_CHANNEL });
-
-      expect(h.callPaths()).toEqual([
-        `DELETE /guilds/${GUILD}/members/${NUKER}/roles/${NUKER_HIGH_ROLE}`,
-        `DELETE /guilds/${GUILD}/members/${NUKER}/roles/${NUKER_LOW_ROLE}`,
-        `PUT /guilds/${GUILD}/bans/${NUKER}`,
-        `POST /channels/${ALERT_CHANNEL}/messages`,
-      ]);
-    } finally {
-      if (previous === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previous;
-    }
+    expect(h.callPaths()).toEqual([
+      `DELETE /guilds/${GUILD}/members/${NUKER}/roles/${NUKER_HIGH_ROLE}`,
+      `DELETE /guilds/${GUILD}/members/${NUKER}/roles/${NUKER_LOW_ROLE}`,
+      `PUT /guilds/${GUILD}/bans/${NUKER}`,
+      `POST /channels/${ALERT_CHANNEL}/messages`,
+    ]);
   });
 
   test('says so and does nothing when the actor owns the server', async () => {

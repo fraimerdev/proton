@@ -6,7 +6,6 @@ export const MAX_RETAINED_BACKUPS = 25;
 export const backupConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
-    description: 'Answer /backup in this server.',
   }),
 
   retainBackups: z
@@ -17,10 +16,7 @@ export const backupConfigSchema = z.object({
     .default(10)
     .register(protonFields, {
       label: 'Snapshots to keep',
-      description:
-        'How many snapshots to keep for this server. Taking a new one deletes the oldest ' +
-        'beyond this count. Each snapshot holds every channel, role and permission overwrite ' +
-        'at the moment it was taken.',
+      description: 'A new snapshot deletes the oldest beyond this count',
     }),
 });
 

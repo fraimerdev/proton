@@ -2,16 +2,34 @@ import { describe, expect, test } from 'bun:test';
 import { type CaseQueryInput, caseQuerySchema } from '@proton/core';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
+import {
+  type AnyViewEntry,
+  activeView,
+  moduleSearchSchema,
+  parseViewSearch,
+} from '../src/components/views/registry.ts';
 
 function roundTrip(input: CaseQueryInput) {
   return caseQuerySchema.parse(defaultParseSearch(defaultStringifySearch(input)));
 }
 
-const validator = zodValidator(caseQuerySchema);
+const routeValidator = zodValidator(moduleSearchSchema);
+
+function casesView(): AnyViewEntry {
+  const entry = activeView('cases', 'cases');
+  if (!entry) throw new Error("the cases module registers no 'cases' view");
+
+  return entry;
+}
+
+function fromUrl(url: string): unknown {
+  return parseViewSearch(casesView(), routeValidator.parse(defaultParseSearch(url)));
+}
 
 describe('case filters survive a URL round trip', () => {
   test('a fully specified filter set comes back identical', () => {
     const filters = {
+      caseId: 'K7f3M2q',
       type: 'ban',
       moderatorId: '100000000000000001',
       targetId: '200000000000000002',
@@ -24,6 +42,21 @@ describe('case filters survive a URL round trip', () => {
     } as const;
 
     expect(roundTrip(filters)).toEqual(filters);
+  });
+
+  test('a case id keeps its case through the URL, since K7f3M2q and k7F3m2Q differ', () => {
+    expect(roundTrip({ caseId: 'K7f3M2q' }).caseId).toBe('K7f3M2q');
+  });
+
+  test('a case id recorded before ids were shortened is still searchable', () => {
+    expect(roundTrip({ caseId: '01JG7Z9V4K8QW2RSTUVWXYZABC' }).caseId).toBe(
+      '01JG7Z9V4K8QW2RSTUVWXYZABC',
+    );
+  });
+
+  test('something that is not a case id is refused rather than searched for', () => {
+    expect(caseQuerySchema.safeParse({ caseId: 'K7f3 M2q' }).success).toBe(false);
+    expect(caseQuerySchema.safeParse({ caseId: '' }).success).toBe(false);
   });
 
   test('numeric filters keep their type through the URL', () => {
@@ -61,30 +94,47 @@ describe('case filters survive a URL round trip', () => {
   });
 });
 
-describe('the router adapter rejects what the API would reject', () => {
+describe('the cases tab rejects what the API would reject', () => {
   test('a hand-edited URL with a bad snowflake is refused, not silently ignored', () => {
-    expect(() => validator.parse(defaultParseSearch('?targetId=not-an-id'))).toThrow(/snowflake/);
+    expect(() => fromUrl('?view=cases&targetId=not-an-id')).toThrow(/snowflake/);
   });
 
   test('an unknown action kind is refused', () => {
-    expect(() => validator.parse(defaultParseSearch('?type=explode'))).toThrow();
+    expect(() => fromUrl('?view=cases&type=explode')).toThrow();
   });
 
   test('a reversed date range is refused with a readable message', () => {
-    expect(() => validator.parse(defaultParseSearch('?from=2026-05-01&to=2026-01-01'))).toThrow(
-      /must not be after/,
-    );
+    expect(() => fromUrl('?view=cases&from=2026-05-01&to=2026-01-01')).toThrow(/must not be after/);
   });
 
   test('a page size beyond the cap is refused rather than clamped', () => {
-    expect(() => validator.parse(defaultParseSearch('?pageSize=100000'))).toThrow();
+    expect(() => fromUrl('?view=cases&pageSize=100000')).toThrow();
   });
 
-  test('the adapter parses a valid URL into the same object the schema does', () => {
-    const url = '?type=timeout&page=2';
-
-    expect(validator.parse(defaultParseSearch(url))).toEqual(
-      caseQuerySchema.parse(defaultParseSearch(url)),
+  test('a hand-typed unquoted id is refused with the reason, because coercing it would be wrong', () => {
+    expect(() => fromUrl('?view=cases&targetId=200000000000000002')).toThrow(/targetId="2000…"/);
+    expect(() => fromUrl('?view=cases&targetId=200000000000000002')).toThrow(
+      /loses its last digits/,
     );
+    expect(() => fromUrl('?view=cases&moderatorId=100000000000000001')).toThrow(
+      /moderatorId="2000…"/,
+    );
+  });
+
+  test('the id the dashboard writes into its own links is quoted and survives untouched', () => {
+    const url = defaultStringifySearch({ view: 'cases', targetId: '200000000000000002' });
+
+    expect(url).toContain('%22200000000000000002%22');
+    expect(fromUrl(url)).toMatchObject({ targetId: '200000000000000002' });
+  });
+
+  test('an unquoted id that is not a snowflake keeps the filter-specific message it already had', () => {
+    expect(() => fromUrl('?view=cases&targetId=not-an-id')).not.toThrow(/has to be quoted/);
+  });
+
+  test('the tab parses a valid URL into the same object the schema does', () => {
+    const url = '?view=cases&type=timeout&page=2';
+
+    expect(fromUrl(url)).toEqual(caseQuerySchema.parse(defaultParseSearch('?type=timeout&page=2')));
   });
 });

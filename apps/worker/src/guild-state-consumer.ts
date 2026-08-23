@@ -4,8 +4,33 @@ import {
   type EventType,
   type GuildStateStore,
   type Logger,
+  parseChannel,
   type Subscription,
 } from '@proton/core';
+
+const CHANNEL_LIFECYCLE_TYPES = [
+  'entity.channel_created',
+  'entity.channel_updated',
+  'entity.channel_deleted',
+  'entity.thread_created',
+  'entity.thread_updated',
+  'entity.thread_deleted',
+] as const satisfies readonly EventType[];
+
+type ChannelLifecycleEventType = (typeof CHANNEL_LIFECYCLE_TYPES)[number];
+
+type ChannelLifecycle = 'upsert' | 'remove';
+
+const LIFECYCLE: Record<ChannelLifecycleEventType, ChannelLifecycle> = {
+  'entity.channel_created': 'upsert',
+  'entity.channel_updated': 'upsert',
+  'entity.channel_deleted': 'remove',
+  'entity.thread_created': 'upsert',
+  'entity.thread_updated': 'upsert',
+  'entity.thread_deleted': 'remove',
+};
+
+const LIFECYCLE_BY_TYPE: ReadonlyMap<string, ChannelLifecycle> = new Map(Object.entries(LIFECYCLE));
 
 const TYPES: EventType[] = [
   'guild.available',
@@ -14,6 +39,7 @@ const TYPES: EventType[] = [
   // message that says "#0" is the visible cost of not tracking it.
   'member.joined',
   'member.left',
+  ...CHANNEL_LIFECYCLE_TYPES,
 ];
 
 export interface GuildRegistrar {
@@ -50,8 +76,36 @@ export class GuildStateConsumer {
     return this.#bus.subscribe('guild-state', TYPES, (event) => this.handle(event));
   }
 
+  async #applyChannel(
+    guildId: string | null,
+    lifecycle: ChannelLifecycle,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    if (!guildId) return;
+
+    if (lifecycle === 'remove') {
+      const channelId = typeof payload.id === 'string' ? payload.id : null;
+      if (!channelId) return;
+
+      await this.#store.patch(guildId, { kind: 'channel.delete', channelId });
+      return;
+    }
+
+    const channel = parseChannel(payload);
+    if (!channel) return;
+
+    // Lands over the bus, so a same-tick use misses state; the precheck fails closed on a miss.
+    await this.#store.patch(guildId, { kind: 'channel.upsert', channel });
+  }
+
   async handle(event: { type: string; guildId: string | null; payload: unknown }): Promise<void> {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
+
+    const lifecycle = LIFECYCLE_BY_TYPE.get(event.type);
+    if (lifecycle) {
+      await this.#applyChannel(event.guildId, lifecycle, payload);
+      return;
+    }
 
     if (event.type === 'member.joined' || event.type === 'member.left') {
       if (!event.guildId) return;

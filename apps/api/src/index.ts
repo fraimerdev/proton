@@ -1,19 +1,31 @@
 import { ALL_PERMISSIONS, RedisStreamsEventBus } from '@proton/core';
 import { createDb, DrizzleGuildRuleStore } from '@proton/db';
+import { DrizzleCaseHistoryStore } from '@proton/module-cases/store';
+import { DrizzleGiveawayStore } from '@proton/module-giveaways';
+import { levelForXp } from '@proton/module-leveling';
+import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
 import { createModuleRegistry } from '@proton/modules';
 import Redis from 'ioredis';
 import { createApiApp } from './app.ts';
+import { CardPreviewService } from './cards/preview.ts';
 import { CaseQueryService } from './cases/service.ts';
 import { loadEnv } from './env.ts';
 import { GuildService } from './guilds/service.ts';
 import { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigService } from './modules/service.ts';
+import { TagSearchService } from './tags/service.ts';
 
 const env = loadEnv();
 
 const handle = createDb(env.DATABASE_URL);
 
-const registry = createModuleRegistry();
+// Bound with the same provider stores the worker uses: the dashboard's requirement picker reads
+// this registry, and an unbound module registers no providers at all.
+const registry = createModuleRegistry({
+  cases: { history: new DrizzleCaseHistoryStore(handle) },
+  leveling: { activity: new DrizzleActivityStore(handle, { levelForXp }) },
+  giveaways: { store: new DrizzleGiveawayStore(handle) },
+});
 
 const busRedis = env.REDIS_URL ? new Redis(env.REDIS_URL, { db: env.REDIS_DB_BUS }) : null;
 const bus = busRedis ? new RedisStreamsEventBus(busRedis) : undefined;
@@ -37,8 +49,10 @@ const app = createApiApp({
           `recompiled, so the old ones are still in force: ${detail}`,
       ),
   }),
+  cards: new CardPreviewService(),
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),
+  tags: new TagSearchService(handle),
   registry,
   // Intents are reported truthfully; permissions are not. A module's Discord permissions are
   // per-guild and live in the worker's guild-state cache, which this process cannot reach, so

@@ -1,9 +1,47 @@
-import { dryRunFor, type ModuleContext } from '@proton/core';
-import { type LevelingConfig, renderLevelUpMessage } from './config.ts';
+import {
+  type AllowedMentions,
+  type MessageTemplate,
+  type ModuleContext,
+  renderTemplate,
+  toDiscordMessage,
+} from '@proton/core';
+import { levelUpCustomId } from './component-id.ts';
+import { isSilentLevelUp, type LevelingConfig, type LevelUpMessage } from './config.ts';
 import { LEVELING_ACTOR, MODULE_ID } from './perform.ts';
 import { planRoleRewards } from './rewards.ts';
 
 export type LevelUpSource = 'message' | 'voice' | 'admin';
+
+export interface LevelUpValues {
+  userId: string;
+  level: number;
+  xp: number;
+}
+
+export type LevelUpBody = MessageTemplate & { allowedMentions: AllowedMentions };
+
+export type LevelUpRender = { ok: true; body: LevelUpBody } | { ok: false; humanReason: string };
+
+export function renderLevelUpMessage(
+  message: LevelUpMessage,
+  values: LevelUpValues,
+  now?: Date,
+): LevelUpRender {
+  const { allowedMentions, ...body } = toDiscordMessage(message, {
+    customIdFor: levelUpCustomId,
+    ...(now ? { now } : {}),
+  });
+
+  const rendered = renderTemplate(body as unknown as MessageTemplate, {
+    user: `<@${values.userId}>`,
+    level: values.level,
+    xp: values.xp,
+  });
+
+  return rendered.ok
+    ? { ok: true, body: { ...rendered.template, allowedMentions } }
+    : { ok: false, humanReason: rendered.humanReason };
+}
 
 export interface LevelUp {
   userId: string;
@@ -86,7 +124,7 @@ async function moveRole(
     actorId: LEVELING_ACTOR,
     reason: `Reached level ${levelUp.level}.`,
     payload: { userId: levelUp.userId, roleId },
-    dryRun: dryRunFor(kind),
+    dryRun: false,
 
     idempotencyKey: `${levelUp.idempotencyRoot}:${kind}:${roleId}`,
   });
@@ -108,8 +146,8 @@ async function moveRole(
 }
 
 async function announce(ctx: ModuleContext<LevelingConfig>, levelUp: LevelUp): Promise<void> {
-  const template = ctx.config.levelUpMessage.trim();
-  if (template.length === 0) return;
+  const message = ctx.config.levelUpMessage;
+  if (isSilentLevelUp(message)) return;
 
   const channelId = ctx.config.levelUpChannelId ?? levelUp.originChannelId;
   if (!channelId) {
@@ -122,6 +160,22 @@ async function announce(ctx: ModuleContext<LevelingConfig>, levelUp: LevelUp): P
     return;
   }
 
+  const rendered = renderLevelUpMessage(message, {
+    userId: levelUp.userId,
+    level: levelUp.level,
+    xp: levelUp.xp,
+  });
+
+  if (!rendered.ok) {
+    ctx.logger.warn(
+      `leveling could not build the level-up message for ${levelUp.userId}: ` +
+        `${rendered.humanReason} Fix it under Level-up announcement on the Leveling page of the ` +
+        'Proton dashboard.',
+      { guildId: ctx.guildId, moduleId: MODULE_ID, channelId, userId: levelUp.userId },
+    );
+    return;
+  }
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -129,14 +183,7 @@ async function announce(ctx: ModuleContext<LevelingConfig>, levelUp: LevelUp): P
     actorId: LEVELING_ACTOR,
     idempotencyKey: `${levelUp.idempotencyRoot}:level-up`,
     dryRun: false,
-    payload: {
-      channelId,
-      content: renderLevelUpMessage(template, {
-        userId: levelUp.userId,
-        level: levelUp.level,
-        xp: levelUp.xp,
-      }).slice(0, 2000),
-    },
+    payload: { channelId, ...rendered.body },
   });
 
   if (result.status === 'failed_precheck' || result.status === 'failed_api') {

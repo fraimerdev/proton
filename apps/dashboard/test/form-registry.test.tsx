@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { FieldDescriptor } from '@proton/core';
-import { zodToDescriptors } from '@proton/core';
+import { protonFields, zodToDescriptors } from '@proton/core';
 import { casesFormSchema } from '@proton/module-cases';
 import { loggingConfigSchema } from '@proton/module-logging';
 import { moderationConfigSchema } from '@proton/module-moderation';
@@ -53,6 +53,7 @@ describe('field registry', () => {
     expect(SUPPORTED_FIELD_KINDS.sort()).toEqual([
       'boolean',
       'channel-id',
+      'colour',
       'duration',
       'enum',
       'number',
@@ -69,9 +70,9 @@ describe('field registry', () => {
 
   test('an unknown kind renders a visible error, not nothing', () => {
     const rogue = {
-      kind: 'colour',
+      kind: 'hologram',
       path: 'x',
-      label: 'Colour',
+      label: 'Hologram',
       optional: false,
     } as unknown as FieldDescriptor;
 
@@ -82,12 +83,12 @@ describe('field registry', () => {
     expect(resolveFieldComponent(rogue).name).toBe('UnsupportedFieldInput');
     expect(html).toContain('role="alert"');
     expect(html).toContain('unsupported field type');
-    expect(html).toContain('colour');
+    expect(html).toContain('hologram');
   });
 
   test('an array of an unsupported kind is still refused', () => {
     const rogue = {
-      kind: 'colour',
+      kind: 'hologram',
       path: 'palette',
       label: 'Palette',
       optional: false,
@@ -121,13 +122,21 @@ describe('rendering each supported field type', () => {
     expect(html).toContain('value="Pong!"');
   });
 
-  test('channel-id renders a picker filtered to the declared channel types', () => {
+  // The options live in a popover that is closed until it is opened, so what the page ships is the
+  // trigger. What the popover would list is channelOptions' job, and is tested with it.
+  test('channel-id renders a closed picker naming the empty state', () => {
     const html = renderField(ping, 'restrictToChannel', null);
 
-    expect(html).toContain('general');
-    expect(html).not.toContain('voice');
-
+    expect(html).toContain('picker-trigger');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('No channel');
+  });
+
+  test('channel-id shows the chosen channel, with the glyph for its type', () => {
+    const html = renderField(ping, 'restrictToChannel', '500000000000000001');
+
+    expect(html).toContain('general');
+    expect(html).toContain('data-icon="hash"');
   });
 
   test('number renders a spinner carrying the schema’s own bounds', () => {
@@ -145,6 +154,36 @@ describe('rendering each supported field type', () => {
     const html = renderField([field as FieldDescriptor], 'count', 1);
 
     expect(html).not.toContain('9007199254740991');
+  });
+
+  test('colour renders a picker and a typable hex, both showing the stored value', () => {
+    const descriptors = zodToDescriptors(
+      z.object({
+        accent: z
+          .number()
+          .int()
+          .min(0)
+          .max(0xffffff)
+          .default(0x5865f2)
+          .register(protonFields, { field: 'colour', label: 'Accent colour' }),
+      }),
+    );
+
+    const html = renderField(descriptors, 'accent', 0x5865f2);
+
+    expect(html).toContain('type="color"');
+    expect(html.split('value="#5865f2"').length - 1).toBe(2);
+    expect(html).not.toContain('type="number"');
+  });
+
+  test('a colour that is short of six digits still renders as six', () => {
+    const descriptors = zodToDescriptors(
+      z.object({
+        accent: z.number().int().register(protonFields, { field: 'colour', label: 'Accent' }),
+      }),
+    );
+
+    expect(renderField(descriptors, 'accent', 0x0000ff)).toContain('value="#0000ff"');
   });
 
   test('enum renders one option per declared value', () => {
@@ -166,12 +205,12 @@ describe('rendering each supported field type', () => {
     expect(renderField(descriptors, 'mode', undefined)).toContain('Not set');
   });
 
-  test('role-id renders a role picker, highest role first', () => {
+  test('role-id shows the chosen role as a chip carrying its colour', () => {
     const html = renderField(overrides, 'overrides.ban', ['600000000000000001']);
 
-    expect(html).toContain('@Moderator');
-    expect(html).toContain('@Member');
-    expect(html.indexOf('@Moderator')).toBeLessThan(html.indexOf('@Member'));
+    expect(html).toContain('Moderator');
+    expect(html).toContain('pick-dot');
+    expect(html).not.toContain('Member');
   });
 
   test('duration renders the stored value and accepts it silently', () => {
@@ -189,15 +228,16 @@ describe('rendering each supported field type', () => {
     expect(html).toContain('30m');
   });
 
-  test('a flat array renders one control per element plus a way to add more', () => {
+  test('a flat array renders one chip per element plus a way to add more', () => {
     const html = renderField(logging, 'ignoredChannels', [
       '500000000000000001',
       '500000000000000002',
     ]);
 
-    expect(html.split('field-channel-id').length - 1).toBe(2);
-    expect(html).toContain('Remove');
+    expect(html.split('class="token"').length - 1).toBe(2);
+    expect(html).toContain('Remove general');
     expect(html).toContain('Add Ignored channels');
+    expect(html).toContain('field-stacked');
   });
 
   test('an empty array says so rather than rendering nothing', () => {
@@ -214,14 +254,22 @@ describe('rendering each supported field type', () => {
     expect(html).toContain('disabled=""');
   });
 
-  test('an array of role ids repeats the role picker, not a text box', () => {
+  test('an array of role ids becomes chips, not text boxes', () => {
     const html = renderField(overrides, 'overrides.ban', [
       '600000000000000001',
       '600000000000000002',
     ]);
 
-    expect(html.split('field-role-id').length - 1).toBe(2);
+    expect(html).toContain('Moderator');
+    expect(html).toContain('Member');
     expect(html).not.toContain('type="text"');
+  });
+
+  test('an id no longer in the guild keeps its chip, so it can still be taken off', () => {
+    const html = renderField(overrides, 'overrides.ban', ['600000000000000009']);
+
+    expect(html).toContain('600000000000000009');
+    expect(html).toContain('data-unknown="true"');
   });
 
   test('the whole ping form renders every field in schema order', () => {

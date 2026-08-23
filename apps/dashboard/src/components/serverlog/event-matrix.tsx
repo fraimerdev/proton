@@ -2,12 +2,12 @@ import {
   LOG_CATEGORIES,
   LOG_EVENT_KEYS,
   LOG_EVENTS,
-  LOG_TEXT_CHANNEL_TYPES,
   type LogCategory,
-  type LogEventOverride,
-} from '@proton/module-serverlog';
+} from '@proton/module-serverlog/catalogue';
+import { LOG_TEXT_CHANNEL_TYPES, type LogEventOverride } from '@proton/module-serverlog/config';
 import type { ReactElement } from 'react';
-import type { DiscordChannel } from '../form/fields.tsx';
+import { useId } from 'react';
+import { channelOptions, type DiscordChannel, SinglePicker } from '../form/picker.tsx';
 
 export interface LogEventMatrixProps {
   events: Readonly<Record<string, LogEventOverride>>;
@@ -54,7 +54,9 @@ export function LogEventMatrix({
   categories,
   onChange,
 }: LogEventMatrixProps): ReactElement {
+  const fieldId = useId();
   const textChannels = channels.filter((channel) => LOG_TEXT_CHANNEL_TYPES.includes(channel.type));
+  const options = channelOptions(textChannels);
 
   function channelName(channelId: string): string {
     if (!channelId) return 'nowhere';
@@ -177,6 +179,8 @@ export function LogEventMatrix({
             {keys.map((key) => {
               const override = events[key];
               const spec = LOG_EVENTS[key];
+              // A wrapping label would forward option clicks to the trigger and reopen it.
+              const channelControlId = `${fieldId}-channel-${key}`;
 
               return (
                 <div className="ladder-rung" key={key}>
@@ -199,21 +203,20 @@ export function LogEventMatrix({
                     </select>
                   </label>
 
-                  <label className="filter">
-                    <span>Channel</span>
-                    <select
-                      value={override?.channelId ?? ''}
-                      aria-label={`${spec?.label ?? key} channel`}
-                      onChange={(e) => setChannel(key, e.target.value)}
-                    >
-                      <option value="">Inherit — {channelName(inherited)}</option>
-                      {textChannels.map((channel) => (
-                        <option key={channel.id} value={channel.id}>
-                          #{channel.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="filter">
+                    <span>
+                      <label htmlFor={channelControlId}>Channel</label>
+                    </span>
+                    <SinglePicker
+                      id={channelControlId}
+                      label={`${spec?.label ?? key} channel`}
+                      options={options}
+                      value={override?.channelId ?? null}
+                      onChange={(next) => setChannel(key, next ?? '')}
+                      emptyLabel={`Inherit — ${channelName(inherited)}`}
+                      clearable
+                    />
+                  </div>
                 </div>
               );
             })}

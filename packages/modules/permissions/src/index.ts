@@ -37,6 +37,8 @@ export const permissionsModule: ModuleManifest<typeof permissionsConfigSchema> =
   requiredIntents: [GatewayIntentBits.Guilds],
 
   requiredPermissions: [Permissions.ViewChannel],
+  // No module code executes: the worker's own command refusals run under this module's id.
+  actionKinds: ['interaction_reply'],
   dashboard: {
     icon: 'lock',
     sections: [

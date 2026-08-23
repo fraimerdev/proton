@@ -1,4 +1,4 @@
-import { type ActionKind, type ActionResult, dryRunFor, type ModuleContext } from '@proton/core';
+import type { ActionKind, ActionResult, ModuleContext } from '@proton/core';
 import { CLASS_LABELS, type NukeClass } from './classes.ts';
 import type { AntinukeConfig } from './config.ts';
 import type { BoundAntinukeDeps } from './deps.ts';
@@ -94,7 +94,7 @@ export async function tripBreaker(
       reason,
 
       payload: { userId: input.actorId, roleId, strippedRoleIds: strippable },
-      dryRun: dryRunFor('remove_role'),
+      dryRun: false,
 
       idempotencyKey: `${MODULE_ID}:${input.eventId}:strip:${roleId}`,
     });
@@ -114,7 +114,7 @@ export async function tripBreaker(
       targetId: input.actorId,
       reason,
       payload: { userId: input.actorId },
-      dryRun: dryRunFor(kind),
+      dryRun: false,
       idempotencyKey: `${MODULE_ID}:${input.eventId}:${kind}`,
     });
 

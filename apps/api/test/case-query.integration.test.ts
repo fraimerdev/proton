@@ -109,6 +109,29 @@ describe('filtering', () => {
     expect(result.cases.map((c) => c.caseNumber).sort()).toEqual([2, 4]);
   });
 
+  test('finds one case by the id a moderator quotes, and nothing else', async () => {
+    const all = await search({});
+    const wanted = all.cases[0];
+    if (!wanted) throw new Error('the seed inserted no cases');
+
+    const result = await search({ caseId: wanted.id });
+
+    expect(result.total).toBe(1);
+    expect(result.cases[0]?.caseNumber).toBe(wanted.caseNumber);
+  });
+
+  // Case-sensitive on purpose: the alphabet has both K and k, so a lookup that ignored case would
+  // answer with somebody else's case.
+  test('a case id in the wrong case matches nothing', async () => {
+    const all = await search({});
+    const wanted = all.cases[0];
+    if (!wanted) throw new Error('the seed inserted no cases');
+
+    expect((await search({ caseId: wanted.id.toLowerCase() })).total).toBe(
+      wanted.id === wanted.id.toLowerCase() ? 1 : 0,
+    );
+  });
+
   test('filters by moderator, matching the actor the recorder actually writes', async () => {
     const result = await search({ moderatorId: MOD_A });
 

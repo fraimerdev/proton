@@ -7,12 +7,20 @@ const displayName = z
   .max(64)
   .describe('The member’s display name, already resolved — cards never look one up.');
 
-const avatarUrl = z.url({ protocol: /^https$/ }).max(2048);
+const imageUrl = z.url({ protocol: /^https$/ }).max(2048);
 
 const cardBase = {
   preset: z.enum(CARD_PRESETS).default('midnight'),
   displayName,
-  avatarUrl: avatarUrl.optional(),
+  avatarUrl: imageUrl.optional(),
+
+  accent: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional()
+    .describe('Overrides the preset’s accent. Six-digit hex, as the guild chose it.'),
+
+  backgroundUrl: imageUrl.optional(),
 };
 
 export const rankCardSchema = z
@@ -27,6 +35,10 @@ export const rankCardSchema = z
 
     xpIntoLevel: z.number().int().min(0),
     xpForNextLevel: z.number().int().min(1),
+
+    showRank: z.boolean().default(true),
+    showPercent: z.boolean().default(true),
+    showTotalXp: z.boolean().default(true),
   })
   .refine((card) => card.xpIntoLevel <= card.xpForNextLevel, {
     path: ['xpIntoLevel'],
@@ -42,6 +54,8 @@ function greetingCard<K extends 'welcome' | 'goodbye'>(kind: K) {
     guildName: z.string().min(1).max(100),
 
     memberCount: z.number().int().min(0),
+
+    showMemberCount: z.boolean().default(true),
   });
 }
 
@@ -67,10 +81,12 @@ export interface CardSize {
   height: number;
 }
 
+const CARD_SIZE: CardSize = { width: 1100, height: 370 };
+
 export const CARD_SIZES: Record<CardKind, CardSize> = {
-  rank: { width: 900, height: 240 },
-  welcome: { width: 900, height: 320 },
-  goodbye: { width: 900, height: 320 },
+  rank: CARD_SIZE,
+  welcome: CARD_SIZE,
+  goodbye: CARD_SIZE,
 };
 
 export function sizeFor(kind: CardKind): CardSize {

@@ -12,6 +12,10 @@ export const userProfileSchema = z.object({
   username: z.string().min(1).max(64),
   globalName: z.string().max(64).nullable(),
   avatarUrl: z.string().max(512).nullable(),
+
+  // Defaulted, not required: entries cached before this field existed still parse, and refresh
+  // into the fuller shape on their own when the TTL lapses.
+  avatarHash: z.string().max(64).nullable().default(null),
 });
 
 export type UserProfile = z.infer<typeof userProfileSchema>;
@@ -51,6 +55,7 @@ export function toUserProfile(raw: unknown): UserProfile | null {
     username,
     globalName: typeof user.global_name === 'string' ? user.global_name : null,
     avatarUrl: avatarUrl(id, user.avatar),
+    avatarHash: typeof user.avatar === 'string' ? user.avatar : null,
   };
 }
 

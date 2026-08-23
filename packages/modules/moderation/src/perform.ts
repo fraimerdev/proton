@@ -3,7 +3,6 @@ import {
   type ActionRequest,
   type ActionResult,
   type CommandContext,
-  dryRunFor,
   parseDuration,
 } from '@proton/core';
 import type { ModerationConfig } from './config.ts';
@@ -73,8 +72,6 @@ export async function perform(
     return;
   }
 
-  const dryRun = dryRunFor(plan.kind);
-
   const request: ActionRequest = {
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -84,7 +81,7 @@ export async function perform(
     ...(plan.reason ? { reason: plan.reason } : {}),
     payload: plan.payload,
     ...(plan.expiresAt ? { expiresAt: plan.expiresAt } : {}),
-    dryRun,
+    dryRun: false,
 
     idempotencyKey: `${ctx.idempotencyKey}:${plan.kind}`,
   };
@@ -117,16 +114,22 @@ export async function perform(
   await reply(ctx, describe(plan, result));
 }
 
+function stamped(text: string, result: ActionResult): string {
+  return result.caseId ? `${text}\n-# Case \`${result.caseId}\`` : text;
+}
+
 function describe(plan: ActionPlan, result: ActionResult): string {
   switch (result.status) {
     case 'executed':
-      return result.failure ? `${plan.success}\n\n${result.failure.humanReason}` : plan.success;
+      return stamped(
+        result.failure ? `${plan.success}\n\n${result.failure.humanReason}` : plan.success,
+        result,
+      );
 
     case 'dry_run':
-      return (
-        `Dry run — Discord was not called, and nothing changed. ${plan.success}\n\n` +
-        `Proton refuses destructive actions outside production (NODE_ENV is ` +
-        `'${process.env.NODE_ENV ?? 'unset'}', not 'production'). The case was still recorded.`
+      return stamped(
+        `${plan.success}\n\nDiscord was not called — the case was recorded as a rehearsal.`,
+        result,
       );
 
     case 'skipped_duplicate':

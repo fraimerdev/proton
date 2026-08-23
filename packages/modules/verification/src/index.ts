@@ -81,6 +81,7 @@ export function createVerificationModule(
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 
     requiredPermissions: [Permissions.ManageRoles],
+    actionKinds: ['add_role', 'remove_role', 'interaction_reply'],
 
     commands: verificationCommands(deps),
     listeners: [createJoinGateListener(deps)],

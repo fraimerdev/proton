@@ -1,5 +1,4 @@
 import {
-  dryRunFor,
   type EventListener,
   type EventType,
   type ModuleContext,
@@ -9,7 +8,7 @@ import {
 } from '@proton/core';
 import { type AntiraidConfig, readScoreSettings } from './config.ts';
 import { readJoin } from './join.ts';
-import { planResponse, RESPONSE_LABELS, responseKind, responseUnconfigured } from './response.ts';
+import { planResponse, RESPONSE_LABELS, responseUnconfigured } from './response.ts';
 import { MAX_JOIN_SCORE, scoreJoin } from './score.ts';
 
 export const ANTIRAID_MODULE_ID = 'antiraid';
@@ -37,7 +36,6 @@ async function announceRaid(
   const channelId = ctx.config.alertChannelId;
   if (!channelId) return;
 
-  const kind = responseKind(ctx.config.response);
   const parts = [
     `**Raid mode.** ${joinsInWindow} accounts joined within ${ctx.config.joinWindow}, at or ` +
       `above this server's threshold of ${ctx.config.joinThreshold}.`,
@@ -47,13 +45,6 @@ async function announceRaid(
 
   const unconfigured = responseUnconfigured(ctx.config);
   if (unconfigured) parts.push(unconfigured);
-
-  if (dryRunFor(kind)) {
-    parts.push(
-      `Nothing is actually being removed: Proton refuses destructive actions outside ` +
-        `production (NODE_ENV is '${process.env.NODE_ENV ?? 'unset'}').`,
-    );
-  }
 
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
@@ -197,7 +188,7 @@ export function createJoinListener(deps: AntiraidDeps): EventListener<AntiraidCo
         actorId: ANTIRAID_ACTOR,
         reason: plan.reason,
         payload: plan.payload,
-        dryRun: dryRunFor(plan.kind),
+        dryRun: false,
 
         idempotencyKey: `antiraid:${event.id}:response`,
       });

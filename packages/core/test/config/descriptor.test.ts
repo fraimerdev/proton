@@ -70,6 +70,46 @@ describe('zodToDescriptors', () => {
     expect((field as ChannelIdField).channelTypes).toEqual([0]);
   });
 
+  test('a number registered as colour becomes a colour field, not a spinner', () => {
+    const schema = z.object({
+      cardAccent: z
+        .number()
+        .int()
+        .min(0)
+        .max(0xffffff)
+        .default(0x5865f2)
+        .register(protonFields, { field: 'colour', label: 'Accent colour' }),
+    });
+
+    const [field] = zodToDescriptors(schema);
+
+    expect(field).toMatchObject({
+      kind: 'colour',
+      path: 'cardAccent',
+      label: 'Accent colour',
+      defaultValue: 0x5865f2,
+    });
+  });
+
+  test('a colour hint on anything but a number is refused', () => {
+    const schema = z.object({
+      accent: z.string().register(protonFields, { field: 'colour' }),
+    });
+
+    expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+  });
+
+  test('z.url() is a string field, so a link setting reaches the form at all', () => {
+    const schema = z.object({
+      backgroundUrl: z.url({ protocol: /^https$/ }).max(2048).optional(),
+    });
+
+    const [field] = zodToDescriptors(schema);
+
+    expect(field).toMatchObject({ kind: 'string', path: 'backgroundUrl', optional: true });
+    expect((field as StringField).maxLength).toBe(2048);
+  });
+
   test('a string registered as role-id becomes a role picker', () => {
     const schema = z.object({
       muteRole: z.string().register(protonFields, { field: 'role-id' }),

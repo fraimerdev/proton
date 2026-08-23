@@ -1,7 +1,8 @@
 import type { FieldDescriptor } from '@proton/core';
-import type { ReactElement } from 'react';
+import { type ReactElement, useMemo } from 'react';
 import type { DiscordChannel, DiscordRole } from './fields.tsx';
 import { resolveFieldComponent } from './registry.tsx';
+import { SectionCard } from './section.tsx';
 
 export interface FormSection {
   id: string;
@@ -16,6 +17,7 @@ export interface GeneratedFormProps {
   channels?: readonly DiscordChannel[] | undefined;
   roles?: readonly DiscordRole[] | undefined;
   sections?: readonly FormSection[] | undefined;
+  scope?: string | undefined;
 }
 
 export interface DescriptorGroup {
@@ -53,6 +55,10 @@ export function groupBySection(
   return groups;
 }
 
+export function sectionKey(scope: string | undefined, id: string): string {
+  return scope === undefined ? id : `${scope}:${id}`;
+}
+
 export function GeneratedForm({
   descriptors,
   values,
@@ -60,14 +66,14 @@ export function GeneratedForm({
   channels,
   roles,
   sections,
+  scope,
 }: GeneratedFormProps): ReactElement {
-  const groups = groupBySection(descriptors, sections);
+  const groups = useMemo(() => groupBySection(descriptors, sections), [descriptors, sections]);
 
   return (
     <div className="generated-form">
       {groups.map((group) => (
-        <fieldset className="form-section" key={group.id}>
-          {group.title ? <legend>{group.title}</legend> : null}
+        <SectionCard key={group.id} id={sectionKey(scope, group.id)} title={group.title}>
           {group.descriptors.map((descriptor) => {
             const Field = resolveFieldComponent(descriptor);
             return (
@@ -81,7 +87,7 @@ export function GeneratedForm({
               />
             );
           })}
-        </fieldset>
+        </SectionCard>
       ))}
     </div>
   );

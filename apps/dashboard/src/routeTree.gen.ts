@@ -12,12 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
+import { Route as DashboardGuildIdRouteImport } from './routes/dashboard/$guildId'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as DashboardGuildIdIndexRouteImport } from './routes/dashboard/$guildId/index'
-import { Route as DashboardGuildIdCasesRouteImport } from './routes/dashboard/$guildId/cases'
-import { Route as DashboardGuildIdLeaderboardRouteImport } from './routes/dashboard/$guildId/leaderboard'
+import { Route as DashboardGuildIdModuleIdRouteImport } from './routes/dashboard/$guildId/$moduleId'
 import { Route as ApiAuthSigninDiscordRouteImport } from './routes/api/auth/signin/discord'
-import { Route as DashboardGuildIdModuleModuleIdRouteImport } from './routes/dashboard/$guildId/module/$moduleId'
+import { Route as ApiGuildsGuildIdCardPreviewRouteImport } from './routes/api/guilds/$guildId/card-preview'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,119 +34,115 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
   path: '/dashboard/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DashboardGuildIdRoute = DashboardGuildIdRouteImport.update({
+  id: '/dashboard/$guildId',
+  path: '/dashboard/$guildId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardGuildIdIndexRoute = DashboardGuildIdIndexRouteImport.update({
-  id: '/dashboard/$guildId/',
-  path: '/dashboard/$guildId/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => DashboardGuildIdRoute,
 } as any)
-const DashboardGuildIdCasesRoute = DashboardGuildIdCasesRouteImport.update({
-  id: '/dashboard/$guildId/cases',
-  path: '/dashboard/$guildId/cases',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardGuildIdLeaderboardRoute =
-  DashboardGuildIdLeaderboardRouteImport.update({
-    id: '/dashboard/$guildId/leaderboard',
-    path: '/dashboard/$guildId/leaderboard',
-    getParentRoute: () => rootRouteImport,
+const DashboardGuildIdModuleIdRoute =
+  DashboardGuildIdModuleIdRouteImport.update({
+    id: '/$moduleId',
+    path: '/$moduleId',
+    getParentRoute: () => DashboardGuildIdRoute,
   } as any)
 const ApiAuthSigninDiscordRoute = ApiAuthSigninDiscordRouteImport.update({
   id: '/api/auth/signin/discord',
   path: '/api/auth/signin/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardGuildIdModuleModuleIdRoute =
-  DashboardGuildIdModuleModuleIdRouteImport.update({
-    id: '/dashboard/$guildId/module/$moduleId',
-    path: '/dashboard/$guildId/module/$moduleId',
+const ApiGuildsGuildIdCardPreviewRoute =
+  ApiGuildsGuildIdCardPreviewRouteImport.update({
+    id: '/api/guilds/$guildId/card-preview',
+    path: '/api/guilds/$guildId/card-preview',
     getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
-  '/dashboard/$guildId/leaderboard': typeof DashboardGuildIdLeaderboardRoute
+  '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
-  '/dashboard/$guildId/module/$moduleId': typeof DashboardGuildIdModuleModuleIdRoute
+  '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
-  '/dashboard/$guildId/leaderboard': typeof DashboardGuildIdLeaderboardRoute
+  '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
   '/dashboard/$guildId': typeof DashboardGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
-  '/dashboard/$guildId/module/$moduleId': typeof DashboardGuildIdModuleModuleIdRoute
+  '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
-  '/dashboard/$guildId/leaderboard': typeof DashboardGuildIdLeaderboardRoute
+  '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
-  '/dashboard/$guildId/module/$moduleId': typeof DashboardGuildIdModuleModuleIdRoute
+  '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/privacy'
+    | '/dashboard/$guildId'
     | '/dashboard/'
     | '/api/auth/$'
-    | '/dashboard/$guildId/cases'
-    | '/dashboard/$guildId/leaderboard'
+    | '/dashboard/$guildId/$moduleId'
     | '/dashboard/$guildId/'
     | '/api/auth/signin/discord'
-    | '/dashboard/$guildId/module/$moduleId'
+    | '/api/guilds/$guildId/card-preview'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/privacy'
     | '/dashboard'
     | '/api/auth/$'
-    | '/dashboard/$guildId/cases'
-    | '/dashboard/$guildId/leaderboard'
+    | '/dashboard/$guildId/$moduleId'
     | '/dashboard/$guildId'
     | '/api/auth/signin/discord'
-    | '/dashboard/$guildId/module/$moduleId'
+    | '/api/guilds/$guildId/card-preview'
   id:
     | '__root__'
     | '/'
     | '/privacy'
+    | '/dashboard/$guildId'
     | '/dashboard/'
     | '/api/auth/$'
-    | '/dashboard/$guildId/cases'
-    | '/dashboard/$guildId/leaderboard'
+    | '/dashboard/$guildId/$moduleId'
     | '/dashboard/$guildId/'
     | '/api/auth/signin/discord'
-    | '/dashboard/$guildId/module/$moduleId'
+    | '/api/guilds/$guildId/card-preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PrivacyRoute: typeof PrivacyRoute
+  DashboardGuildIdRoute: typeof DashboardGuildIdRouteWithChildren
   DashboardIndexRoute: typeof DashboardIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  DashboardGuildIdCasesRoute: typeof DashboardGuildIdCasesRoute
-  DashboardGuildIdLeaderboardRoute: typeof DashboardGuildIdLeaderboardRoute
-  DashboardGuildIdIndexRoute: typeof DashboardGuildIdIndexRoute
   ApiAuthSigninDiscordRoute: typeof ApiAuthSigninDiscordRoute
-  DashboardGuildIdModuleModuleIdRoute: typeof DashboardGuildIdModuleModuleIdRoute
+  ApiGuildsGuildIdCardPreviewRoute: typeof ApiGuildsGuildIdCardPreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +168,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dashboard/$guildId': {
+      id: '/dashboard/$guildId'
+      path: '/dashboard/$guildId'
+      fullPath: '/dashboard/$guildId'
+      preLoaderRoute: typeof DashboardGuildIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -181,24 +184,17 @@ declare module '@tanstack/react-router' {
     }
     '/dashboard/$guildId/': {
       id: '/dashboard/$guildId/'
-      path: '/dashboard/$guildId'
+      path: '/'
       fullPath: '/dashboard/$guildId/'
       preLoaderRoute: typeof DashboardGuildIdIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
     }
-    '/dashboard/$guildId/cases': {
-      id: '/dashboard/$guildId/cases'
-      path: '/dashboard/$guildId/cases'
-      fullPath: '/dashboard/$guildId/cases'
-      preLoaderRoute: typeof DashboardGuildIdCasesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard/$guildId/leaderboard': {
-      id: '/dashboard/$guildId/leaderboard'
-      path: '/dashboard/$guildId/leaderboard'
-      fullPath: '/dashboard/$guildId/leaderboard'
-      preLoaderRoute: typeof DashboardGuildIdLeaderboardRouteImport
-      parentRoute: typeof rootRouteImport
+    '/dashboard/$guildId/$moduleId': {
+      id: '/dashboard/$guildId/$moduleId'
+      path: '/$moduleId'
+      fullPath: '/dashboard/$guildId/$moduleId'
+      preLoaderRoute: typeof DashboardGuildIdModuleIdRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
     }
     '/api/auth/signin/discord': {
       id: '/api/auth/signin/discord'
@@ -207,26 +203,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSigninDiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard/$guildId/module/$moduleId': {
-      id: '/dashboard/$guildId/module/$moduleId'
-      path: '/dashboard/$guildId/module/$moduleId'
-      fullPath: '/dashboard/$guildId/module/$moduleId'
-      preLoaderRoute: typeof DashboardGuildIdModuleModuleIdRouteImport
+    '/api/guilds/$guildId/card-preview': {
+      id: '/api/guilds/$guildId/card-preview'
+      path: '/api/guilds/$guildId/card-preview'
+      fullPath: '/api/guilds/$guildId/card-preview'
+      preLoaderRoute: typeof ApiGuildsGuildIdCardPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
 }
 
+interface DashboardGuildIdRouteChildren {
+  DashboardGuildIdModuleIdRoute: typeof DashboardGuildIdModuleIdRoute
+  DashboardGuildIdIndexRoute: typeof DashboardGuildIdIndexRoute
+}
+
+const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
+  DashboardGuildIdModuleIdRoute: DashboardGuildIdModuleIdRoute,
+  DashboardGuildIdIndexRoute: DashboardGuildIdIndexRoute,
+}
+
+const DashboardGuildIdRouteWithChildren =
+  DashboardGuildIdRoute._addFileChildren(DashboardGuildIdRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PrivacyRoute: PrivacyRoute,
+  DashboardGuildIdRoute: DashboardGuildIdRouteWithChildren,
   DashboardIndexRoute: DashboardIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
-  DashboardGuildIdCasesRoute: DashboardGuildIdCasesRoute,
-  DashboardGuildIdLeaderboardRoute: DashboardGuildIdLeaderboardRoute,
-  DashboardGuildIdIndexRoute: DashboardGuildIdIndexRoute,
   ApiAuthSigninDiscordRoute: ApiAuthSigninDiscordRoute,
-  DashboardGuildIdModuleModuleIdRoute: DashboardGuildIdModuleModuleIdRoute,
+  ApiGuildsGuildIdCardPreviewRoute: ApiGuildsGuildIdCardPreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

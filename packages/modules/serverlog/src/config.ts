@@ -67,13 +67,12 @@ export type LogEventOverride = z.infer<typeof logEventOverrideSchema>;
 export const serverlogConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Post an embed to a log channel when things change in this server.',
   }),
 
   defaultChannelId: channelRef().register(protonFields, {
     field: 'channel-id',
     label: 'Default log channel',
-    description: 'Every log lands here unless a category or a single event points somewhere else.',
+    description: 'Category and per-event channels override this',
     channelTypes: LOG_TEXT_CHANNEL_TYPES,
   }),
 
@@ -105,7 +104,6 @@ export const serverlogConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Ignored channels',
-      description: 'Nothing that happens in these channels is ever logged.',
     }),
 
   ignoredRoleIds: z
@@ -115,7 +113,6 @@ export const serverlogConfigSchema = z.object({
     .register(protonFields, {
       field: 'role-id',
       label: 'Ignored roles',
-      description: 'Anything done by someone holding one of these roles is never logged.',
     }),
 
   ignoredUserIds: z
@@ -124,12 +121,10 @@ export const serverlogConfigSchema = z.object({
     .default([])
     .register(protonFields, {
       label: 'Ignored user ids',
-      description: 'Anything done by these users is never logged. Paste Discord user ids.',
     }),
 
   ignoreBots: z.boolean().default(false).register(protonFields, {
     label: 'Ignore bots',
-    description: 'Skip anything done by a bot. Proton’s own log posts are always skipped.',
   }),
 });
 

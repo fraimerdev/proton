@@ -1,0 +1,25 @@
+{
+  "name": "@proton/module-tickets",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "@proton/db": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "discord.js": "^14.27.0",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@proton/fixtures": "workspace:*"
+  }
+}

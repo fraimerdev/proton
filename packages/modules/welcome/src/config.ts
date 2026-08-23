@@ -1,10 +1,18 @@
-// /presets, not the barrel: the barrel re-exports the resvg rasteriser, a native addon
-// that the dashboard's bundler cannot load. Config is read in the browser.
+// /presets, not the barrel: the barrel reaches @napi-rs/canvas, a native addon that the
+// dashboard's bundler cannot load. Config is read in the browser.
 import { CARD_PRESETS } from '@proton/cards/presets';
-import { protonFields } from '@proton/core';
+import {
+  interactiveKeys,
+  liftLegacyMessage,
+  MESSAGE_CONTENT_MAX,
+  messageObjectSchema,
+  protonFields,
+  refineMessage,
+  substitute,
+} from '@proton/core';
 import { z } from 'zod';
 
-export const WELCOME_SCHEMA_VERSION = 1;
+export const WELCOME_SCHEMA_VERSION = 4;
 
 export const WELCOME_PLACEHOLDERS = ['{user}', '{username}', '{server}', '{memberCount}'] as const;
 
@@ -14,59 +22,125 @@ export const DEFAULT_WELCOME_MESSAGE =
   'Welcome to {server}, {user}! You are member #{memberCount}.';
 export const DEFAULT_GOODBYE_MESSAGE = '{username} has left {server}.';
 
+const ONLY_LINK_BUTTONS =
+  'a welcome or goodbye message can carry link buttons and nothing else: the welcome module has ' +
+  'no interaction listener, so a press on anything else would go unanswered. Make this a link ' +
+  'button, or post the interactive message with the Embeds module instead.';
+
+export function liftLegacyGreeting(value: unknown): unknown {
+  // A greeting stored before it could hold embeds is a bare string, and z.object would strip it to
+  // an empty message that the next write — a sidebar toggle sends no config — would then persist.
+  if (typeof value === 'string') return { content: value };
+
+  return liftLegacyMessage(value);
+}
+
+type GreetingShape = z.infer<typeof messageObjectSchema>;
+
+export function isSilentGreeting(message: GreetingShape): boolean {
+  return (
+    (message.content?.trim().length ?? 0) === 0 &&
+    message.embeds.length === 0 &&
+    message.components.length === 0 &&
+    message.v2.length === 0
+  );
+}
+
+function refineGreeting(message: GreetingShape, ctx: z.RefinementCtx): void {
+  // An empty greeting is how a guild says "announce nothing", so refineMessage's nothing-to-send
+  // rule must not see it.
+  if (isSilentGreeting(message)) return;
+
+  refineMessage(message, ctx);
+
+  for (const [row, component] of message.components.entries()) {
+    if (component.kind !== 'buttons') {
+      ctx.addIssue({ code: 'custom', path: ['components', row], message: ONLY_LINK_BUTTONS });
+      continue;
+    }
+
+    for (const [index, button] of component.buttons.entries()) {
+      if (button.style === 'link') continue;
+
+      ctx.addIssue({
+        code: 'custom',
+        path: ['components', row, 'buttons', index, 'style'],
+        message: ONLY_LINK_BUTTONS,
+      });
+    }
+  }
+
+  if (interactiveKeys({ components: [], v2: message.v2 }).length > 0) {
+    ctx.addIssue({ code: 'custom', path: ['v2'], message: ONLY_LINK_BUTTONS });
+  }
+}
+
+export const greetingMessageSchema = z.preprocess(
+  liftLegacyGreeting,
+  messageObjectSchema.superRefine(refineGreeting),
+);
+
+export type GreetingMessage = z.infer<typeof greetingMessageSchema>;
+
+export const DEFAULT_WELCOME_GREETING: GreetingMessage =
+  greetingMessageSchema.parse(DEFAULT_WELCOME_MESSAGE);
+export const DEFAULT_GOODBYE_GREETING: GreetingMessage =
+  greetingMessageSchema.parse(DEFAULT_GOODBYE_MESSAGE);
+
 const channelId = z
   .string()
   .regex(/^\d{17,20}$/, 'must be a Discord channel id')
   .register(protonFields, { field: 'channel-id' });
 
 const welcomeShape = {
-  enabled: z.boolean().default(false).register(protonFields, {
-    label: 'Enabled',
-    description: 'Greet members when they join, and note when they leave.',
-  }),
+  enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
-  welcomeChannelId: channelId.optional().register(protonFields, {
-    label: 'Welcome channel',
-    description: 'Where joins are announced. Leave empty to announce nothing on join.',
-  }),
+  welcomeChannelId: channelId.optional().register(protonFields, { label: 'Welcome channel' }),
 
-  welcomeMessage: z
-    .string()
-    .max(1000)
-    .default(DEFAULT_WELCOME_MESSAGE)
-    .register(protonFields, {
-      label: 'Welcome message',
-      description: `Placeholders: ${WELCOME_PLACEHOLDERS.join(', ')}.`,
-    }),
+  welcomeMessage: greetingMessageSchema.default(DEFAULT_WELCOME_GREETING),
 
-  goodbyeChannelId: channelId.optional().register(protonFields, {
-    label: 'Goodbye channel',
-    description: 'Where leaves are noted. Leave empty to say nothing when someone leaves.',
-  }),
+  goodbyeChannelId: channelId.optional().register(protonFields, { label: 'Goodbye channel' }),
 
-  goodbyeMessage: z
-    .string()
-    .max(1000)
-    .default(DEFAULT_GOODBYE_MESSAGE)
-    .register(protonFields, {
-      label: 'Goodbye message',
-      description: `Placeholders: ${WELCOME_PLACEHOLDERS.join(', ')}.`,
-    }),
+  goodbyeMessage: greetingMessageSchema.default(DEFAULT_GOODBYE_GREETING),
 
   card: z.boolean().default(false).register(protonFields, {
     label: 'Attach a card',
-    description: 'Render an image alongside the message. Costs a little more per join.',
+    description: 'Costs an extra image render per join',
   }),
 
-  preset: z.enum(CARD_PRESETS).default('midnight').register(protonFields, {
-    label: 'Card style',
-    description: 'Which of the three built-in card designs to render.',
-  }),
+  preset: z.enum(CARD_PRESETS).default('midnight').register(protonFields, { label: 'Card style' }),
+
+  cardAccent: z
+    .number()
+    .int()
+    .min(0)
+    .max(0xffffff)
+    .default(0x5865f2)
+    .register(protonFields, { field: 'colour', label: 'Accent colour' }),
+
+  cardBackgroundUrl: z
+    .url({ protocol: /^https$/ })
+    .max(2048)
+    .optional()
+    .register(protonFields, {
+      label: 'Background image',
+      description: 'Only images hosted on Discord’s CDN load',
+    }),
+
+  cardShowMemberCount: z
+    .boolean()
+    .default(true)
+    .register(protonFields, { label: 'Show the member count' }),
 };
 
 export const welcomeConfigSchema = z.object(welcomeShape);
 
 export type WelcomeConfig = z.infer<typeof welcomeConfigSchema>;
+
+export const welcomeFormSchema = welcomeConfigSchema.omit({
+  welcomeMessage: true,
+  goodbyeMessage: true,
+});
 
 export const welcomeDefaultConfig: WelcomeConfig = welcomeConfigSchema.parse({});
 
@@ -77,30 +151,22 @@ export interface GreetingFacts {
   memberCount: number;
 }
 
-export function renderGreeting(template: string, facts: GreetingFacts): string {
-  const values: Record<WelcomePlaceholder, string> = {
-    '{user}': `<@${facts.userId}>`,
-    '{username}': facts.username,
-    '{server}': facts.guildName,
-    '{memberCount}': String(facts.memberCount),
+type GreetingVars = Readonly<Record<string, string>>;
+
+function greetingVars(facts: GreetingFacts): GreetingVars {
+  return {
+    user: `<@${facts.userId}>`,
+    username: facts.username,
+    server: facts.guildName,
+    memberCount: String(facts.memberCount),
   };
+}
 
-  let out = '';
-  let index = 0;
+export function renderGreeting(message: GreetingMessage, facts: GreetingFacts): GreetingMessage {
+  const rendered = substitute(message, greetingVars(facts)) as GreetingMessage;
+  const content = rendered.content;
 
-  while (index < template.length) {
-    const token = WELCOME_PLACEHOLDERS.find((placeholder) =>
-      template.startsWith(placeholder, index),
-    );
+  if (content === undefined || content.length <= MESSAGE_CONTENT_MAX) return rendered;
 
-    if (token) {
-      out += values[token];
-      index += token.length;
-    } else {
-      out += template[index];
-      index += 1;
-    }
-  }
-
-  return out.slice(0, 2000);
+  return { ...rendered, content: content.slice(0, MESSAGE_CONTENT_MAX) };
 }

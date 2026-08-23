@@ -1,4 +1,4 @@
-import { dryRunFor, type EventListener, type EventType } from '@proton/core';
+import type { EventListener, EventType } from '@proton/core';
 import type { AutomodHit } from './checks.ts';
 import { type AutomodConfig, readSettings } from './config.ts';
 import { type AutomodDeps, bindDeps, describeUnbound, MODULE_ID } from './deps.ts';
@@ -99,7 +99,7 @@ export function createAutomodListener(deps: AutomodDeps): EventListener<AutomodC
         kind: 'send',
         actorId: MODULE_ID,
         idempotencyKey: `${MODULE_ID}:${ctx.guildId}:${facts.messageId}:alert`,
-        dryRun: dryRunFor('send'),
+        dryRun: false,
         record: false,
         payload: {
           channelId: alertChannelId,

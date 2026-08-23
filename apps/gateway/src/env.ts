@@ -9,6 +9,7 @@ export const DEFAULT_INTENTS =
   GatewayIntentBits.GuildModeration |
   GatewayIntentBits.MessageContent |
   GatewayIntentBits.GuildMessageReactions |
+  GatewayIntentBits.GuildMessagePolls |
   GatewayIntentBits.GuildVoiceStates |
   // Both non-privileged, and both only ever deliver to a bot already holding Manage Server.
   GatewayIntentBits.AutoModerationConfiguration |

@@ -1,67 +1,33 @@
-import type { ModuleContext, ProtonEvent } from '@proton/core';
+import {
+  interactionRef,
+  type ModuleContext,
+  type ProtonEvent,
+  parseCustomId,
+  readComponentInteraction,
+} from '@proton/core';
 import { ComponentType } from 'discord-api-types/v10';
-import { findMenu, type RolemenuConfig } from './config.ts';
-import { parseCustomId } from './custom-id.ts';
+import { findMenu, MODULE_ID, type RolemenuConfig } from './config.ts';
 import { bindComponentDeps, describeUnbound, type RolemenuDeps } from './deps.ts';
 import {
   deferEphemeral,
   describeReport,
   followUp,
-  MODULE_ID,
   replyEphemeral,
   runRoleChanges,
 } from './perform.ts';
 import { resolveRoleChanges } from './resolve.ts';
 
-export interface ComponentFacts {
-  interactionId: string;
-  token: string;
-  userId: string;
-
-  roleIds: string[] | null;
-  customId: string;
-  componentType: number;
-
-  values: string[];
+export interface MenuBinding {
+  menuId: string;
+  bindingKey: string;
 }
 
-function record(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
-}
+export function readMenuBinding(customId: unknown): MenuBinding | null {
+  const parsed = parseCustomId(customId);
+  const bindingKey = parsed?.args.length === 1 ? parsed.args[0] : undefined;
+  if (!parsed || parsed.moduleId !== MODULE_ID || !bindingKey) return null;
 
-function str(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-function strings(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
-}
-
-export function readComponent(event: ProtonEvent): ComponentFacts | null {
-  const d = record(event.payload);
-  if (!d) return null;
-
-  const interactionId = str(d.id);
-  const token = str(d.token);
-  const data = record(d.data);
-  const customId = str(data?.custom_id);
-  if (!interactionId || !token || !customId) return null;
-
-  const member = record(d.member);
-  const userId = str(record(member?.user)?.id) ?? str(record(d.user)?.id);
-  if (!userId) return null;
-
-  return {
-    interactionId,
-    token,
-    userId,
-    roleIds: Array.isArray(member?.roles) ? strings(member.roles) : null,
-    customId,
-    componentType: typeof data?.component_type === 'number' ? data.component_type : 0,
-    values: strings(data?.values),
-  };
+  return { menuId: parsed.action, bindingKey };
 }
 
 export type ComponentOutcome =
@@ -79,7 +45,7 @@ export async function handleComponent(
   ctx: ModuleContext<RolemenuConfig>,
   rawDeps: RolemenuDeps,
 ): Promise<ComponentOutcome> {
-  const facts = readComponent(event);
+  const facts = readComponentInteraction(event);
   if (!facts) {
     ctx.logger.error(
       'rolemenu received an interaction.component it could not read, so whoever pressed it was ' +
@@ -89,17 +55,18 @@ export async function handleComponent(
     return { action: 'ignored', reason: 'unreadable interaction payload' };
   }
 
-  const parsed = parseCustomId(facts.customId);
-  if (!parsed) {
+  const binding = readMenuBinding(facts.customId);
+  if (!binding) {
     return { action: 'ignored', reason: 'the component is not a role menu’s' };
   }
 
-  const interaction = { id: facts.interactionId, token: facts.token };
+  const { menuId, bindingKey } = binding;
+  const interaction = interactionRef(facts);
 
   const bound = bindComponentDeps(rawDeps);
   if ('unbound' in bound) {
     ctx.logger.error(
-      describeUnbound(`a press on menu '${parsed.menuId}' could not be completed`, bound.unbound),
+      describeUnbound(`a press on menu '${menuId}' could not be completed`, bound.unbound),
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
     await replyEphemeral(ctx, interaction, facts.userId, event.id, NOT_WIRED);
@@ -118,21 +85,20 @@ export async function handleComponent(
     return { action: 'ignored', reason: 'role menus are off in this server' };
   }
 
-  const menu = findMenu(ctx.config, parsed.menuId);
+  const menu = findMenu(ctx.config, menuId);
   if (!menu || menu.kind === 'reaction') {
     await replyEphemeral(
       ctx,
       interaction,
       facts.userId,
       event.id,
-      `This menu (${parsed.menuId}) is no longer set up in this server, so I can't give you ` +
+      `This menu (${menuId}) is no longer set up in this server, so I can't give you ` +
         'anything from it. Ask an admin to re-post it or to delete the message.',
     );
-    return { action: 'refused', reason: `no button or dropdown menu '${parsed.menuId}'` };
+    return { action: 'refused', reason: `no button or dropdown menu '${menuId}'` };
   }
 
-  const keys =
-    facts.componentType === ComponentType.StringSelect ? facts.values : [parsed.bindingKey];
+  const keys = facts.componentType === ComponentType.StringSelect ? facts.values : [bindingKey];
 
   if (keys.length === 0) {
     await replyEphemeral(
@@ -189,7 +155,7 @@ export async function handleComponent(
 
   await followUp(
     ctx,
-    { applicationId: bound.deps.applicationId, interactionToken: facts.token },
+    { applicationId: bound.deps.applicationId, interaction },
     facts.userId,
     event.id,
     lines.join(' '),

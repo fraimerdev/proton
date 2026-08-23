@@ -2,15 +2,21 @@ import { type ActionKind, targetsMember } from '../actions/kinds.ts';
 import type { ActionExecutor, ActionRequest, ActionResult } from '../actions/types.ts';
 import { tryParseDuration } from '../config/duration.ts';
 import type { ProtonEvent } from '../events/types.ts';
+import type { MemberContextLoader } from '../providers/member-context.ts';
+import { memberContextFromRuleFacts } from '../providers/member-context.ts';
+import type { ProviderRegistry } from '../providers/registry.ts';
+import type { MemberContext } from '../providers/types.ts';
 import {
-  type ConditionResult,
   evaluateFactCondition,
   type FactCondition,
+  type FactConditionResult,
+  type ProviderCondition,
   type RateOverWindowCondition,
   type RuleCondition,
   type RuleConditionKind,
 } from './conditions.ts';
 import type { RuleFacts } from './facts.ts';
+import { migrateCondition } from './migrate.ts';
 import { RATE_WINDOW_GUILD_SCOPE, type RateWindowStore } from './rate-window.ts';
 import { type GuildRule, guildRuleSchema, type RuleAction } from './types.ts';
 
@@ -69,10 +75,20 @@ export interface RuleEngineDeps {
   executor: ActionExecutor;
   rateWindow: RateWindowStore;
   now?: () => number;
+
+  providers?: ProviderRegistry;
+
+  // Optional: a rule whose conditions are all event-scoped never needs a member loaded, and the
+  // facts a dispatch already carries answer most of the rest without a round trip.
+  memberContext?: MemberContextLoader;
 }
 
 function isRateCondition(condition: RuleCondition): condition is RateOverWindowCondition {
   return condition.kind === 'rate-over-window';
+}
+
+function isProviderCondition(condition: RuleCondition): condition is ProviderCondition {
+  return condition.kind === 'provider';
 }
 
 function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unknown> {
@@ -99,7 +115,16 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'edit_message':
     case 'delete_message':
     case 'add_reaction':
+    case 'delete_channel':
+    case 'edit_channel':
+    case 'create_thread':
+    case 'end_poll':
+    case 'pin_message':
       return facts.channelId ? { channelId: facts.channelId } : {};
+
+    // Not facts.channelId — that is where the member spoke, not where the rule wants them moved.
+    case 'move_member':
+      return facts.actorId ? { userId: facts.actorId } : {};
 
     case 'interaction_reply':
     case 'interaction_followup':
@@ -112,7 +137,11 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'automod_rule_create':
     case 'automod_rule_update':
     case 'automod_rule_delete':
+    case 'giveaway_draw':
       return {};
+
+    case 'create_dm':
+      return facts.actorId ? { userId: facts.actorId } : {};
   }
 }
 
@@ -260,14 +289,28 @@ export class RuleEngine {
     now: number,
   ): Promise<ConditionOutcome> {
     const rateConditions: RateOverWindowCondition[] = [];
+    const providerConditions: ProviderCondition[] = [];
     const factConditions: FactCondition[] = [];
-    for (const condition of rule.conditions) {
+
+    for (const raw of rule.conditions) {
+      const condition = migrateCondition(raw);
+
       if (isRateCondition(condition)) rateConditions.push(condition);
+      else if (isProviderCondition(condition)) providerConditions.push(condition);
       else factConditions.push(condition);
     }
 
+    // Cheapest first: pure facts, then providers (which may query), then the rate window (which
+    // writes to Redis and must not be counted against a rule the facts already ruled out).
     for (const condition of factConditions) {
       const result = evaluateFactCondition(condition, input.facts, now);
+      if (!result.passed) {
+        return { passed: false, kind: condition.kind, humanReason: result.humanReason };
+      }
+    }
+
+    for (const condition of providerConditions) {
+      const result = await this.#evaluateProvider(condition, rule, input, now);
       if (!result.passed) {
         return { passed: false, kind: condition.kind, humanReason: result.humanReason };
       }
@@ -283,12 +326,73 @@ export class RuleEngine {
     return { passed: true };
   }
 
+  async #loadMember(rule: GuildRule, actorId: string): Promise<MemberContext | null> {
+    const loader = this.#deps.memberContext;
+    if (!loader) return null;
+
+    const loaded = await loader.load(rule.guildId, [actorId]);
+    return loaded.get(actorId) ?? null;
+  }
+
+  async #evaluateProvider(
+    condition: ProviderCondition,
+    rule: GuildRule,
+    input: RuleFireInput,
+    now: number,
+  ): Promise<FactConditionResult> {
+    const registry = this.#deps.providers;
+    if (!registry) {
+      return {
+        passed: false,
+        humanReason:
+          `this rule uses the '${condition.providerId}' condition, but no provider registry is ` +
+          'wired into this process. The process running rules must construct the RuleEngine ' +
+          'with { providers: new ProviderRegistry() }.',
+      };
+    }
+
+    const provider = registry.condition(condition.providerId);
+    if (!provider) {
+      return {
+        passed: false,
+        humanReason:
+          `no '${condition.providerId}' condition is loaded — the module that owns it is not ` +
+          'running in this deployment, so this rule cannot be judged.',
+      };
+    }
+
+    const parsed = registry.parseConfig(condition.providerId, condition.config);
+    if (!parsed.ok) return { passed: false, humanReason: parsed.humanReason };
+
+    const fromFacts = memberContextFromRuleFacts(rule.guildId, input.facts, new Date(now));
+    if (fromFacts === null) {
+      return {
+        passed: false,
+        humanReason:
+          'this event named no member, so a member condition could not be judged against it.',
+      };
+    }
+
+    let result = await provider.evaluate(fromFacts, parsed.config);
+
+    // Only on indeterminate, and only then: the dispatch already carries roles for most events, so
+    // loading the member up front would be a REST call on every message automod ever sees.
+    if (result.indeterminate && input.facts.actorId) {
+      const loaded = await this.#loadMember(rule, input.facts.actorId);
+      if (loaded) result = await provider.evaluate(loaded, parsed.config);
+    }
+
+    if (result.passed) return { passed: true };
+
+    return { passed: false, humanReason: provider.describeFailure(parsed.config, result, 'en') };
+  }
+
   async #evaluateRate(
     condition: RateOverWindowCondition,
     rule: GuildRule,
     input: RuleFireInput,
     now: number,
-  ): Promise<ConditionResult> {
+  ): Promise<FactConditionResult> {
     const windowMs = tryParseDuration(condition.window);
     if (windowMs === null) {
       return { passed: false, humanReason: `'${condition.window}' is not a duration I can read.` };

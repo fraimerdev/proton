@@ -1,8 +1,22 @@
 # Third-party licences — `@proton/cards`
 
-This package checks two font binaries into the repository and embeds them in every
+This package checks four font binaries into the repository and draws with them on every
 rendered card. They are redistributed under the terms below. OFL 1.1 §2 requires the
 licence to travel with the font files, which is what this file is for.
+
+## Manrope
+
+- Files: `assets/Manrope-latin-400.woff2`, `assets/Manrope-latin-700.woff2`
+- Upstream: https://github.com/sharanda/manrope
+- Obtained from: the `@fontsource/manrope` npm package (`manrope-latin-400-normal.woff2`
+  and `manrope-latin-700-normal.woff2`), renamed and otherwise byte-identical. WOFF2 is
+  checked in rather than TTF because `@napi-rs/canvas` registers WOFF2 directly, so
+  there is nothing to convert.
+- Licence: SIL Open Font License, Version 1.1
+- Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)
+
+Manrope is the face the cards are designed in. Inter sits behind it in the font stack for
+the latin-1 glyphs Manrope's latin subset omits.
 
 ## Inter
 
@@ -18,8 +32,9 @@ OFL 1.1 permits bundling and redistribution inside a commercial product, includi
 hosted service, provided the fonts are not sold on their own and the licence and
 copyright notice are included. Both hold here.
 
-Why static weights rather than one variable file is explained in `src/fonts.ts` — it is
-a satori limitation, not a licensing one.
+Static weights rather than one variable file: the renderer picks a face by weight at
+`ctx.font` time, so the two it can choose between are the two that are checked in. That is
+a rendering decision, not a licensing one.
 
 ---
 

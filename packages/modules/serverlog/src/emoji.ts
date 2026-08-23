@@ -1,7 +1,7 @@
 export const STEM_FALLBACK = '├';
 export const REPLY_FALLBACK = '└';
 
-export const STEM_NAME = 'stem';
+export const STEM_NAME = 'replycontinued';
 export const REPLY_NAME = 'reply';
 
 export interface EmojiSet {

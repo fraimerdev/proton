@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { Permissions } from '@proton/core';
 import { ANTINUKE_ACTOR } from '../src/breaker.ts';
 import {
@@ -15,17 +15,6 @@ import {
   NUKER_LOW_ROLE,
   OWNER,
 } from './harness.ts';
-
-const ORIGINAL_ENV = process.env.NODE_ENV;
-
-beforeAll(() => {
-  process.env.NODE_ENV = 'production';
-});
-
-afterAll(() => {
-  if (ORIGINAL_ENV === undefined) delete process.env.NODE_ENV;
-  else process.env.NODE_ENV = ORIGINAL_ENV;
-});
 
 function tripped(options: HarnessOptions = {}) {
   const h = harness(options);
@@ -179,18 +168,8 @@ describe('when Proton cannot do its half', () => {
   });
 });
 
-describe('I12 in development', () => {
-  const DEV_ENV = 'development';
-
-  beforeEach(() => {
-    process.env.NODE_ENV = DEV_ENV;
-  });
-
-  afterAll(() => {
-    process.env.NODE_ENV = 'production';
-  });
-
-  test('strips for real but holds the ban back, recording what it would have done', async () => {
+describe('the ban that follows a strip', () => {
+  test('is performed for real, after the roles are already off', async () => {
     const h = tripped();
 
     await h.handle(auditEvent('channel.deleted'), { afterStrip: 'ban' });
@@ -198,9 +177,10 @@ describe('I12 in development', () => {
     expect(h.callPaths()).toEqual([
       `DELETE /guilds/${GUILD}/members/${NUKER}/roles/${NUKER_HIGH_ROLE}`,
       `DELETE /guilds/${GUILD}/members/${NUKER}/roles/${NUKER_LOW_ROLE}`,
+      `PUT /guilds/${GUILD}/bans/${NUKER}`,
     ]);
 
     const ban = h.cases().find((recorded) => recorded.kind === 'ban');
-    expect(ban?.dryRun).toBe(true);
+    expect(ban?.dryRun).toBe(false);
   });
 });

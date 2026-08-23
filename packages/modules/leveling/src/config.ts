@@ -1,9 +1,14 @@
-// /presets, not the barrel: the barrel re-exports the resvg rasteriser, a native addon
-// that the dashboard's bundler cannot load. Config is read in the browser.
+// /presets, not the barrel: the barrel reaches @napi-rs/canvas, a native addon that the
+// dashboard's bundler cannot load. Config is read in the browser.
 import { CARD_PRESETS } from '@proton/cards/presets';
 import {
+  DEFAULT_MENTION_POLICY,
   durationStringSchema,
+  interactiveKeys,
+  liftLegacyMessage,
+  messageObjectSchema,
   protonFields,
+  refineMessage,
   snowflakeSchema,
   tryParseDuration,
 } from '@proton/core';
@@ -39,68 +44,106 @@ export const LEVEL_UP_PLACEHOLDERS = ['{user}', '{level}', '{xp}'] as const;
 
 export const DEFAULT_LEVEL_UP_MESSAGE = '{user} reached level {level}.';
 
-const levelingShape = {
-  enabled: z.boolean().default(false).register(protonFields, {
-    label: 'Enabled',
-    description: 'Award XP for chatting and for time in voice channels.',
+export function liftLevelUpMessage(value: unknown): unknown {
+  return typeof value === 'string' ? { content: value } : liftLegacyMessage(value);
+}
+
+const NO_INTERACTIVE =
+  'a level-up message can carry link buttons and nothing else: the leveling module has no ' +
+  'interaction listener, so a press on anything else would go unanswered. Make it a link button, ' +
+  'or post the interactive message with the Embeds module instead.';
+
+export function isSilentLevelUp(message: {
+  content?: string | undefined;
+  embeds: readonly unknown[];
+  components: readonly unknown[];
+  v2?: readonly unknown[] | undefined;
+}): boolean {
+  return (
+    (message.content?.trim().length ?? 0) === 0 &&
+    message.embeds.length === 0 &&
+    message.components.length === 0 &&
+    (message.v2?.length ?? 0) === 0
+  );
+}
+
+export const levelUpMessageSchema = z.preprocess(
+  liftLevelUpMessage,
+  messageObjectSchema.superRefine((message, ctx) => {
+    // A message with nothing in it is how a server levels members up silently, and refineMessage
+    // rejects exactly that — so it only sees a message that is meant to be posted.
+    if (isSilentLevelUp(message)) return;
+    refineMessage(message, ctx);
+
+    if (interactiveKeys(message).length > 0) {
+      ctx.addIssue({ code: 'custom', path: ['components'], message: NO_INTERACTIVE });
+    }
   }),
+);
+
+export type LevelUpMessage = z.infer<typeof levelUpMessageSchema>;
+
+export const DEFAULT_LEVEL_UP: LevelUpMessage = {
+  content: DEFAULT_LEVEL_UP_MESSAGE,
+  embeds: [],
+  components: [],
+  mentions: DEFAULT_MENTION_POLICY,
+  v2: [],
+};
+
+const levelingShape = {
+  enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
   xpPerMessageMin: z.number().int().min(0).max(1000).default(15).register(protonFields, {
     label: 'XP per message (minimum)',
-    description: 'The low end of the range rolled for each message that earns XP.',
   }),
 
-  xpPerMessageMax: z
-    .number()
-    .int()
-    .min(0)
-    .max(1000)
-    .default(25)
-    .register(protonFields, {
-      label: 'XP per message (maximum)',
-      description:
-        'The high end of the range. A range rather than a fixed number so the exact ' +
-        'message count needed for a level cannot be computed and farmed.',
-    }),
+  xpPerMessageMax: z.number().int().min(0).max(1000).default(25).register(protonFields, {
+    label: 'XP per message (maximum)',
+  }),
 
   messageCooldown: durationStringSchema.default('60s').register(protonFields, {
     field: 'duration',
     label: 'Message cooldown',
-    description:
-      'How long after earning XP before a member can earn it again. Shorter rewards ' +
-      'flooding; this is the one setting that decides whether the leaderboard measures ' +
-      'participation or typing speed.',
   }),
 
-  rankCard: z.boolean().default(false).register(protonFields, {
-    label: 'Rank card',
-    description: 'Attach a rendered image to /rank instead of replying with text alone.',
-  }),
+  rankCard: z.boolean().default(false).register(protonFields, { label: 'Rank card' }),
 
   cardPreset: z.enum(CARD_PRESETS).default('midnight').register(protonFields, {
     label: 'Card style',
-    description: 'Which of the three built-in card designs /rank renders.',
   }),
 
-  levelUpMessage: z
-    .string()
-    .max(500)
-    .default(DEFAULT_LEVEL_UP_MESSAGE)
+  cardAccent: z.number().int().min(0).max(0xffffff).default(0x5865f2).register(protonFields, {
+    field: 'colour',
+    label: 'Accent colour',
+    description: 'Top three ranks keep gold, silver and bronze regardless',
+  }),
+
+  cardBackgroundUrl: z
+    .url({ protocol: /^https$/ })
+    .max(2048)
+    .optional()
     .register(protonFields, {
-      label: 'Level-up message',
-      description:
-        `Posted when a member levels up. ${LEVEL_UP_PLACEHOLDERS.join(', ')} are replaced. ` +
-        'Leave it empty to level members up silently.',
+      label: 'Background image',
+      description: 'Only images hosted on Discord’s CDN load',
     }),
+
+  cardShowRank: z.boolean().default(true).register(protonFields, {
+    label: 'Show the rank number',
+  }),
+
+  cardShowPercent: z.boolean().default(true).register(protonFields, {
+    label: 'Show progress percentage',
+  }),
+
+  cardShowTotalXp: z.boolean().default(true).register(protonFields, { label: 'Show total XP' }),
+
+  levelUpMessage: levelUpMessageSchema.default(DEFAULT_LEVEL_UP),
 
   levelUpChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Level-up channel',
-    description:
-      'Where level-up messages go. Left empty, the message is posted in the channel the ' +
-      'member was talking in — and a level-up earned in voice is silent, because there is ' +
-      'no such channel.',
-
+    description: 'Empty posts in the member’s channel, silencing voice level-ups',
     channelTypes: [0, 5, 11, 12],
   }),
 
@@ -111,54 +154,28 @@ const levelingShape = {
     .register(protonFields, {
       field: 'channel-id',
       label: 'Excluded channels',
-      description: 'Messages in these channels never earn XP — bot-command and spam channels.',
       channelTypes: [0, 5, 11, 12],
     }),
 
-  excludedRoleIds: z
-    .array(snowflakeSchema)
-    .max(50)
-    .default([])
-    .register(protonFields, {
-      field: 'role-id',
-      label: 'Excluded roles',
-      description:
-        'Members holding any of these roles never earn XP. Usually staff, so the ' +
-        'leaderboard measures the community rather than the people moderating it.',
-    }),
+  excludedRoleIds: z.array(snowflakeSchema).max(50).default([]).register(protonFields, {
+    field: 'role-id',
+    label: 'Excluded roles',
+  }),
 
-  voiceXpPerMinute: z
-    .number()
-    .int()
-    .min(0)
-    .max(100)
-    .default(5)
-    .register(protonFields, {
-      label: 'Voice XP per minute',
-      description:
-        'XP for each full minute in a voice channel, paid when the member leaves. Set it ' +
-        'to 0 to award nothing for voice.',
-    }),
+  voiceXpPerMinute: z.number().int().min(0).max(100).default(5).register(protonFields, {
+    label: 'Voice XP per minute',
+    description: 'Credited when the member leaves the voice channel, not during',
+  }),
 
   afkChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'AFK channel',
-    description:
-      'Time in this channel earns nothing. Set it to the server’s AFK channel — otherwise ' +
-      'the top of the voice leaderboard is whoever leaves Discord open overnight.',
-
     channelTypes: [2, 13],
   }),
 
-  rewardMode: z
-    .enum(REWARD_MODES)
-    .default('stack')
-    .register(protonFields, {
-      label: 'Reward mode',
-      description:
-        'Stack keeps every reward role a member has earned. Replace keeps only the newest ' +
-        'and removes the ones below it.',
-    }),
+  rewardMode: z.enum(REWARD_MODES).default('stack').register(protonFields, {
+    label: 'Reward mode',
+  }),
 
   roleRewards: roleRewardsSchema.default([]),
 };
@@ -177,16 +194,22 @@ export const levelingConfigSchema = z.object(levelingShape).superRefine((config,
 
 export type LevelingConfig = z.infer<typeof levelingConfigSchema>;
 
-export const levelingFormSchema = z.object(levelingShape).omit({ roleRewards: true });
+export const levelingFormSchema = z
+  .object(levelingShape)
+  .omit({ levelUpMessage: true, roleRewards: true });
 
 export const levelingDefaultConfig: LevelingConfig = {
   enabled: false,
   xpPerMessageMin: 15,
   rankCard: false,
   cardPreset: 'midnight',
+  cardAccent: 0x5865f2,
+  cardShowRank: true,
+  cardShowPercent: true,
+  cardShowTotalXp: true,
   xpPerMessageMax: 25,
   messageCooldown: '60s',
-  levelUpMessage: DEFAULT_LEVEL_UP_MESSAGE,
+  levelUpMessage: DEFAULT_LEVEL_UP,
   excludedChannelIds: [],
   excludedRoleIds: [],
   voiceXpPerMinute: 5,
@@ -195,7 +218,7 @@ export const levelingDefaultConfig: LevelingConfig = {
   roleRewards: [],
 };
 
-export const LEVELING_SCHEMA_VERSION = 1;
+export const LEVELING_SCHEMA_VERSION = 4;
 
 export interface LevelingSettings {
   messageCooldownMs: number;
@@ -222,14 +245,4 @@ export function rollMessageXp(config: LevelingConfig, random: () => number = Mat
   const min = Math.min(config.xpPerMessageMin, config.xpPerMessageMax);
   const max = Math.max(config.xpPerMessageMin, config.xpPerMessageMax);
   return min + Math.floor(random() * (max - min + 1));
-}
-
-export function renderLevelUpMessage(
-  template: string,
-  values: { userId: string; level: number; xp: number },
-): string {
-  return template
-    .replaceAll('{user}', `<@${values.userId}>`)
-    .replaceAll('{level}', String(values.level))
-    .replaceAll('{xp}', String(values.xp));
 }

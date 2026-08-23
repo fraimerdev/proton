@@ -18,24 +18,24 @@ import {
 } from '../src/embed.ts';
 import { DEFAULT_EMOJIS, emojiSet, REPLY_FALLBACK, STEM_FALLBACK } from '../src/emoji.ts';
 
-const EMOJIS = emojiSet({ stemId: '1388502932571557939', replyId: '1388502903827857408' });
+const EMOJIS = emojiSet({ stemId: '1539999327580192858', replyId: '1539999328674783242' });
 
 describe('logLine', () => {
   test('renders label, mention and raw value in the owner’s shape', () => {
     expect(logLine(EMOJIS.stem, { label: 'Name', mention: '<#1>', value: '#general' })).toBe(
-      '<:stem:1388502932571557939> **Name:** <#1> `#general`',
+      '<:replycontinued:1539999327580192858> **Name:** <#1> `#general`',
     );
   });
 
   test('omits the mention when there is none', () => {
     expect(logLine(EMOJIS.reply, { label: 'Id', value: '42' })).toBe(
-      '<:reply:1388502903827857408> **Id:** `42`',
+      '<:reply:1539999328674783242> **Id:** `42`',
     );
   });
 
   test('omits the code span when there is no value', () => {
     expect(logLine(EMOJIS.stem, { label: 'Roles', mention: '<@&1>' })).toBe(
-      '<:stem:1388502932571557939> **Roles:** <@&1>',
+      '<:replycontinued:1539999327580192858> **Roles:** <@&1>',
     );
   });
 });
@@ -168,7 +168,7 @@ describe('logEmbed', () => {
 describe('emojiSet', () => {
   test('configured ids render as application emoji', () => {
     expect(emojiSet({ stemId: '1', replyId: '2' })).toEqual({
-      stem: '<:stem:1>',
+      stem: '<:replycontinued:1>',
       reply: '<:reply:2>',
     });
   });
@@ -178,7 +178,10 @@ describe('emojiSet', () => {
   });
 
   test('one missing id only degrades that one', () => {
-    expect(emojiSet({ stemId: '1' })).toEqual({ stem: '<:stem:1>', reply: REPLY_FALLBACK });
+    expect(emojiSet({ stemId: '1' })).toEqual({
+      stem: '<:replycontinued:1>',
+      reply: REPLY_FALLBACK,
+    });
   });
 });
 

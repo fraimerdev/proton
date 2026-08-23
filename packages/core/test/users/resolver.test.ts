@@ -68,6 +68,7 @@ describe('toUserProfile', () => {
       username: 'admin',
       globalName: 'Admin',
       avatarUrl: 'https://cdn.discordapp.com/embed/avatars/0.png',
+      avatarHash: null,
     });
   });
 
@@ -92,7 +93,7 @@ describe('createUserResolver', () => {
 
   test('a hit never reaches Discord', async () => {
     const cache = new MemoryCache();
-    await cache.put({ id: USER, username: 'cached', globalName: null, avatarUrl: null });
+    await cache.put({ id: USER, username: 'cached', globalName: null, avatarUrl: null, avatarHash: null });
     const rest = new FakeRest();
 
     const profile = await createUserResolver({ cache, rest }).resolve(USER);
@@ -124,6 +125,7 @@ describe('createUserResolver', () => {
       username: 'Proton Antinuke',
       globalName: null,
       avatarUrl: null,
+      avatarHash: null,
     });
     expect(await resolver.resolve('proton:joinroles')).toMatchObject({ username: 'joinroles' });
     expect(rest.calls).toEqual([]);

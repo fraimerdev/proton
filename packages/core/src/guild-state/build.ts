@@ -65,6 +65,8 @@ export function parseChannel(raw: unknown): ChannelState | null {
   return {
     id,
     parentId: str(channel.parent_id),
+    ...(typeof channel.type === 'number' ? { type: channel.type } : {}),
+    ...(str(channel.name) === null ? {} : { name: str(channel.name) as string }),
     overwrites: parseOverwrites(channel.permission_overwrites),
   };
 }
@@ -85,7 +87,8 @@ export function buildGuildState(
   }
 
   const channels = new Map<string, ChannelState>();
-  for (const raw of array(payload.channels)) {
+  // Threads share this map: lookups do channels.get(id), so a split map hides parent overwrites.
+  for (const raw of [...array(payload.channels), ...array(payload.threads)]) {
     const channel = parseChannel(raw);
     if (channel) channels.set(channel.id, channel);
   }

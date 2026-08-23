@@ -6,7 +6,7 @@ export const Route = createFileRoute('/api/auth/signin/discord')({
     handlers: {
       GET: async ({ request }) => {
         const response = await auth.api.signInSocial({
-          body: { provider: 'discord', callbackURL: '/guilds' },
+          body: { provider: 'discord', callbackURL: '/dashboard' },
           headers: request.headers,
           asResponse: true,
         });

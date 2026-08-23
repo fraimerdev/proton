@@ -1,9 +1,14 @@
 import type { CardDeps, CardDescriptorInput } from '@proton/cards';
+import type { ActivityStore } from './activity.ts';
 import type { MemberXpStore } from './store.ts';
 import type { VoiceSessionStore } from './voice-session.ts';
 
 export interface LevelingDeps {
   xp?: MemberXpStore;
+
+  // Unbound means leveling registers no providers at all: a requirement nobody can ever satisfy
+  // should not appear in the picker, and listAvailable is what keeps it out.
+  activity?: ActivityStore;
 
   sessions?: VoiceSessionStore;
 
@@ -19,6 +24,7 @@ export interface LevelingDeps {
 
 const PORT_HINTS: Record<string, string> = {
   xp: 'xp: new DrizzleMemberXpStore(db, { levelForXp, maxXp: MAX_XP })',
+  activity: 'activity: new DrizzleActivityStore(db, { levelForXp })',
   sessions: 'sessions: new RedisVoiceSessionStore(redis)',
 };
 

@@ -9,6 +9,10 @@ export interface DiscordUserGuild {
   permissions: string;
 }
 
+export interface SessionGuild extends DiscordUserGuild {
+  present: boolean;
+}
+
 export interface GuildAccess {
   guildId: string;
   via: 'owner' | 'manage_guild';
@@ -37,6 +41,15 @@ export function resolveGuildAccess(
 
 export function administrableGuilds(guilds: readonly DiscordUserGuild[]): DiscordUserGuild[] {
   return guilds.filter((g) => resolveGuildAccess(guilds, g.id) !== null);
+}
+
+export function withPresence(
+  guilds: readonly DiscordUserGuild[],
+  present: ReadonlySet<string>,
+): SessionGuild[] {
+  return guilds
+    .map((guild) => ({ ...guild, present: present.has(guild.id) }))
+    .sort((a, b) => Number(b.present) - Number(a.present));
 }
 
 export function accessGrants(access: GuildAccess, required: bigint): boolean {

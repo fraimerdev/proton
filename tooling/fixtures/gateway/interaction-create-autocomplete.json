@@ -1,0 +1,50 @@
+{
+  "t": "INTERACTION_CREATE",
+  "s": 53,
+  "op": 0,
+  "d": {
+    "id": "1500000000000000004",
+    "application_id": "800000000000000001",
+    "type": 4,
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000001",
+    "token": "autocomplete-interaction-token",
+    "version": 1,
+    "app_permissions": "563603924254720",
+    "data": {
+      "id": "1300000000000000005",
+      "name": "case",
+      "type": 1,
+      "options": [
+        {
+          "name": "lookup",
+          "type": 1,
+          "options": [
+            {
+              "name": "reference",
+              "type": 3,
+              "value": "PRO-1",
+              "focused": true
+            }
+          ]
+        }
+      ]
+    },
+    "member": {
+      "user": {
+        "id": "100000000000000002",
+        "username": "newcomer",
+        "discriminator": "0",
+        "global_name": "Newcomer",
+        "avatar": null,
+        "bot": false
+      },
+      "roles": ["700000000000000001"],
+      "joined_at": "2026-08-14T09:00:00.000000+00:00",
+      "deaf": false,
+      "mute": false,
+      "flags": 0,
+      "communication_disabled_until": null
+    }
+  }
+}

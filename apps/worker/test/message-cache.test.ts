@@ -211,3 +211,16 @@ describe('ttlOf', () => {
     expect(ttlOf({ ...config, cacheRetention: 'not a duration' })).toBe(24 * 60 * 60 * 1000);
   });
 });
+
+describe('the cache this consumer fills is the one server logs read', () => {
+  test('the worker hands serverlog the message cache', async () => {
+    const source = await Bun.file(`${import.meta.dir}/../src/index.ts`).text();
+    const start = source.indexOf('const serverlogDeps: ServerlogDeps = {');
+
+    expect(start).toBeGreaterThan(-1);
+
+    // ServerlogDeps.cache is optional, so leaving it out type-checks and every edit and delete
+    // log silently reports the text as not remembered.
+    expect(source.slice(start, source.indexOf('};', start))).toContain('cache: messageCache');
+  });
+});

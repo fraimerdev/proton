@@ -46,6 +46,7 @@ export function createUserResolver(deps: UserResolverDeps): UserResolver {
           username: known?.username ?? userId.slice(PSEUDO_ACTOR_PREFIX.length),
           globalName: null,
           avatarUrl: known?.avatarUrl ?? null,
+          avatarHash: null,
         };
       }
 

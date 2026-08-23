@@ -25,15 +25,21 @@ import guildRoleCreate from '../gateway/guild-role-create.json' with { type: 'js
 import guildRoleDelete from '../gateway/guild-role-delete.json' with { type: 'json' };
 import guildRoleUpdate from '../gateway/guild-role-update.json' with { type: 'json' };
 import guildUpdate from '../gateway/guild-update.json' with { type: 'json' };
+import interactionCreateAutocomplete from '../gateway/interaction-create-autocomplete.json' with {
+  type: 'json',
+};
 import interactionCreateComponent from '../gateway/interaction-create-component.json' with {
   type: 'json',
 };
+import interactionCreateModal from '../gateway/interaction-create-modal.json' with { type: 'json' };
 import interactionCreatePing from '../gateway/interaction-create-ping.json' with { type: 'json' };
 import inviteCreate from '../gateway/invite-create.json' with { type: 'json' };
 import inviteDelete from '../gateway/invite-delete.json' with { type: 'json' };
 import messageCreate from '../gateway/message-create.json' with { type: 'json' };
 import messageDelete from '../gateway/message-delete.json' with { type: 'json' };
 import messageDeleteBulk from '../gateway/message-delete-bulk.json' with { type: 'json' };
+import messagePollVoteAdd from '../gateway/message-poll-vote-add.json' with { type: 'json' };
+import messagePollVoteRemove from '../gateway/message-poll-vote-remove.json' with { type: 'json' };
 import messageReactionAdd from '../gateway/message-reaction-add.json' with { type: 'json' };
 import messageReactionRemove from '../gateway/message-reaction-remove.json' with { type: 'json' };
 import messageUpdate from '../gateway/message-update.json' with { type: 'json' };
@@ -63,9 +69,13 @@ export const dispatches = {
   messageDelete: messageDelete as unknown as RawDispatch,
 
   messageDeleteBulk: messageDeleteBulk as unknown as RawDispatch,
+  messagePollVoteAdd: messagePollVoteAdd as unknown as RawDispatch,
+  messagePollVoteRemove: messagePollVoteRemove as unknown as RawDispatch,
   interactionCreatePing: interactionCreatePing as unknown as RawDispatch,
 
   interactionCreateComponent: interactionCreateComponent as unknown as RawDispatch,
+  interactionCreateModal: interactionCreateModal as unknown as RawDispatch,
+  interactionCreateAutocomplete: interactionCreateAutocomplete as unknown as RawDispatch,
   channelObfuscated: channelObfuscated as unknown as RawDispatch,
   auditLogChannelDelete: auditLogChannelDelete as unknown as RawDispatch,
 

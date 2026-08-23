@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite dev --port 3000",
     "build": "vite build",
+    "build:icons": "bun run scripts/build-icons.ts",
     "start": "bun --env-file=../../.env .output/server/index.mjs",
     "typecheck": "tsc --noEmit"
   },
@@ -16,6 +17,8 @@
     "@proton/db": "workspace:*",
     "@proton/module-automod": "workspace:*",
     "@proton/module-cases": "workspace:*",
+    "@proton/module-counters": "workspace:*",
+    "@proton/module-messages": "workspace:*",
     "@proton/module-leveling": "workspace:*",
     "@proton/module-logging": "workspace:*",
     "@proton/module-moderation": "workspace:*",
@@ -23,9 +26,14 @@
     "@proton/module-ping": "workspace:*",
     "@proton/module-rolemenu": "workspace:*",
     "@proton/module-serverlog": "workspace:*",
+    "@proton/module-tags": "workspace:*",
+    "@proton/module-tempvc": "workspace:*",
+    "@proton/module-tickets": "workspace:*",
+    "@proton/module-welcome": "workspace:*",
     "@tanstack/react-form": "1.33.5",
     "@tanstack/react-query": "5.101.4",
     "@tanstack/react-router": "1.170.28",
+    "@tanstack/react-router-ssr-query": "1.167.1",
     "@tanstack/react-start": "1.168.45",
     "@tanstack/react-table": "9.1.2",
     "@tanstack/react-virtual": "3.14.9",
@@ -37,6 +45,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@phosphor-icons/core": "2.1.1",
     "@tanstack/router-plugin": "1.168.31",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

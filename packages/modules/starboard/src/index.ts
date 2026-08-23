@@ -96,6 +96,7 @@ export function createStarboardModule(
       Permissions.SendMessages,
       Permissions.EmbedLinks,
     ],
+    actionKinds: ['send', 'edit_message', 'delete_message'],
 
     listeners: [createStarboardListener(deps)],
 

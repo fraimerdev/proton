@@ -92,6 +92,13 @@ export class DrizzleMemberXpStore {
                message_count = m.message_count + 1
          where m.last_xp_at is null or m.last_xp_at < ${cutoff}::timestamptz
         returning m.xp as xp, m.level as level, true as awarded
+      ), rolled as (
+        insert into member_activity_daily as a (guild_id, user_id, day, message_count)
+        select ${input.guildId}, ${input.userId},
+               (${now}::timestamptz at time zone 'utc')::date, 1
+         where exists (select 1 from awarded)
+        on conflict (guild_id, user_id, day) do update
+           set message_count = a.message_count + 1
       )
       select xp, level, awarded from awarded
       union all
@@ -112,14 +119,26 @@ export class DrizzleMemberXpStore {
   async creditVoice(input: MemberXpVoiceInput): Promise<MemberXpAwardResult> {
     const insertLevel = this.#levelForXp(input.amount);
 
+    const now = new Date(input.now).toISOString();
+
     const rows = await this.#handle.client<AwardRow[]>`
-      insert into members as m (guild_id, user_id, xp, level, voice_seconds)
-           values (${input.guildId}, ${input.userId}, ${input.amount}, ${insertLevel},
-                   ${input.seconds})
-      on conflict (guild_id, user_id) do update
-         set xp = m.xp + ${input.amount},
-             voice_seconds = m.voice_seconds + ${input.seconds}
-      returning m.xp as xp, m.level as level, true as awarded
+      with credited as (
+        insert into members as m (guild_id, user_id, xp, level, voice_seconds)
+             values (${input.guildId}, ${input.userId}, ${input.amount}, ${insertLevel},
+                     ${input.seconds})
+        on conflict (guild_id, user_id) do update
+           set xp = m.xp + ${input.amount},
+               voice_seconds = m.voice_seconds + ${input.seconds}
+        returning m.xp as xp, m.level as level, true as awarded
+      ), rolled as (
+        insert into member_activity_daily as a (guild_id, user_id, day, voice_seconds)
+        select ${input.guildId}, ${input.userId},
+               (${now}::timestamptz at time zone 'utc')::date, ${input.seconds}
+         where exists (select 1 from credited)
+        on conflict (guild_id, user_id, day) do update
+           set voice_seconds = a.voice_seconds + ${input.seconds}
+      )
+      select xp, level, awarded from credited
     `;
 
     const row = rows[0];

@@ -102,11 +102,11 @@ describe('LogEventMatrix', () => {
   });
 
   test('only text channels are offered as destinations', () => {
-    const html = render({});
+    const text = render({ 'members.joined': { channelId: '500000000000000003' } });
+    const voice = render({ 'members.joined': { channelId: '500000000000000002' } });
 
-    expect(html).toContain('#mod-log');
-    expect(html).toContain('#announcements');
-    expect(html).not.toContain('#lounge');
+    expect(text).toContain('<span class="picker-value">announcements</span>');
+    expect(voice).not.toContain('lounge');
   });
 
   test('the inherit option names the channel it would inherit', () => {

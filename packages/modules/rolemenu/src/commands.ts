@@ -1,7 +1,6 @@
 import {
   type CommandContext,
   type CommandDefinition,
-  dryRunFor,
   Permissions,
   snowflakeSchema,
 } from '@proton/core';
@@ -75,21 +74,29 @@ async function runRolemenu(ctx: Ctx): Promise<void> {
 
 async function postComponents(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   const content = ctx.options.getString('message') ?? undefined;
-  const components = buildComponents(menu);
   const refreshing = menu.messageId !== undefined;
+
+  const built = buildComponents(menu);
+  if (!built.ok) {
+    return reply(
+      ctx,
+      `I couldn't build '${menu.id}': ${built.humanReason} Edit the menu under Role menus in ` +
+        'the Proton dashboard.',
+    );
+  }
 
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
     kind: refreshing ? 'edit_message' : 'send',
     actorId: ctx.userId,
-    dryRun: dryRunFor(refreshing ? 'edit_message' : 'send'),
+    dryRun: false,
     idempotencyKey: `${MODULE_ID}:${ctx.idempotencyKey}:post:${menu.id}`,
     payload: {
       channelId: menu.channelId,
       ...(menu.messageId ? { messageId: menu.messageId } : {}),
       ...(content ? { content } : {}),
-      components,
+      components: built.components,
     },
   });
 
@@ -128,7 +135,7 @@ async function seedReactions(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
       moduleId: MODULE_ID,
       kind: 'add_reaction',
       actorId: ctx.userId,
-      dryRun: dryRunFor('add_reaction'),
+      dryRun: false,
       idempotencyKey: `${MODULE_ID}:${ctx.idempotencyKey}:seed:${menu.id}:${binding.key}`,
       payload: { channelId: menu.channelId, messageId: menu.messageId, emoji: binding.key },
     });

@@ -35,6 +35,7 @@ export class DatabaseReversalScheduler {
       kind: planned.plan.kind,
       idempotencyKey: reversalIdempotencyKey(request.idempotencyKey),
       payload: {
+        kind: 'reversal',
         caseId,
         moduleId: request.moduleId,
         actorId: request.actorId,

@@ -38,6 +38,8 @@ export class CaseQueryService {
   #filters(query: CaseQuery): SQL[] {
     const filters: SQL[] = [];
 
+    if (query.caseId !== undefined) filters.push(eq(cases.id, query.caseId));
+
     if (query.type !== undefined) filters.push(eq(cases.type, query.type));
 
     if (query.moderatorId !== undefined) {

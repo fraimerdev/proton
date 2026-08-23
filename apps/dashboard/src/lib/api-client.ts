@@ -1,57 +1,33 @@
 import type {
   CaseQuery,
   CaseSearchResult,
+  GuildOverview,
   LeaderboardQuery,
   LeaderboardResult,
+  ModuleConfigView,
+  ModuleDescriptors,
+  ModuleIndex,
+  ModuleUpdateResult,
 } from '@proton/core';
+import {
+  guildOverviewSchema,
+  guildPresenceSchema,
+  moduleConfigViewSchema,
+  moduleDescriptorsSchema,
+  moduleIndexSchema,
+  moduleUpdateResultSchema,
+} from '@proton/core';
+import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
+import type { z } from 'zod';
+import type { AuditStamp } from '../server/audit.ts';
 
-export type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+function queryString(query: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) params.set(key, String(value));
+  }
 
-export interface JsonFieldDescriptor {
-  kind: string;
-  path: string;
-  label: string;
-  description?: string;
-  optional: boolean;
-  defaultValue?: JsonValue;
-  array?: boolean;
-  maxItems?: number;
-  minLength?: number;
-  maxLength?: number;
-  min?: number;
-  max?: number;
-  options?: string[];
-  channelTypes?: number[];
-}
-
-export interface ModuleConfigView {
-  moduleId: string;
-  enabled: boolean;
-  config: Record<string, JsonValue>;
-  schemaVersion: number;
-}
-
-export interface ModuleSection {
-  id: string;
-  title: string;
-  fields: string[];
-}
-
-export interface ModuleStatusView {
-  id: string;
-  enabled: boolean;
-  disabledReason?: { code: string; humanReason: string };
-}
-
-export interface ModuleSummary {
-  id: string;
-  name: string;
-  category: string;
-  descriptors: JsonFieldDescriptor[];
-
-  commands: string[];
-  dashboard: { icon: string; sections: ModuleSection[] } | null;
-  status: ModuleStatusView | null;
+  return params.toString();
 }
 
 export class ApiClient {
@@ -81,44 +57,83 @@ export class ApiClient {
     return (await response.json()) as T;
   }
 
-  listModules(guildId: string): Promise<{ modules: ModuleSummary[] }> {
-    return this.#request(`/guilds/${guildId}/modules`);
+  // Parsed rather than cast, for the shapes both apps declare: the dashboard's own copy of
+  // ModuleConfigView had already drifted two fields behind the api's before this existed, and a
+  // cast turns that into a runtime undefined somewhere far from the endpoint that changed.
+  async #parsed<TSchema extends z.ZodType>(
+    path: string,
+    schema: TSchema,
+    init: RequestInit = {},
+  ): Promise<z.output<TSchema>> {
+    const parsed = schema.safeParse(await this.#request(path, init));
+
+    if (!parsed.success) {
+      throw new Error(
+        `the api answered ${path} with a shape this dashboard does not understand — ` +
+          `${parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ')}`,
+      );
+    }
+
+    return parsed.data;
+  }
+
+  getGuild(guildId: string): Promise<GuildOverview> {
+    return this.#parsed(`/guilds/${guildId}`, guildOverviewSchema);
+  }
+
+  async guildPresence(guildIds: readonly string[]): Promise<string[]> {
+    const { present } = await this.#parsed('/guilds/presence', guildPresenceSchema, {
+      method: 'POST',
+      body: JSON.stringify({ ids: guildIds }),
+    });
+
+    return present;
+  }
+
+  listModules(guildId: string): Promise<ModuleIndex> {
+    return this.#parsed(`/guilds/${guildId}/modules`, moduleIndexSchema);
   }
 
   getModule(guildId: string, moduleId: string): Promise<ModuleConfigView> {
-    return this.#request(`/guilds/${guildId}/modules/${moduleId}`);
+    return this.#parsed(`/guilds/${guildId}/modules/${moduleId}`, moduleConfigViewSchema);
+  }
+
+  getModuleDescriptors(guildId: string, moduleId: string): Promise<ModuleDescriptors> {
+    return this.#parsed(
+      `/guilds/${guildId}/modules/${moduleId}/descriptors`,
+      moduleDescriptorsSchema,
+    );
   }
 
   searchCases(guildId: string, query: CaseQuery): Promise<CaseSearchResult> {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) params.set(key, String(value));
-    }
+    return this.#request(`/guilds/${guildId}/cases?${queryString(query)}`);
+  }
 
-    return this.#request(`/guilds/${guildId}/cases?${params.toString()}`);
+  searchTags(guildId: string, query: TagQuery): Promise<TagSearchResult> {
+    return this.#request(`/guilds/${guildId}/tags?${queryString(query)}`);
   }
 
   searchLeaderboard(guildId: string, query: LeaderboardQuery): Promise<LeaderboardResult> {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value !== undefined) params.set(key, String(value));
-    }
+    return this.#request(`/guilds/${guildId}/leaderboard?${queryString(query)}`);
+  }
 
-    return this.#request(`/guilds/${guildId}/leaderboard?${params.toString()}`);
+  // The Response itself, not bytes: the card is an image the browser streams into an <img>, and
+  // buffering it here to hand back a data URI would cost a base64 round trip per keystroke.
+  cardPreview(guildId: string, query: Record<string, unknown>): Promise<Response> {
+    return fetch(`${this.#baseUrl}/guilds/${guildId}/cards/preview?${queryString(query)}`, {
+      headers: { 'x-proton-secret': this.#secret },
+    });
   }
 
   updateModule(
     guildId: string,
     moduleId: string,
-    body: {
+    body: AuditStamp & {
       enabled?: boolean | undefined;
       config?: Record<string, unknown> | undefined;
-      actorId: string;
-      source: 'dashboard';
-      ipHash?: string | undefined;
     },
-  ): Promise<{ before: ModuleConfigView; after: ModuleConfigView }> {
-    return this.#request(`/guilds/${guildId}/modules/${moduleId}`, {
+  ): Promise<ModuleUpdateResult> {
+    return this.#parsed(`/guilds/${guildId}/modules/${moduleId}`, moduleUpdateResultSchema, {
       method: 'POST',
       body: JSON.stringify(body),
     });

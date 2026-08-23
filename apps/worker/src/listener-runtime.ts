@@ -10,8 +10,10 @@ import type {
   Subscription,
 } from '@proton/core';
 import { ConfigUnavailableError } from './config-provider.ts';
+import { moduleExecutor } from './module-actions.ts';
 import type { ModulePublisherFactory } from './module-publish.ts';
-import type { ConfigProvider } from './runtime.ts';
+import type { ModuleSchedulerFactory } from './module-schedule.ts';
+import type { ConfigProvider, ModuleConfigSnapshot } from './runtime.ts';
 
 export const LISTENER_GROUP_PREFIX = 'listener';
 
@@ -27,6 +29,7 @@ export interface ListenerRuntimeDeps {
   groupPrefix?: string;
 
   publisherFor?: ModulePublisherFactory;
+  schedulerFor?: ModuleSchedulerFactory;
 }
 
 export function subscribedTypes(manifest: ModuleManifest): EventType[] {
@@ -98,12 +101,14 @@ export class ModuleListenerRuntime {
     const ctx: ModuleContext<typeof parsed.data> = {
       guildId,
       config: parsed.data,
-      executor: this.#deps.executor,
+      tier: snapshot.tier ?? 'free',
+      executor: moduleExecutor(this.#deps.registry, manifest.id, this.#deps.executor),
       logger: this.#deps.logger,
 
       ...(this.#deps.publisherFor
         ? { publish: this.#deps.publisherFor(manifest.id, guildId) }
         : {}),
+      ...(this.#deps.schedulerFor ? this.#deps.schedulerFor(manifest.id, guildId) : {}),
     };
 
     for (const listener of matching) {
@@ -115,7 +120,7 @@ export class ModuleListenerRuntime {
     guildId: string,
     manifest: ModuleManifest,
     event: ProtonEvent,
-  ): Promise<{ enabled: boolean; config: unknown } | null> {
+  ): Promise<ModuleConfigSnapshot | null> {
     try {
       return await this.#deps.config.get(guildId, manifest.id);
     } catch (error) {

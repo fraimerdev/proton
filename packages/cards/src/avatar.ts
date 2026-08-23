@@ -2,17 +2,17 @@ const ALLOWED_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
 
 const ALLOWED_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/gif'];
 
-export const AVATAR_MAX_BYTES = 1_048_576;
+export const IMAGE_MAX_BYTES = 1_048_576;
 
-export const AVATAR_TIMEOUT_MS = 2_000;
+export const IMAGE_TIMEOUT_MS = 2_000;
 
-export interface AvatarFetcher {
+export interface ImageFetcher {
   fetch(url: string): Promise<Uint8Array | null>;
 }
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
-export interface HttpAvatarFetcherOptions {
+export interface HttpImageFetcherOptions {
   maxBytes?: number;
   timeoutMs?: number;
 
@@ -59,15 +59,15 @@ async function readCapped(response: Response, maxBytes: number): Promise<Uint8Ar
   return out;
 }
 
-export class HttpAvatarFetcher implements AvatarFetcher {
+export class HttpImageFetcher implements ImageFetcher {
   readonly #maxBytes: number;
   readonly #timeoutMs: number;
   readonly #fetch: FetchLike;
   readonly #onSkip: (reason: string) => void;
 
-  constructor(options: HttpAvatarFetcherOptions = {}) {
-    this.#maxBytes = options.maxBytes ?? AVATAR_MAX_BYTES;
-    this.#timeoutMs = options.timeoutMs ?? AVATAR_TIMEOUT_MS;
+  constructor(options: HttpImageFetcherOptions = {}) {
+    this.#maxBytes = options.maxBytes ?? IMAGE_MAX_BYTES;
+    this.#timeoutMs = options.timeoutMs ?? IMAGE_TIMEOUT_MS;
     this.#fetch = options.fetchImpl ?? globalThis.fetch;
     this.#onSkip = options.onSkip ?? (() => undefined);
   }
@@ -77,14 +77,15 @@ export class HttpAvatarFetcher implements AvatarFetcher {
     try {
       parsed = new URL(url);
     } catch {
-      this.#onSkip(`avatar URL is not a URL: ${url}`);
+      this.#onSkip(`card image URL is not a URL: ${url}`);
       return null;
     }
 
     if (parsed.protocol !== 'https:' || !ALLOWED_HOSTS.has(parsed.hostname)) {
       this.#onSkip(
-        `refused to fetch an avatar from '${parsed.protocol}//${parsed.hostname}': cards only ` +
-          `fetch over https from ${[...ALLOWED_HOSTS].join(' or ')}`,
+        `refused to fetch a card image from '${parsed.protocol}//${parsed.hostname}': cards only ` +
+          `fetch over https from ${[...ALLOWED_HOSTS].join(' or ')}. Upload the image to Discord ` +
+          'and use the link Discord gives it.',
       );
       return null;
     }
@@ -96,34 +97,34 @@ export class HttpAvatarFetcher implements AvatarFetcher {
       });
 
       if (!response.ok) {
-        this.#onSkip(`avatar CDN answered ${response.status} for ${parsed.pathname}`);
+        this.#onSkip(`the Discord CDN answered ${response.status} for ${parsed.pathname}`);
         return null;
       }
 
       if (!contentTypeAllowed(response.headers.get('content-type'))) {
         this.#onSkip(
-          `avatar at ${parsed.pathname} is '${response.headers.get('content-type') ?? 'untyped'}'; ` +
-            `card rendering can only embed ${ALLOWED_CONTENT_TYPES.join(', ')} — request the ` +
-            'avatar with a .png extension',
+          `the image at ${parsed.pathname} is '${response.headers.get('content-type') ?? 'untyped'}'; ` +
+            `card rendering can only draw ${ALLOWED_CONTENT_TYPES.join(', ')} — request it ` +
+            'with a .png extension',
         );
         return null;
       }
 
       const declared = Number(response.headers.get('content-length'));
       if (Number.isFinite(declared) && declared > this.#maxBytes) {
-        this.#onSkip(`avatar at ${parsed.pathname} declares ${declared} bytes, over the cap`);
+        this.#onSkip(`the image at ${parsed.pathname} declares ${declared} bytes, over the cap`);
         return null;
       }
 
       const bytes = await readCapped(response, this.#maxBytes);
       if (!bytes) {
-        this.#onSkip(`avatar at ${parsed.pathname} exceeded the ${this.#maxBytes}-byte cap`);
+        this.#onSkip(`the image at ${parsed.pathname} exceeded the ${this.#maxBytes}-byte cap`);
         return null;
       }
       return bytes;
     } catch (cause) {
       this.#onSkip(
-        `avatar fetch for ${parsed.pathname} failed: ${
+        `fetching the image at ${parsed.pathname} failed: ${
           cause instanceof Error ? cause.message : String(cause)
         }`,
       );
@@ -132,7 +133,7 @@ export class HttpAvatarFetcher implements AvatarFetcher {
   }
 }
 
-export const nullAvatarFetcher: AvatarFetcher = { fetch: async () => null };
+export const nullImageFetcher: ImageFetcher = { fetch: async () => null };
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff]);
@@ -142,17 +143,8 @@ function startsWith(bytes: Uint8Array, magic: Uint8Array): boolean {
   return magic.every((byte, index) => bytes[index] === byte);
 }
 
-export function toDataUri(bytes: Uint8Array): string | null {
-  const type = startsWith(bytes, PNG)
-    ? 'image/png'
-    : startsWith(bytes, JPEG)
-      ? 'image/jpeg'
-      : startsWith(bytes, GIF)
-        ? 'image/gif'
-        : null;
-  if (!type) return null;
-
-  return `data:${type};base64,${Buffer.from(bytes).toString('base64')}`;
+export function isRenderableImage(bytes: Uint8Array): boolean {
+  return startsWith(bytes, PNG) || startsWith(bytes, JPEG) || startsWith(bytes, GIF);
 }
 
 export function discordAvatarUrl(userId: string, avatarHash: string, size = 256): string {

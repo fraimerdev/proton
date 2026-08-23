@@ -7,6 +7,8 @@ import {
   casesFormSchema,
 } from './config.ts';
 import { casesPresetRules, escalationRules } from './escalation.ts';
+import type { CaseHistoryStore } from './history.ts';
+import { createCasesProviders } from './providers.ts';
 
 export {
   CASES_SCHEMA_VERSION,
@@ -21,6 +23,26 @@ export {
   escalationRungSchema,
 } from './config.ts';
 export { casesPresetRules, escalationRuleId, escalationRules } from './escalation.ts';
+export {
+  CASE_TYPES,
+  type CaseCountQuery,
+  type CaseHistoryStore,
+  type CaseType,
+} from './history.ts';
+export { CASES_MODULE_ID, createCasesProviders } from './providers.ts';
+
+export interface CasesDeps {
+  // Unbound means cases registers no providers: a requirement that can never be judged should not
+  // appear in the picker at all.
+  history?: CaseHistoryStore;
+}
+
+export function createCasesModule(deps: CasesDeps = {}): ModuleManifest<typeof casesConfigSchema> {
+  return {
+    ...casesModule,
+    ...(deps.history ? { providers: createCasesProviders(deps.history) } : {}),
+  };
+}
 
 export const casesModule: ModuleManifest<typeof casesConfigSchema> = {
   id: 'cases',

@@ -1,4 +1,7 @@
-import { MESSAGE_CACHE_FALLBACK_TTL_MS, MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging';
+import {
+  MESSAGE_CACHE_FALLBACK_TTL_MS,
+  MESSAGE_LOG_RETENTION_DAYS,
+} from '@proton/module-logging/config';
 
 const MESSAGE_CACHE_DEFAULT_RETENTION_HOURS = MESSAGE_CACHE_FALLBACK_TTL_MS / 3_600_000;
 
@@ -6,7 +9,7 @@ import type { ReactElement } from 'react';
 
 export function PrivacyPolicy(): ReactElement {
   return (
-    <section className="panel prose">
+    <section className="prose">
       <h1>Privacy</h1>
 
       <p>

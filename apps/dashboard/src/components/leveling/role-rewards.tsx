@@ -1,15 +1,12 @@
 import { type RoleReward, roleRewardsSchema } from '@proton/module-leveling/config';
 import { MAX_LEVEL } from '@proton/module-leveling/curve';
 import type { ReactElement } from 'react';
-
-export interface GuildRole {
-  id: string;
-  name: string;
-}
+import { useId } from 'react';
+import { type DiscordRole, roleOptions, SinglePicker } from '../form/picker.tsx';
 
 export interface RoleRewardsEditorProps {
   rewards: readonly RoleReward[];
-  roles: readonly GuildRole[];
+  roles: readonly DiscordRole[];
   onChange: (rewards: RoleReward[]) => void;
 }
 
@@ -20,7 +17,9 @@ export function RoleRewardsEditor({
   roles,
   onChange,
 }: RoleRewardsEditorProps): ReactElement {
+  const fieldId = useId();
   const parsed = roleRewardsSchema.safeParse(rewards);
+  const options = roleOptions(roles);
 
   function update(index: number, patch: Partial<RoleReward>): void {
     onChange(rewards.map((reward, i) => (i === index ? { ...reward, ...patch } : reward)));
@@ -42,51 +41,56 @@ export function RoleRewardsEditor({
         previous reward roles are removed; in <em>stack</em> mode they are kept.
       </p>
 
-      {rewards.map((reward, index) => (
-        <div
-          className="ladder-rung"
-          // biome-ignore lint/suspicious/noArrayIndexKey: the edited value cannot key its own row
-          key={`reward-${index}`}
-        >
-          <label className="filter">
-            <span>At level</span>
-            <input
-              type="number"
-              min={1}
-              max={MAX_LEVEL}
-              value={reward.level}
-              onChange={(e) =>
-                update(index, { level: e.target.value === '' ? 0 : e.target.valueAsNumber })
-              }
-            />
-          </label>
+      {rewards.map((reward, index) => {
+        // A label wrapping the picker would forward option clicks back to the trigger and reopen it.
+        const roleControlId = `${fieldId}-role-${index}`;
 
-          <label className="filter">
-            <span>Grant role</span>
-            <select
-              value={reward.roleId}
-              aria-invalid={reward.roleId === ''}
-              onChange={(e) => update(index, { roleId: e.target.value })}
-            >
-              <option value="">Choose a role…</option>
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <button
-            type="button"
-            className="button button-quiet"
-            aria-label={`Remove the reward at level ${reward.level}`}
-            onClick={() => onChange(rewards.filter((_, i) => i !== index))}
+        return (
+          <div
+            className="ladder-rung"
+            // biome-ignore lint/suspicious/noArrayIndexKey: the edited value cannot key its own row
+            key={`reward-${index}`}
           >
-            Remove
-          </button>
-        </div>
-      ))}
+            <label className="filter">
+              <span>At level</span>
+              <input
+                type="number"
+                min={1}
+                max={MAX_LEVEL}
+                value={reward.level}
+                onChange={(e) =>
+                  update(index, { level: e.target.value === '' ? 0 : e.target.valueAsNumber })
+                }
+              />
+            </label>
+
+            <div className="filter">
+              <span>
+                <label htmlFor={roleControlId}>Grant role</label>
+              </span>
+              <SinglePicker
+                id={roleControlId}
+                label="Grant role"
+                options={options}
+                value={reward.roleId === '' ? null : reward.roleId}
+                onChange={(next) => update(index, { roleId: next ?? '' })}
+                emptyLabel="Choose a role…"
+                clearable={false}
+                invalid={reward.roleId === ''}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="button button-quiet"
+              aria-label={`Remove the reward at level ${reward.level}`}
+              onClick={() => onChange(rewards.filter((_, i) => i !== index))}
+            >
+              Remove
+            </button>
+          </div>
+        );
+      })}
 
       {rewards.length === 0 ? (
         <p className="field-empty">

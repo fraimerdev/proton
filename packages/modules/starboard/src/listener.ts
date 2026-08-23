@@ -1,10 +1,9 @@
-import {
-  type ActionResult,
-  dryRunFor,
-  type EventListener,
-  type EventType,
-  type ModuleContext,
-  type ProtonEvent,
+import type {
+  ActionResult,
+  EventListener,
+  EventType,
+  ModuleContext,
+  ProtonEvent,
 } from '@proton/core';
 import type { StarboardConfig } from './config.ts';
 import { countStars, decide, eligibility, type StarboardDecision } from './decide.ts';
@@ -151,7 +150,7 @@ async function create(count: number, input: ApplyInput): Promise<void> {
     kind: 'send',
     actorId: MODULE_ID,
     reason: `Starred by ${count} members`,
-    dryRun: dryRunFor('send'),
+    dryRun: false,
     idempotencyKey: createKey(ctx.guildId, message.id),
     payload: { channelId: boardChannelId, ...board },
   });
@@ -193,7 +192,7 @@ async function edit(boardMessageId: string, count: number, input: ApplyInput): P
     moduleId: MODULE_ID,
     kind: 'edit_message',
     actorId: MODULE_ID,
-    dryRun: dryRunFor('edit_message'),
+    dryRun: false,
 
     idempotencyKey: `${MODULE_ID}:${ctx.guildId}:${input.event.id}:edit`,
     payload: { channelId: boardChannelId, messageId: boardMessageId, ...board },
@@ -221,7 +220,7 @@ async function remove(boardMessageId: string, input: ApplyInput): Promise<void> 
     actorId: MODULE_ID,
     reason: 'Fell below the star threshold',
 
-    dryRun: dryRunFor('delete_message'),
+    dryRun: false,
 
     idempotencyKey: `${MODULE_ID}:${ctx.guildId}:${message.id}:delete:${boardMessageId}`,
     payload: { channelId: boardChannelId, messageId: boardMessageId },

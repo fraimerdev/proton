@@ -13,6 +13,16 @@ export function reversalIdempotencyKey(originalKey: string): string {
   return `reversal:${originalKey}`;
 }
 
+export interface CaseReversalInput {
+  caseId: string;
+  revertedAt: Date;
+  revertedBy: string;
+}
+
+export interface CaseReversalStore {
+  markReverted(input: CaseReversalInput): Promise<void>;
+}
+
 export interface ReversalPlan {
   kind: ActionKind;
 

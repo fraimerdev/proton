@@ -1,9 +1,4 @@
-import {
-  type ActionResult,
-  type CommandContext,
-  dryRunFor,
-  type ModuleContext,
-} from '@proton/core';
+import type { ActionResult, CommandContext, ModuleContext } from '@proton/core';
 import type { VerificationConfig } from './config.ts';
 import type { RoleStep } from './roles.ts';
 
@@ -47,7 +42,7 @@ export async function runSteps(
       targetId: input.targetId,
       ...(input.reason ? { reason: input.reason.slice(0, REASON_MAX) } : {}),
       payload: { userId: input.targetId, roleId: step.roleId, ...input.payloadExtra },
-      dryRun: dryRunFor(step.kind),
+      dryRun: false,
       idempotencyKey: `${MODULE_ID}:${input.idempotencyRoot}:${step.kind}:${step.roleId}`,
     });
 

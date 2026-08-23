@@ -109,6 +109,7 @@ export function createServerlogModule(
       Permissions.EmbedLinks,
       Permissions.ViewAuditLog,
     ],
+    actionKinds: ['send'],
 
     listeners: [createServerlogListener(deps)],
 

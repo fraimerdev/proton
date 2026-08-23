@@ -11,12 +11,17 @@ import { ModuleRegistry, Permissions } from '@proton/core';
 import { dispatch } from '@proton/fixtures';
 import { normalise } from '@proton/gateway/normaliser';
 import { GatewayIntentBits } from 'discord-api-types/v10';
+import type { WelcomeConfig } from '../src/config.ts';
 import {
   DEFAULT_GOODBYE_MESSAGE,
+  DEFAULT_WELCOME_MESSAGE,
+  type GreetingMessage,
+  greetingMessageSchema,
+  isSilentGreeting,
   renderGreeting,
-  type WelcomeConfig,
   welcomeConfigSchema,
   welcomeDefaultConfig,
+  welcomeFormSchema,
 } from '../src/config.ts';
 import { createWelcomeModule, welcomeModule } from '../src/index.ts';
 import { createGreetingListener, readGreetingTarget } from '../src/listeners.ts';
@@ -53,13 +58,17 @@ function collectingLogger(): { logger: Logger; lines: string[] } {
   };
 }
 
-function config(overrides: Partial<WelcomeConfig> = {}): WelcomeConfig {
+function config(overrides: Record<string, unknown> = {}): WelcomeConfig {
   return welcomeConfigSchema.parse({
     enabled: true,
     welcomeChannelId: CHANNEL,
     goodbyeChannelId: CHANNEL,
     ...overrides,
   });
+}
+
+function greeting(value: unknown): GreetingMessage {
+  return greetingMessageSchema.parse(value);
 }
 
 function joinEvent(): ProtonEvent {
@@ -79,28 +88,186 @@ function leaveEvent(): ProtonEvent {
 describe('renderGreeting', () => {
   const facts = { userId: MEMBER, username: 'Newcomer', guildName: 'Proton', memberCount: 42 };
 
+  function content(template: string): string | undefined {
+    return renderGreeting(greeting(template), facts).content;
+  }
+
   test('substitutes every placeholder', () => {
-    expect(renderGreeting('{user} {username} {server} {memberCount}', facts)).toBe(
+    expect(content('{user} {username} {server} {memberCount}')).toBe(
       `<@${MEMBER}> Newcomer Proton 42`,
     );
   });
 
   test('{user} is a mention, so it pings and renders any display name', () => {
-    expect(renderGreeting('{user}', facts)).toBe(`<@${MEMBER}>`);
+    expect(content('{user}')).toBe(`<@${MEMBER}>`);
   });
 
   test('leaves unknown tokens alone rather than blanking them', () => {
-    expect(renderGreeting('hello {nobody}', facts)).toBe('hello {nobody}');
+    expect(content('hello {nobody}')).toBe('hello {nobody}');
+  });
+
+  test('a token naming an Object.prototype member is left alone, not resolved to it', () => {
+    expect(content('hello {constructor}')).toBe('hello {constructor}');
   });
 
   test('a substituted value is not itself expanded', () => {
     const hostile = { ...facts, username: '{server}' };
 
-    expect(renderGreeting('{username}', hostile)).toBe('{server}');
+    expect(renderGreeting(greeting('{username}'), hostile).content).toBe('{server}');
   });
 
   test('truncates to Discord’s 2000-character limit rather than sending nothing', () => {
-    expect(renderGreeting('x'.repeat(3000), facts)).toHaveLength(2000);
+    const huge = { ...facts, guildName: 'P'.repeat(3000) };
+
+    expect(renderGreeting(greeting('Welcome to {server}'), huge).content).toHaveLength(2000);
+  });
+
+  test('substitutes inside an embed, not only in the content', () => {
+    const rendered = renderGreeting(
+      greeting({
+        embeds: [
+          {
+            title: 'Welcome to {server}',
+            description: 'Say hello to {username}',
+            fields: [{ name: 'Member', value: 'You are #{memberCount}' }],
+          },
+        ],
+      }),
+      facts,
+    );
+
+    expect(rendered.embeds[0]?.title).toBe('Welcome to Proton');
+    expect(rendered.embeds[0]?.description).toBe('Say hello to Newcomer');
+    expect(rendered.embeds[0]?.fields?.[0]?.value).toBe('You are #42');
+  });
+
+  test('leaves the stored message untouched, so the next join renders the tokens again', () => {
+    const stored = greeting('Welcome to {server}');
+
+    renderGreeting(stored, facts);
+
+    expect(stored.content).toBe('Welcome to {server}');
+  });
+});
+
+describe('a greeting stored before it could hold an embed', () => {
+  test('a bare string comes back as the content of a message', () => {
+    expect(greeting('Welcome to {server}!')).toEqual({
+      content: 'Welcome to {server}!',
+      embeds: [],
+      components: [],
+      mentions: { everyone: false, roles: true, users: true },
+      v2: [],
+    });
+  });
+
+  // The bug this closes: the sidebar switch saves { enabled } with no config, and the API falls
+  // back to the parsed config it read. A string that did not survive the parse would be gone.
+  test('it survives a parse and a re-parse with its text intact', () => {
+    const once = greeting('Welcome to {server}!');
+    const twice = greeting(once);
+
+    expect(twice).toEqual(once);
+    expect(twice.content).toBe('Welcome to {server}!');
+  });
+
+  test('a whole stored config round-trips through the schema without losing either message', () => {
+    const stored = {
+      enabled: true,
+      welcomeChannelId: CHANNEL,
+      welcomeMessage: 'Welcome to {server}!',
+      goodbyeMessage: 'Bye {username}.',
+      card: true,
+    };
+
+    const once = welcomeConfigSchema.parse(stored);
+    const twice = welcomeConfigSchema.parse(once);
+
+    expect(twice.welcomeMessage.content).toBe('Welcome to {server}!');
+    expect(twice.goodbyeMessage.content).toBe('Bye {username}.');
+    expect(twice).toEqual(once);
+  });
+
+  test('an empty string stays an empty message rather than failing to parse', () => {
+    const empty = greeting('');
+
+    expect(isSilentGreeting(empty)).toBe(true);
+    expect(greeting(empty)).toEqual(empty);
+  });
+
+  test('the defaults are the same messages, in the new shape', () => {
+    expect(welcomeDefaultConfig.welcomeMessage.content).toBe(DEFAULT_WELCOME_MESSAGE);
+    expect(welcomeDefaultConfig.goodbyeMessage.content).toBe(DEFAULT_GOODBYE_MESSAGE);
+  });
+});
+
+describe('what a greeting refuses', () => {
+  test('a button Proton would have to answer, because nothing here listens for the press', () => {
+    const refused = greetingMessageSchema.safeParse({
+      content: 'Hello',
+      components: [
+        {
+          kind: 'buttons',
+          buttons: [
+            { key: 'hi', label: 'Hi', style: 'primary', action: { kind: 'reply', content: 'Hi' } },
+          ],
+        },
+      ],
+    });
+
+    expect(refused.success).toBe(false);
+    expect(refused.error?.issues[0]?.message).toContain('no interaction listener');
+  });
+
+  test('a dropdown, for the same reason', () => {
+    const refused = greetingMessageSchema.safeParse({
+      content: 'Hello',
+      components: [
+        {
+          kind: 'select',
+          select: { key: 'pick', options: [{ key: 'one', label: 'One' }] },
+        },
+      ],
+    });
+
+    expect(refused.success).toBe(false);
+  });
+
+  // A link button never reaches Proton — Discord opens the address itself — so it is the one
+  // component that works on a message nothing is listening to.
+  test('but not a link button', () => {
+    const accepted = greetingMessageSchema.safeParse({
+      content: 'Hello',
+      components: [
+        {
+          kind: 'buttons',
+          buttons: [
+            { key: 'rules', label: 'Read the rules', style: 'link', url: 'https://example.com' },
+          ],
+        },
+      ],
+    });
+
+    expect(accepted.success).toBe(true);
+  });
+
+  test('an embed with nothing in it', () => {
+    expect(greetingMessageSchema.safeParse({ embeds: [{}] }).success).toBe(false);
+  });
+});
+
+describe('the generated form', () => {
+  test('omits the two messages, which the message builder panel edits instead', () => {
+    expect(Object.keys(welcomeFormSchema.shape).sort()).toEqual([
+      'card',
+      'cardAccent',
+      'cardBackgroundUrl',
+      'cardShowMemberCount',
+      'enabled',
+      'goodbyeChannelId',
+      'preset',
+      'welcomeChannelId',
+    ]);
   });
 });
 
@@ -265,6 +432,110 @@ describe('greeting listener', () => {
     });
 
     expect(lines.join(' ')).toContain('I cannot post in that channel.');
+  });
+
+  test('posts the embed the guild built, with its placeholders already substituted', async () => {
+    const executor = new RecordingExecutor();
+    const listener = createGreetingListener({
+      guildState: { get: async () => ({ name: 'Proton', memberCount: 42 }) },
+    });
+
+    await listener.handler(joinEvent(), {
+      guildId: GUILD,
+      config: config({
+        welcomeMessage: {
+          content: 'Hey {user}',
+          embeds: [{ title: 'Welcome to {server}', description: 'Member #{memberCount}' }],
+        },
+      }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    const payload = payloadOf(executor);
+    const embeds = payload.embeds as Array<Record<string, unknown>> | undefined;
+
+    expect(payload.content).toBe(`Hey <@${MEMBER}>`);
+    expect(embeds?.[0]?.title).toBe('Welcome to Proton');
+    expect(embeds?.[0]?.description).toBe('Member #42');
+  });
+
+  // Discord parses every mention in a bot message by default, so a greeting built from a name a
+  // member picked could otherwise ping the whole server.
+  test('always names what may be mentioned', async () => {
+    const executor = new RecordingExecutor();
+    const listener = createGreetingListener();
+
+    await listener.handler(joinEvent(), {
+      guildId: GUILD,
+      config: config(),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(payloadOf(executor).allowedMentions).toEqual({ parse: ['roles', 'users'] });
+  });
+
+  test('a link button is posted with its address, and never asks for a custom_id', async () => {
+    const executor = new RecordingExecutor();
+    const listener = createGreetingListener();
+
+    await listener.handler(joinEvent(), {
+      guildId: GUILD,
+      config: config({
+        welcomeMessage: {
+          content: 'Hello',
+          components: [
+            {
+              kind: 'buttons',
+              buttons: [
+                { key: 'rules', label: 'Read the rules', style: 'link', url: 'https://ex.com' },
+              ],
+            },
+          ],
+        },
+      }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    const rows = payloadOf(executor).components as Array<{
+      components: Array<Record<string, unknown>>;
+    }>;
+
+    expect(rows[0]?.components[0]?.url).toBe('https://ex.com');
+    expect(rows[0]?.components[0]?.custom_id).toBeUndefined();
+  });
+
+  test('an empty message with no card says nothing, and reports nothing', async () => {
+    const executor = new RecordingExecutor();
+    const { logger, lines } = collectingLogger();
+    const listener = createGreetingListener();
+
+    await listener.handler(joinEvent(), {
+      guildId: GUILD,
+      config: config({ welcomeMessage: '' }),
+      executor,
+      logger,
+    });
+
+    expect(executor.requests).toEqual([]);
+    expect(lines).toEqual([]);
+  });
+
+  test('an empty message still posts the card on its own', async () => {
+    const executor = new RecordingExecutor();
+    const listener = createGreetingListener({ render: async () => new Uint8Array([137, 80]) });
+
+    await listener.handler(joinEvent(), {
+      guildId: GUILD,
+      config: config({ welcomeMessage: '', card: true }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(payloadOf(executor).content).toBeUndefined();
+    expect(payloadOf(executor).files).toHaveLength(1);
   });
 });
 

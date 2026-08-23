@@ -197,6 +197,18 @@ Framework-enforced behaviour: a module missing a required intent **disables itse
     mass mentions, invites, blocked domains, attachments, patterns, zalgo, caps, emoji, walls) plus
     native AutoMod delegation. One config; Proton pushes what Discord's edge can enforce into real
     rules it owns by `creator_id`, and enforces the rest itself. Both halves feed one case history.
+  - **Built — see `docs/PHASE-4.md`.** Ten modules: `tags`, `reminders`, `embeds`, `announcements`,
+    `polls`, `giveaways`, `suggestions`, `tickets`, `tempvc`, `counters`.
+  - **`giveaways` rebuilt on the shared provider registry — see `docs/modules/GIVEAWAYS-BUILD.md`.**
+    `ModuleManifest` gained `providers`, and the rule engine's member-scoped conditions (`role-has`,
+    `role-lacks`, `account-age`, `is-premium`) are now `core.*` providers reached through it, so
+    automod, autorole and a giveaway requirement share one predicate implementation rather than
+    two. Weighted entries, seeded A-ExpJ draws reproducible from their audit row, and the first
+    Components V2 message in the project. Two framework additions
+    earn their keep across five of them: `create_channel` now carries permission overwrites (a
+    ticket channel is private in the call that creates it, not one round trip later), and a guild's
+    entitlement tier reaches every module surface on the cached config path, which is what finally
+    makes `entitlements/limits.ts` load-bearing rather than decorative.
 - **Phase 5 (commercial):** entitlements/billing, premium gating, sharding hardening, App Verification, privileged intent application, SLOs, status page.
 - **After engine is stable, high priority:** visual rule builder — worth more than any three modules.
 

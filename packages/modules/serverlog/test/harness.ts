@@ -21,7 +21,7 @@ export const LOG_CHANNEL = '500000000000000099';
 export const ACTOR = '200000000000000009';
 export const BOT_USER = '100000000000000098';
 
-export const EMOJIS = emojiSet({ stemId: '1388502932571557939', replyId: '1388502903827857408' });
+export const EMOJIS = emojiSet({ stemId: '1539999327580192858', replyId: '1539999328674783242' });
 
 export class MemoryCorrelationStore implements CorrelationStore {
   readonly audits = new Map<string, AuditEntry>();
@@ -124,7 +124,7 @@ export function collectingLogger(): { logger: Logger; lines: string[] } {
 
 export const resolver: UserResolver = {
   async resolve(userId: string): Promise<UserProfile | null> {
-    return { id: userId, username: 'admin', globalName: 'Admin', avatarUrl: 'https://cdn/a.png' };
+    return { id: userId, username: 'admin', globalName: 'Admin', avatarUrl: 'https://cdn/a.png', avatarHash: null };
   },
 };
 

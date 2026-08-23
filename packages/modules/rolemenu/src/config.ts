@@ -1,6 +1,15 @@
-import { MAX_CUSTOM_ID_LENGTH, protonFields, snowflakeSchema } from '@proton/core';
+import {
+  CUSTOM_ID_SEPARATOR,
+  encodeCustomId,
+  MAX_CUSTOM_ID_LENGTH,
+  protonFields,
+  snowflakeSchema,
+} from '@proton/core';
 import { z } from 'zod';
-import { CUSTOM_ID_SEPARATOR, encodeCustomId, SELECT_BINDING_KEY } from './custom-id.ts';
+
+export const MODULE_ID = 'rolemenu';
+
+export const SELECT_BINDING_KEY = '*';
 
 export const ROLEMENU_KINDS = ['reaction', 'button', 'select'] as const;
 export type RolemenuKind = (typeof ROLEMENU_KINDS)[number];
@@ -70,15 +79,15 @@ export const rolemenuMenuSchema = z
       }
       seen.add(binding.key);
 
-      const encoded = encodeCustomId(menu.id, binding.key).length;
-      if (encoded > MAX_CUSTOM_ID_LENGTH) {
+      const encoded = encodeCustomId(MODULE_ID, menu.id, binding.key);
+      if (!encoded.ok) {
         ctx.addIssue({
           code: 'custom',
           path: ['bindings', index, 'key'],
           message:
-            `menu id '${menu.id}' and key '${binding.key}' need ${encoded} characters together ` +
-            `with Proton's prefix, and Discord allows a custom_id of ${MAX_CUSTOM_ID_LENGTH}. ` +
-            'Shorten the menu id or the key.',
+            `menu id '${menu.id}' and key '${binding.key}' need ${encoded.length} characters ` +
+            `together with Proton's prefix, and Discord allows a custom_id of ` +
+            `${MAX_CUSTOM_ID_LENGTH}. Shorten the menu id or the key.`,
         });
       }
     }
@@ -117,7 +126,6 @@ export const rolemenuMenusSchema = z
 export const rolemenuConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Let members give themselves roles from the menus configured below.',
   }),
 
   menus: rolemenuMenusSchema.default([]),

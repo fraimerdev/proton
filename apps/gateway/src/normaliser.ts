@@ -6,7 +6,7 @@ import {
   type ProtonEvent,
   snowflakeCreatedAt,
 } from '@proton/core';
-import { AuditLogEvent } from 'discord-api-types/v10';
+import { AuditLogEvent, InteractionType } from 'discord-api-types/v10';
 
 export interface RawDispatch {
   t: string;
@@ -35,6 +35,13 @@ export const AUDIT_LOG_ACTIONS: ReadonlyMap<number, AuditLogEventType> = new Map
   [AuditLogEvent.RoleDelete, 'role.deleted'],
   [AuditLogEvent.WebhookDelete, 'webhook.deleted'],
   [AuditLogEvent.EmojiDelete, 'emoji.deleted'],
+]);
+
+export const INTERACTION_EVENT_TYPES: ReadonlyMap<number, EventType> = new Map([
+  [InteractionType.ApplicationCommand, 'interaction.command'],
+  [InteractionType.MessageComponent, 'interaction.component'],
+  [InteractionType.ApplicationCommandAutocomplete, 'interaction.autocomplete'],
+  [InteractionType.ModalSubmit, 'interaction.modal'],
 ]);
 
 function str(value: unknown): string | null {
@@ -104,6 +111,9 @@ export const NORMALISED_EVENT_TYPES: readonly EventType[] = [
   'reaction.added',
   'reaction.removed',
 
+  'poll.voted',
+  'poll.vote_removed',
+
   'voice.state_updated',
 
   'automod.executed',
@@ -112,6 +122,8 @@ export const NORMALISED_EVENT_TYPES: readonly EventType[] = [
 
   'interaction.command',
   'interaction.component',
+  'interaction.modal',
+  'interaction.autocomplete',
 ] as const;
 
 function event(
@@ -385,6 +397,22 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       return [event(type, `${channelId}:${messageId}:${userId}:${emoji}`, str(d.guild_id), now, d)];
     }
 
+    case 'MESSAGE_POLL_VOTE_ADD':
+    case 'MESSAGE_POLL_VOTE_REMOVE': {
+      const channelId = str(d.channel_id);
+      const messageId = str(d.message_id);
+      const userId = str(d.user_id);
+      const answerId = typeof d.answer_id === 'number' ? d.answer_id : null;
+      if (!channelId || !messageId || !userId || answerId === null) return [];
+
+      const type: EventType =
+        raw.t === 'MESSAGE_POLL_VOTE_ADD' ? 'poll.voted' : 'poll.vote_removed';
+
+      return [
+        event(type, `${channelId}:${messageId}:${userId}:${answerId}`, str(d.guild_id), now, d),
+      ];
+    }
+
     case 'AUTO_MODERATION_ACTION_EXECUTION': {
       const guildId = str(d.guild_id);
       const ruleId = str(d.rule_id);
@@ -424,8 +452,7 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       const interactionId = str(d.id);
       if (!interactionId) return [];
 
-      const type: EventType | null =
-        d.type === 2 ? 'interaction.command' : d.type === 3 ? 'interaction.component' : null;
+      const type = typeof d.type === 'number' ? INTERACTION_EVENT_TYPES.get(d.type) : undefined;
       if (!type) return [];
 
       return [event(type, interactionId, str(d.guild_id), now, d)];

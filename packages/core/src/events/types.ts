@@ -25,11 +25,17 @@ export const EVENT_TYPES = [
   'reaction.added',
   'reaction.removed',
 
+  'poll.voted',
+  'poll.vote_removed',
+
   'voice.state_updated',
 
   'interaction.command',
 
   'interaction.component',
+
+  'interaction.modal',
+  'interaction.autocomplete',
 
   'audit.entry',
 

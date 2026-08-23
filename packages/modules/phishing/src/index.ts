@@ -93,6 +93,7 @@ export function createPhishingModule(
     ],
 
     requiredPermissions: [Permissions.ViewChannel],
+    actionKinds: ['timeout', 'kick', 'ban', 'send', 'interaction_reply'],
 
     commands: [createPhishingStatusCommand(deps)],
     listeners: [createPhishingListener(deps)],

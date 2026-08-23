@@ -13,8 +13,8 @@ import {
   newId,
   Permissions,
   RedisDedupeStore,
-  ReversalSweeper,
   requiredPermissionsFor,
+  ScheduledActionSweeper,
 } from '@proton/core';
 import {
   createDb,
@@ -122,14 +122,15 @@ function build(options: { maxAttempts?: number } = {}) {
       botUserId: BOT,
       botHighestRolePosition: 10,
       botChannelPermissions: Permissions.BanMembers | Permissions.ModerateMembers,
-      requiredPermissions: requiredPermissionsFor(request.kind),
+      requiredPermissions: requiredPermissionsFor(request.kind, request.payload),
       ...(request.targetId ? { target: { id: request.targetId, highestRolePosition: 1 } } : {}),
     }),
   });
 
   const sweeperOf = () =>
-    new ReversalSweeper({
+    new ScheduledActionSweeper({
       store,
+      cases: store,
       executor,
       logger,
       now: () => clock,
@@ -192,7 +193,7 @@ async function scheduledRows(): Promise<ScheduledRow[]> {
   `) as ScheduledRow[];
 }
 
-const NOTHING = { claimed: 0, reverted: 0, retrying: 0, abandoned: 0 };
+const NOTHING = { claimed: 0, reverted: 0, ran: 0, retrying: 0, abandoned: 0, aborted: 0 };
 
 describe('temp action auto-reversal (Gate 1 acceptance)', () => {
   test('a temp ban lifts itself exactly once when its expiry passes', async () => {
@@ -220,8 +221,10 @@ describe('temp action auto-reversal (Gate 1 acceptance)', () => {
     expect(await sweeper.sweep()).toEqual({
       claimed: 1,
       reverted: 1,
+      ran: 0,
       retrying: 0,
       abandoned: 0,
+      aborted: 0,
     });
 
     expect(rest.callsTo('PUT', `/guilds/${GUILD}/bans/${TARGET}`)).toHaveLength(1);
@@ -279,6 +282,7 @@ describe('temp action auto-reversal (Gate 1 acceptance)', () => {
       kind: 'unban',
       idempotencyKey: `reversal:${request.idempotencyKey}`,
       payload: {
+        kind: 'reversal',
         caseId: (await caseRow(request.idempotencyKey))?.id ?? '',
         moduleId: 'moderation',
         actorId: MOD,
@@ -331,8 +335,10 @@ describe('temp action auto-reversal (Gate 1 acceptance)', () => {
     expect(await sweeper.sweep()).toEqual({
       claimed: 1,
       reverted: 0,
+      ran: 0,
       retrying: 1,
       abandoned: 0,
+      aborted: 0,
     });
 
     let pending = await scheduledRows();
@@ -367,8 +373,10 @@ describe('temp action auto-reversal (Gate 1 acceptance)', () => {
     expect(await sweeper.sweep()).toEqual({
       claimed: 1,
       reverted: 0,
+      ran: 0,
       retrying: 0,
       abandoned: 1,
+      aborted: 0,
     });
 
     expect(await sweeper.sweep()).toEqual(NOTHING);

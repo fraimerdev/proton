@@ -186,6 +186,7 @@ const SAMPLES: Record<RuleConditionKind, RuleCondition> = {
   'content-pattern': { kind: 'content-pattern', pattern: 'spam', mode: 'contains' },
   'rate-over-window': { kind: 'rate-over-window', limit: 5, window: '10s', scope: 'guild' },
   'is-premium': { kind: 'is-premium', tier: 'pro' },
+  provider: { kind: 'provider', providerId: 'core.has_role', config: { roleIds: [ROLE_A] } },
 };
 
 describe('ruleConditionSchema', () => {

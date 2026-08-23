@@ -6,6 +6,8 @@ export const INTERACTION_CALLBACK_CHANNEL_MESSAGE = 4;
 
 export const MESSAGE_FLAG_EPHEMERAL = 64;
 
+export const MESSAGE_FLAG_IS_COMPONENTS_V2 = 32768;
+
 export const BULK_DELETE_MAX = 100;
 
 export const BULK_DELETE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -20,13 +22,79 @@ export const INTERACTION_CALLBACK_DEFERRED_UPDATE = 6;
 
 export const INTERACTION_CALLBACK_UPDATE_MESSAGE = 7;
 
+export const INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT = 8;
+
+export const INTERACTION_CALLBACK_MODAL = 9;
+
+export const INTERACTION_TYPE_MODAL_SUBMIT = 5;
+
 export const MAX_COMPONENTS_PER_MESSAGE = 40;
+export const MAX_COMPONENTS_PER_MODAL = 5;
 export const MAX_CUSTOM_ID_LENGTH = 100;
 
 export const MAX_BUTTONS_PER_ROW = 5;
 
+export const MAX_MODAL_TITLE_LENGTH = 45;
+
+export const MAX_AUTOCOMPLETE_CHOICES = 25;
+export const MAX_AUTOCOMPLETE_CHOICE_LENGTH = 100;
+
+export const POLL_MAX_QUESTION_LENGTH = 300;
+export const POLL_MAX_ANSWERS = 10;
+export const POLL_MAX_ANSWER_LENGTH = 55;
+export const POLL_MAX_DURATION_HOURS = 768;
+
+export const MAX_CHANNEL_USER_LIMIT = 10_000;
+export const MIN_CHANNEL_BITRATE = 8_000;
+export const MAX_CHANNEL_BITRATE = 384_000;
+
+export const THREAD_TYPE_PUBLIC = 11;
+export const THREAD_TYPE_PRIVATE = 12;
+
 const embedsSchema = z.array(z.record(z.string(), z.unknown())).max(10);
 const componentsSchema = z.array(z.record(z.string(), z.unknown())).max(MAX_COMPONENTS_PER_MESSAGE);
+const modalComponentsSchema = z
+  .array(z.record(z.string(), z.unknown()))
+  .min(1)
+  .max(MAX_COMPONENTS_PER_MODAL, `a modal holds at most ${MAX_COMPONENTS_PER_MODAL} components.`);
+
+// looseObject, not object: a stripping object would silently drop poll fields Discord needs.
+const pollAnswerSchema = z.looseObject({
+  poll_media: z.looseObject({
+    text: z
+      .string()
+      .max(
+        POLL_MAX_ANSWER_LENGTH,
+        `a poll answer is capped at ${POLL_MAX_ANSWER_LENGTH} characters.`,
+      ),
+  }),
+});
+
+const pollSchema = z.looseObject({
+  question: z.looseObject({
+    text: z
+      .string()
+      .max(
+        POLL_MAX_QUESTION_LENGTH,
+        `a poll question is capped at ${POLL_MAX_QUESTION_LENGTH} characters.`,
+      ),
+  }),
+  answers: z
+    .array(pollAnswerSchema)
+    .min(1)
+    .max(POLL_MAX_ANSWERS, `a poll takes at most ${POLL_MAX_ANSWERS} answers.`),
+  duration: z
+    .number()
+    .int()
+    .positive()
+    .max(
+      POLL_MAX_DURATION_HOURS,
+      `a poll runs for at most ${POLL_MAX_DURATION_HOURS} hours (32 days).`,
+    )
+    .optional(),
+  allow_multiselect: z.boolean().optional(),
+  layout_type: z.number().int().optional(),
+});
 
 export const attachmentSchema = z.object({
   filename: z.string().min(1).max(256),
@@ -42,17 +110,19 @@ function hasSomethingToSend(value: {
   embeds?: unknown[] | undefined;
   components?: unknown[] | undefined;
   files?: unknown[] | undefined;
+  poll?: unknown;
 }): boolean {
   return Boolean(
     value.content?.length ||
       value.embeds?.length ||
       value.components?.length ||
-      value.files?.length,
+      value.files?.length ||
+      value.poll,
   );
 }
 
 const NOTHING_TO_SEND =
-  'a message needs content, an embed, a component or a file — this one has none of them.';
+  'a message needs content, an embed, a component, a file or a poll — this one has none of them.';
 
 export const MENTION_PARSE_KINDS = ['roles', 'users', 'everyone'] as const;
 
@@ -67,6 +137,31 @@ export const allowedMentionsSchema = z.object({
 
 export type AllowedMentions = z.infer<typeof allowedMentionsSchema>;
 
+// Under IS_COMPONENTS_V2 Discord rejects content, embeds, sticker_ids and poll outright with a
+// 400. Catching it here names the field; catching it at the proxy is an opaque Bad Request from
+// inside a debounced edit loop nobody is watching.
+const COMPONENTS_V2_CONFLICT =
+  'a Components V2 message is built entirely from components: content, embeds and poll are ' +
+  'refused by Discord when the IS_COMPONENTS_V2 flag is set. Use a Text Display component ' +
+  'instead of content, and a Container instead of an embed.';
+
+function componentsV2IsExclusive(payload: {
+  flags?: number | undefined;
+  content?: string | undefined;
+  embeds?: unknown[] | undefined;
+  poll?: unknown;
+  components?: unknown[] | undefined;
+}): boolean {
+  if (((payload.flags ?? 0) & MESSAGE_FLAG_IS_COMPONENTS_V2) === 0) return true;
+
+  return (
+    payload.content === undefined &&
+    payload.embeds === undefined &&
+    payload.poll === undefined &&
+    (payload.components?.length ?? 0) > 0
+  );
+}
+
 export const sendPayloadSchema = z
   .object({
     channelId: snowflakeSchema,
@@ -75,12 +170,15 @@ export const sendPayloadSchema = z
     embeds: embedsSchema.optional(),
     components: componentsSchema.optional(),
     files: z.array(attachmentSchema).max(10).optional(),
+    poll: pollSchema.optional(),
+    flags: z.number().int().optional(),
 
     allowedMentions: allowedMentionsSchema.optional(),
 
     replyToMessageId: snowflakeSchema.optional(),
   })
-  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND });
+  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
+  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT });
 
 export const editMessagePayloadSchema = z
   .object({
@@ -89,8 +187,12 @@ export const editMessagePayloadSchema = z
     content: z.string().max(2000).optional(),
     embeds: embedsSchema.optional(),
     components: componentsSchema.optional(),
+
+    // Only ever set, never cleared — Discord refuses to take IS_COMPONENTS_V2 off a message.
+    flags: z.number().int().optional(),
   })
-  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND });
+  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
+  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT });
 
 export const deleteMessagePayloadSchema = z.object({
   channelId: snowflakeSchema,
@@ -103,6 +205,21 @@ export const addReactionPayloadSchema = z.object({
   emoji: z.string().min(1).max(64),
 });
 
+export const modalSchema = z.object({
+  customId: z.string().min(1).max(MAX_CUSTOM_ID_LENGTH),
+  title: z.string().min(1).max(MAX_MODAL_TITLE_LENGTH),
+  components: modalComponentsSchema,
+});
+
+export const autocompleteChoiceSchema = z.object({
+  name: z.string().min(1).max(MAX_AUTOCOMPLETE_CHOICE_LENGTH),
+  value: z.union([z.string().max(MAX_AUTOCOMPLETE_CHOICE_LENGTH), z.number()]),
+});
+
+const MODAL_ON_MODAL_SUBMIT =
+  'Discord will not open a modal in response to a modal submission (interaction type 5). ' +
+  'Reply with a message or a deferred update instead, and open the next modal from a component.';
+
 export const interactionReplyPayloadSchema = z
   .object({
     interactionId: snowflakeSchema,
@@ -113,21 +230,56 @@ export const interactionReplyPayloadSchema = z
     files: z.array(attachmentSchema).max(10).optional(),
     ephemeral: z.boolean().default(false),
 
+    flags: z.number().int().optional(),
+
+    allowedMentions: allowedMentionsSchema.optional(),
+
+    modal: modalSchema.optional(),
+    choices: z.array(autocompleteChoiceSchema).max(MAX_AUTOCOMPLETE_CHOICES).optional(),
+
+    sourceInteractionType: z.number().int().optional(),
+
     callbackType: z
       .union([
         z.literal(INTERACTION_CALLBACK_CHANNEL_MESSAGE),
         z.literal(INTERACTION_CALLBACK_DEFERRED_MESSAGE),
         z.literal(INTERACTION_CALLBACK_DEFERRED_UPDATE),
         z.literal(INTERACTION_CALLBACK_UPDATE_MESSAGE),
+        z.literal(INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT),
+        z.literal(INTERACTION_CALLBACK_MODAL),
       ])
       .default(INTERACTION_CALLBACK_CHANNEL_MESSAGE),
   })
-  .refine((v) => isDeferral(v.callbackType) || hasSomethingToSend(v), { message: NOTHING_TO_SEND });
+  .refine((v) => v.callbackType !== INTERACTION_CALLBACK_MODAL || v.modal !== undefined, {
+    message: 'a modal response carries no modal.',
+    path: ['modal'],
+  })
+  .refine(
+    (v) => v.callbackType !== INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT || v.choices !== undefined,
+    { message: 'an autocomplete response carries no choices.', path: ['choices'] },
+  )
+  .refine(
+    (v) =>
+      v.callbackType !== INTERACTION_CALLBACK_MODAL ||
+      v.sourceInteractionType !== INTERACTION_TYPE_MODAL_SUBMIT,
+    { message: MODAL_ON_MODAL_SUBMIT, path: ['callbackType'] },
+  )
+  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT })
+  .refine((v) => !carriesMessage(v.callbackType) || hasSomethingToSend(v), {
+    message: NOTHING_TO_SEND,
+  });
 
 export function isDeferral(callbackType: number): boolean {
   return (
     callbackType === INTERACTION_CALLBACK_DEFERRED_MESSAGE ||
     callbackType === INTERACTION_CALLBACK_DEFERRED_UPDATE
+  );
+}
+
+export function carriesMessage(callbackType: number): boolean {
+  return (
+    callbackType === INTERACTION_CALLBACK_CHANNEL_MESSAGE ||
+    callbackType === INTERACTION_CALLBACK_UPDATE_MESSAGE
   );
 }
 
@@ -140,14 +292,36 @@ export const interactionFollowupPayloadSchema = z
     components: componentsSchema.optional(),
     files: z.array(attachmentSchema).max(10).optional(),
     ephemeral: z.boolean().default(false),
+
+    flags: z.number().int().optional(),
+
+    allowedMentions: allowedMentionsSchema.optional(),
   })
-  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND });
+  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
+  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT });
 
 export const warnPayloadSchema = z.object({
   userId: snowflakeSchema,
 
   note: z.string().max(1024).optional(),
 });
+
+export const giveawayDrawPayloadSchema = z.object({
+  giveawayId: z.string().min(1).max(64),
+  drawNumber: z.number().int().min(1),
+
+  seed: z.string().min(1).max(64),
+  snapshotHash: z.string().min(1).max(128),
+
+  entrantCount: z.number().int().min(0),
+  totalEntries: z.number().int().min(0),
+
+  winnerIds: z.array(snowflakeSchema).max(100),
+  degradedProviders: z.array(z.string().max(100)).max(50).optional(),
+  disqualified: z.number().int().min(0).optional(),
+});
+
+export const createDmPayloadSchema = z.object({ userId: snowflakeSchema });
 
 export const banPayloadSchema = z.object({
   userId: snowflakeSchema,
@@ -189,9 +363,22 @@ export const lockdownPayloadSchema = z.object({
   previousDeny: z.string().default('0'),
 });
 
-// Restore recreates what a backup snapshotted, so these mirror the snapshot's own shape rather
-// than Discord's full create bodies — anything a restore cannot faithfully reproduce is reported
-// as skipped instead of being guessed at.
+export const permissionOverwriteSchema = z.object({
+  id: snowflakeSchema,
+  type: z.union([z.literal(0), z.literal(1)]),
+  allow: z.string().regex(/^\d+$/).optional(),
+  deny: z.string().regex(/^\d+$/).optional(),
+});
+
+export type PermissionOverwriteSpec = z.infer<typeof permissionOverwriteSchema>;
+
+export const MAX_PERMISSION_OVERWRITES = 100;
+
+// Restore recreates what a backup snapshotted, so the first seven fields mirror the snapshot's own
+// shape rather than Discord's full create body — anything a restore cannot faithfully reproduce is
+// reported as skipped instead of being guessed at. The rest exist because a ticket channel has to
+// be private in the same call that creates it: create-then-patch leaves it world-readable for the
+// width of one round trip.
 export const createChannelPayloadSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.number().int().min(0).max(16),
@@ -200,6 +387,13 @@ export const createChannelPayloadSchema = z.object({
   topic: z.string().max(1024).optional(),
   nsfw: z.boolean().optional(),
   rateLimitPerUser: z.number().int().min(0).max(MAX_SLOWMODE_SECONDS).optional(),
+
+  permissionOverwrites: z
+    .array(permissionOverwriteSchema)
+    .max(MAX_PERMISSION_OVERWRITES)
+    .optional(),
+  userLimit: z.number().int().min(0).max(MAX_CHANNEL_USER_LIMIT).optional(),
+  bitrate: z.number().int().min(MIN_CHANNEL_BITRATE).max(MAX_CHANNEL_BITRATE).optional(),
 });
 
 export const createRolePayloadSchema = z.object({
@@ -216,6 +410,45 @@ export const unlockPayloadSchema = z.object({
   roleId: snowflakeSchema,
   restoreAllow: z.string().default('0'),
   restoreDeny: z.string().default('0'),
+});
+
+export const deleteChannelPayloadSchema = z.object({ channelId: snowflakeSchema });
+
+export const editChannelPayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  name: z.string().min(1).max(100).optional(),
+  userLimit: z.number().int().min(0).max(MAX_CHANNEL_USER_LIMIT).optional(),
+  bitrate: z.number().int().min(MIN_CHANNEL_BITRATE).max(MAX_CHANNEL_BITRATE).optional(),
+  topic: z.string().max(1024).optional(),
+  parentId: snowflakeSchema.optional(),
+  rateLimitPerUser: z.number().int().min(0).max(MAX_SLOWMODE_SECONDS).optional(),
+  permissionOverwrites: z.array(permissionOverwriteSchema).optional(),
+});
+
+export const createThreadPayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  name: z.string().min(1).max(100),
+  type: z.union([z.literal(THREAD_TYPE_PUBLIC), z.literal(THREAD_TYPE_PRIVATE)]),
+  autoArchiveDuration: z
+    .union([z.literal(60), z.literal(1440), z.literal(4320), z.literal(10080)])
+    .optional(),
+  invitable: z.boolean().optional(),
+  rateLimitPerUser: z.number().int().min(0).max(MAX_SLOWMODE_SECONDS).optional(),
+});
+
+export const moveMemberPayloadSchema = z.object({
+  userId: snowflakeSchema,
+  channelId: snowflakeSchema,
+});
+
+export const endPollPayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  messageId: snowflakeSchema,
+});
+
+export const pinMessagePayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  messageId: snowflakeSchema,
 });
 
 export const AUTOMOD_EVENT_MESSAGE_SEND = 1 as const;
@@ -336,11 +569,21 @@ export type InteractionReplyPayload = z.infer<typeof interactionReplyPayloadSche
 export type InteractionFollowupPayload = z.infer<typeof interactionFollowupPayloadSchema>;
 export type WarnPayload = z.infer<typeof warnPayloadSchema>;
 export type BanPayload = z.infer<typeof banPayloadSchema>;
+export type GiveawayDrawPayload = z.infer<typeof giveawayDrawPayloadSchema>;
+export type CreateDmPayload = z.infer<typeof createDmPayloadSchema>;
 export type TimeoutPayload = z.infer<typeof timeoutPayloadSchema>;
 export type PurgePayload = z.infer<typeof purgePayloadSchema>;
 export type LockdownPayload = z.infer<typeof lockdownPayloadSchema>;
 export type CreateChannelPayload = z.infer<typeof createChannelPayloadSchema>;
 export type CreateRolePayload = z.infer<typeof createRolePayloadSchema>;
+export type DeleteChannelPayload = z.infer<typeof deleteChannelPayloadSchema>;
+export type EditChannelPayload = z.infer<typeof editChannelPayloadSchema>;
+export type CreateThreadPayload = z.infer<typeof createThreadPayloadSchema>;
+export type MoveMemberPayload = z.infer<typeof moveMemberPayloadSchema>;
+export type EndPollPayload = z.infer<typeof endPollPayloadSchema>;
+export type PinMessagePayload = z.infer<typeof pinMessagePayloadSchema>;
+export type Modal = z.infer<typeof modalSchema>;
+export type AutocompleteChoice = z.infer<typeof autocompleteChoiceSchema>;
 export type AutomodRuleCreatePayload = z.infer<typeof automodRuleCreatePayloadSchema>;
 export type AutomodRuleUpdatePayload = z.infer<typeof automodRuleUpdatePayloadSchema>;
 export type AutomodRuleDeletePayload = z.infer<typeof automodRuleDeletePayloadSchema>;

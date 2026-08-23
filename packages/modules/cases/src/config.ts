@@ -38,19 +38,15 @@ export const escalationLadderSchema = z
 export const casesConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
-    description: 'Record moderation cases and run the warn-escalation ladder in this server.',
   }),
 
   historyLimit: z.number().int().min(1).max(25).default(10).register(protonFields, {
     label: 'Cases shown in /history',
-    description: 'How many of a member’s most recent cases /history lists. 1-25.',
   }),
 
   escalationWindow: durationStringSchema.default('30d').register(protonFields, {
     field: 'duration',
     label: 'Escalation window',
-    description:
-      'How long a warning counts towards the ladder. Warnings older than this stop counting.',
   }),
 
   escalationLadder: escalationLadderSchema.default([

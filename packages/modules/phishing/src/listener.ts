@@ -1,5 +1,4 @@
 import {
-  dryRunFor,
   type EventListener,
   type EventType,
   formatDuration,
@@ -118,7 +117,7 @@ async function act(
     targetId: authorId,
     reason,
     payload,
-    dryRun: dryRunFor(kind),
+    dryRun: false,
 
     idempotencyKey: `${key}:action`,
   });

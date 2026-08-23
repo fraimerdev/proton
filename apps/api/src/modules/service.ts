@@ -1,6 +1,16 @@
-import { diffKeys, type EventBus, type Logger, type ModuleRegistry, newId } from '@proton/core';
+import {
+  type ConfigLimit,
+  checkListLimit,
+  diffKeys,
+  ENTITLEMENT_TIERS,
+  type EntitlementTier,
+  type EventBus,
+  type Logger,
+  type ModuleRegistry,
+  newId,
+} from '@proton/core';
 import type { DbHandle, GuildRuleStore } from '@proton/db';
-import { auditTrail, guildModules } from '@proton/db/schema';
+import { auditTrail, guildModules, guilds } from '@proton/db/schema';
 import { and, eq } from 'drizzle-orm';
 
 export interface ModuleConfigView {
@@ -10,6 +20,11 @@ export interface ModuleConfigView {
   schemaVersion: number;
 
   migrated: boolean;
+
+  // A guild fact riding the module-config response on purpose: this is the one read every module
+  // surface already makes and the worker already caches, so putting the tier anywhere else would
+  // mean a second round trip per command, listener and scheduled job just to count against a limit.
+  tier: EntitlementTier;
 }
 
 export interface UpdateModuleConfigInput {
@@ -21,6 +36,44 @@ export interface UpdateModuleConfigInput {
   actorId: string;
   source: 'dashboard' | 'command' | 'system';
   ipHash?: string | undefined;
+}
+
+function isEntitlementTier(value: unknown): value is EntitlementTier {
+  return (ENTITLEMENT_TIERS as readonly string[]).includes(value as string);
+}
+
+function listAt(config: Record<string, unknown>, path: string): unknown[] | null {
+  let value: unknown = config;
+
+  for (const segment of path.split('.')) {
+    if (typeof value !== 'object' || value === null) return null;
+    value = (value as Record<string, unknown>)[segment];
+  }
+
+  return Array.isArray(value) ? value : null;
+}
+
+export function overLimit(
+  limits: readonly ConfigLimit[],
+  config: Record<string, unknown>,
+  tier: EntitlementTier,
+): string | null {
+  for (const limit of limits) {
+    const list = listAt(config, limit.path);
+    if (list === null) continue;
+
+    const check = checkListLimit(tier, limit.key, list.length);
+    if (!check.ok) return check.humanReason;
+  }
+
+  return null;
+}
+
+// A module that has renamed a config key lifts the old shape here, before Zod sees it and strips
+// the key it no longer knows. Applied on read and on write, so a caller posting the old shape is
+// migrated rather than silently emptied.
+function lift(manifest: { liftStoredConfig?(raw: unknown): unknown }, raw: unknown): unknown {
+  return manifest.liftStoredConfig ? manifest.liftStoredConfig(raw) : raw;
 }
 
 export class ModuleConfigError extends Error {
@@ -60,14 +113,37 @@ export class ModuleConfigService {
     return manifest;
   }
 
+  async #tier(guildId: string): Promise<EntitlementTier> {
+    const rows = await this.#db.db
+      .select({ tier: guilds.tier })
+      .from(guilds)
+      .where(eq(guilds.id, guildId))
+      .limit(1);
+
+    const stored = rows[0]?.tier;
+    return isEntitlementTier(stored) ? stored : 'free';
+  }
+
+  async enabledMap(guildId: string): Promise<Record<string, boolean>> {
+    const rows = await this.#db.db
+      .select({ moduleId: guildModules.moduleId, enabled: guildModules.enabled })
+      .from(guildModules)
+      .where(eq(guildModules.guildId, guildId));
+
+    return Object.fromEntries(rows.map((row) => [row.moduleId, row.enabled]));
+  }
+
   async get(guildId: string, moduleId: string): Promise<ModuleConfigView> {
     const manifest = this.#manifest(moduleId);
 
-    const rows = await this.#db.db
-      .select()
-      .from(guildModules)
-      .where(and(eq(guildModules.guildId, guildId), eq(guildModules.moduleId, moduleId)))
-      .limit(1);
+    const [rows, tier] = await Promise.all([
+      this.#db.db
+        .select()
+        .from(guildModules)
+        .where(and(eq(guildModules.guildId, guildId), eq(guildModules.moduleId, moduleId)))
+        .limit(1),
+      this.#tier(guildId),
+    ]);
 
     const row = rows[0];
 
@@ -78,10 +154,11 @@ export class ModuleConfigService {
         config: manifest.defaultConfig as Record<string, unknown>,
         schemaVersion: manifest.schemaVersion,
         migrated: false,
+        tier,
       };
     }
 
-    const parsed = manifest.configSchema.safeParse(row.config);
+    const parsed = manifest.configSchema.safeParse(lift(manifest, row.config));
     if (!parsed.success) {
       throw new ModuleConfigError(
         'invalid_stored_config',
@@ -99,6 +176,7 @@ export class ModuleConfigService {
       config: parsed.data as Record<string, unknown>,
       schemaVersion: manifest.schemaVersion,
       migrated,
+      tier,
     };
   }
 
@@ -109,8 +187,16 @@ export class ModuleConfigService {
     const manifest = this.#manifest(input.moduleId);
     const before = await this.get(input.guildId, input.moduleId);
 
-    const nextConfigRaw = input.config ?? before.config;
-    const parsed = manifest.configSchema.safeParse(nextConfigRaw);
+    // Every module carries its own `enabled` field alongside the guild_modules row, and
+    // disabledReason treats either being false as off. One switch drives both, so a module that
+    // is on in the dashboard can never sit on a stored config that says otherwise. A schema
+    // without the field strips the extra key on parse.
+    const nextConfigRaw =
+      input.enabled === undefined
+        ? (input.config ?? before.config)
+        : { ...(input.config ?? before.config), enabled: input.enabled };
+
+    const parsed = manifest.configSchema.safeParse(lift(manifest, nextConfigRaw));
     if (!parsed.success) {
       throw new ModuleConfigError(
         'invalid_config',
@@ -121,6 +207,15 @@ export class ModuleConfigService {
     }
 
     const nextConfig = parsed.data as Record<string, unknown>;
+
+    const exceeded = overLimit(manifest.configLimits ?? [], nextConfig, before.tier);
+    if (exceeded) {
+      throw new ModuleConfigError(
+        'over_limit',
+        `Those ${input.moduleId} settings were not saved: ${exceeded}`,
+      );
+    }
+
     const nextEnabled = input.enabled ?? before.enabled;
 
     const after: ModuleConfigView = {
@@ -129,6 +224,7 @@ export class ModuleConfigService {
       config: nextConfig,
       schemaVersion: manifest.schemaVersion,
       migrated: false,
+      tier: before.tier,
     };
 
     // Hoisted out of the transaction so the published event can carry the same id as the durable

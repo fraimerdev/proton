@@ -59,7 +59,7 @@ export function EnforcementPanel({ config }: EnforcementPanelProps): ReactElemen
       <p className="field-description">
         Proton manages only the rules it created. A rule you built yourself in Discord’s own
         settings is never edited or removed — but editing one of Proton’s there is undone the next
-        time this page is saved.
+        time this page is saved. Switching the module off takes them down.
       </p>
     </div>
   );

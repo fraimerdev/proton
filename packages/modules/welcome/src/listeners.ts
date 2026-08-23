@@ -1,13 +1,20 @@
 import type { CardDeps, CardDescriptorInput } from '@proton/cards';
-import { discordAvatarUrl, renderCard } from '@proton/cards';
-import type {
-  Attachment,
-  EventListener,
-  EventType,
-  ModuleContext,
-  ProtonEvent,
+import { discordAvatarUrl, renderCard, toHexColour } from '@proton/cards';
+import {
+  type Attachment,
+  type CustomIdFor,
+  type EventListener,
+  type EventType,
+  type ModuleContext,
+  type ProtonEvent,
+  toDiscordMessage,
 } from '@proton/core';
-import { type GreetingFacts, renderGreeting, type WelcomeConfig } from './config.ts';
+import {
+  type GreetingFacts,
+  isSilentGreeting,
+  renderGreeting,
+  type WelcomeConfig,
+} from './config.ts';
 
 export const WELCOME_MODULE_ID = 'welcome';
 
@@ -15,11 +22,19 @@ export const WELCOME_ACTOR = 'proton:welcome';
 
 export const WELCOME_EVENT_TYPES: EventType[] = ['member.joined', 'member.left'];
 
+// Only a link button survives greetingMessageSchema, and link buttons never ask for a custom_id,
+// so reaching this means the config was written around the dashboard.
+const NO_CUSTOM_IDS: CustomIdFor = () => {
+  throw new Error(
+    'a welcome or goodbye message carried a component, and the welcome module has no interaction ' +
+      'listener to answer a press on it. Remove the component rows from the welcome module config.',
+  );
+};
+
 export interface WelcomeDeps {
   cards?: CardDeps;
 
   render?: (input: CardDescriptorInput, deps: CardDeps) => Promise<Uint8Array>;
-  // The same snapshot the executor's prechecks read, for the guild's name and member count.
   guildState?: { get(guildId: string): Promise<GuildSummary | null> };
 }
 
@@ -42,9 +57,8 @@ export interface GuildSummary {
   memberCount?: number | undefined;
 }
 
-// Neither GUILD_MEMBER_ADD nor GUILD_MEMBER_REMOVE carries the guild's name or member count, so
-// they come from the guild-state cache instead. Both stay optional: a template rendering
-// "this server" is wrong-ish, one rendering "undefined" is broken.
+// Both stay optional on purpose: the member events do not carry them, and a required field would
+// render the string "undefined" into a greeting whenever the guild-state cache misses.
 export function readGreetingTarget(
   payload: unknown,
   guild: GuildSummary = {},
@@ -87,7 +101,7 @@ export function createGreetingListener(deps: WelcomeDeps = {}): EventListener<We
         return;
       }
 
-      const content = renderGreeting(
+      const message = renderGreeting(
         joined ? ctx.config.welcomeMessage : ctx.config.goodbyeMessage,
         target,
       );
@@ -95,6 +109,10 @@ export function createGreetingListener(deps: WelcomeDeps = {}): EventListener<We
       const files = ctx.config.card
         ? await renderGreetingCard(joined, target, ctx, render, deps.cards ?? {})
         : [];
+
+      if (isSilentGreeting(message) && files.length === 0) return;
+
+      const body = toDiscordMessage(message, { customIdFor: NO_CUSTOM_IDS });
 
       const result = await ctx.executor.execute({
         guildId: ctx.guildId,
@@ -104,7 +122,7 @@ export function createGreetingListener(deps: WelcomeDeps = {}): EventListener<We
 
         idempotencyKey: `${event.id}:greeting`,
         dryRun: false,
-        payload: { channelId, content, ...(files.length > 0 ? { files } : {}) },
+        payload: { channelId, ...body, ...(files.length > 0 ? { files } : {}) },
       });
 
       if (result.status === 'failed_precheck' || result.status === 'failed_api') {
@@ -131,14 +149,24 @@ async function renderGreetingCard(
       {
         kind: joined ? 'welcome' : 'goodbye',
         preset: ctx.config.preset,
+        accent: toHexColour(ctx.config.cardAccent),
         displayName: target.username,
         guildName: target.guildName,
         memberCount: target.memberCount,
+        showMemberCount: ctx.config.cardShowMemberCount,
         ...(target.avatarHash
           ? { avatarUrl: discordAvatarUrl(target.userId, target.avatarHash) }
           : {}),
+        ...(ctx.config.cardBackgroundUrl ? { backgroundUrl: ctx.config.cardBackgroundUrl } : {}),
       },
-      cards,
+      {
+        ...cards,
+        onImageSkipped: (reason) =>
+          ctx.logger.warn(`the greeting card dropped an image: ${reason}`, {
+            guildId: ctx.guildId,
+            moduleId: WELCOME_MODULE_ID,
+          }),
+      },
     );
 
     return [

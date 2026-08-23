@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { SERVICE_EMITTED_EVENT_TYPES } from '@proton/core';
+import { Permissions, SERVICE_EMITTED_EVENT_TYPES } from '@proton/core';
 import { DEFAULT_INTENTS } from '@proton/gateway/env';
 import { NORMALISED_EVENT_TYPES } from '@proton/gateway/normaliser';
 import { GatewayIntentBits } from 'discord-api-types/v10';
@@ -25,6 +25,16 @@ const SHIPPED_MODULE_IDS = [
   'rolemenu',
   'starboard',
   'welcome',
+
+  'tags',
+  'tickets',
+  'tempvc',
+  'reminders',
+  'messages',
+  'polls',
+  'giveaways',
+  'counters',
+  'suggestions',
 ];
 
 describe('shipped module registry', () => {
@@ -91,6 +101,28 @@ describe('shipped module registry', () => {
 
     expect(registry.invitePermissions()).toBeGreaterThan(0n);
     expect(registry.requiredIntents()).toBeGreaterThan(0);
+  });
+
+  test('the invite asks for what shipped modules execute, not only what they gate on', () => {
+    const invited = createModuleRegistry().invitePermissions();
+
+    const named: ReadonlyArray<readonly [string, bigint]> = [
+      ['ManageMessages', Permissions.ManageMessages],
+      ['AddReactions', Permissions.AddReactions],
+      ['ManageGuild', Permissions.ManageGuild],
+    ];
+
+    expect(named.filter(([, bit]) => (invited & bit) === 0n).map(([name]) => name)).toEqual([]);
+  });
+
+  test('every module that ships a command declares the kind its handler answers with', () => {
+    const mute = MODULES.filter(
+      (manifest) =>
+        (manifest.commands ?? []).length > 0 &&
+        !(manifest.actionKinds ?? []).includes('interaction_reply'),
+    ).map((manifest) => manifest.id);
+
+    expect(mute).toEqual([]);
   });
 
   test('every intent a shipped module needs is one the gateway identifies with', () => {

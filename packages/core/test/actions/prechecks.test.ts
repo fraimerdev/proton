@@ -6,16 +6,30 @@ const OWNER = '200000000000000000';
 const BOT = '300000000000000000';
 const TARGET = '400000000000000000';
 const CHANNEL = '500000000000000000';
+const THREAD = '500000000000000009';
+const GUILD = '900000000000000001';
 
 function input(overrides: Partial<PrecheckInput> = {}): PrecheckInput {
   return {
-    guildId: '900000000000000001',
+    guildId: GUILD,
     guildOwnerId: OWNER,
     botUserId: BOT,
     botHighestRolePosition: 10,
     botChannelPermissions: Permissions.ViewChannel | Permissions.SendMessages,
     requiredPermissions: Permissions.SendMessages,
     channelId: CHANNEL,
+    ...overrides,
+  };
+}
+
+function guildScoped(overrides: Partial<PrecheckInput> = {}): PrecheckInput {
+  return {
+    guildId: GUILD,
+    guildOwnerId: OWNER,
+    botUserId: BOT,
+    botHighestRolePosition: 10,
+    botChannelPermissions: Permissions.ViewChannel,
+    requiredPermissions: Permissions.BanMembers,
     ...overrides,
   };
 }
@@ -37,6 +51,44 @@ describe('runPrechecks', () => {
 
     expect(failure?.humanReason).toContain('SendMessages');
     expect(failure?.humanReason).toContain(CHANNEL);
+  });
+
+  test('does not claim a channel check when that channel’s overwrites were never loaded', () => {
+    const failure = runPrechecks(
+      input({
+        botChannelPermissions: Permissions.ViewChannel,
+        requiredPermissions: Permissions.SendMessages,
+        channelOverwritesUnknown: true,
+      }),
+    );
+
+    expect(failure?.humanReason).toContain('SendMessages');
+    expect(failure?.humanReason).toContain(CHANNEL);
+    expect(failure?.humanReason).toContain('guild 900000000000000001');
+    expect(failure?.humanReason).not.toMatch(/permission in channel/);
+  });
+
+  test('sends the admin to the guild, not a channel, when no channel was resolved', () => {
+    const failure = runPrechecks(guildScoped());
+
+    expect(failure?.humanReason).toContain('BanMembers');
+    expect(failure?.humanReason).toContain(`guild ${GUILD}`);
+    expect(failure?.humanReason).not.toContain('channel');
+  });
+
+  test('sends the admin to the parent channel when the permission is missing in a thread', () => {
+    const failure = runPrechecks(
+      input({
+        channelId: THREAD,
+        threadParentId: CHANNEL,
+        botChannelPermissions: Permissions.ViewChannel,
+        requiredPermissions: Permissions.SendMessagesInThreads,
+      }),
+    );
+
+    expect(failure?.humanReason).toContain('SendMessagesInThreads');
+    expect(failure?.humanReason).toContain(`thread ${THREAD}`);
+    expect(failure?.humanReason).toContain(`parent channel ${CHANNEL}`);
   });
 
   test('reports every missing permission, not just the first', () => {

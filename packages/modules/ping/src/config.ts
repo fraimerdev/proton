@@ -4,12 +4,10 @@ import { z } from 'zod';
 export const pingConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
-    description: 'Respond to /ping in this server.',
   }),
 
   response: z.string().min(1).max(200).default('Pong!').register(protonFields, {
     label: 'Reply text',
-    description: 'What the bot replies with. 1-200 characters.',
   }),
 
   restrictToChannel: z
@@ -19,7 +17,6 @@ export const pingConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Restrict to channel',
-      description: 'If set, /ping only answers in this channel.',
       channelTypes: [0],
     }),
 });

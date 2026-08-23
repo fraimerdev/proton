@@ -7,6 +7,7 @@ import {
   administrableGuilds,
   type DiscordUserGuild,
   resolveGuildAccess,
+  withPresence,
 } from '../src/lib/guild-access.ts';
 
 const OWNED: DiscordUserGuild = {
@@ -79,6 +80,37 @@ describe('resolveGuildAccess', () => {
 
   test('the picker offers only administrable guilds', () => {
     expect(administrableGuilds(GUILDS).map((g) => g.id)).toEqual([OWNED.id, MANAGED.id]);
+  });
+});
+
+describe('withPresence', () => {
+  test('marks the servers Proton is in and the ones it is not', () => {
+    const marked = withPresence(GUILDS, new Set([MANAGED.id]));
+
+    expect(marked.find((g) => g.id === MANAGED.id)?.present).toBe(true);
+    expect(marked.find((g) => g.id === OWNED.id)?.present).toBe(false);
+  });
+
+  test('puts every server Proton is in ahead of the ones it is not', () => {
+    const marked = withPresence(GUILDS, new Set([MEMBER_ONLY.id]));
+
+    expect(marked.map((g) => g.id)).toEqual([MEMBER_ONLY.id, OWNED.id, MANAGED.id]);
+  });
+
+  test('leaves Discord’s own order alone within each half', () => {
+    const marked = withPresence(GUILDS, new Set([OWNED.id, MANAGED.id, MEMBER_ONLY.id]));
+
+    expect(marked.map((g) => g.id)).toEqual(GUILDS.map((g) => g.id));
+  });
+
+  test('an empty presence set leaves the list ordered, not reversed', () => {
+    expect(withPresence(GUILDS, new Set()).map((g) => g.id)).toEqual(GUILDS.map((g) => g.id));
+  });
+
+  test('carries every field the picker renders through', () => {
+    const [first] = withPresence([OWNED], new Set([OWNED.id]));
+
+    expect(first).toEqual({ ...OWNED, present: true });
   });
 });
 

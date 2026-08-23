@@ -65,6 +65,7 @@ function manifest(): ModuleManifest {
     schemaVersion: 1,
     requiredIntents: [GatewayIntentBits.Guilds],
     requiredPermissions: [],
+    actionKinds: ['interaction_reply'],
     commands: [
       {
         name: 'ping',
@@ -148,8 +149,12 @@ describe('a command that cannot run still answers', () => {
     const content = replyContent(executor);
     expect(content).toContain('Ping');
     expect(content).toContain('switched off');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/module/ping`);
-    expect(content).toContain('Module enabled');
+    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
+
+    // One switch, so the refusal names one place. It used to distinguish "Module enabled" from the
+    // config field's "Enabled", which the dashboard no longer renders.
+    expect(content).toContain('sidebar');
+    expect(content).not.toContain('Module enabled');
   });
 
   test('a module switched off in its own config is refused the same way', async () => {
@@ -159,7 +164,7 @@ describe('a command that cannot run still answers', () => {
 
     const content = replyContent(executor);
     expect(content).toContain('switched off');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/module/ping`);
+    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
   });
 
   test('a disabled module never reaches its handler', async () => {
@@ -195,7 +200,7 @@ describe('a command that cannot run still answers', () => {
     const content = replyContent(executor);
     expect(content).toContain('Ping');
     expect(content).toContain('Save');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/module/ping`);
+    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
   });
 
   test('invalid stored settings name the field that is wrong', async () => {

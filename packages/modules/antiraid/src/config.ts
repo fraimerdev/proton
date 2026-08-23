@@ -13,15 +13,11 @@ export type RaidResponse = (typeof RAID_RESPONSES)[number];
 
 export const antiraidConfigSchema = z
   .object({
-    enabled: z.boolean().default(false).register(protonFields, {
-      label: 'Enabled',
-      description: 'Screen joins for raid patterns in this server.',
-    }),
+    enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
     joinWindow: durationStringSchema.default('10s').register(protonFields, {
       field: 'duration',
       label: 'Join window',
-      description: 'How far back the join-rate counter looks. Joins older than this stop counting.',
     }),
 
     joinThreshold: z
@@ -30,25 +26,16 @@ export const antiraidConfigSchema = z
       .min(2)
       .max(500)
       .default(10)
-      .register(protonFields, {
-        label: 'Joins per window',
-        description:
-          'How many joins inside the window count as a burst. Set this above the busiest ' +
-          'legitimate join wave this server sees — a growing server is not a raid.',
-      }),
+      .register(protonFields, { label: 'Joins per window' }),
 
     newAccountAge: durationStringSchema.default('7d').register(protonFields, {
       field: 'duration',
       label: 'New account age',
-      description: 'Accounts younger than this are treated as new.',
     }),
 
     brandNewAccountAge: durationStringSchema.default('1d').register(protonFields, {
       field: 'duration',
       label: 'Brand-new account age',
-      description:
-        'Accounts younger than this score higher than merely new ones. Must not exceed the ' +
-        'new-account age.',
     }),
 
     scoreThreshold: z
@@ -57,47 +44,28 @@ export const antiraidConfigSchema = z
       .min(MIN_ACTIONABLE_SCORE)
       .max(MAX_JOIN_SCORE)
       .default(MIN_ACTIONABLE_SCORE)
-      .register(protonFields, {
-        label: 'Score to act',
-        description:
-          `Suspicion score at which the response is applied, ${MIN_ACTIONABLE_SCORE}-${MAX_JOIN_SCORE}. ` +
-          'Lower is more aggressive; the minimum still requires at least two signals.',
-      }),
+      .register(protonFields, { label: 'Score to act' }),
 
     response: z
       .enum(RAID_RESPONSES)
       .default('verify')
-      .register(protonFields, {
-        label: 'Response',
-        description:
-          'What happens to a join that scores at or above the threshold: verify applies the ' +
-          'verification role, quarantine applies the quarantine role and alerts staff, kick ' +
-          'removes the account.',
-      }),
+      .register(protonFields, { label: 'Response' }),
 
     verificationRoleId: snowflakeSchema.optional().register(protonFields, {
       field: 'role-id',
       label: 'Verification role',
-      description:
-        'Applied by the verify response. The role that gates access until the member passes ' +
-        'this server’s verification — Proton only applies it, the role’s own permissions and ' +
-        'channel overwrites decide what it means.',
+      description: 'Gates nothing unless the role’s own permissions deny access',
     }),
 
     quarantineRoleId: snowflakeSchema.optional().register(protonFields, {
       field: 'role-id',
       label: 'Quarantine role',
-      description:
-        'Applied by the quarantine response. Isolates the account until a staff member ' +
-        'reviews it and removes the role.',
+      description: 'Stays on until a staff member takes it off',
     }),
 
     alertChannelId: snowflakeSchema.optional().register(protonFields, {
       field: 'channel-id',
       label: 'Alert channel',
-      description:
-        'Where Proton posts one message when the join rate crosses the threshold. Left empty, ' +
-        'raids are still handled but nobody is told.',
     }),
   })
 

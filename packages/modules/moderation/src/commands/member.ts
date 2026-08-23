@@ -1,4 +1,10 @@
-import { type CommandDefinition, formatDuration, Permissions, snowflakeSchema } from '@proton/core';
+import {
+  type CommandContext,
+  type CommandDefinition,
+  formatDuration,
+  Permissions,
+  snowflakeSchema,
+} from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import type { ModerationConfig } from '../config.ts';
@@ -12,67 +18,125 @@ const REASON_MAX = 512;
 
 export const banCommand: Command = {
   name: 'ban',
-  description: 'Ban a member from this server.',
+  description: 'Ban a member, or lift a ban.',
 
   data: new SlashCommandBuilder()
     .setName('ban')
-    .setDescription('Ban a member from this server.')
+    .setDescription('Ban a member, or lift a ban.')
     .setContexts(InteractionContextType.Guild)
     .setDefaultMemberPermissions(Permissions.BanMembers)
-    .addUserOption((option) =>
-      option.setName('user').setDescription('The member to ban.').setRequired(true),
+    .addSubcommand((sub) =>
+      sub
+        .setName('add')
+        .setDescription('Ban a member from this server.')
+        .addUserOption((option) =>
+          option.setName('user').setDescription('The member to ban.').setRequired(true),
+        )
+        .addStringOption((option) =>
+          option
+            .setName('duration')
+            .setDescription('Temporary ban length, e.g. 12h or 7d. Omit to ban permanently.'),
+        )
+        .addIntegerOption((option) =>
+          option
+            .setName('delete_message_days')
+            .setDescription('Days of their recent messages to delete, 0-7.')
+            .setMinValue(0)
+            .setMaxValue(7),
+        )
+        .addStringOption((option) =>
+          option
+            .setName('reason')
+            .setDescription('Written to the Discord audit log and to the case.')
+            .setMaxLength(REASON_MAX),
+        ),
     )
-    .addStringOption((option) =>
-      option
-        .setName('duration')
-        .setDescription('Temporary ban length, e.g. 12h or 7d. Omit to ban permanently.'),
-    )
-    .addIntegerOption((option) =>
-      option
-        .setName('delete_message_days')
-        .setDescription('Days of their recent messages to delete, 0-7.')
-        .setMinValue(0)
-        .setMaxValue(7),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('reason')
-        .setDescription('Written to the Discord audit log and to the case.')
-        .setMaxLength(REASON_MAX),
+    .addSubcommand((sub) =>
+      sub
+        .setName('remove')
+        .setDescription('Lift a ban on a user.')
+        .addStringOption((option) =>
+          option
+            .setName('user_id')
+            .setDescription(
+              'Id of the banned user. They are not in the server to pick from a list.',
+            )
+            .setRequired(true),
+        )
+        .addStringOption((option) =>
+          option
+            .setName('reason')
+            .setDescription('Written to the Discord audit log and to the case.')
+            .setMaxLength(REASON_MAX),
+        ),
     )
     .toJSON(),
 
   async handler(ctx) {
-    const userId = ctx.options.getUserId('user');
-    if (!userId) return perform(ctx, { refusal: 'I need a user to ban.' });
-
-    const reason = ctx.options.getString('reason');
-    const days = ctx.options.getInteger('delete_message_days') ?? ctx.config.defaultBanDeleteDays;
-    const rawDuration = ctx.options.getString('duration');
-
-    if (!rawDuration) {
-      return perform(ctx, {
-        kind: 'ban',
-        targetId: userId,
-        payload: { userId, deleteMessageSeconds: days * SECONDS_PER_DAY },
-        ...(reason ? { reason } : {}),
-        success: `Banned <@${userId}>.`,
-      });
+    switch (ctx.options.getSubcommand()) {
+      case 'add':
+        return addBan(ctx);
+      case 'remove':
+        return removeBan(ctx);
+      default:
+        return perform(ctx, {
+          refusal: 'Use /ban add to ban someone, or /ban remove to lift a ban.',
+        });
     }
+  },
+};
 
-    const duration = readDuration(rawDuration, 'A temporary ban');
-    if (isRefusal(duration)) return perform(ctx, duration);
+async function addBan(ctx: CommandContext<ModerationConfig>): Promise<void> {
+  const userId = ctx.options.getUserId('user');
+  if (!userId) return perform(ctx, { refusal: 'I need a user to ban.' });
 
+  const reason = ctx.options.getString('reason');
+  const days = ctx.options.getInteger('delete_message_days') ?? ctx.config.defaultBanDeleteDays;
+  const rawDuration = ctx.options.getString('duration');
+
+  if (!rawDuration) {
     return perform(ctx, {
       kind: 'ban',
       targetId: userId,
       payload: { userId, deleteMessageSeconds: days * SECONDS_PER_DAY },
       ...(reason ? { reason } : {}),
-      expiresAt: new Date(Date.now() + duration.ms),
-      success: `Banned <@${userId}> for ${formatDuration(duration.ms)} — it lifts automatically.`,
+      success: `Banned <@${userId}>.`,
     });
-  },
-};
+  }
+
+  const duration = readDuration(rawDuration, 'A temporary ban');
+  if (isRefusal(duration)) return perform(ctx, duration);
+
+  return perform(ctx, {
+    kind: 'ban',
+    targetId: userId,
+    payload: { userId, deleteMessageSeconds: days * SECONDS_PER_DAY },
+    ...(reason ? { reason } : {}),
+    expiresAt: new Date(Date.now() + duration.ms),
+    success: `Banned <@${userId}> for ${formatDuration(duration.ms)} — it lifts automatically.`,
+  });
+}
+
+async function removeBan(ctx: CommandContext<ModerationConfig>): Promise<void> {
+  const userId = ctx.options.getString('user_id')?.trim() ?? '';
+  const reason = ctx.options.getString('reason');
+
+  if (!snowflakeSchema.safeParse(userId).success) {
+    return perform(ctx, {
+      refusal:
+        `'${userId}' is not a Discord user id. Turn on Developer Mode in Discord, then ` +
+        'right-click the user in Server Settings, Bans and choose Copy User ID.',
+    });
+  }
+
+  return perform(ctx, {
+    kind: 'unban',
+    targetId: userId,
+    payload: { userId },
+    ...(reason ? { reason } : {}),
+    success: `Unbanned <@${userId}>.`,
+  });
+}
 
 export const warnCommand: Command = {
   name: 'warn',
@@ -113,51 +177,6 @@ export const warnCommand: Command = {
           channelId: ctx.channelId,
         });
       },
-    });
-  },
-};
-
-export const unbanCommand: Command = {
-  name: 'unban',
-  description: 'Lift a ban on a user.',
-
-  data: new SlashCommandBuilder()
-    .setName('unban')
-    .setDescription('Lift a ban on a user.')
-    .setContexts(InteractionContextType.Guild)
-    .setDefaultMemberPermissions(Permissions.BanMembers)
-    .addStringOption((option) =>
-      option
-        .setName('user_id')
-        .setDescription('Id of the banned user. They are not in the server to pick from a list.')
-        .setRequired(true),
-    )
-    .addStringOption((option) =>
-      option
-        .setName('reason')
-        .setDescription('Written to the Discord audit log and to the case.')
-        .setMaxLength(REASON_MAX),
-    )
-    .toJSON(),
-
-  async handler(ctx) {
-    const userId = ctx.options.getString('user_id')?.trim() ?? '';
-    const reason = ctx.options.getString('reason');
-
-    if (!snowflakeSchema.safeParse(userId).success) {
-      return perform(ctx, {
-        refusal:
-          `'${userId}' is not a Discord user id. Turn on Developer Mode in Discord, then ` +
-          'right-click the user in Server Settings, Bans and choose Copy User ID.',
-      });
-    }
-
-    return perform(ctx, {
-      kind: 'unban',
-      targetId: userId,
-      payload: { userId },
-      ...(reason ? { reason } : {}),
-      success: `Unbanned <@${userId}>.`,
     });
   },
 };
@@ -281,7 +300,6 @@ export const untimeoutCommand: Command = {
 
 export const memberCommands: Command[] = [
   banCommand,
-  unbanCommand,
   kickCommand,
   timeoutCommand,
   untimeoutCommand,

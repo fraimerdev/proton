@@ -1,0 +1,551 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-21T00:00:00.000Z",
+  "title": "Design System: Proton Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "console-ground": {
+        "role": "neutral",
+        "displayName": "Console Ground",
+        "canonical": "oklch(18.5% 0.011 268)",
+        "tonalRamp": [
+          "oklch(15% 0.011 268)",
+          "oklch(25% 0.011 268)",
+          "oklch(35% 0.011 268)",
+          "oklch(45% 0.011 268)",
+          "oklch(55% 0.011 268)",
+          "oklch(65% 0.011 268)",
+          "oklch(80% 0.011 268)",
+          "oklch(95% 0.008 268)"
+        ]
+      },
+      "rail-black": {
+        "role": "neutral",
+        "displayName": "Rail Black",
+        "canonical": "oklch(14.5% 0.012 268)",
+        "tonalRamp": [
+          "oklch(15% 0.012 268)",
+          "oklch(25% 0.012 268)",
+          "oklch(35% 0.012 268)",
+          "oklch(45% 0.012 268)",
+          "oklch(55% 0.012 268)",
+          "oklch(65% 0.012 268)",
+          "oklch(80% 0.012 268)",
+          "oklch(95% 0.008 268)"
+        ]
+      },
+      "card-slate": {
+        "role": "neutral",
+        "displayName": "Card Slate",
+        "canonical": "oklch(22.4% 0.012 267)",
+        "tonalRamp": [
+          "oklch(15% 0.012 267)",
+          "oklch(25% 0.012 267)",
+          "oklch(35% 0.012 267)",
+          "oklch(45% 0.012 267)",
+          "oklch(55% 0.012 267)",
+          "oklch(65% 0.012 267)",
+          "oklch(80% 0.012 267)",
+          "oklch(95% 0.008 267)"
+        ]
+      },
+      "raised-slate": {
+        "role": "neutral",
+        "displayName": "Raised Slate",
+        "canonical": "oklch(26.5% 0.016 267)",
+        "tonalRamp": [
+          "oklch(15% 0.016 267)",
+          "oklch(25% 0.016 267)",
+          "oklch(35% 0.016 267)",
+          "oklch(45% 0.016 267)",
+          "oklch(55% 0.016 267)",
+          "oklch(65% 0.016 267)",
+          "oklch(80% 0.014 267)",
+          "oklch(95% 0.010 267)"
+        ]
+      },
+      "well-black": {
+        "role": "neutral",
+        "displayName": "Well Black",
+        "canonical": "oklch(15.5% 0.011 268)",
+        "tonalRamp": [
+          "oklch(15% 0.011 268)",
+          "oklch(25% 0.011 268)",
+          "oklch(35% 0.011 268)",
+          "oklch(45% 0.011 268)",
+          "oklch(55% 0.011 268)",
+          "oklch(65% 0.011 268)",
+          "oklch(80% 0.011 268)",
+          "oklch(95% 0.008 268)"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(28.2% 0.018 268)",
+        "tonalRamp": [
+          "oklch(15% 0.018 268)",
+          "oklch(25% 0.018 268)",
+          "oklch(35% 0.018 268)",
+          "oklch(45% 0.018 268)",
+          "oklch(55% 0.018 268)",
+          "oklch(65% 0.018 268)",
+          "oklch(80% 0.014 268)",
+          "oklch(95% 0.010 268)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(93.2% 0.008 268)",
+        "tonalRamp": [
+          "oklch(15% 0.008 268)",
+          "oklch(25% 0.008 268)",
+          "oklch(35% 0.008 268)",
+          "oklch(45% 0.008 268)",
+          "oklch(55% 0.008 268)",
+          "oklch(65% 0.008 268)",
+          "oklch(80% 0.008 268)",
+          "oklch(95% 0.008 268)"
+        ]
+      },
+      "quiet-slate": {
+        "role": "neutral",
+        "displayName": "Quiet Slate",
+        "canonical": "oklch(62.5% 0.024 268)",
+        "tonalRamp": [
+          "oklch(15% 0.024 268)",
+          "oklch(25% 0.024 268)",
+          "oklch(35% 0.024 268)",
+          "oklch(45% 0.024 268)",
+          "oklch(55% 0.024 268)",
+          "oklch(65% 0.024 268)",
+          "oklch(80% 0.020 268)",
+          "oklch(95% 0.012 268)"
+        ]
+      },
+      "cold-link-blue": {
+        "role": "primary",
+        "displayName": "Cold Link Blue",
+        "canonical": "oklch(71.2% 0.135 264)",
+        "tonalRamp": [
+          "oklch(15% 0.135 264)",
+          "oklch(25% 0.135 264)",
+          "oklch(35% 0.135 264)",
+          "oklch(45% 0.135 264)",
+          "oklch(55% 0.135 264)",
+          "oklch(65% 0.135 264)",
+          "oklch(80% 0.110 264)",
+          "oklch(95% 0.040 264)"
+        ]
+      },
+      "committed-blue": {
+        "role": "primary",
+        "displayName": "Committed Blue",
+        "canonical": "oklch(54.8% 0.186 264)",
+        "tonalRamp": [
+          "oklch(15% 0.186 264)",
+          "oklch(25% 0.186 264)",
+          "oklch(35% 0.186 264)",
+          "oklch(45% 0.186 264)",
+          "oklch(55% 0.186 264)",
+          "oklch(65% 0.160 264)",
+          "oklch(80% 0.110 264)",
+          "oklch(95% 0.040 264)"
+        ]
+      },
+      "signal-cyan": {
+        "role": "secondary",
+        "displayName": "Signal Cyan",
+        "canonical": "oklch(72.8% 0.148 232)",
+        "tonalRamp": [
+          "oklch(15% 0.148 232)",
+          "oklch(25% 0.148 232)",
+          "oklch(35% 0.148 232)",
+          "oklch(45% 0.148 232)",
+          "oklch(55% 0.148 232)",
+          "oklch(65% 0.148 232)",
+          "oklch(80% 0.120 232)",
+          "oklch(95% 0.050 232)"
+        ]
+      },
+      "node-blue": {
+        "role": "secondary",
+        "displayName": "Node Blue",
+        "canonical": "oklch(58.4% 0.192 262)",
+        "tonalRamp": [
+          "oklch(15% 0.192 262)",
+          "oklch(25% 0.192 262)",
+          "oklch(35% 0.192 262)",
+          "oklch(45% 0.192 262)",
+          "oklch(55% 0.192 262)",
+          "oklch(65% 0.170 262)",
+          "oklch(80% 0.115 262)",
+          "oklch(95% 0.045 262)"
+        ]
+      },
+      "edge-violet": {
+        "role": "secondary",
+        "displayName": "Edge Violet",
+        "canonical": "oklch(50.2% 0.238 273)",
+        "tonalRamp": [
+          "oklch(15% 0.238 273)",
+          "oklch(25% 0.238 273)",
+          "oklch(35% 0.238 273)",
+          "oklch(45% 0.238 273)",
+          "oklch(55% 0.220 273)",
+          "oklch(65% 0.185 273)",
+          "oklch(80% 0.125 273)",
+          "oklch(95% 0.050 273)"
+        ]
+      },
+      "running-green": {
+        "role": "tertiary",
+        "displayName": "Running Green",
+        "canonical": "oklch(78.4% 0.145 159)",
+        "tonalRamp": [
+          "oklch(15% 0.145 159)",
+          "oklch(25% 0.145 159)",
+          "oklch(35% 0.145 159)",
+          "oklch(45% 0.145 159)",
+          "oklch(55% 0.145 159)",
+          "oklch(65% 0.145 159)",
+          "oklch(80% 0.140 159)",
+          "oklch(95% 0.060 159)"
+        ]
+      },
+      "advisory-amber": {
+        "role": "tertiary",
+        "displayName": "Advisory Amber",
+        "canonical": "oklch(81.2% 0.126 80)",
+        "tonalRamp": [
+          "oklch(15% 0.126 80)",
+          "oklch(25% 0.126 80)",
+          "oklch(35% 0.126 80)",
+          "oklch(45% 0.126 80)",
+          "oklch(55% 0.126 80)",
+          "oklch(65% 0.126 80)",
+          "oklch(80% 0.126 80)",
+          "oklch(95% 0.070 80)"
+        ]
+      },
+      "blocked-coral": {
+        "role": "tertiary",
+        "displayName": "Blocked Coral",
+        "canonical": "oklch(72.1% 0.156 17)",
+        "tonalRamp": [
+          "oklch(15% 0.156 17)",
+          "oklch(25% 0.156 17)",
+          "oklch(35% 0.156 17)",
+          "oklch(45% 0.156 17)",
+          "oklch(55% 0.156 17)",
+          "oklch(65% 0.156 17)",
+          "oklch(80% 0.130 17)",
+          "oklch(95% 0.055 17)"
+        ]
+      },
+      "discord-blurple": {
+        "role": "tertiary",
+        "displayName": "Discord Blurple",
+        "canonical": "oklch(55.1% 0.214 271)",
+        "tonalRamp": [
+          "oklch(15% 0.214 271)",
+          "oklch(25% 0.214 271)",
+          "oklch(35% 0.214 271)",
+          "oklch(45% 0.214 271)",
+          "oklch(55% 0.214 271)",
+          "oklch(65% 0.180 271)",
+          "oklch(80% 0.120 271)",
+          "oklch(95% 0.048 271)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The signed-out door's single headline. Nowhere else in the product."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The one h1 per page, and the h1 inside long-form prose pages."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "The confirm dialog's title, the door wordmark, and h2 in prose."
+      },
+      "lead": {
+        "displayName": "Lead",
+        "purpose": "Page lede (capped 68ch), sidebar server name, master-switch line, door subtitle, palette input."
+      },
+      "subhead": {
+        "displayName": "Subhead",
+        "purpose": "Sentence-case section headings inside a page: module-category headings and form-section headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text, table cells, nav items, controls."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Field descriptions (capped 64ch), timestamps, counts, status and error text, breadcrumbs."
+      },
+      "label": {
+        "displayName": "Micro-Caps Label",
+        "purpose": "Labels a SET of things: nav group labels, table column headers, filter field labels, the sidebar role line. Never a form field label."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Every button label, at 36px control height."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Machine strings only: snowflake IDs, UTC timestamps, case numbers, ranks, counts, slash-command lines, keycaps, inline code. Never prose."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating",
+        "value": "0 4px 12px rgba(0, 0, 0, 0.36)",
+        "purpose": "Declared for medium-lift surfaces. Never used on a resting card."
+      },
+      {
+        "name": "detached",
+        "value": "0 16px 40px rgba(0, 0, 0, 0.5)",
+        "purpose": "Everything dismissible that overlays the page: user menu, command palette, confirm dialog, sticky save bar, mobile drawer."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.2, 0.9, 0.3, 1)",
+        "purpose": "The only easing curve in the system."
+      },
+      { "name": "duration-row", "value": "0.12s", "purpose": "Nav item and list row hover." },
+      {
+        "name": "duration-control",
+        "value": "0.13s",
+        "purpose": "Buttons, inputs, tabs — background, border and colour only."
+      },
+      {
+        "name": "duration-surface",
+        "value": "0.16s",
+        "purpose": "Module row icon tiles, master switch border, disclosure carets."
+      },
+      {
+        "name": "duration-indicator",
+        "value": "0.18s",
+        "purpose": "Guild rail sliver height and the 15px to 12px avatar squircle morph."
+      },
+      {
+        "name": "duration-switch",
+        "value": "0.2s",
+        "purpose": "Switch track fill and 18px thumb travel."
+      },
+      {
+        "name": "duration-drawer",
+        "value": "0.22s",
+        "purpose": "Mobile sidebar and rail translate."
+      },
+      {
+        "name": "palette-in",
+        "value": "0.16s — opacity 0 to 1, translateY(-8px) to 0",
+        "purpose": "Command palette entrance."
+      },
+      {
+        "name": "save-bar-in",
+        "value": "0.24s — opacity 0 to 1, translateY(12px) to 0",
+        "purpose": "Sticky save bar entrance when the form goes dirty."
+      },
+      {
+        "name": "field-flash",
+        "value": "1.6s — link-wash background decaying to transparent after 70%",
+        "purpose": "Marks the field a command-palette result jumped to."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition-duration and animation-duration forced to 0.01ms",
+        "purpose": "prefers-reduced-motion collapses every duration above. Any new transition must survive this."
+      }
+    ],
+    "breakpoints": [
+      { "name": "page-tighten", "value": "1080px" },
+      { "name": "drawer", "value": "900px" },
+      { "name": "compact", "value": "620px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single committing action on a surface — Save changes, Continue.",
+      "html": "<button class='ds-btn-primary' type='button'>Save changes</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--r-md, 8px); background: var(--accent-solid, #3369e8); color: #fff; cursor: pointer; font: 600 14px/1 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); white-space: nowrap; transition: background 0.13s cubic-bezier(0.2,0.9,0.3,1), border-color 0.13s cubic-bezier(0.2,0.9,0.3,1); } .ds-btn-primary:hover { background: var(--accent-solid-hi, #3a6fea); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #6ba1ff); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "The default secondary action — pagination, Open, Add. Card surface with a lifted hairline.",
+      "html": "<button class='ds-btn-quiet' type='button'><svg width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' aria-hidden='true'><path d='M8 3.5v9M3.5 8h9'/></svg>Add blocked domain</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 16px; border: 1px solid var(--line-hi, #333949); border-radius: var(--r-md, 8px); background: var(--surface, #161920); color: var(--text, #e9ebf1); cursor: pointer; font: 600 14px/1 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); white-space: nowrap; transition: background 0.13s cubic-bezier(0.2,0.9,0.3,1), border-color 0.13s cubic-bezier(0.2,0.9,0.3,1); } .ds-btn-quiet:hover { border-color: var(--text-3, #868e9f); background: var(--surface-hi, #1d212b); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--accent, #6ba1ff); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-text",
+      "description": "Sunken well with a light control stroke. Brightens rather than glows on focus.",
+      "html": "<input class='ds-input' type='text' value='10s' aria-label='Flood window' />",
+      "css": ".ds-input { width: 100%; max-width: 420px; height: 36px; padding: 0 12px; border: 1px solid var(--control-line, #4b5468); border-radius: var(--r-md, 8px); background: var(--sunken, #0b0d12); color: var(--text, #e9ebf1); font: 400 14px/1 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); transition: border-color 0.13s cubic-bezier(0.2,0.9,0.3,1), background 0.13s cubic-bezier(0.2,0.9,0.3,1); } .ds-input::placeholder { color: var(--text-3, #868e9f); } .ds-input:hover { border-color: var(--text-3, #868e9f); } .ds-input:focus { outline: none; border-color: var(--accent, #6ba1ff); background: var(--bg, #0f1116); } .ds-input:focus-visible { outline: 2px solid var(--accent, #6ba1ff); outline-offset: 1px; } .ds-input[aria-invalid='true'] { border-color: var(--danger, #ff7a86); }"
+    },
+    {
+      "name": "Module Switch",
+      "kind": "custom",
+      "refersTo": "switch-track",
+      "description": "The signature control. Off is a sunken well; on fills with the brand gradient; blocked and plan-gated recolour the track and stay interactive rather than going disabled.",
+      "html": "<div class='ds-switch-row'><label class='ds-switch-cell'><input class='ds-switch' type='checkbox' role='switch' aria-label='Leveling' /></label><label class='ds-switch-cell'><input class='ds-switch' type='checkbox' role='switch' checked aria-label='Moderation' /></label><label class='ds-switch-cell' data-state='degraded'><input class='ds-switch' type='checkbox' role='switch' checked aria-label='Verification' /></label><label class='ds-switch-cell' data-state='blocked'><input class='ds-switch' type='checkbox' role='switch' checked aria-label='Automod' /></label></div>",
+      "css": ".ds-switch-row { display: flex; gap: 16px; align-items: center; } .ds-switch-cell { display: inline-flex; } .ds-switch { appearance: none; position: relative; width: 42px; height: 24px; margin: 0; border: 1px solid var(--control-line, #4b5468); border-radius: 999px; background: var(--sunken, #0b0d12); cursor: pointer; transition: background 0.2s cubic-bezier(0.2,0.9,0.3,1), border-color 0.2s cubic-bezier(0.2,0.9,0.3,1); } .ds-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 999px; background: var(--text-3, #868e9f); transition: transform 0.2s cubic-bezier(0.2,0.9,0.3,1), background 0.2s cubic-bezier(0.2,0.9,0.3,1); } .ds-switch:hover { border-color: var(--text-3, #868e9f); } .ds-switch:checked { border-color: transparent; background: var(--brand, linear-gradient(135deg, #0ab9fe, #3874f3 52%, #5944ec)); } .ds-switch:checked::after { background: #fff; transform: translateX(18px); } .ds-switch-cell[data-state='blocked'] .ds-switch:checked { background: var(--danger, #ff7a86); } .ds-switch-cell[data-state='degraded'] .ds-switch:checked { background: var(--warn, #f0b752); } .ds-switch:focus-visible { outline: 2px solid var(--accent, #6ba1ff); outline-offset: 2px; }"
+    },
+    {
+      "name": "Module Row",
+      "kind": "custom",
+      "refersTo": "module-row",
+      "description": "The product's primary object: a clipped list of hairline-separated rows, each an icon tile, a name over its slash-commands in mono, an optional state word, and the switch. The whole row opens the module via a stretched link that leaves the switch clickable.",
+      "html": "<div class='ds-module-list'><div class='ds-module-row ds-module-row-on'><span class='ds-module-tile ds-module-tile-on'><svg width='17' height='17' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linejoin='round' aria-hidden='true'><path d='M8 1.6 2.8 3.9v3.9c0 3 2.1 5.1 5.2 5.9 3.1-.8 5.2-2.9 5.2-5.9V3.9L8 1.6Z'/></svg></span><a class='ds-module-open' href='#'><span class='ds-module-name'>Moderation</span><span class='ds-module-desc'>/ban&nbsp;&nbsp;/kick&nbsp;&nbsp;/timeout</span></a><span></span><input class='ds-switch' type='checkbox' role='switch' checked aria-label='Moderation' /></div><div class='ds-module-row' data-state='blocked'><span class='ds-module-tile'><svg width='17' height='17' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' aria-hidden='true'><circle cx='8' cy='8' r='6.2'/><path d='M8 4.8v3.6M8 11.1h.01'/></svg></span><a class='ds-module-open' href='#'><span class='ds-module-name'>Automod</span><span class='ds-module-desc'>/automod</span></a><span class='ds-module-warn'>A permission is missing</span><input class='ds-switch' type='checkbox' role='switch' checked aria-label='Automod' /></div></div>",
+      "css": ".ds-module-list { border: 1px solid var(--line, #242833); border-radius: var(--r-lg, 12px); background: var(--surface, #161920); overflow: hidden; } .ds-module-row { position: relative; display: grid; grid-template-columns: 34px minmax(0,1fr) auto auto; align-items: center; gap: 12px; padding: 12px 16px; transition: background 0.12s cubic-bezier(0.2,0.9,0.3,1); } .ds-module-row + .ds-module-row { border-top: 1px solid var(--line, #242833); } .ds-module-row:hover { background: var(--surface-hi, #1d212b); } .ds-module-tile { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-md, 8px); background: var(--surface-hi, #1d212b); color: var(--text-3, #868e9f); transition: background 0.16s cubic-bezier(0.2,0.9,0.3,1), color 0.16s cubic-bezier(0.2,0.9,0.3,1); } .ds-module-tile-on { background: var(--accent-wash, #141c30); color: var(--accent, #6ba1ff); } .ds-module-open { min-width: 0; color: inherit; text-decoration: none; } .ds-module-open::after { content: ''; position: absolute; inset: 0; } .ds-module-name { display: block; font: 500 14px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--text-2, #aab1c0); } .ds-module-row-on .ds-module-name { color: var(--text, #e9ebf1); } .ds-module-desc { display: block; margin-top: 1px; font: 400 12.5px/1.4 var(--mono, 'Spline Sans Mono', ui-monospace, Menlo, monospace); color: var(--text-3, #868e9f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-module-warn { font: 500 12.5px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--danger, #ff7a86); white-space: nowrap; } .ds-module-row[data-state='blocked'] .ds-switch:checked { background: var(--danger, #ff7a86); }"
+    },
+    {
+      "name": "Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar row with a leading icon, an optional mono count badge, and a 3px brand-gradient sliver on the left edge when it is the current page.",
+      "html": "<nav class='ds-nav'><span class='ds-nav-label'>Browse</span><a class='ds-nav-item' href='#'><svg width='17' height='17' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linejoin='round' aria-hidden='true'><rect x='2.2' y='2.2' width='4.8' height='4.8' rx='1'/><rect x='9' y='2.2' width='4.8' height='4.8' rx='1'/><rect x='2.2' y='9' width='4.8' height='4.8' rx='1'/><rect x='9' y='9' width='4.8' height='4.8' rx='1'/></svg><span class='ds-nav-text'>All modules</span><span class='ds-nav-badge'>24</span></a><a class='ds-nav-item' href='#' aria-current='page'><svg width='17' height='17' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' aria-hidden='true'><path d='M8 2.2v11.6M3.4 6.4h9.2M4.6 6.4 2.6 10.4h4Z'/></svg><span class='ds-nav-text'>Cases</span><span class='ds-nav-badge'>412</span></a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 1px; width: 224px; padding: 12px; background: var(--rail, #0a0c11); } .ds-nav-label { padding: 0 8px 8px; font: 600 11px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3, #868e9f); } .ds-nav-item { position: relative; display: flex; align-items: center; gap: 12px; height: 34px; padding: 0 8px; border-radius: var(--r-sm, 6px); color: var(--text-2, #aab1c0); font: 400 14px/1 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); text-decoration: none; transition: background 0.12s cubic-bezier(0.2,0.9,0.3,1), color 0.12s cubic-bezier(0.2,0.9,0.3,1); } .ds-nav-item svg { color: var(--text-3, #868e9f); } .ds-nav-item:hover { background: var(--surface, #161920); color: var(--text, #e9ebf1); } .ds-nav-item[aria-current='page'] { background: var(--surface-hi, #1d212b); color: var(--text, #e9ebf1); font-weight: 500; } .ds-nav-item[aria-current='page']::before { content: ''; position: absolute; left: -11px; top: 50%; width: 3px; height: 18px; border-radius: 0 4px 4px 0; background: var(--brand, linear-gradient(135deg, #0ab9fe, #3874f3 52%, #5944ec)); transform: translateY(-50%); } .ds-nav-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-nav-badge { font: 500 11px/1 var(--mono, 'Spline Sans Mono', ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; color: var(--text-3, #868e9f); }"
+    },
+    {
+      "name": "State Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A capsule state readout on a case row. Semantic variants swap to the matching wash-and-line pair; the system variant marks an action Proton took itself.",
+      "html": "<div class='ds-chip-row'><span class='ds-chip'>active</span><span class='ds-chip'>expires <span class='ds-chip-mono'>2026-08-21 14:47</span></span><span class='ds-chip ds-chip-warn'>Rehearsal</span><span class='ds-chip ds-chip-ok'>Reverted</span><span class='ds-chip ds-chip-system'><svg width='12' height='12' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'><path d='M9.4 1.5 3 9h3.6l-.4 5.5L12.6 7H9l.4-5.5Z'/></svg>Proton</span></div>",
+      "css": ".ds-chip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; } .ds-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid var(--line-hi, #333949); border-radius: 999px; color: var(--text-2, #aab1c0); font: 500 11px/1.5 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); white-space: nowrap; } .ds-chip-mono { font-family: var(--mono, 'Spline Sans Mono', ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; } .ds-chip-ok { border-color: var(--ok-line, #1c4536); background: var(--ok-wash, #0e2019); color: var(--ok, #4fcf95); } .ds-chip-warn { border-color: var(--warn-line, #4b3919); background: var(--warn-wash, #241c0f); color: var(--warn, #f0b752); } .ds-chip-system { border-color: var(--accent-line, #2a3c68); background: var(--accent-wash, #141c30); color: var(--accent, #6ba1ff); }"
+    },
+    {
+      "name": "Form Section Card",
+      "kind": "card",
+      "refersTo": "form-section-title",
+      "description": "The default container: 1px hairline, 12px radius, card slate. A sentence-case semibold heading over hairline-separated fields, each a sentence-case label, a capped description, and a control.",
+      "html": "<section class='ds-card'><h2 class='ds-card-title'>General</h2><label class='ds-field'><span class='ds-field-label'>Flood window</span><span class='ds-field-desc'>A number followed by s, m, h, d or w.</span><input class='ds-input' type='text' value='10s' /></label><label class='ds-field ds-field-bool'><span class='ds-field-text'><span class='ds-field-label'>Rehearse only</span><span class='ds-field-desc'>Proton records what it would have done without doing it.</span></span><input class='ds-switch' type='checkbox' role='switch' aria-label='Rehearse only' /></label></section>",
+      "css": ".ds-card { max-width: 560px; border: 1px solid var(--line, #242833); border-radius: var(--r-lg, 12px); background: var(--surface, #161920); } .ds-card-title { margin: 0; padding: 16px 20px; border-bottom: 1px solid var(--line, #242833); font: 600 14px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); letter-spacing: -0.02em; color: var(--text, #e9ebf1); } .ds-field { display: block; padding: 16px 20px; } .ds-field + .ds-field { border-top: 1px solid var(--line, #242833); } .ds-field-label { display: block; font: 500 14px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--text, #e9ebf1); } .ds-field-desc { display: block; margin: 2px 0 8px; max-width: 64ch; font: 400 12.5px/1.55 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--text-3, #868e9f); } .ds-field-bool { display: flex; align-items: center; gap: 20px; cursor: pointer; } .ds-field-text { flex: 1; min-width: 0; } .ds-field-bool .ds-field-desc { margin-bottom: 0; }"
+    },
+    {
+      "name": "Gap Card",
+      "kind": "custom",
+      "refersTo": "gap-card",
+      "description": "The honesty device. Names the failure, names the missing permission or intent, then gives the literal Discord path to fix it. Coral wash for blocked, amber for degraded.",
+      "html": "<div class='ds-gap'><span class='ds-gap-head'><svg width='17' height='17' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'><path d='M8 1.4A6.6 6.6 0 1 0 8 14.6 6.6 6.6 0 0 0 8 1.4Zm.75 9.9h-1.5V9.8h1.5Zm0-2.9h-1.5V4.3h1.5Z'/></svg><span class='ds-gap-name'>Not running</span></span><p class='ds-gap-text'>Automod needs Manage Server to push rules into Discord&rsquo;s own AutoMod, and Proton&rsquo;s role does not have it in this server.</p><span class='ds-gap-where'><svg width='14' height='14' viewBox='0 0 16 16' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3.5 3v5.5h8M9 6l2.5 2.5L9 11'/></svg>Server Settings &rarr; Roles &rarr; Proton</span></div>",
+      "css": ".ds-gap { display: flex; flex-direction: column; gap: 8px; max-width: 560px; padding: 16px 20px; border: 1px solid var(--danger-line, #542630); border-radius: var(--r-lg, 12px); background: var(--danger-wash, #241318); } .ds-gap-head { display: flex; align-items: center; gap: 8px; color: var(--danger, #ff7a86); } .ds-gap-name { font: 600 14px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--text, #e9ebf1); } .ds-gap-text { margin: 0; max-width: 62ch; font: 400 14px/1.55 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--text-2, #aab1c0); } .ds-gap-where { display: flex; align-items: flex-start; gap: 8px; font: 400 12.5px/1.5 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); color: var(--text-3, #868e9f); }"
+    },
+    {
+      "name": "Case Table",
+      "kind": "custom",
+      "refersTo": "table-header-cell",
+      "description": "Sticky micro-caps header over hairline-separated rows. The row's key column is mono, tabular and full-strength; everything else recedes to muted paper.",
+      "html": "<div class='ds-table-card'><table class='ds-table'><thead><tr><th style='width:66px'><button class='ds-sort' type='button'>#<svg width='12' height='12' viewBox='0 0 16 16' fill='currentColor' aria-hidden='true'><path d='m8 10.8 3.6-4.4H4.4L8 10.8Z'/></svg></button></th><th>Action</th><th style='width:120px'>Target</th><th>Reason</th><th style='width:142px'>When (UTC)</th></tr></thead><tbody><tr><td class='ds-key'>#412</td><td>Banned</td><td class='ds-mono'>1902&hellip;4471</td><td>Raid account &mdash; matched join burst</td><td class='ds-mono'>2026-08-21 14:02</td></tr><tr><td class='ds-key'>#411</td><td>Timed out</td><td class='ds-mono'>3310&hellip;9921</td><td>Flood: 9 messages in 10s</td><td class='ds-mono'>2026-08-21 13:47</td></tr></tbody></table></div>",
+      "css": ".ds-table-card { border: 1px solid var(--line, #242833); border-radius: var(--r-lg, 12px); background: var(--surface, #161920); overflow: hidden; } .ds-table { width: 100%; border-collapse: collapse; font: 400 14px/1.5 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); } .ds-table th { padding: 12px 16px; border-bottom: 1px solid var(--line, #242833); background: var(--surface, #161920); color: var(--text-3, #868e9f); font: 600 11px/1.4 var(--font, Onest, ui-sans-serif, system-ui, sans-serif); letter-spacing: 0.05em; text-transform: uppercase; text-align: left; white-space: nowrap; } .ds-table td { padding: 12px 16px; border-bottom: 1px solid var(--line, #242833); color: var(--text-2, #aab1c0); vertical-align: middle; } .ds-table tbody tr:last-child td { border-bottom: 0; } .ds-table tbody tr:hover { background: var(--surface-hi, #1d212b); } .ds-key { font-family: var(--mono, 'Spline Sans Mono', ui-monospace, Menlo, monospace); font-variant-numeric: tabular-nums; color: var(--text, #e9ebf1); } .ds-mono { font-family: var(--mono, 'Spline Sans Mono', ui-monospace, Menlo, monospace); font-size: 12.5px; font-variant-numeric: tabular-nums; } .ds-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: inherit; } .ds-sort:hover { color: var(--text, #e9ebf1); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Switchboard",
+    "overview": "Proton's dashboard is a dark room full of switches, and the only thing that glows is what is currently live. The ground is a cool near-black that never resolves to pure black; surfaces step up from it in four small increments and are cut apart by 1px hairlines rather than shadows or gaps. On that ground, one gradient — cyan through blue to violet, sampled from the product's own mark — is allowed to appear, and only ever as a 2–6px sliver marking a thing that is on: the server you are looking at, the section you are in, the tab you are reading, the module that is running. Everything else in the interface is greyscale plus a small, disciplined set of semantic colours.\n\nThe arrangement is deliberately the one a Discord admin already knows: a narrow icon rail of servers, a sidebar of categories, a single centred column of work. The craft, not the layout, is where the product differentiates. That means an obsessive typographic hierarchy — ten roles, all Onest, with a second face reserved strictly for machine strings — and state carried by precise small type sitting beside colour, never by colour alone. A module that cannot run says \"A permission is missing\" in amber-or-coral text and recolours its own switch track; it is never greyed out and never silently dead.\n\nThe density is high and unapologetic: 34px nav rows, 36px controls, 12px vertical padding on list rows, no decorative whitespace. What the room does not contain is as deliberate as what it does. No tinted glass, no glows behind cards, no gradient buttons, no card that lifts on hover, no colour that appears once for effect.",
+    "keyCharacteristics": [
+      "Cool near-black ground (#0f1116) with four tonal surface steps and 1px hairline separation",
+      "The mark's cyan→blue→violet gradient reserved exclusively for slivers that mark live state",
+      "Onest for all UI text; Spline Sans Mono for identifiers, timestamps, commands, counts and keycaps",
+      "Semantic colour ships as ink + near-black wash + hairline, never as a saturated block",
+      "880px reading column, widened to a hard-capped table width only when a table is on the page",
+      "Flat at rest: two shadows exist and both mean \"this floats above the page\"",
+      "Uppercase micro-caps label a set; sentence-case semibold is a heading"
+    ],
+    "rules": [
+      {
+        "name": "The Gradient Is A Sliver Rule",
+        "body": "The brand gradient is only ever a thin marker of something that is live. It never fills a button, a card, a surface, a tile or text. It appears in exactly six places: the guild-rail indicator (4px wide), the active nav-item indicator (3px), the active tab underline (2px), the on-switch track, the XP bar fill (6px tall), and the signed-out door's halo (12% opacity behind a 90px blur). Adding a seventh has to pass the same test — does it mark something that is currently running? (The world was declared with three jobs; the build settled at six. Six is the system. The three additions all still mark live state or are the mark itself.)",
+        "section": "colors"
+      },
+      {
+        "name": "The Switch Carries The State Rule",
+        "body": "A module that is switched on but cannot run recolours its own switch track — coral for blocked, amber for plan-gated — and is never disabled. The switch is the only way to turn the module back off, so it stays live; the state goes into the track and into a named line of text beside it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Wash-And-Line Rule",
+        "body": "Every semantic colour ships as a triple: the ink, a near-black wash and a hairline. Semantic surfaces sit a few percent above the ground, never as saturated blocks. There is no such thing as a coral card or an amber banner — only a coral hairline around a coral-tinted near-black.",
+        "section": "colors"
+      },
+      {
+        "name": "The Blurple Is A Doorknob Rule",
+        "body": "Discord blurple appears on exactly one element: the \"Continue with Discord\" button on the signed-out door. Anywhere else it makes Proton read as a Discord clone instead of a tool that manages one.",
+        "section": "colors"
+      },
+      {
+        "name": "The Micro-Caps Label A Set Rule",
+        "body": "Uppercase 11px tracked type labels a set of things — a nav group, a table column, a filter input, a role line. Sentence-case semibold is a heading for a region of the page. These do not swap. A form field label is a heading for one control and is therefore sentence case at 14px/500; a table column header labels a column of values and is therefore micro-caps.",
+        "section": "typography"
+      },
+      {
+        "name": "The Mono Is For Machine Strings Rule",
+        "body": "Spline Sans Mono is for things a machine produced or a machine will parse: snowflake IDs, UTC timestamps, case numbers, ranks, counts, slash-command lines, keycaps and inline code. Never prose, never a heading, never a button label. Every mono number carries font-variant-numeric: tabular-nums so digits stack in a column.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "All UI text is Onest. Hierarchy is size, weight and tracking — never a second display face, never letter-spaced uppercase outside the Label role, never italics.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-At-Rest Rule",
+        "body": "Surfaces are flat. A shadow is not decoration and not hierarchy — it means the element is floating over the document and can be dismissed. If it cannot be dismissed, it does not get a shadow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Cut-In Rule",
+        "body": "Anything the user types into or toggles is sunken (Well Black) with a Control Stroke border, cut into the card rather than laid on it. Anything that displays is raised (Raised Slate) with no border. This is how an input and a pill are told apart at a glance even though they are the same height.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Every boundary in the product is a 1px #242833 rule. There are no 2px borders, no dividers with margins around them, no double rules, and no shadow used as a separator. Rows are separated with + .row { border-top } inside a clipped container so the container's 12px radius survives.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Clipped Container Rule",
+        "body": "A list of rows is one bordered, 12px-radius container with overflow: hidden and hairlines between rows — not a stack of individually-bordered cards with gaps. A gap between rows is a different, louder statement than this system makes.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do build a page as .page-head (optional 12.5px breadcrumb, then one h1) → optional lede → optional .tabs → sections, each a subhead over a clipped, hairline-bordered container, 40px apart.",
+      "Do reach for an existing container (.card, .module-list, .form-section, .table-card) before inventing a surface. All four are the same object: 1px #242833, 12px radius, #161920.",
+      "Do put separators inside the container as + el { border-top: 1px solid #242833 } and clip the container with overflow: hidden, so the 12px radius survives the first and last row.",
+      "Do express a failure as a gap card: name what is missing, then give the literal Discord path to fix it on a .where line.",
+      "Do pair every state colour with a word. The coral track is always accompanied by \"A permission is missing\"; the amber track by \"Not on this plan\".",
+      "Do set every number that appears in a column in mono with tabular-nums.",
+      "Do sink anything the user edits (Well Black + Control Stroke) and raise anything that only displays (Raised Slate, no border).",
+      "Do transition only colour, and only over 0.12–0.2s on cubic-bezier(0.2, 0.9, 0.3, 1). The reduced-motion block collapses every duration to 0.01ms and must keep working.",
+      "Do cap measure: 68ch for prose and ledes, 64ch for field descriptions, 62ch for failure copy."
+    ],
+    "donts": [
+      "Don't put the brand gradient on a surface, a button, a card, an icon or text. It is a 2–6px sliver marking live state, and it already has its six jobs.",
+      "Don't disable a switch to say \"cannot run\" — recolour the track and name the reason in text.",
+      "Don't use uppercase micro-caps on a form field label, a page heading, or a button. Micro-caps label a set of things, nothing else.",
+      "Don't set prose, headings or button labels in Spline Sans Mono.",
+      "Don't give a resting card a shadow, a hover lift, a transform, or a glow. Hover is one tonal step.",
+      "Don't add a thick or coloured left border to anything other than .embed-preview. That stripe is Discord's own embed accent bar reproduced inside a preview of a Discord embed; used anywhere else it is a decorative side-tab.",
+      "Don't introduce a fifth surface step, a second hairline value, or a third shadow.",
+      "Don't use Discord blurple anywhere but the sign-in button, and don't reproduce Discord's, MEE6's, Sapphire's or Wick's layouts or assets.",
+      "Don't let colour be the only carrier of a state — every semantic colour in this system appears next to a word that says the same thing.",
+      "Don't introduce a second sans face, letter-spaced uppercase outside the Label role, italics, or a weight above 600 for UI text."
+    ]
+  }
+}

@@ -9,8 +9,22 @@ import {
 } from './config.ts';
 import type { LevelingDeps } from './deps.ts';
 import { createMessageXpListener } from './message-xp.ts';
+import { createLevelingProviders } from './providers.ts';
+import { createPruneHandler, PRUNE_JOB_ID } from './prune.ts';
 import { createVoiceXpListener } from './voice-xp.ts';
 
+export {
+  ACTIVITY_RETENTION_DAYS,
+  ACTIVITY_WINDOW_DAYS,
+  ACTIVITY_WINDOWS,
+  type ActivityQuery,
+  type ActivityStore,
+  type ActivityTotals,
+  type ActivityWindow,
+  type MemberStats,
+  utcDay,
+  windowStart,
+} from './activity.ts';
 export {
   LEADERBOARD_MAX_PAGE,
   LEADERBOARD_PAGE_SIZE,
@@ -19,20 +33,25 @@ export {
   rankCommand,
   xpCommand,
 } from './commands.ts';
+export { LEVEL_UP_ACTION, levelUpCustomId } from './component-id.ts';
 export {
+  DEFAULT_LEVEL_UP,
   DEFAULT_LEVEL_UP_MESSAGE,
+  isSilentLevelUp,
   LEVEL_UP_PLACEHOLDERS,
   LEVELING_SCHEMA_VERSION,
   type LevelingConfig,
   type LevelingSettings,
+  type LevelUpMessage,
   levelingConfigSchema,
   levelingDefaultConfig,
   levelingFormSchema,
+  levelUpMessageSchema,
+  liftLevelUpMessage,
   REWARD_MODES,
   type RewardMode,
   type RoleReward,
   readSettings,
-  renderLevelUpMessage,
   roleRewardSchema,
   roleRewardsSchema,
   rollMessageXp,
@@ -50,13 +69,23 @@ export {
   xpForStep,
 } from './curve.ts';
 export { bindVoice, bindXp, clockOf, describeUnbound, type LevelingDeps } from './deps.ts';
-export { applyLevelUp, type LevelUp, type LevelUpSource } from './level-up.ts';
+export {
+  applyLevelUp,
+  type LevelUp,
+  type LevelUpBody,
+  type LevelUpRender,
+  type LevelUpSource,
+  type LevelUpValues,
+  renderLevelUpMessage,
+} from './level-up.ts';
 export {
   createMessageXpListener,
   MESSAGE_XP_EVENT_TYPES,
   readMessage,
   type XpMessage,
 } from './message-xp.ts';
+export { createLevelingProviders, LEVELING_MODULE_ID } from './providers.ts';
+export { createPruneHandler, PRUNE_JOB_ID } from './prune.ts';
 export { RedisVoiceSessionStore } from './redis-session-store.ts';
 export {
   planRoleRewards,
@@ -102,9 +131,21 @@ export function createLevelingModule(
     ],
 
     requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
+    actionKinds: ['add_role', 'remove_role', 'send', 'interaction_reply'],
 
     commands: levelingCommands(deps),
     listeners: [createMessageXpListener(deps), createVoiceXpListener(deps)],
+
+    ...(deps.activity ? { providers: createLevelingProviders(deps.activity) } : {}),
+
+    // Windowed conditions only ever look back 30 days, so anything older is dead weight that
+    // grows without bound. Registered only when there is a store to prune.
+    ...(deps.activity
+      ? {
+          schedules: [PRUNE_JOB_ID],
+          scheduledHandlers: { [PRUNE_JOB_ID]: createPruneHandler(deps.activity, deps.now) },
+        }
+      : {}),
 
     emits: ['xp.level_gained'],
 
@@ -112,18 +153,26 @@ export function createLevelingModule(
       icon: 'trending-up',
       sections: [
         { id: 'general', title: 'General', fields: ['enabled'] },
-        { id: 'card', title: 'Rank card', fields: ['rankCard', 'cardPreset'] },
+        {
+          id: 'card',
+          title: 'Rank card',
+          fields: [
+            'rankCard',
+            'cardPreset',
+            'cardAccent',
+            'cardBackgroundUrl',
+            'cardShowRank',
+            'cardShowPercent',
+            'cardShowTotalXp',
+          ],
+        },
         {
           id: 'message',
           title: 'Message XP',
           fields: ['xpPerMessageMin', 'xpPerMessageMax', 'messageCooldown'],
         },
         { id: 'voice', title: 'Voice XP', fields: ['voiceXpPerMinute', 'afkChannelId'] },
-        {
-          id: 'announce',
-          title: 'Level-up announcement',
-          fields: ['levelUpMessage', 'levelUpChannelId'],
-        },
+        { id: 'announce', title: 'Level-up announcement', fields: ['levelUpChannelId'] },
         {
           id: 'exclusions',
           title: 'Exclusions',

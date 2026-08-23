@@ -13,6 +13,7 @@ export const scheduledActions = pgTable(
     payload: jsonb('payload'),
     attempts: integer('attempts').notNull().default(0),
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    lockToken: text('lock_token'),
     idempotencyKey: text('idempotency_key').notNull(),
   },
   (t) => [
