@@ -60,12 +60,12 @@ describe('/ban add', () => {
     const h = harness();
 
     await h.run('ban', subcommand('add', [userOption('user', MEMBER)]), {
-      appPermissions: BOT_PERMISSIONS & ~Permissions.BanMembers,
+      botPermissions: BOT_PERMISSIONS & ~Permissions.BanMembers,
     });
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.replyContent()).toContain('BanMembers');
-    expect(h.replyContent()).toContain(CHANNEL);
+    expect(h.replyContent()).toContain(GUILD);
   });
 
   test('a duration makes the ban temporary and schedules the unban', async () => {
@@ -202,7 +202,7 @@ describe('/kick', () => {
     const h = harness();
 
     await h.run('kick', [userOption('user', MEMBER)], {
-      appPermissions: BOT_PERMISSIONS & ~Permissions.KickMembers,
+      botPermissions: BOT_PERMISSIONS & ~Permissions.KickMembers,
     });
 
     expect(h.discordCalls()).toHaveLength(0);
