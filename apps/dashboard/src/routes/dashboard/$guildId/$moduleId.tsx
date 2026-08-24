@@ -471,15 +471,6 @@ function ModuleSettings({
   const fields = shownDescriptors(area, descriptors, summary.dashboard?.sections);
   const areaPanels = shownPanels(area, panels);
 
-  // Which sections a collapsed form is hiding an edit inside. The save bar says work is unsaved;
-  // on a seven-section module it cannot say where, and reopening every card to find it is the
-  // whole complaint.
-  const changed = new Set(
-    Object.keys(values).filter(
-      (path) => JSON.stringify(values[path]) !== JSON.stringify(baseline.values[path]),
-    ),
-  );
-
   // Checked over every descriptor, not just this area's: the save writes the whole config, so a
   // duration left unreadable on another area would be rejected by the API with the field named and
   // nothing on screen to fix. Naming it here is the difference between the two.
@@ -513,7 +504,6 @@ function ModuleSettings({
       <GeneratedForm
         descriptors={fields}
         values={values}
-        changed={changed}
         channels={channels}
         roles={roles}
         sections={sections}
@@ -531,10 +521,6 @@ function ModuleSettings({
             key={key ?? panel.title}
             id={sectionKey(moduleId, `panel:${key ?? panel.title}`)}
             title={panel.title === area?.title ? null : panel.title}
-            edited={
-              key !== null &&
-              JSON.stringify(panelValues[key]) !== JSON.stringify(baseline.panelValues[key])
-            }
           >
             <Panel
               value={key === null ? undefined : panelValues[key]}

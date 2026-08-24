@@ -1565,21 +1565,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-size: 14px;
 }
 
-.form-section-toggle .form-section-title {
-  margin-right: auto;
-}
-
-.form-section-edited {
-  flex-shrink: 0;
-  padding: 2px var(--s2);
-  border: 1px solid var(--accent-line);
-  border-radius: var(--r-full);
-  background: var(--accent-wash);
-  color: var(--accent);
-  font-size: var(--t-xs);
-  font-weight: 500;
-}
-
 .form-section-head + .form-section-body {
   border-top: 1px solid var(--line);
 }

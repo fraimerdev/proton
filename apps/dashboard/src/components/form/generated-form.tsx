@@ -3,7 +3,7 @@ import { type ReactElement, useMemo } from 'react';
 import type { DiscordChannel, DiscordRole, FieldSlot } from './fields.tsx';
 import { type MatrixLayout, matrixFor, toMatrix } from './matrix.ts';
 import { resolveFieldComponent } from './registry.tsx';
-import { type FormRow, type RuleRow, ruleIsOff, toRows } from './rules.ts';
+import { type RuleRow, ruleIsOff, toRows } from './rules.ts';
 import { SectionCard } from './section.tsx';
 
 export interface FormSection {
@@ -20,7 +20,6 @@ export interface GeneratedFormProps {
   roles?: readonly DiscordRole[] | undefined;
   sections?: readonly FormSection[] | undefined;
   scope?: string | undefined;
-  changed?: ReadonlySet<string> | undefined;
 
   // A section the page's own h1 has already named. It renders headerless rather than stacking a
   // third identical heading under the first two.
@@ -111,16 +110,6 @@ export function groupBySection(
 
 export function sectionKey(scope: string | undefined, id: string): string {
   return scope === undefined ? id : `${scope}:${id}`;
-}
-
-function pathsOf(row: FormRow): string[] {
-  if (row.kind === 'field') return [row.descriptor.path];
-
-  return [
-    ...(row.head ? [row.head.path] : []),
-    ...row.params.map((param) => param.descriptor.path),
-    ...row.stacked.map((descriptor) => descriptor.path),
-  ];
 }
 
 interface ControlProps {
@@ -263,7 +252,6 @@ export function GeneratedForm({
   roles,
   sections,
   scope,
-  changed,
   suppressTitle,
 }: GeneratedFormProps): ReactElement {
   // Deliberately not keyed on `values`: grouping, the matrix layout and toRows' stemming would all
@@ -291,14 +279,6 @@ export function GeneratedForm({
             key={group.id}
             id={sectionKey(scope, group.id)}
             title={group.title === suppressTitle ? null : group.title}
-            edited={
-              (laid[index]?.rows ?? []).some((row) =>
-                pathsOf(row).some((path) => changed?.has(path)),
-              ) ||
-              (laid[index]?.matrix?.rows ?? []).some((row) =>
-                row.cells.some((cell) => cell && changed?.has(cell.path)),
-              )
-            }
           >
             {laid[index]?.matrix ? (
               <Matrix
