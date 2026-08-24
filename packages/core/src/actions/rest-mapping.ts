@@ -270,7 +270,11 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             components: p.data.components,
             attachments: descriptors,
             allowed_mentions: p.data.allowedMentions,
-            flags: p.data.ephemeral ? MESSAGE_FLAG_EPHEMERAL : undefined,
+            // Or'd, like the callback above: the schema validates componentsV2IsExclusive against
+            // this field, so discarding it let a V2 followup pass validation and then reach Discord
+            // without the bit that makes its components legal.
+            flags:
+              (p.data.ephemeral ? MESSAGE_FLAG_EPHEMERAL : 0) | (p.data.flags ?? 0) || undefined,
           }),
           ...(files ? { files } : {}),
         },

@@ -46,8 +46,8 @@ export interface InteractionMessage {
   files?: Attachment[];
   ephemeral?: boolean;
 
-  // Only IS_COMPONENTS_V2 in practice. A callback cannot create a V2 message, so a V2 reply has
-  // to be a followup or an edit of the original response.
+  // Only IS_COMPONENTS_V2 in practice, and it is or'd with the ephemeral bit rather than replacing
+  // it. A reply, an update and a followup all carry it; only a DEFERRED callback cannot.
   flags?: number;
 
   allowedMentions?: AllowedMentions;

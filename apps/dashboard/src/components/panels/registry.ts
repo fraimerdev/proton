@@ -20,7 +20,6 @@ type PanelExport =
   | 'EscalationLadderPanel'
   | 'GoodbyeMessagePanel'
   | 'HoneypotChannelsPanel'
-  | 'HoneypotNoticePanel'
   | 'LevelUpMessagePanel'
   | 'LogEventsPanel'
   | 'RoleMenusPanel'
@@ -29,7 +28,6 @@ type PanelExport =
   | 'TemplatesPanel'
   | 'TempVcHubsPanel'
   | 'TicketPanelsPanel'
-  | 'VerificationPanelPublisher'
   | 'WelcomeMessagePanel';
 
 export interface PanelProps {
@@ -109,9 +107,6 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
   automod: {
     panels: [{ key: null, title: 'Who enforces what', Panel: panel('EnforcementReadout') }],
   },
-  verification: {
-    panels: [{ key: null, title: 'Post the panel', Panel: panel('VerificationPanelPublisher') }],
-  },
   honeypot: {
     panels: [
       {
@@ -120,7 +115,6 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
         title: 'Honeypot channels',
         Panel: panel('HoneypotChannelsPanel'),
       },
-      { key: null, title: 'Post the notice', Panel: panel('HoneypotNoticePanel') },
     ],
   },
   serverlog: {

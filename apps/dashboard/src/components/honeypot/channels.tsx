@@ -9,7 +9,6 @@ import {
   SECONDS_PER_DAY,
 } from '@proton/module-honeypot/config';
 import { type ReactElement, useId, useState } from 'react';
-import { postHoneypotNotice } from '../../server/honeypot.ts';
 import { channelOptions, type DiscordChannel, SinglePicker } from '../form/picker.tsx';
 import { Icon } from '../shell/icon.tsx';
 
@@ -17,12 +16,6 @@ export interface HoneypotChannelsEditorProps {
   honeypots: readonly Partial<HoneypotChannel>[];
   channels: readonly DiscordChannel[];
   onChange: (honeypots: HoneypotChannel[]) => void;
-}
-
-export interface HoneypotNoticesProps {
-  guildId: string;
-  honeypots: readonly Partial<HoneypotChannel>[];
-  channels: readonly DiscordChannel[];
 }
 
 const TEXT_CHANNEL_TYPES = [0, 5];
@@ -316,98 +309,6 @@ export function HoneypotChannelsEditor({
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-type NoticeState =
-  | { status: 'posting' }
-  | { status: 'posted' }
-  | { status: 'failed'; humanReason: string };
-
-export function HoneypotNotices({
-  guildId,
-  honeypots: stored,
-  channels,
-}: HoneypotNoticesProps): ReactElement {
-  // Deliberately not useMutation: posting a notice caches nothing and invalidates nothing, and a
-  // query client is one more thing this panel would need to be handed to render at all.
-  const [states, setStates] = useState<Record<string, NoticeState>>({});
-
-  const honeypots = stored.map(complete).filter((honeypot) => honeypot.channelId !== '');
-
-  async function post(channelId: string): Promise<void> {
-    setStates((prev) => ({ ...prev, [channelId]: { status: 'posting' } }));
-
-    try {
-      await postHoneypotNotice({ data: { guildId, channelId } });
-      setStates((prev) => ({ ...prev, [channelId]: { status: 'posted' } }));
-    } catch (error) {
-      setStates((prev) => ({
-        ...prev,
-        [channelId]: {
-          status: 'failed',
-          humanReason:
-            error instanceof Error
-              ? error.message
-              : 'Proton could not be asked to post the notice.',
-        },
-      }));
-    }
-  }
-
-  return (
-    <div className="publish-panel" data-path="__honeypotNotice">
-      <p className="field-description">
-        The notice tells members the channel is a trap, what posting there costs them, and how far
-        back their messages would be deleted. Post it once per honeypot so nobody who joined before
-        you set the trap walks into it unwarned.
-      </p>
-
-      {/* Save-then-post, not post-then-save: the worker reads the stored config, so an unsaved row
-          is not a honeypot yet and Proton would refuse to post a notice into it. */}
-      <p className="field-description">
-        Save your changes before posting — Proton reads each honeypot from the saved settings.
-      </p>
-
-      {honeypots.length === 0 ? (
-        <p className="field-empty">
-          No saved honeypot channels. Add one above and save, then come back to post its notice.
-        </p>
-      ) : null}
-
-      {honeypots.map((honeypot) => {
-        const state = states[honeypot.channelId];
-
-        return (
-          <div className="honeypot-notice" key={honeypot.channelId}>
-            <div className="honeypot-notice-what">
-              <strong>{nameOf(channels, honeypot.channelId)}</strong>
-              <span className="honeypot-hint">{consequence(honeypot, 'it')}</span>
-            </div>
-
-            <button
-              type="button"
-              className="button"
-              onClick={() => void post(honeypot.channelId)}
-              disabled={state?.status === 'posting'}
-            >
-              <Icon name="paper-plane-tilt" />
-              {state?.status === 'posting' ? 'Posting…' : 'Post the notice'}
-            </button>
-
-            {state?.status === 'posted' ? (
-              <p className="publish-panel-result">
-                Asked Proton to post it. It should appear within a few seconds.
-              </p>
-            ) : null}
-
-            {state?.status === 'failed' ? (
-              <p className="publish-panel-result publish-panel-error">{state.humanReason}</p>
-            ) : null}
-          </div>
-        );
-      })}
     </div>
   );
 }

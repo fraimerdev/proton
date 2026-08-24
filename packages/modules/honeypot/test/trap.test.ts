@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { Permissions } from '@proton/core';
 import { DELETE_SECONDS_MAX } from '../src/config.ts';
-import { HONEYPOT_ALARM, HONEYPOT_COLOUR, HONEYPOT_OK } from '../src/embed.ts';
+import { HONEYPOT_ALARM, HONEYPOT_OK } from '../src/embed.ts';
 import type { TrapOutcome } from '../src/listener.ts';
+import { HONEYPOT_COLOUR } from '../src/notice.ts';
 import {
   ABOVE,
   armed,

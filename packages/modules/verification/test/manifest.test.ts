@@ -71,12 +71,12 @@ describe('the manifest', () => {
     expect(verificationModule.requiredIntents).toContain(GatewayIntentBits.GuildMembers);
   });
 
-  test('listens to joins, to its own components and modals, and to its own service events', () => {
+  test('listens to joins, to its own components and modals, and to every config save', () => {
     expect(verificationModule.listeners?.map((listener) => listener.types)).toEqual([
       ['member.joined'],
       ['interaction.component'],
       ['interaction.modal'],
-      ['verification.panel_requested', 'verification.web_passed'],
+      ['proton.config_changed', 'verification.web_passed'],
     ]);
   });
 
@@ -91,6 +91,7 @@ describe('the manifest', () => {
         'interaction_followup',
         'send',
         'edit_message',
+        'delete_message',
         'create_dm',
         'kick',
         'ban',

@@ -98,3 +98,148 @@ export class RedisNoticeStore implements NoticeStore {
     await this.#redis.set(key, JSON.stringify(book));
   }
 }
+
+export const HONEYPOT_STATS_PREFIX = 'proton:honeypot:stats';
+
+export const HONEYPOT_CAUGHT_PREFIX = 'proton:honeypot:caught';
+
+export const HONEYPOT_REFRESH_PREFIX = 'proton:honeypot:refresh';
+
+// A month. The lifetime total is a separate counter so this trim never rewrites the button.
+export const CAUGHT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const RECENT_SHOWN = 8;
+
+export interface CaughtEntry {
+  userId: string;
+  action: string;
+  at: number;
+}
+
+// Keyed on the message: RESUME redelivers one long after the burst lock let go, and without this
+// the same member lands on a public number twice.
+export interface CaughtInput extends CaughtEntry {
+  messageId: string;
+}
+
+export interface HoneypotStats {
+  total: number;
+  lastDay: number;
+  lastWeek: number;
+
+  byAction: Record<string, number>;
+  recent: CaughtEntry[];
+}
+
+export interface HoneypotStatsStore {
+  record(guildId: string, channelId: string, entry: CaughtInput): Promise<number>;
+
+  read(guildId: string, channelId: string, now: number): Promise<HoneypotStats>;
+
+  total(guildId: string, channelId: string): Promise<number>;
+
+  claimRefresh(guildId: string, channelId: string, ttlMs: number): Promise<boolean>;
+}
+
+function scoped(prefix: string, guildId: string, channelId: string): string {
+  return `${prefix}:${guildId}:${channelId}`;
+}
+
+// WITHSCORES answers one flat array of member, score, member, score — the timestamp comes off the
+// score rather than the member so the member can stay keyed on the message that produced it.
+function pairs(flat: readonly string[]): CaughtEntry[] {
+  const entries: CaughtEntry[] = [];
+
+  for (let index = 0; index + 1 < flat.length; index += 2) {
+    const entry = parseEntry(flat[index] ?? '', flat[index + 1] ?? '');
+    if (entry) entries.push(entry);
+  }
+
+  return entries;
+}
+
+function parseEntry(member: string, score: string): CaughtEntry | null {
+  const [, userId, action] = member.split(':');
+  if (!userId || !action) return null;
+
+  const at = Number(score);
+  return Number.isFinite(at) ? { userId, action, at } : null;
+}
+
+export class RedisHoneypotStatsStore implements HoneypotStatsStore {
+  readonly #redis: Redis;
+
+  constructor(redis: Redis) {
+    this.#redis = redis;
+  }
+
+  async record(guildId: string, channelId: string, entry: CaughtInput): Promise<number> {
+    const stats = scoped(HONEYPOT_STATS_PREFIX, guildId, channelId);
+    const caught = scoped(HONEYPOT_CAUGHT_PREFIX, guildId, channelId);
+
+    // NX first, and its answer is the gate: the counters below are what the notice shows, and a
+    // redelivered message must not move them a second time.
+    const added = await this.#redis.zadd(
+      caught,
+      'NX',
+      entry.at,
+      `${entry.messageId}:${entry.userId}:${entry.action}`,
+    );
+
+    if (Number(added) === 0) return this.total(guildId, channelId);
+
+    const replies = await this.#redis
+      .multi()
+      .hincrby(stats, 'total', 1)
+      .hincrby(stats, `action:${entry.action}`, 1)
+      .zremrangebyscore(caught, '-inf', entry.at - CAUGHT_RETENTION_MS)
+      .exec();
+
+    const counted = replies?.[0]?.[1];
+    return typeof counted === 'number' ? counted : Number(counted ?? 0);
+  }
+
+  async total(guildId: string, channelId: string): Promise<number> {
+    const raw = await this.#redis.hget(scoped(HONEYPOT_STATS_PREFIX, guildId, channelId), 'total');
+
+    return raw === null ? 0 : Number(raw) || 0;
+  }
+
+  async read(guildId: string, channelId: string, now: number): Promise<HoneypotStats> {
+    const stats = scoped(HONEYPOT_STATS_PREFIX, guildId, channelId);
+    const caught = scoped(HONEYPOT_CAUGHT_PREFIX, guildId, channelId);
+
+    const [fields, day, week, recent] = await Promise.all([
+      this.#redis.hgetall(stats),
+      this.#redis.zcount(caught, now - 24 * 60 * 60 * 1000, '+inf'),
+      this.#redis.zcount(caught, now - 7 * 24 * 60 * 60 * 1000, '+inf'),
+      this.#redis.zrevrange(caught, 0, RECENT_SHOWN - 1, 'WITHSCORES'),
+    ]);
+
+    const byAction: Record<string, number> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (!key.startsWith('action:')) continue;
+      byAction[key.slice('action:'.length)] = Number(value) || 0;
+    }
+
+    return {
+      total: Number(fields.total) || 0,
+      lastDay: day,
+      lastWeek: week,
+      byAction,
+      recent: pairs(recent),
+    };
+  }
+
+  async claimRefresh(guildId: string, channelId: string, ttlMs: number): Promise<boolean> {
+    const won = await this.#redis.set(
+      scoped(HONEYPOT_REFRESH_PREFIX, guildId, channelId),
+      '1',
+      'PX',
+      Math.max(1, Math.floor(ttlMs)),
+      'NX',
+    );
+
+    return won === 'OK';
+  }
+}

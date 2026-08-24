@@ -89,15 +89,29 @@ describe('the manifest', () => {
   });
 
   test('declares every kind a trap and its notice can execute', () => {
+    // moduleExecutor throws UndeclaredActionError on anything absent here, and the throw escapes
+    // the listener — so a kind left off does not degrade, it kills the whole handler mid-way.
     expect(new Set(honeypotModule.actionKinds)).toEqual(
-      new Set(['ban', 'unban', 'kick', 'timeout', 'warn', 'delete_message', 'send']),
+      new Set([
+        'ban',
+        'unban',
+        'kick',
+        'timeout',
+        'warn',
+        'delete_message',
+        'send',
+        'edit_message',
+        'interaction_reply',
+      ]),
     );
   });
 
-  test('listens for messages and for its own notice request, and nothing else', () => {
+  test('listens for messages, for the save that reconciles its notices, and for its button', () => {
+    // Without the third, the notice renders a button nothing in Proton is listening for.
     expect(honeypotModule.listeners?.map((listener) => listener.types)).toEqual([
       ['message.created'],
-      ['honeypot.notice_requested'],
+      ['proton.config_changed'],
+      ['interaction.component'],
     ]);
   });
 

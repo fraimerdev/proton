@@ -1,5 +1,5 @@
 import type { GuildStateStore } from '@proton/core';
-import type { HoneypotLock, NoticeStore } from './store.ts';
+import type { HoneypotLock, HoneypotStatsStore, NoticeStore } from './store.ts';
 
 export interface HoneypotDeps {
   lock?: HoneypotLock;
@@ -9,6 +9,8 @@ export interface HoneypotDeps {
   guildState?: GuildStateStore;
 
   notices?: NoticeStore;
+
+  stats?: HoneypotStatsStore;
 
   now?(): number;
 }
@@ -26,6 +28,7 @@ const PORT_HINTS: Record<string, string> = {
   botUserId: "botUserId: the application's own id, from READY",
   guildState: 'guildState: new RedisGuildStateStore(redis)',
   notices: 'notices: new RedisNoticeStore(redis)',
+  stats: 'stats: new RedisHoneypotStatsStore(redis)',
 };
 
 export function bindHoneypotDeps(deps: HoneypotDeps): BindResult<BoundHoneypotDeps> {

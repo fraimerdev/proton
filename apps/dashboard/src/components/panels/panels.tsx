@@ -13,7 +13,7 @@ import { EnforcementPanel } from '../automod/enforcement.tsx';
 import { CardPreview, GreetingCardPreview } from '../cards/card-preview.tsx';
 import { EscalationLadderEditor } from '../cases/escalation-ladder.tsx';
 import { CountersEditor } from '../counters/counters.tsx';
-import { HoneypotChannelsEditor, HoneypotNotices } from '../honeypot/channels.tsx';
+import { HoneypotChannelsEditor } from '../honeypot/channels.tsx';
 import { LevelUpMessageEditor } from '../leveling/level-up-message.tsx';
 import { RoleRewardsEditor } from '../leveling/role-rewards.tsx';
 import { PaletteEditor } from '../messages/palette.tsx';
@@ -22,7 +22,6 @@ import { RolemenuEditor } from '../rolemenu/menus.tsx';
 import { LogEventMatrix } from '../serverlog/event-matrix.tsx';
 import { HubsEditor } from '../tempvc/hubs.tsx';
 import { TicketPanelsEditor } from '../tickets/panels.tsx';
-import { PublishPanel } from '../verification/publish-panel.tsx';
 import { GreetingEditor } from '../welcome/greeting.tsx';
 import type { PanelProps } from './registry.ts';
 
@@ -173,18 +172,6 @@ export function HoneypotChannelsPanel({ value, onChange, channels }: PanelProps)
   );
 }
 
-export function HoneypotNoticePanel({ guildId, liveConfig, channels }: PanelProps): ReactElement {
-  return (
-    <HoneypotNotices
-      channels={channels}
-      guildId={guildId}
-      // The saved rows, not the edited ones: the worker refuses a notice for a channel its stored
-      // config does not know is a honeypot, so offering an unsaved row would only ever fail.
-      honeypots={asArray<Partial<HoneypotChannel>>(liveConfig.channels)}
-    />
-  );
-}
-
 export function WelcomeMessagePanel({
   value,
   onChange,
@@ -217,12 +204,4 @@ export function GoodbyeMessagePanel({
       roles={roles}
     />
   );
-}
-
-export function VerificationPanelPublisher({
-  guildId,
-  liveConfig,
-  channels,
-}: PanelProps): ReactElement {
-  return <PublishPanel channels={channels} config={liveConfig} guildId={guildId} />;
 }

@@ -1,8 +1,4 @@
-import {
-  type EventBus,
-  newId,
-  verificationWebPassedSchema,
-} from '@proton/core';
+import { type EventBus, newId, verificationWebPassedSchema } from '@proton/core';
 
 export class VerificationError extends Error {
   readonly code: string;

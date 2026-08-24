@@ -1,14 +1,14 @@
-import type {
-  ActionResult,
-  EventListener,
-  EventType,
-  ModuleContext,
-  ProtonEvent,
+import {
+  type ActionResult,
+  type EventListener,
+  type EventType,
+  MESSAGE_FLAG_IS_COMPONENTS_V2,
+  type ModuleContext,
+  type ProtonEvent,
 } from '@proton/core';
-import { type HoneypotChannel, type HoneypotConfig, MODULE_ID } from './config.ts';
-import { type HoneypotDeps, describeUnbound } from './deps.ts';
-import { buildNoticeEmbed } from './embed.ts';
-import { HONEYPOT_ACTOR } from './listener.ts';
+import { HONEYPOT_ACTOR, type HoneypotChannel, type HoneypotConfig, MODULE_ID } from './config.ts';
+import { describeUnbound, type HoneypotDeps } from './deps.ts';
+import { buildNoticeComponents } from './notice.ts';
 import type { NoticeBook } from './store.ts';
 
 export const HONEYPOT_SERVICE_EVENT_TYPES: EventType[] = ['proton.config_changed'];
@@ -75,9 +75,7 @@ export async function reconcileNotices(
   const live = field(event.payload, 'enabledAfter') !== false && ctx.config.enabled;
 
   const wanted = new Map<string, HoneypotChannel>(
-    live
-      ? ctx.config.channels.filter((c) => c.enabled).map((c) => [c.channelId, c])
-      : [],
+    live ? ctx.config.channels.filter((c) => c.enabled).map((c) => [c.channelId, c]) : [],
   );
 
   const book = await notices.get(ctx.guildId);
@@ -86,7 +84,13 @@ export async function reconcileNotices(
 
   for (const [channelId, channel] of wanted) {
     const known = book[channelId];
-    const change = await ensure(ctx, event, channel, known);
+    const change = await ensure(
+      ctx,
+      event,
+      channel,
+      known,
+      await caughtFor(deps, ctx.guildId, channelId),
+    );
 
     if (change.record) next[channelId] = change.record;
     if (change.did) changes.push({ channelId, did: change.did });
@@ -96,7 +100,7 @@ export async function reconcileNotices(
     if (wanted.has(channelId)) continue;
 
     // The channel is not a trap any more, so a notice saying it is would be a lie.
-    await run(
+    const removed = await run(
       ctx,
       {
         kind: 'delete_message',
@@ -105,6 +109,14 @@ export async function reconcileNotices(
       },
       `take down the notice in ${channelId}`,
     );
+
+    // Forgetting a notice Discord refused to delete strands it: nothing would ever try again, and
+    // the channel would keep a message calling itself a trap that no longer is.
+    if (!succeeded(removed) && removed.failure?.code !== 'discord_404') {
+      next[channelId] = record;
+      changes.push({ channelId, did: 'failed' });
+      continue;
+    }
 
     changes.push({ channelId, did: 'removed' });
   }
@@ -124,18 +136,29 @@ async function ensure(
   event: ProtonEvent,
   channel: HoneypotChannel,
   known: { messageId: string; postedAt: number } | undefined,
+  caught: number,
 ): Promise<EnsureResult> {
-  const message = {
-    channelId: channel.channelId,
-    embeds: [buildNoticeEmbed(channel)],
-    allowedMentions: { parse: [] },
-  };
+  const built = buildNoticeComponents(channel, caught);
+  if (!built.ok) {
+    ctx.logger.error(`honeypot could not build its notice: ${built.humanReason}`, {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+    });
+    return { did: 'failed' };
+  }
+
+  // No allowedMentions here: editMessagePayloadSchema has no such field and Zod strips it, so
+  // putting it on the shared object would read as a guarantee the edit does not carry.
+  const message = { channelId: channel.channelId, components: built.components };
 
   if (known) {
     const edited = await run(
       ctx,
       {
         kind: 'edit_message',
+
+        // No flags on the edit: Discord refuses to take IS_COMPONENTS_V2 off a message, and the
+        // send that created it already set the bit.
         payload: { ...message, messageId: known.messageId },
         idempotencyKey: `${MODULE_ID}:${event.id}:notice-edit:${channel.channelId}`,
       },
@@ -153,7 +176,7 @@ async function ensure(
     ctx,
     {
       kind: 'send',
-      payload: message,
+      payload: { ...message, allowedMentions: { parse: [] }, flags: MESSAGE_FLAG_IS_COMPONENTS_V2 },
       idempotencyKey: `${MODULE_ID}:${event.id}:notice-post:${channel.channelId}`,
     },
     `post the notice in ${channel.channelId}`,
@@ -176,7 +199,11 @@ async function ensure(
 
 async function run(
   ctx: ModuleContext<HoneypotConfig>,
-  request: { kind: 'send' | 'edit_message' | 'delete_message'; payload: unknown; idempotencyKey: string },
+  request: {
+    kind: 'send' | 'edit_message' | 'delete_message';
+    payload: unknown;
+    idempotencyKey: string;
+  },
   attempt: string,
 ): Promise<ActionResult> {
   const result = await ctx.executor.execute({
@@ -198,4 +225,50 @@ async function run(
   }
 
   return result;
+}
+
+async function caughtFor(deps: HoneypotDeps, guildId: string, channelId: string): Promise<number> {
+  return deps.stats ? deps.stats.total(guildId, channelId) : 0;
+}
+
+export const NOTICE_REFRESH_MS = 10_000;
+
+// Debounced across every worker process: a raid of fifty bots must not become fifty edits of one
+// message, and a missed count is picked up by the next trip outside the window or the next save.
+export async function refreshNoticeCount(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+  channelId: string,
+  eventId: string,
+): Promise<'refreshed' | 'debounced' | 'skipped'> {
+  const { notices, stats } = deps;
+  if (!notices || !stats) return 'skipped';
+
+  const known = (await notices.get(ctx.guildId))[channelId];
+  if (!known) return 'skipped';
+
+  const channel = ctx.config.channels.find((candidate) => candidate.channelId === channelId);
+  if (!channel) return 'skipped';
+
+  if (!(await stats.claimRefresh(ctx.guildId, channelId, NOTICE_REFRESH_MS))) return 'debounced';
+
+  const built = buildNoticeComponents(channel, await stats.total(ctx.guildId, channelId));
+  if (!built.ok) return 'skipped';
+
+  await run(
+    ctx,
+    {
+      kind: 'edit_message',
+      payload: {
+        channelId,
+        messageId: known.messageId,
+        components: built.components,
+        allowedMentions: { parse: [] },
+      },
+      idempotencyKey: `${MODULE_ID}:${eventId}:notice-count:${channelId}`,
+    },
+    `move the count on the notice in ${channelId}`,
+  );
+
+  return 'refreshed';
 }

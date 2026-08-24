@@ -172,6 +172,7 @@ export function createVerificationModule(
       'interaction_followup',
       'send',
       'edit_message',
+      'delete_message',
       'create_dm',
       'kick',
       'ban',

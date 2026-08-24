@@ -35,7 +35,11 @@ import {
   RedisDraftStore,
   RedisEntryBucket,
 } from '@proton/module-giveaways';
-import { RedisHoneypotLock } from '@proton/module-honeypot';
+import {
+  RedisHoneypotLock,
+  RedisHoneypotStatsStore,
+  RedisNoticeStore,
+} from '@proton/module-honeypot';
 import { DrizzleStickyRoleStore, RedisPendingGrantStore } from '@proton/module-joinroles';
 import { levelForXp, MAX_XP, RedisVoiceSessionStore } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
@@ -271,6 +275,8 @@ const registry = createModuleRegistry(
     },
     honeypot: {
       lock: new RedisHoneypotLock(moduleRedis),
+      notices: new RedisNoticeStore(moduleRedis),
+      stats: new RedisHoneypotStatsStore(moduleRedis),
       guildState,
 
       botUserId: env.DISCORD_APPLICATION_ID,

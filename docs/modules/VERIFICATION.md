@@ -30,7 +30,7 @@ Plus a **failure action** — what Proton does to a member who exhausts their ca
 
 | Area | Decision |
 |---|---|
-| Panel publish | **From the dashboard**, over the bus. This is new infrastructure — every other panel in the repo is posted by a slash command. See §6. |
+| Panel publish | **Automatically, when the config is saved.** No button and no slash command: a gate whose panel an admin forgot to post is a gate nobody can pass. Saving again edits the panel already there; moving the panel channel takes the old message down first; clearing the channel or switching the module off takes it down. |
 | Panel identity | The button's `custom_id` carries the module and action only. A press re-reads live config, so an edited panel behaves correctly even if the posted message was never re-rendered. |
 | Panel message id | Redis, `proton:verification:panel:{guildId}`. Re-posting **edits** the existing message when the id is still good and `send`s a new one on a `discord_404`. Verification owns no Postgres table and this pass does not add one. |
 | Captcha rendering | `@proton/cards` on `@napi-rs/canvas`, already a dependency. **No new package.** |
@@ -82,12 +82,12 @@ quarantineRoleId       role-id                         (existing; also the failu
 
 ### 4.1 The panel
 
-An admin sets `panelChannelId`, writes the copy, saves, and presses **Post panel** in the dashboard.
-The worker posts a message carrying one button whose `custom_id` is `proton:verification:verify`.
+An admin sets `panelChannelId`, writes the copy and saves. The worker posts a message carrying one
+button whose `custom_id` is `proton:verification:verify`.
 
-The panel is **not** re-posted on every config save. It is re-posted only when the admin asks, because
-an automatic re-post on save would rewrite a pinned message every time somebody touched an unrelated
-field.
+Every later save **edits that message** rather than posting another, so the panel and the settings
+cannot drift apart. The message id is remembered in Redis; if somebody deletes the panel by hand, the
+next save sees the `discord_404`, forgets the dead id and posts a fresh one.
 
 ### 4.2 `mode: 'button'`
 
@@ -156,18 +156,20 @@ captcha cards on the page.
 
 ## 6. New bus events (`packages/core/src/events/types.ts`)
 
-Both are service-emitted — published by `apps/api`, never by the gateway — so both belong in
+One new event. It is service-emitted — published by `apps/api`, never by the gateway — so it belongs in
 `SERVICE_EMITTED_EVENT_TYPES` as well as `EVENT_TYPES`, or the registry's "somebody emits this" check
-reads a verification listener for them as a typo.
+reads a verification listener for it as a typo.
 
 | Event | Published when | Payload |
 |---|---|---|
-| `verification.panel_requested` | An admin presses **Post panel** | `{ guildId, actorId, channelId }` |
 | `verification.web_passed` | The dashboard has verified a token against a signed-in session | `{ guildId, userId, jti, verifiedAt }` |
 
-`apps/api`'s bus is optional today and the process boots without Redis on purpose. These two routes are
-the first that genuinely need it, so they must refuse with a named, readable error when the bus is
-absent — not silently succeed.
+Posting the panel needs no event of its own: `proton.config_changed` is already published on every
+save and already carries the guild, the module and the new enabled state.
+
+`apps/api`'s bus is optional today and the process boots without Redis on purpose. This route is the
+first that genuinely needs it, so it must refuse with a named, readable error when the bus is absent —
+not silently succeed.
 
 ---
 
@@ -210,7 +212,7 @@ requirement — the executor's precheck names the missing bit at fire time, whic
 position (`packages/modules/cases/test/escalation.test.ts`).
 
 Listeners grow from one to four: the existing `member.joined`, plus `interaction.component`,
-`interaction.modal`, and `['verification.panel_requested', 'verification.web_passed']`.
+`interaction.modal`, and `['proton.config_changed', 'verification.web_passed']`.
 
 ---
 

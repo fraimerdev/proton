@@ -525,14 +525,6 @@ describe('the honeypot, whose delete window is stored in seconds and edited in d
   test('no arming confirmation is shown until somebody asks to arm one', () => {
     expect(renderPanel('honeypot', editor(), [HONEYPOT_ROW])).not.toContain('Arm it');
   });
-
-  test('the notice panel offers one control per saved honeypot and names what posting costs', () => {
-    const html = renderPanel('honeypot', panelsFor('honeypot')[1] as PanelEntry, undefined);
-
-    expect(html).toContain('Post the notice');
-    expect(html).toContain('#general');
-    expect(html).toContain('be removed from the server and let straight back in');
-  });
 });
 
 describe('the values a module page holds for its panels', () => {

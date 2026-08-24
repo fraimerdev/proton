@@ -33,9 +33,9 @@ import { handleComponent, handleModal, type InteractionOutcome } from '../src/in
 import { ANSWER_ACTION, CAPTCHA_ACTION, REFRESH_ACTION, VERIFY_ACTION } from '../src/panel.ts';
 import { MODULE_ID } from '../src/perform.ts';
 import {
-  handlePanelRequest,
   handleWebPassed,
   type PanelOutcome,
+  reconcilePanel,
   type WebOutcome,
 } from '../src/service.ts';
 import type {
@@ -85,6 +85,8 @@ export const CAPTCHA_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0
 
 export const CAPTCHA_TTL_MS = 5 * 60 * 1000;
 
+const MESSAGE_PATH = /^\/channels\/\d+\/messages\/\d+$/;
+
 const POSITIONS: Record<string, number> = {
   [EVERYONE_ROLE]: 0,
   [UNVERIFIED_ROLE]: 1,
@@ -100,6 +102,7 @@ export const BOT_PERMISSIONS =
   Permissions.ViewChannel |
   Permissions.SendMessages |
   Permissions.AttachFiles |
+  Permissions.ManageMessages |
   Permissions.ManageRoles |
   Permissions.KickMembers |
   Permissions.BanMembers |
@@ -306,6 +309,14 @@ export interface PressOverrides {
   eventId: string;
 }
 
+export interface SavedOverrides extends PressOverrides {
+  moduleId: string;
+
+  enabledAfter: boolean;
+
+  changedKeys: string[];
+}
+
 export interface SeedOverrides {
   userId: string;
   attemptsUsed: number;
@@ -359,6 +370,8 @@ export interface Harness {
 
   edits(): Array<Record<string, unknown>>;
 
+  deleted(): Array<{ channelId: string; messageId: string }>;
+
   cases(): CaseInput[];
 
   replies(): string[];
@@ -395,7 +408,7 @@ export interface Harness {
 
   seed(overrides?: Partial<SeedOverrides>): Promise<CaptchaChallenge>;
 
-  panelRequest(channelId: string, overrides?: Partial<PressOverrides>): Promise<PanelOutcome>;
+  saved(overrides?: Partial<SavedOverrides>): Promise<PanelOutcome>;
 
   webPassed(
     payload: Record<string, unknown>,
@@ -546,7 +559,7 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
   };
 
   const serviceEvent = (
-    type: 'verification.panel_requested' | 'verification.web_passed',
+    type: 'proton.config_changed' | 'verification.web_passed',
     payload: unknown,
     overrides: Partial<PressOverrides>,
   ): ProtonEvent => ({
@@ -638,7 +651,15 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
 
     sentIn: (channelId) => bodiesFor('POST', new RegExp(`^/channels/${channelId}/messages$`)),
 
-    edits: () => bodiesFor('PATCH', /^\/channels\/\d+\/messages\/\d+$/),
+    edits: () => bodiesFor('PATCH', MESSAGE_PATH),
+
+    deleted: () =>
+      rest.calls
+        .filter((call) => call.method === 'DELETE' && MESSAGE_PATH.test(call.path))
+        .map((call) => {
+          const parts = call.path.split('/');
+          return { channelId: parts[2] ?? '', messageId: parts[4] ?? '' };
+        }),
 
     told: () =>
       shown()
@@ -748,14 +769,27 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
       return challenge;
     },
 
-    async panelRequest(channelId, overrides = {}) {
+    async saved(overrides = {}) {
+      const config = overrides.config ?? {};
+      const auditId = newId();
+
       const event = serviceEvent(
-        'verification.panel_requested',
-        { guildId: GUILD, actorId: overrides.userId ?? MODERATOR, channelId },
-        overrides,
+        'proton.config_changed',
+        {
+          auditId,
+          guildId: GUILD,
+          moduleId: overrides.moduleId ?? MODULE_ID,
+          moduleName: 'Verification',
+          actorId: overrides.userId ?? MODERATOR,
+          source: 'dashboard',
+          enabledBefore: false,
+          enabledAfter: overrides.enabledAfter ?? config.enabled ?? false,
+          changedKeys: overrides.changedKeys ?? ['panelChannelId'],
+        },
+        { ...overrides, eventId: overrides.eventId ?? `proton.config_changed:${GUILD}:${auditId}` },
       );
 
-      return handlePanelRequest(event, moduleContext(overrides.config), overrides.deps ?? deps);
+      return reconcilePanel(event, moduleContext(config), overrides.deps ?? deps);
     },
 
     async webPassed(payload, overrides = {}) {
@@ -811,6 +845,8 @@ export const GATED: Partial<VerificationConfig> = {
   unverifiedRoleId: UNVERIFIED_ROLE,
   verifiedRoleId: VERIFIED_ROLE,
 };
+
+export const PANELLED: Partial<VerificationConfig> = { ...GATED, panelChannelId: CHANNEL };
 
 export const CAPTCHA: Partial<VerificationConfig> = { ...GATED, mode: 'captcha' };
 

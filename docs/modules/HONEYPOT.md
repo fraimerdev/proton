@@ -71,7 +71,7 @@ permission precheck, the role-hierarchy check and the case ledger for free.
 | Channels | A list. Each row carries its own channel, enabled switch, action and delete window. |
 | Configuration | **Dashboard only.** No slash commands — this module registers none. |
 | Panel | A bespoke `MODULE_PANELS` entry: the generated form cannot render a list of objects. |
-| Warning embed | Posted on demand from the dashboard, over the bus, exactly as Verification's panel is. Never automatically. |
+| Warning embed | Posted **automatically when the config is saved**, one per armed channel. There is no button: a trap an admin armed and forgot to announce is exactly the case the notice exists to prevent. Saving again edits the notice already there rather than posting a second; disarming a channel, removing it, or switching the module off takes its notice down. |
 | Duplicate suppression | A short-lived Redis claim on `(guildId, userId)`. Not in-memory: the worker is horizontally scaled, and an in-memory map is per-process. |
 | Intents | `Guilds` + `GuildMessages`. **Not `MessageContent`** — the module never reads a message body, which is worth keeping true. |
 | Permissions | `BanMembers`. Declared module-wide, so the module reports itself disabled with a reason when it is missing rather than failing silently at the first trap. |
@@ -117,19 +117,42 @@ manifest ships a `formSchema` that omits it and the dashboard renders the list i
 
 ---
 
-## 6. The warning embed
+## 6. The warning notice
 
-Posted into the honeypot channel on request. It exists so a member who wanders in has been told,
-and so the trap is not a gotcha for someone who joined before it was set.
+Posted into the honeypot channel the moment the honeypot is saved, and kept in step with it on every
+later save. It exists so a member who wanders in has been told, and so the trap is not a gotcha for
+someone who joined before it was set — which is why posting it is not something an admin can forget
+to do.
 
-It must communicate, in Proton's own voice and branding:
+**Components V2**, not an embed. One container, Blocked Coral, holding all three parts:
 
-- **DO NOT SEND MESSAGES IN THIS CHANNEL**, unmissably.
-- That the channel is monitored and exists to catch spam and compromised accounts.
-- That posting removes you and deletes your recent messages.
-- The delete window actually configured for that channel.
+| | |
+|---|---|
+| Heading | `## 🍯  DO NOT SEND MESSAGES IN THIS CHANNEL` |
+| Body | What posting here costs *in that channel's own terms*: its configured action, and its configured delete window. |
+| Button | One button, below a dividerless separator. Its label counts what this trap has done, named for the action it is configured with: `Softbans: 4`, `Kicks: 4`, `Timeouts: 4`, `Warnings: 4`, `Bans: 4`, or `Caught: 4` when the action is `none`. |
+
+The V2 flag is set on the send and **omitted on every edit** — Discord refuses to take
+`IS_COMPONENTS_V2` off a message, and the send that created it already set the bit.
 
 Not copied from any other bot: no borrowed name, wording or layout.
+
+### The button
+
+Pressing it answers **ephemerally**, also in Components V2, with what the trap has caught: the
+lifetime total, the last 24 hours, the last 7 days, and a breakdown by what was done to them.
+
+**Who was caught is not public.** The notice sits in a channel everybody can see, so everybody can
+press the button. The member list is shown only to a presser holding Ban Members or Manage Server;
+everyone else gets the counts and a line saying so. The permission comes off the interaction's own
+`member.permissions` bitfield, which Discord computes for the channel the press happened in.
+
+The number on the label moves after a trap springs, debounced to one edit per channel per ten seconds
+across every worker process — a raid of fifty bots must not become fifty edits of one message. The
+count a debounced trip misses is picked up by the next trip outside the window, or by the next save.
+
+Counted only when the trap did what the notice promises: a refused ban caught nobody, and a number
+that included it would overstate what the channel has ever done.
 
 ---
 

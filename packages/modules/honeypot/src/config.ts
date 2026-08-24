@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 export const MODULE_ID = 'honeypot';
 
+export const HONEYPOT_ACTOR = 'proton:honeypot';
+
 export const HONEYPOT_ACTIONS = ['softban', 'ban', 'kick', 'timeout', 'warn', 'none'] as const;
 export type HoneypotAction = (typeof HONEYPOT_ACTIONS)[number];
 

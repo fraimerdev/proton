@@ -8,6 +8,7 @@ import type {
 import {
   channelFor,
   describeWindow,
+  HONEYPOT_ACTOR,
   type HoneypotChannel,
   type HoneypotConfig,
   MODULE_ID,
@@ -21,11 +22,10 @@ import {
 import { buildIncidentEmbed, type Incident } from './embed.ts';
 import { ignoreReason, readMessage, type TrapMessage } from './message.ts';
 import { planTrap, type TrapPlan } from './plan.ts';
+import { refreshNoticeCount } from './service.ts';
 import { HONEYPOT_LOCK_TTL_MS } from './store.ts';
 
 export const HONEYPOT_EVENT_TYPES: EventType[] = ['message.created'];
-
-export const HONEYPOT_ACTOR = 'proton:honeypot';
 
 export type TrapOutcome =
   | { action: 'ignored'; reason: string }
@@ -91,12 +91,13 @@ export async function handleMessage(
     return { action: 'held', reason: 'this member already tripped a honeypot moments ago' };
   }
 
-  return spring(ctx, bound.deps, channel, message);
+  return spring(ctx, bound.deps, rawDeps, channel, message);
 }
 
 async function spring(
   ctx: ModuleContext<HoneypotConfig>,
   deps: BoundHoneypotDeps,
+  rawDeps: HoneypotDeps,
   channel: HoneypotChannel,
   message: TrapMessage,
 ): Promise<TrapOutcome> {
@@ -129,6 +130,11 @@ async function spring(
   let banned = false;
   let failure: string | null = null;
 
+  // The executor already refused this step as a duplicate, which means this message sprang the trap
+  // once before and was counted then. RESUME redelivers past the burst lock; this is what stops the
+  // same member being added to a public number twice.
+  let replayed = false;
+
   for (const step of plan.steps) {
     const result = await ctx.executor.execute({
       guildId: ctx.guildId,
@@ -147,6 +153,7 @@ async function spring(
 
     if (succeeded(result)) {
       if (step.kind === 'ban') banned = true;
+      if (result.status === 'skipped_duplicate') replayed = true;
       continue;
     }
 
@@ -187,8 +194,15 @@ async function spring(
   await deleteTrigger(ctx, plan, message, root, failure !== null);
 
   const outcome = failure === null ? 'done' : 'refused';
+
   await report(ctx, deps, incidentOf(ctx, channel, message, plan.describe, outcome, failure));
   await publish(ctx, message, plan, outcome);
+
+  // Last, and after the audit trail rather than before it. A number on a button is cosmetic; a
+  // throw out of Redis here used to take the incident log and the security event down with it.
+  if (failure === null && !replayed) {
+    await count(ctx, rawDeps, channel, message, deps.now());
+  }
 
   return failure === null
     ? { action: 'sprung', kind: channel.action }
@@ -323,4 +337,30 @@ async function publish(
         : [plan.describe],
     ownerExempt: false,
   });
+}
+
+async function count(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+  channel: HoneypotChannel,
+  message: TrapMessage,
+  at: number,
+): Promise<void> {
+  try {
+    await deps.stats?.record(ctx.guildId, channel.channelId, {
+      messageId: message.messageId,
+      userId: message.authorId,
+      action: channel.action,
+      at,
+    });
+
+    await refreshNoticeCount(ctx, deps, channel.channelId, message.messageId);
+  } catch (error) {
+    ctx.logger.warn(
+      `honeypot removed ${message.authorId} but could not move the count on the notice: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+  }
 }
