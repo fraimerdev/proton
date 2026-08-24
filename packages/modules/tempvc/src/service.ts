@@ -14,7 +14,6 @@ import {
   VOICE_CHANNEL_TYPE,
 } from './config.ts';
 import { panelMessage } from './interface.ts';
-import { logTempVoice } from './log.ts';
 import { planOverwrites } from './permissions.ts';
 import type { TempVoiceRepository } from './repository.ts';
 import type { AccessKind, TempVoiceChannelRow } from './table.ts';
@@ -177,8 +176,6 @@ export class TemporaryVoiceService {
       await this.postPanel(ctx, hub, { ...row, channelId, status: 'live' });
     }
 
-    await logTempVoice(ctx, 'created', { channelId, actorId: member.userId });
-
     return { created: { ...row, channelId, status: 'live' } };
   }
 
@@ -287,25 +284,6 @@ export class TemporaryVoiceService {
     return result.status === 'executed' || result.status === 'skipped_duplicate';
   }
 
-  /** A privacy change is the same overwrite rewrite, told to the log as its own event. */
-  async setPrivacy(
-    ctx: ModuleContext<TempVcConfig>,
-    row: TempVoiceChannelRow,
-    privacy: PrivacyMode,
-  ): Promise<boolean> {
-    const applied = await this.applyAccess(ctx, row, privacy);
-
-    if (applied) {
-      await logTempVoice(ctx, 'privacy_changed', {
-        channelId: row.channelId,
-        actorId: row.ownerId,
-        detail: privacy,
-      });
-    }
-
-    return applied;
-  }
-
   async setAccess(
     ctx: ModuleContext<TempVcConfig>,
     row: TempVoiceChannelRow,
@@ -321,18 +299,6 @@ export class TemporaryVoiceService {
     // Blocking somebody sitting in the channel has to remove them too, or the overwrite only stops
     // them coming back.
     if (applied && kind === 'block' && row.channelId) await this.disconnect(ctx, row, userId);
-
-    if (applied) {
-      await logTempVoice(
-        ctx,
-        kind === 'block' ? 'blocked' : kind === 'trust' ? 'trusted' : 'untrusted',
-        {
-          channelId: row.channelId,
-          actorId: row.ownerId,
-          targetId: userId,
-        },
-      );
-    }
 
     return applied;
   }
@@ -355,14 +321,6 @@ export class TemporaryVoiceService {
       // A null channel is Discord's own way of saying "disconnect".
       payload: { userId, channelId: null },
     });
-
-    if (result.status === 'executed') {
-      await logTempVoice(ctx, 'kicked', {
-        channelId: row.channelId,
-        actorId: row.ownerId,
-        targetId: userId,
-      });
-    }
 
     return result.status === 'executed';
   }
@@ -421,15 +379,6 @@ export class TemporaryVoiceService {
     }
 
     await this.#deps.repository.touch(row.id);
-
-    if (what === 'rename' || what === 'limit') {
-      await logTempVoice(ctx, what === 'rename' ? 'renamed' : 'limit_changed', {
-        channelId: row.channelId,
-        actorId: row.ownerId,
-        detail: String(payload.name ?? payload.userLimit ?? ''),
-      });
-    }
-
     return true;
   }
 
@@ -442,15 +391,7 @@ export class TemporaryVoiceService {
   ): Promise<boolean> {
     await this.#deps.repository.setOwner(row.id, toUserId);
 
-    const applied = await this.applyAccess(ctx, { ...row, ownerId: toUserId }, privacy);
-
-    await logTempVoice(ctx, 'transferred', {
-      channelId: row.channelId,
-      actorId: row.ownerId,
-      targetId: toUserId,
-    });
-
-    return applied;
+    return this.applyAccess(ctx, { ...row, ownerId: toUserId }, privacy);
   }
 
   async claim(
@@ -463,8 +404,6 @@ export class TemporaryVoiceService {
     if (!won) return false;
 
     await this.applyAccess(ctx, { ...row, ownerId: byUserId }, privacy);
-    await logTempVoice(ctx, 'claimed', { channelId: row.channelId, actorId: byUserId });
-
     return true;
   }
 
@@ -599,8 +538,6 @@ export class TemporaryVoiceService {
     }
 
     await repo.forget(row.id);
-    await logTempVoice(ctx, 'deleted', { channelId: row.channelId, detail: why });
-
     return true;
   }
 

@@ -215,17 +215,6 @@ const settings = {
     label: 'New channels per minute',
     description: 'Discord rate-limits channel creation per guild; past this Proton waits',
   }),
-
-  loggingEnabled: z.boolean().default(false).register(protonFields, {
-    label: 'Log what happens to temporary channels',
-  }),
-
-  logChannelId: snowflakeSchema.optional().register(protonFields, {
-    field: 'channel-id',
-    label: 'Log channel',
-    channelTypes: [0, 5],
-    showWhen: { path: 'loggingEnabled', equals: ['true'] },
-  }),
 };
 
 export const tempVcConfigSchema = z.object({

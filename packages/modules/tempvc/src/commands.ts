@@ -252,7 +252,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const mode = (ctx.options.getString('mode') ?? 'public') as PrivacyMode;
-          const ok = await context.service.setPrivacy(ctx, context.row, mode);
+          const ok = await context.service.applyAccess(ctx, context.row, mode);
 
           return reply(ctx, ok ? `Your channel is now **${mode}**.` : refused('privacy'));
         }

@@ -118,13 +118,6 @@ export {
   renameModal,
   USER_SELECT_ACTION,
 } from './interface.ts';
-export {
-  type LogFields,
-  logTempVoice,
-  renderLogLine,
-  TEMP_VOICE_EVENTS,
-  type TempVoiceEvent,
-} from './log.ts';
 export { reply } from './perform.ts';
 export {
   type AccessEntry,
@@ -233,7 +226,6 @@ export function createTempVcModule(
       sections: [
         { id: 'general', title: 'General', fields: ['enabled', 'ownerCommands'] },
         { id: 'protection', title: 'Protection', fields: ['serverCreationLimit'] },
-        { id: 'logging', title: 'Logging', fields: ['loggingEnabled', 'logChannelId'] },
       ],
     },
   };

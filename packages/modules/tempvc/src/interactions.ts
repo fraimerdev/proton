@@ -187,7 +187,7 @@ export async function handleComponent(
     const held = await authorise(ctx, deps, facts, tempChannelId, 'privacy', true);
     if ('refused' in held) return refuse(say, held.refused);
 
-    const ok = await held.service.setPrivacy(ctx, held.row, mode as PrivacyMode);
+    const ok = await held.service.applyAccess(ctx, held.row, mode as PrivacyMode);
     await say(ok ? `Your channel is now **${mode}**.` : couldNot('change who may join'));
 
     return { action: 'done', what: `privacy:${mode}` };

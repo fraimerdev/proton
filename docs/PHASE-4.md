@@ -270,6 +270,10 @@ what catches a channel emptied while the worker was down, which fires no event a
 **Not a moderation action.** Every temp-voice write passes `record: false`: the case ledger is the
 product's headline feature and channel churn would bury it.
 
+**It logs nothing itself.** `serverlog` already renders channel creation, deletion and permission
+changes from Discord's own gateway events, so the module has no log channel and no log settings of
+its own — a second renderer for the same events is the duplicate framework §29 rules out.
+
 ### 4.J — `counters`
 
 Counter channels in config, refreshed by a cron `job`. **Channel renames are rate-limited far more

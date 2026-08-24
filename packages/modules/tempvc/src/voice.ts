@@ -3,7 +3,6 @@ import { armPatrol } from './cleanup.ts';
 import { hubFor, MODULE_ID, type TempVcConfig, type TempVcHub } from './config.ts';
 import { planReconcile, planTransition, type TempSide, type TempVcStep } from './decide.ts';
 import { bindService, describeUnbound, type TempVcDeps } from './deps.ts';
-import { logTempVoice } from './log.ts';
 import type { TempVoiceRepository } from './repository.ts';
 import type { TemporaryVoiceService } from './service.ts';
 import type { PresenceStore } from './store.ts';
@@ -288,10 +287,6 @@ export async function handleGuildAvailable(
   }
 
   if (plan.delete.length > 0 || plan.forget.length > 0) {
-    await logTempVoice(ctx, 'reconciled', {
-      detail: `removed ${plan.delete.length}, forgot ${plan.forget.length}`,
-    });
-
     ctx.logger.info(
       `reconciled temporary voice channels: removed ${plan.delete.length}, forgot ` +
         `${plan.forget.length} that no longer exist`,
