@@ -106,3 +106,119 @@ describe('sectionKey', () => {
     expect(sectionKey(undefined, 'general')).toBe('general');
   });
 });
+
+const SEVERITY = (path: string, label: string): FieldDescriptor => ({
+  kind: 'enum',
+  path,
+  label,
+  optional: false,
+  options: ['off', 'low', 'medium', 'high'],
+});
+
+const NUMBER = (path: string, label: string): FieldDescriptor => ({
+  kind: 'number',
+  path,
+  label,
+  optional: false,
+});
+
+const RULES: FieldDescriptor[] = [
+  SEVERITY('floodSeverity', 'Message flood'),
+  NUMBER('floodCount', 'Flood: messages'),
+  SEVERITY('capsSeverity', 'Shouting'),
+  NUMBER('capsRatio', 'Caps: percent'),
+];
+
+describe('a rule whose severity is off', () => {
+  const off = form(RULES, { values: { floodSeverity: 'off', capsSeverity: 'medium' } });
+
+  test('hides its settings rather than removing them', () => {
+    expect(off).toContain('class="rule-body" hidden');
+  });
+
+  /**
+   * The save writes every value, hidden or not, so a hidden field can still be the one the API
+   * rejects — and the command palette indexes it by path and scrolls to its [data-path]. Unmounting
+   * it made both of those land on nothing.
+   */
+  test('keeps every settings path addressable in the document', () => {
+    for (const path of ['floodCount', 'capsRatio']) {
+      expect(`${path}: ${off.includes(`data-path="${path}"`)}`).toBe(`${path}: true`);
+    }
+  });
+
+  test('a rule that is on is not hidden', () => {
+    const shown = form(RULES, { values: { floodSeverity: 'high', capsSeverity: 'medium' } });
+
+    expect(shown).not.toContain('hidden');
+  });
+});
+
+const CATEGORY_KEYS = ['server', 'channels', 'roles', 'members'];
+
+const MATRIX_FIELDS: FieldDescriptor[] = [
+  ...CATEGORY_KEYS.map((key) => ({
+    kind: 'boolean' as const,
+    path: `categories.${key}`,
+    label: key[0]?.toUpperCase() + key.slice(1),
+    optional: false,
+  })),
+  ...CATEGORY_KEYS.map((key) => ({
+    kind: 'channel-id' as const,
+    path: `categoryChannels.${key}`,
+    label: key[0]?.toUpperCase() + key.slice(1),
+    optional: false,
+    defaultValue: '',
+  })),
+];
+
+const MATRIX_SECTION = [
+  { id: 'categories', title: 'Categories', fields: ['categories', 'categoryChannels'] },
+];
+
+describe('a section declared as a matrix', () => {
+  const html = form(MATRIX_FIELDS, { sections: MATRIX_SECTION, scope: 'serverlog' });
+
+  test('renders one table row per key rather than one form row per field', () => {
+    expect(html.split('<tr').length - 1).toBe(CATEGORY_KEYS.length + 1);
+    expect(html).not.toContain('class="field field-boolean"');
+  });
+
+  test('each label is printed once, as the row header', () => {
+    expect(html.split('>Server<').length - 1).toBe(1);
+    expect(html).toContain('scope="row"');
+  });
+
+  test('the column headers name the two controls', () => {
+    expect(html).toContain('>Logged<');
+    expect(html).toContain('>Channel<');
+  });
+
+  // Every switch in the column is labelled "Server", "Channels"... and so is every picker. Without
+  // a per-cell name the accessibility tree is thirteen pairs of identical controls.
+  test('every control is named by its row and its column', () => {
+    expect(html).toContain('Server — Logged');
+    expect(html).toContain('Server — Channel');
+  });
+
+  test('an empty category channel reads as inheriting, not as unset', () => {
+    expect(html).toContain('Inherit');
+    expect(html).not.toContain('Select a channel');
+  });
+});
+
+describe('the matrix declines a shape it cannot fill', () => {
+  test('a module with no matrix declared keeps its plain rows', () => {
+    const html = form(MATRIX_FIELDS, { sections: MATRIX_SECTION, scope: 'automod' });
+
+    expect(html).not.toContain('class="matrix"');
+  });
+
+  test('a leaf only one column has drops the whole table rather than a row', () => {
+    const lopsided = MATRIX_FIELDS.filter((d) => d.path !== 'categoryChannels.members');
+    const html = form(lopsided, { sections: MATRIX_SECTION, scope: 'serverlog' });
+
+    expect(html).not.toContain('class="matrix"');
+    expect(html).toContain('data-path="categories.members"');
+  });
+});

@@ -111,6 +111,7 @@ export {
   type NumberField,
   protonFields,
   type RoleIdField,
+  type ShowWhen,
   type StringField,
   UnsupportedSchemaError,
   zodToDescriptors,
@@ -188,6 +189,10 @@ export {
   SERVICE_EMITTED_EVENT_TYPES,
   type ServiceEmittedEventType,
 } from './events/types.ts';
+export {
+  type VerificationWebPassed,
+  verificationWebPassedSchema,
+} from './events/verification.ts';
 export { buildGuildState, parseChannel, parseOverwrites, parseRole } from './guild-state/build.ts';
 export { GUILD_STATE_PREFIX, RedisGuildStateStore } from './guild-state/redis.ts';
 export {
@@ -349,6 +354,7 @@ export {
   toAllowedMentions,
   toDiscordMessage,
 } from './messages/message.ts';
+export { HUMAN_MESSAGE_TYPES, isHumanMessage } from './messages/message-type.ts';
 export {
   type MessageTemplate,
   messageTemplateSchema,
@@ -412,6 +418,8 @@ export {
   moduleStatusSchema,
   moduleSummarySchema,
   moduleUpdateResultSchema,
+  type VerificationRequestResult,
+  verificationRequestResultSchema,
 } from './modules/api-io.ts';
 export type {
   CommandContext,
@@ -549,3 +557,13 @@ export {
   type UserResolver,
   type UserResolverDeps,
 } from './users/resolver.ts';
+export {
+  newVerifyLinkClaims,
+  readVerifyLink,
+  signVerifyLink,
+  VERIFY_LINK_SECRET_MIN,
+  VERIFY_LINK_TTL_MS,
+  type VerifyLinkClaims,
+  type VerifyLinkResult,
+  verifyLinkClaimsSchema,
+} from './verify-link.ts';

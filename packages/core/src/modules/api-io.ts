@@ -67,6 +67,10 @@ export const guildPresenceSchema = z.object({
   present: z.array(z.string()),
 });
 
+export const verificationRequestResultSchema = z.object({
+  requestId: z.string().min(1),
+});
+
 export type ModuleField = z.infer<typeof moduleFieldSchema>;
 export type ModuleSection = z.infer<typeof moduleSectionSchema>;
 export type ModuleStatusView = z.infer<typeof moduleStatusSchema>;
@@ -77,3 +81,4 @@ export type ModuleConfigView = z.infer<typeof moduleConfigViewSchema>;
 export type ModuleUpdateResult = z.infer<typeof moduleUpdateResultSchema>;
 export type GuildOverview = z.infer<typeof guildOverviewSchema>;
 export type GuildPresence = z.infer<typeof guildPresenceSchema>;
+export type VerificationRequestResult = z.infer<typeof verificationRequestResultSchema>;

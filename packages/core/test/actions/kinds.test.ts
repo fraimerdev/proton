@@ -3,6 +3,7 @@ import {
   ACTION_KINDS,
   type ActionKind,
   CHANNEL_SCOPED,
+  hierarchyApplies,
   isChannelScoped,
   isLedgerOnly,
   isNeverRecorded,
@@ -644,5 +645,23 @@ describe('audit-log reasons on the channel and poll kinds', () => {
         kind === 'end_poll' ? undefined : 'raid%20cleanup',
       );
     }
+  });
+});
+
+describe('which kinds Discord ranks', () => {
+  test('moving a member between voice channels is not ranked', () => {
+    expect(targetsMember('move_member')).toBe(true);
+    expect(hierarchyApplies('move_member')).toBe(false);
+  });
+
+  test('the moderation actions are', () => {
+    for (const kind of ['ban', 'kick', 'timeout', 'add_role', 'remove_role'] as const) {
+      expect(`${kind}: ${hierarchyApplies(kind)}`).toBe(`${kind}: true`);
+    }
+  });
+
+  test('a kind that names no member is never ranked', () => {
+    expect(hierarchyApplies('create_channel')).toBe(false);
+    expect(hierarchyApplies('send')).toBe(false);
   });
 });

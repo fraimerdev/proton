@@ -1,4 +1,12 @@
-import type { ActionResult, CommandContext, ModuleContext } from '@proton/core';
+import type {
+  ActionRequest,
+  ActionResult,
+  CommandContext,
+  FollowUpTo,
+  InteractionRef,
+  ModuleContext,
+  RespondTo,
+} from '@proton/core';
 import type { VerificationConfig } from './config.ts';
 import type { RoleStep } from './roles.ts';
 
@@ -62,6 +70,42 @@ export function succeeded(result: ActionResult): boolean {
     result.status === 'dry_run' ||
     result.status === 'skipped_duplicate'
   );
+}
+
+export function respondTo(
+  ctx: ModuleContext<VerificationConfig>,
+  interaction: InteractionRef,
+  actorId: string,
+  idempotencyRoot: string,
+): RespondTo {
+  return {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    actorId,
+    interaction,
+    idempotencyKey: `${MODULE_ID}:${idempotencyRoot}`,
+  };
+}
+
+export function followUpTo(to: RespondTo, applicationId: string): FollowUpTo {
+  return { ...to, applicationId };
+}
+
+export async function run(
+  ctx: ModuleContext<VerificationConfig>,
+  request: ActionRequest,
+  attempt: string,
+): Promise<ActionResult> {
+  const result = await ctx.executor.execute(request);
+
+  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
+    ctx.logger.warn(
+      `verification could not ${attempt}: ${result.failure?.humanReason ?? 'no reason was reported'}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
+    );
+  }
+
+  return result;
 }
 
 export async function reply(

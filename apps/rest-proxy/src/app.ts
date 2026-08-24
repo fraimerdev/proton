@@ -72,6 +72,13 @@ export function createProxyApp(rest: REST): Hono {
 
     try {
       const userAuth = c.req.header('x-proton-authorization');
+      const auditReason = c.req.header('x-audit-log-reason');
+
+      // Not InternalRequest.reason: @discordjs/rest encodes that, and the caller already did.
+      const upstreamHeaders: Record<string, string> = {
+        ...(userAuth ? { Authorization: userAuth } : {}),
+        ...(auditReason ? { 'X-Audit-Log-Reason': auditReason } : {}),
+      };
 
       const request: InternalRequest = {
         fullRoute: route,
@@ -79,7 +86,8 @@ export function createProxyApp(rest: REST): Hono {
         query: url.searchParams,
         ...(body !== undefined ? { body } : {}),
         ...(files && files.length > 0 ? { files } : {}),
-        ...(userAuth ? { auth: false, headers: { Authorization: userAuth } } : {}),
+        ...(userAuth ? { auth: false } : {}),
+        ...(Object.keys(upstreamHeaders).length > 0 ? { headers: upstreamHeaders } : {}),
       };
 
       const response = await rest.queueRequest(request);

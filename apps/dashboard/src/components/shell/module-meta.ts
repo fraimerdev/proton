@@ -1,3 +1,4 @@
+import type { ModuleSummary } from '@proton/core';
 import type { IconName } from './icon-set.gen.ts';
 export const CATEGORY_ORDER = [
   'moderation',
@@ -27,6 +28,59 @@ export const CATEGORY_ICONS: Record<Category, IconName> = {
 
 export function isCategory(value: string): value is Category {
   return (CATEGORY_ORDER as readonly string[]).includes(value);
+}
+
+// Held here rather than on the manifest: a module tells the worker what it does by doing it, and
+// adding a prose field to ModuleManifest would put dashboard copy in twenty-seven packages the
+// worker loads. A module with no entry falls back to its category, which is never wrong.
+const MODULE_BLURBS: Record<string, string> = {
+  antinuke: 'Trips a breaker when one member deletes channels, roles or webhooks too quickly.',
+  antiraid: 'Watches the join rate and how new the accounts are, and gates a suspected raid.',
+  automod: 'Checks every message for spam, banned words, links and shouting.',
+  backup: 'Snapshots this server’s channels and roles, and previews a restore before it runs.',
+  cases:
+    'Every action Proton takes, numbered and searchable, with the ladder that escalates repeat warnings.',
+  counters: 'Channels whose names carry a count of this server, rewritten every ten minutes.',
+  giveaways: 'Giveaways members enter with a button, drawn and announced by Proton.',
+  honeypot:
+    'Channels nobody has a reason to post in. Anyone who posts in one is removed on the spot, which is how spam bots and compromised accounts give themselves away.',
+  joinroles: 'Roles handed out when somebody joins, and the roles they get back if they return.',
+  leveling:
+    'XP for talking and for time in voice, with level-up announcements, role rewards and the /rank card.',
+  logging:
+    'Edited and deleted messages, archived for 30 days. It stores personal data, so it is off by default.',
+  messages: 'Named messages you post with /message, and the button and dropdown rows they carry.',
+  moderation:
+    'The ban, kick, timeout and purge commands, and the policy Proton applies when staff run them.',
+  permissions: 'Which roles may run each of Proton’s commands.',
+  phishing: 'Matches links against a phishing blocklist Proton refreshes for itself.',
+  ping: 'Answers /ping, so anyone can tell whether Proton is responding.',
+  polls: 'Runs Discord’s own polls, and announces the result when one closes.',
+  reminders: 'Members ask Proton to remind them later, in the channel they asked from.',
+  rolemenu: 'Menus members click to give themselves roles.',
+  serverlog:
+    'Discord’s own audit events — channels, roles, members, bans — routed to the channels you pick.',
+  starboard: 'Messages the server stars often enough get reposted to one channel.',
+  suggestions:
+    'Members suggest things, staff accept or deny them, and each suggestion keeps its own thread.',
+  tags: 'Saved snippets anybody can post with /tag.',
+  tempvc: 'Creator channels that give each member their own voice channel, with a panel to run it.',
+  tickets:
+    'Private support channels members open from a panel, and the staff commands that close them.',
+  verification: 'A gate new members pass before the rest of the server opens up.',
+  welcome:
+    'What Proton posts when somebody joins or leaves, and the card it draws on the greeting.',
+};
+
+export function moduleBlurb(moduleId: string, category: string): string {
+  if (Object.hasOwn(MODULE_BLURBS, moduleId)) {
+    const held = MODULE_BLURBS[moduleId];
+    if (held) return held;
+  }
+
+  return isCategory(category)
+    ? `A ${CATEGORY_LABELS[category].toLowerCase()} module.`
+    : 'A Proton module.';
 }
 
 // The module's own switch, which the sidebar owns. It is filtered out of the generated form so
@@ -114,6 +168,20 @@ export function shortReason(code: string | undefined): string {
     ? (SHORT_REASONS[code] ?? 'Not running')
     : 'Not running';
 }
+
+export type ModuleState = 'off' | 'running' | 'blocked' | 'degraded';
+
+export function moduleState(module: ModuleSummary): ModuleState {
+  if (!module.enabled) return 'off';
+  if (!module.status || module.status.enabled) return 'running';
+
+  return module.status.disabledReason?.code === 'insufficient_entitlement' ? 'degraded' : 'blocked';
+}
+
+// What the control does, not what state it is in. The state is carried by the track's colour, by
+// the reason printed beside it when the module cannot run, and by the save confirmation, which
+// still names a module that was saved while switched off.
+export const SWITCH_NOTE = 'Turn this module on or off for this server.';
 
 const WHERE_TO_FIX: Record<string, string> = {
   missing_intent: 'Discord Developer Portal → Proton → Bot → Privileged Gateway Intents',

@@ -23,6 +23,7 @@ describe('the table', () => {
       tempVcHubs: 2,
       savedTemplates: 10,
       activePolls: 3,
+      honeypotChannels: 3,
     });
   });
 

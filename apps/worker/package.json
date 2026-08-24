@@ -21,6 +21,7 @@
     "@proton/module-cases": "workspace:*",
     "@proton/module-counters": "workspace:*",
     "@proton/module-giveaways": "workspace:*",
+    "@proton/module-honeypot": "workspace:*",
     "@proton/module-joinroles": "workspace:*",
     "@proton/module-leveling": "workspace:*",
     "@proton/module-logging": "workspace:*",

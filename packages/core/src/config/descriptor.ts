@@ -2,6 +2,10 @@ import { z } from 'zod';
 import { parseDuration } from './duration.ts';
 import { type JsonValue, jsonValueSchema } from './json.ts';
 
+const showWhenSchema = z.object({ path: z.string(), equals: z.array(z.string()) });
+
+export type ShowWhen = z.infer<typeof showWhenSchema>;
+
 const fieldBaseSchema = z.object({
   path: z.string(),
   label: z.string(),
@@ -12,6 +16,8 @@ const fieldBaseSchema = z.object({
   array: z.boolean().optional(),
 
   maxItems: z.number().int().optional(),
+
+  showWhen: showWhenSchema.optional(),
 });
 
 type FieldBase = z.infer<typeof fieldBaseSchema>;
@@ -29,7 +35,11 @@ export const fieldDescriptorSchema = z.discriminatedUnion('kind', [
     max: z.number().optional(),
   }),
   fieldBaseSchema.extend({ kind: z.literal('colour') }),
-  fieldBaseSchema.extend({ kind: z.literal('enum'), options: z.array(z.string()) }),
+  fieldBaseSchema.extend({
+    kind: z.literal('enum'),
+    options: z.array(z.string()),
+    optionLabels: z.record(z.string(), z.string()).optional(),
+  }),
   fieldBaseSchema.extend({
     kind: z.literal('channel-id'),
     channelTypes: z.array(z.number().int()).optional(),
@@ -57,6 +67,8 @@ export interface FieldMetadata {
   description?: string;
 
   channelTypes?: number[];
+  showWhen?: ShowWhen;
+  optionLabels?: Record<string, string>;
 }
 
 export const protonFields = z.registry<FieldMetadata>();
@@ -154,6 +166,83 @@ function assertHint(
   }
 }
 
+function enumOptions(path: string, schema: z.ZodType): string[] | undefined {
+  if (!(schema instanceof z.ZodEnum)) return undefined;
+
+  const options: unknown[] = [...schema.options];
+
+  if (!options.every((option): option is string => typeof option === 'string')) {
+    throw new UnsupportedSchemaError(path, 'enums must have string values, not numeric ones');
+  }
+
+  return options;
+}
+
+function assertOptionLabels(
+  path: string,
+  metadata: FieldMetadata,
+  schema: z.ZodType,
+  options: readonly string[] | undefined,
+): void {
+  if (metadata.optionLabels === undefined) return;
+
+  if (options === undefined) {
+    throw new UnsupportedSchemaError(
+      path,
+      `optionLabels was registered on a ${schema.constructor.name}`,
+      'Only an enum has options to label.',
+    );
+  }
+
+  for (const key of Object.keys(metadata.optionLabels)) {
+    if (options.includes(key)) continue;
+
+    throw new UnsupportedSchemaError(
+      path,
+      `optionLabels names '${key}', which is not one of its options`,
+      `The options are ${options.join(', ')}.`,
+    );
+  }
+}
+
+function assertShowWhen(descriptors: readonly FieldDescriptor[]): void {
+  const byPath = new Map(descriptors.map((descriptor) => [descriptor.path, descriptor]));
+
+  for (const { path, showWhen } of descriptors) {
+    if (showWhen === undefined) continue;
+
+    const target = byPath.get(showWhen.path);
+
+    if (target === undefined) {
+      throw new UnsupportedSchemaError(
+        path,
+        `showWhen names '${showWhen.path}', which is not a field of this schema`,
+        'showWhen.path is another field of the same config, by its dotted path.',
+      );
+    }
+
+    if (showWhen.equals.length === 0) {
+      throw new UnsupportedSchemaError(
+        path,
+        `showWhen lists no value of '${showWhen.path}' that would show it`,
+        'Give showWhen.equals every option the field should appear for.',
+      );
+    }
+
+    if (target.kind !== 'enum') continue;
+
+    for (const value of showWhen.equals) {
+      if (target.options.includes(value)) continue;
+
+      throw new UnsupportedSchemaError(
+        path,
+        `showWhen expects '${showWhen.path}' to be '${value}', which is not one of its options`,
+        `The options are ${target.options.join(', ')}.`,
+      );
+    }
+  }
+}
+
 function assertDurationDefault(path: string, defaultValue: unknown): void {
   if (defaultValue === undefined || defaultValue === null) return;
 
@@ -177,6 +266,9 @@ function leafField(
   inner: z.ZodType,
   metadata: FieldMetadata,
 ): FieldDescriptor {
+  const options = enumOptions(path, inner);
+  assertOptionLabels(path, metadata, inner, options);
+
   if (inner instanceof z.ZodBoolean) {
     assertHint(path, metadata, inner, ['boolean']);
     return { ...base, kind: 'boolean' };
@@ -189,14 +281,15 @@ function leafField(
     return { ...base, kind: 'number', ...numberConstraints(inner) };
   }
 
-  if (inner instanceof z.ZodEnum) {
+  if (options !== undefined) {
     assertHint(path, metadata, inner, ['enum']);
-    const options: unknown[] = [...inner.options];
 
-    if (!options.every((option): option is string => typeof option === 'string')) {
-      throw new UnsupportedSchemaError(path, 'enums must have string values, not numeric ones');
-    }
-    return { ...base, kind: 'enum', options };
+    return {
+      ...base,
+      kind: 'enum',
+      options,
+      ...(metadata.optionLabels !== undefined ? { optionLabels: metadata.optionLabels } : {}),
+    };
   }
 
   // ZodURL is a string at runtime but not a ZodString subclass, so without naming it here a
@@ -242,6 +335,7 @@ function describeField(key: string, schema: z.ZodType, prefix: string): FieldDes
     label: metadata.label ?? humanise(key),
     optional,
     ...(metadata.description !== undefined ? { description: metadata.description } : {}),
+    ...(metadata.showWhen !== undefined ? { showWhen: metadata.showWhen } : {}),
     ...(defaultValue !== undefined ? { defaultValue: jsonDefault(path, defaultValue) } : {}),
   };
 
@@ -249,6 +343,19 @@ function describeField(key: string, schema: z.ZodType, prefix: string): FieldDes
     if (prefix) {
       throw new UnsupportedSchemaError(path, 'objects may nest only one level deep');
     }
+
+    // An object contributes no descriptor of its own, so anything registered on it is dropped on
+    // the way to its children — a showWhen written here would have hidden nothing, silently.
+    for (const key of ['showWhen', 'optionLabels'] as const) {
+      if (metadata[key] === undefined) continue;
+
+      throw new UnsupportedSchemaError(
+        path,
+        `${key} was registered on '${path}', which is a group of fields rather than a field`,
+        `Register ${key} on each field of '${path}' it should govern.`,
+      );
+    }
+
     return walk(inner as z.ZodObject<z.ZodRawShape>, path);
   }
 
@@ -289,5 +396,8 @@ function walk(schema: z.ZodObject<z.ZodRawShape>, prefix: string): FieldDescript
 }
 
 export function zodToDescriptors(schema: z.ZodObject<z.ZodRawShape>): FieldDescriptor[] {
-  return walk(schema, '');
+  const descriptors = walk(schema, '');
+
+  assertShowWhen(descriptors);
+  return descriptors;
 }

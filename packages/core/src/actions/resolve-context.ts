@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { type GuildStateStore, highestRolePosition } from '../guild-state/types.ts';
 import { computeChannelPermissions } from '../permissions/compute.ts';
-import { isChannelScoped, requiredPermissionsFor, targetsMember } from './kinds.ts';
+import {
+  hierarchyApplies,
+  isChannelScoped,
+  requiredPermissionsFor,
+  targetsMember,
+} from './kinds.ts';
 import { snowflakeSchema, THREAD_TYPE_PRIVATE, THREAD_TYPE_PUBLIC } from './payloads.ts';
 import type { PrecheckInput } from './prechecks.ts';
 import type { ActionFailure, ActionRequest } from './types.ts';
@@ -119,6 +124,15 @@ export async function resolvePrecheckContext(
         code: 'missing_target',
         humanReason: `The '${request.kind}' action needs a target member, but none was supplied.`,
       },
+    };
+  }
+
+  // A kind Discord does not rank needs no role lookup: fetching them anyway spent a member fetch
+  // per voice move and turned a cold member cache into a refused move ('target_state_unavailable')
+  // for an action whose only requirement is MOVE_MEMBERS.
+  if (!hierarchyApplies(request.kind)) {
+    return {
+      context: { ...context, hierarchy: false, target: { id: targetId, highestRolePosition: 0 } },
     };
   }
 

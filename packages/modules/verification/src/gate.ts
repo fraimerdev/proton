@@ -196,17 +196,24 @@ export async function runVerify(
     return;
   }
 
-  await performVerification(ctx, plan, ctx.userId, ctx.idempotencyKey);
+  await reply(ctx, (await runVerification(ctx, plan, ctx.userId, ctx.idempotencyKey)).message);
 }
 
-async function performVerification(
-  ctx: CommandContext<VerificationConfig>,
+export interface VerifyResult {
+  verified: boolean;
+  message: string;
+}
+
+export async function runVerification(
+  ctx: ModuleContext<VerificationConfig>,
   plan: { grant: RoleStep[]; clear: RoleStep[] },
   userId: string,
   idempotencyRoot: string,
-): Promise<void> {
+): Promise<VerifyResult> {
   const reason = 'Verification gate: passed.';
 
+  // Granting before clearing means a refused grant leaves the member exactly where they were,
+  // rather than ungated with nothing to show for it.
   const granted = await runSteps(ctx, {
     targetId: userId,
     actorId: VERIFICATION_ACTOR,
@@ -217,17 +224,18 @@ async function performVerification(
 
   if (granted.failures.length > 0) {
     const detail = granted.failures.join(' | ');
-    ctx.logger.warn(`/verify could not grant: ${detail}`, {
+    ctx.logger.warn(`verification could not grant: ${detail}`, {
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
       userId,
     });
-    await reply(
-      ctx,
-      `I couldn't finish verifying you, so nothing has changed — you still have the same ` +
+
+    return {
+      verified: false,
+      message:
+        `I couldn't finish verifying you, so nothing has changed — you still have the same ` +
         `roles you had. ${detail}`,
-    );
-    return;
+    };
   }
 
   const cleared = await runSteps(ctx, {
@@ -239,13 +247,13 @@ async function performVerification(
   });
 
   if (cleared.failures.length > 0) {
-    await reply(
-      ctx,
-      "You're verified and your access should be live. One thing did not finish — " +
+    return {
+      verified: true,
+      message:
+        "You're verified and your access should be live. One thing did not finish — " +
         `${cleared.failures.join(' | ')} — so tell a moderator; it does not affect your access.`,
-    );
-    return;
+    };
   }
 
-  await reply(ctx, "You're verified. Welcome in.");
+  return { verified: true, message: "You're verified. Welcome in." };
 }

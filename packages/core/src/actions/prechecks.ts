@@ -13,6 +13,10 @@ export interface PrecheckInput {
   channelOverwritesUnknown?: boolean;
   threadParentId?: string;
   target?: { id: string; highestRolePosition: number };
+
+  // Off for a kind Discord does not rank, so the owner and hierarchy gates below are skipped while
+  // the target is still resolved for the audit record. See hierarchyApplies.
+  hierarchy?: boolean;
 }
 
 function whereItIsMissing(input: PrecheckInput): string {
@@ -54,6 +58,10 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
       humanReason: "I can't perform this action on myself.",
     };
   }
+
+  // Everything below is Discord's ranking model, which does not reach every kind that names a
+  // member. The target is still resolved above, so the action is recorded against the right person.
+  if (input.hierarchy === false) return null;
 
   if (target.id === input.guildOwnerId) {
     return {

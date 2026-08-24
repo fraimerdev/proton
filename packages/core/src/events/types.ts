@@ -59,6 +59,8 @@ export const EVENT_TYPES = [
 
   'automod.executed',
 
+  'verification.web_passed',
+
   'xp.level_gained',
 
   'proton.config_changed',
@@ -74,6 +76,7 @@ export type EventType = (typeof EVENT_TYPES)[number];
 export const SERVICE_EMITTED_EVENT_TYPES = [
   'proton.config_changed',
   'proton.action_executed',
+  'verification.web_passed',
 ] as const satisfies readonly EventType[];
 
 export type ServiceEmittedEventType = (typeof SERVICE_EMITTED_EVENT_TYPES)[number];

@@ -35,6 +35,7 @@ import {
   RedisDraftStore,
   RedisEntryBucket,
 } from '@proton/module-giveaways';
+import { RedisHoneypotLock } from '@proton/module-honeypot';
 import { DrizzleStickyRoleStore, RedisPendingGrantStore } from '@proton/module-joinroles';
 import { levelForXp, MAX_XP, RedisVoiceSessionStore } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
@@ -51,9 +52,17 @@ import {
 import { DrizzleStarboardStore } from '@proton/module-starboard';
 import { DrizzleSuggestionStore } from '@proton/module-suggestions';
 import { DrizzleTagStore } from '@proton/module-tags';
-import { RedisTempVcStore } from '@proton/module-tempvc';
+import {
+  DrizzleTempVoiceRepository,
+  RedisCooldownGate,
+  RedisPresenceStore,
+} from '@proton/module-tempvc';
 import { DrizzleTicketStore } from '@proton/module-tickets';
-import { RedisQuarantineStore } from '@proton/module-verification';
+import {
+  RedisCaptchaStore,
+  RedisPanelStore,
+  RedisQuarantineStore,
+} from '@proton/module-verification';
 import { createModuleRegistry } from '@proton/modules';
 import Redis from 'ioredis';
 import { PublishingCaseRecorder, publishableCase } from './action-events.ts';
@@ -237,6 +246,11 @@ const registry = createModuleRegistry(
       guildState,
       fetchMemberRoles,
       quarantine: new RedisQuarantineStore(moduleRedis),
+      captcha: new RedisCaptchaStore(moduleRedis),
+      panel: new RedisPanelStore(moduleRedis),
+      applicationId: env.DISCORD_APPLICATION_ID,
+      verifyLinkBaseUrl: env.DASHBOARD_URL,
+      ...(env.VERIFY_LINK_SECRET ? { verifyLinkSecret: env.VERIFY_LINK_SECRET } : {}),
     },
     backup: {
       store: new DrizzleBackupStore(handle, {
@@ -252,6 +266,12 @@ const registry = createModuleRegistry(
     },
     phishing: {
       blocklist,
+
+      botUserId: env.DISCORD_APPLICATION_ID,
+    },
+    honeypot: {
+      lock: new RedisHoneypotLock(moduleRedis),
+      guildState,
 
       botUserId: env.DISCORD_APPLICATION_ID,
     },
@@ -299,7 +319,13 @@ const registry = createModuleRegistry(
 
       botUserId: env.DISCORD_APPLICATION_ID,
     },
-    tempvc: { store: new RedisTempVcStore(moduleRedis), guildState },
+    tempvc: {
+      repository: new DrizzleTempVoiceRepository(handle),
+      presence: new RedisPresenceStore(moduleRedis),
+      cooldown: new RedisCooldownGate(moduleRedis),
+      guildState,
+      botUserId: env.DISCORD_APPLICATION_ID,
+    },
     reminders: { store: new DrizzleReminderStore(handle) },
     messages: { applicationId: env.DISCORD_APPLICATION_ID },
     counters: { guildState },

@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { zodToDescriptors } from '@proton/core';
+import { automodFormSchema } from '@proton/module-automod/config';
 import { levelingFormSchema } from '@proton/module-leveling/config';
 import { messagesFormSchema } from '@proton/module-messages/config';
+import { serverlogFormSchema } from '@proton/module-serverlog/config';
 import { welcomeFormSchema } from '@proton/module-welcome/config';
 import type { z } from 'zod';
 import {
@@ -25,8 +27,10 @@ const MODULES = join(import.meta.dir, '..', '..', '..', 'packages', 'modules');
 // The form schema, not the config schema: the descriptors the dashboard actually renders come
 // from this one, and the config schema still carries the panel-backed keys it omits.
 const FORM_SCHEMAS: Record<string, z.ZodObject> = {
+  automod: automodFormSchema,
   leveling: levelingFormSchema,
   messages: messagesFormSchema,
+  serverlog: serverlogFormSchema,
   welcome: welcomeFormSchema,
 };
 

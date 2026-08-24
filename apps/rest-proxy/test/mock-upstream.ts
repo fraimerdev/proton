@@ -1,6 +1,7 @@
 export interface UpstreamRequest {
   path: string;
   method: string;
+  headers: Record<string, string>;
   receivedAt: number;
 }
 
@@ -67,7 +68,12 @@ export function startMockUpstream(options: MockUpstreamOptions = {}): MockUpstre
       maxConcurrent = Math.max(maxConcurrent, inFlight);
 
       const url = new URL(request.url);
-      requests.push({ path: url.pathname, method: request.method, receivedAt: Date.now() });
+      requests.push({
+        path: url.pathname,
+        method: request.method,
+        headers: Object.fromEntries(request.headers),
+        receivedAt: Date.now(),
+      });
 
       try {
         served += 1;

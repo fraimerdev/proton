@@ -5,6 +5,7 @@ import { EMPTY_MESSAGE } from '@proton/core';
 import { automodConfigSchema } from '@proton/module-automod/config';
 import { casesConfigSchema } from '@proton/module-cases';
 import { countersConfigSchema } from '@proton/module-counters/config';
+import { honeypotConfigSchema } from '@proton/module-honeypot/config';
 import { levelingConfigSchema } from '@proton/module-leveling/config';
 import { messagesConfigSchema } from '@proton/module-messages/config';
 import { permissionsConfigSchema } from '@proton/module-permissions';
@@ -12,6 +13,7 @@ import { rolemenuConfigSchema } from '@proton/module-rolemenu/config';
 import { serverlogConfigSchema } from '@proton/module-serverlog/config';
 import { tempVcConfigSchema } from '@proton/module-tempvc/config';
 import { ticketsConfigSchema } from '@proton/module-tickets/config';
+import { verificationConfigSchema } from '@proton/module-verification/config';
 import { welcomeConfigSchema } from '@proton/module-welcome/config';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { z } from 'zod';
@@ -32,8 +34,10 @@ const CONFIG_SCHEMAS: Record<string, z.ZodObject> = {
   rolemenu: rolemenuConfigSchema,
   serverlog: serverlogConfigSchema,
   counters: countersConfigSchema,
+  honeypot: honeypotConfigSchema,
   messages: messagesConfigSchema,
   tickets: ticketsConfigSchema,
+  verification: verificationConfigSchema,
   tempvc: tempVcConfigSchema,
   welcome: welcomeConfigSchema,
 };
@@ -47,6 +51,14 @@ const ROLES = [
   { id: '600000000000000001', name: 'Moderator', position: 5 },
   { id: '600000000000000002', name: 'Member', position: 1 },
 ];
+
+const HONEYPOT_ROW = {
+  channelId: '500000000000000001',
+  enabled: true,
+  action: 'softban',
+  deleteMessageSeconds: 604_800,
+  timeoutDuration: '1h',
+};
 
 const LIVE_CONFIG: Record<string, Record<string, unknown>> = {
   automod: automodConfigSchema.parse({ enabled: true, blockedWords: ['scam'] }),
@@ -63,6 +75,7 @@ const LIVE_CONFIG: Record<string, Record<string, unknown>> = {
   messages: {},
   counters: {},
   welcome: {},
+  honeypot: { channels: [HONEYPOT_ROW] },
 };
 
 // The registry holds every editor lazily so a module with no panel ships none of them; the module
@@ -174,6 +187,7 @@ describe('the module panel registry', () => {
         { channelId: '500000000000000002', template: 'Members: {count}', source: 'members' },
       ],
       welcome: 'Welcome to {server}, {user}!',
+      honeypot: [HONEYPOT_ROW],
     };
 
     // Keyed by panel where a module has more than one shape to render: messages stores a template
@@ -481,6 +495,43 @@ describe('the welcome module, whose two greetings are each their own message', (
     };
 
     expect(applyPanels('welcome', config, initialPanelValues('welcome', config))).toEqual(config);
+  });
+});
+
+describe('the honeypot, whose delete window is stored in seconds and edited in days', () => {
+  const editor = () => panelsFor('honeypot')[0] as PanelEntry;
+
+  test('a seven-day window is offered as 7, never as 604800', () => {
+    const html = renderPanel('honeypot', editor(), [HONEYPOT_ROW]);
+
+    expect(html).toContain('value="7"');
+    expect(html).not.toContain('604800');
+  });
+
+  test('the row says in words how far back the deletion reaches', () => {
+    expect(renderPanel('honeypot', editor(), [HONEYPOT_ROW])).toContain('the last 7 days');
+  });
+
+  test('the timeout length is offered only for the action that reads it', () => {
+    const softban = renderPanel('honeypot', editor(), [HONEYPOT_ROW]);
+    const timeout = renderPanel('honeypot', editor(), [{ ...HONEYPOT_ROW, action: 'timeout' }]);
+
+    expect(softban).not.toContain('Timed out for');
+    expect(timeout).toContain('Timed out for');
+  });
+
+  // Arming is the dangerous half. Nothing may be armed by the first click, so the confirmation
+  // copy must be absent until somebody asks for it.
+  test('no arming confirmation is shown until somebody asks to arm one', () => {
+    expect(renderPanel('honeypot', editor(), [HONEYPOT_ROW])).not.toContain('Arm it');
+  });
+
+  test('the notice panel offers one control per saved honeypot and names what posting costs', () => {
+    const html = renderPanel('honeypot', panelsFor('honeypot')[1] as PanelEntry, undefined);
+
+    expect(html).toContain('Post the notice');
+    expect(html).toContain('#general');
+    expect(html).toContain('be removed from the server and let straight back in');
   });
 });
 

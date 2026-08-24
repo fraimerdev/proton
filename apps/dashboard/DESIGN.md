@@ -258,6 +258,26 @@ components:
     textColor: "{colors.muted-paper}"
     typography: "{typography.body}"
     padding: "12px 16px"
+  master-switch:
+    backgroundColor: "{colors.card-slate}"
+    textColor: "{colors.paper}"
+    typography: "{typography.lead}"
+    rounded: "{rounded.lg}"
+    padding: "16px 20px"
+  master-switch-on:
+    borderColor: "{colors.link-line}"
+  master-switch-blocked:
+    borderColor: "{colors.blocked-line}"
+  master-switch-degraded:
+    borderColor: "{colors.advisory-line}"
+  rule-row:
+    backgroundColor: "{colors.card-slate}"
+    textColor: "{colors.paper}"
+    typography: "{typography.body}"
+    padding: "16px 20px"
+  rule-param-label:
+    textColor: "{colors.quiet-slate}"
+    typography: "{typography.caption}"
   form-section-title:
     backgroundColor: "{colors.card-slate}"
     textColor: "{colors.paper}"
@@ -615,6 +635,28 @@ Two different objects that are easy to confuse.
 - **Internal Padding:** 16px 20px for form sections and fields; 12px 16px for list rows and table
   cells; 16px for filter bars; 24px for the confirm dialog.
 
+### Module Header
+
+The first thing on every module page, and the answer to the two questions an admin arrives with:
+what is this, and is it on.
+
+- **Crumb:** a 12.5px Quiet Slate line above the `h1`. On the module's own page it is the category
+  the sidebar filed it under; inside an area it is the module's name, linked back to the module.
+  It never takes the link blue — a coloured line above an `h1` outranks the heading.
+- **Lede:** one sentence saying what the module does, in the page lede role. An area shows its own
+  blurb instead. A data view shows neither — the view carries its own lede about its rows.
+- **Master switch:** a full-width card, Card Slate on a Hairline, wrapping the switch in its own
+  `<label>` so the whole bar toggles. "Enabled" in Lead over a Caption note in Quiet Slate —
+  "Turn this module on or off for this server." The border goes Link Line when the module is on,
+  Blocked Coral's line when it cannot run, Advisory Amber's when it is plan-gated — and the switch
+  track takes the matching colour.
+- **It is a settings row, not a status report.** The bar names what the control does; no glyph, and
+  no sentence restating the position of the switch beside it. The one thing it adds is the failure:
+  a module that is on but cannot run prints the short reason at the far end of the line in the
+  matching ink, because the recoloured track may never be the only carrier of that state.
+- **Position:** above the tabs, because it governs the whole module rather than one face of it. A
+  gap card follows it directly with the sentence and the Discord path.
+
 ### Section Card
 
 A settings section is a card that carries its own name. There is no heading floating above it.
@@ -708,6 +750,49 @@ The only thing in the system that appears on hover.
   its label, and nothing else. It is a real `<button>` sitting outside the `<label>` — inside one it
   would toggle the switch it is explaining — and it reveals a tooltip on hover and on focus. Most
   fields have no info button; see The One-Line Row Rule.
+
+### Rule Row
+
+A field family rendered as one setting with parts. `floodSeverity`, `floodCount` and `floodWindow`
+are not three settings; they are one check and the two numbers it reads.
+
+- **Head:** the family's name on the left and its own control on the right, on the same two-column
+  grid as `.field`, so a rule and a plain row hold one alignment line down the form.
+- **Parameters:** a wrapping flow under the head at 16px, each a Caption Quiet Slate label over its
+  control. Number inputs sit at 110px, durations at 130px, enums at a 156px floor — a threshold is
+  not as wide as the card. A parameter whose label repeats the rule's name is labelled for screen
+  readers only; two controls telling apart by type is not two names.
+- **Off is empty.** When the head is a severity set to `off`, the parameters are not rendered. The
+  values are kept and come back the moment it is switched on; eleven checks' worth of thresholds
+  for checks nobody enabled is the page's whole weight problem.
+- **A growing parameter still stacks.** Token lists and colour pairs take the full width under the
+  head rather than joining the inline flow. See The Stacked-When-It-Grows Rule.
+- **It has to earn itself.** Grouping applies only where a section yields two or more rules. One
+  family among unrelated rows reads better as plain rows, and a form that groups in one section and
+  not the next has traded the alignment line for nothing.
+
+### Matrix
+
+Where a section's fields are two parallel objects over one set of keys, it is a table, and it is
+built as one. Server Logs declares thirteen category switches and thirteen category channels; as
+plain rows that is twenty-six rows printing thirteen labels twice, with each category's two halves
+a screenful apart.
+
+- **Head:** micro-caps column names in Quiet Slate on a hairline — the name of the row set first
+  ("Category"), then one per column ("Logged", "Channel"). This is the Micro-Caps Label A Set Rule
+  doing exactly its job: labelling a column of values, not a control.
+- **Rows:** a `<th scope="row">` in Paper at 14px/500 carrying the name once, then one cell per
+  column at 12px/20px padding with a hairline between rows. The name column takes all the slack so
+  every control column shrinks to its own control.
+- **Named per cell.** Every control in a column inherits the same label from the schema, so each
+  gets an accessible name composed from its row and its column — "Server — Channel". Thirteen pairs
+  of controls all called "Server" is a table nobody can navigate by ear.
+- **It has to earn itself.** The table is built only when every column is populated on every row.
+  A renamed root or a leaf one column is missing drops the whole table back to plain rows rather
+  than rendering a grid with holes in it.
+- **On a phone** the columns stop being columns: each row becomes a block, the head is dropped, and
+  every cell takes its column's name as its own Caption label — the same shape a rule row's
+  parameters take at the same width.
 
 ### Switch
 
@@ -818,12 +903,28 @@ admin has to read instead of recognise.
 collapses it. Nothing is titled by a heading hovering above a container — a name and the thing it
 names are one object.
 
+**The Switch Is On The Page Rule.** The control that turns a module on lives on that module's page,
+as the master switch, with the sentence that says what its current position means. It is not in the
+chrome. A second copy of it in the sidebar is one control disagreeing with another about which one
+the admin is meant to use, and an unlabelled 33px switch in a nav row cannot carry "switched on but
+a permission is missing" the way the bar can.
+
+**The Family Is One Row Rule.** Fields that name one subject and differ only in aspect — a severity
+and its thresholds, a limit and its window — render as a rule row, not as one row each. What
+decides whether a family groups is the section it is in: two or more families group, one does not.
+
+**The Label Is Printed Once Rule.** No name appears twice down one card. Two parallel objects over
+one set of keys are a matrix, whose row header carries the name and whose column headers carry what
+the two controls are. A form that prints "Server" on a switch and again on a picker eleven rows
+later has made the reader hold the pairing in their head, which is the table's job.
+
 ## Do's and Don'ts
 
 ### Do:
 
 - **Do** build a page as `.page-head` (optional 12.5px breadcrumb, then one `h1`) → optional lede →
   optional `.tabs` → sections, each a hairline-bordered card carrying its own header, 40px apart.
+  A module page puts its master switch and any gap card between the lede and the tabs.
 - **Do** reach for an existing container (`.card`, `.module-list`, `.form-section`, `.table-card`)
   before inventing a surface. All four are the same object: 1px `#242833`, 12px radius, `#161920`.
 - **Do** put separators *inside* the container as `+ el { border-top: 1px solid #242833 }` and clip

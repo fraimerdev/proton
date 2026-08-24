@@ -33,6 +33,7 @@ const SHIPPED_MODULE_IDS = [
   'messages',
   'polls',
   'giveaways',
+  'honeypot',
   'counters',
   'suggestions',
 ];

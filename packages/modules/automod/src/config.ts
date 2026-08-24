@@ -195,7 +195,11 @@ const automodShape = {
   }),
 };
 
-export const automodConfigSchema = z.object(automodShape).superRefine((config, ctx) => {
+// The unrefined object, because the dashboard's descriptor generator walks a ZodObject's shape and
+// a refined schema no longer is one.
+export const automodFormSchema = z.object(automodShape);
+
+export const automodConfigSchema = automodFormSchema.superRefine((config, ctx) => {
   for (const pattern of config.regexPatterns) {
     try {
       new RegExp(pattern);

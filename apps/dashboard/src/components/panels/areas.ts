@@ -19,7 +19,77 @@ function tally(config: Record<string, unknown>, key: string, noun: string): stri
   return length === 0 ? null : `${length} ${noun}${length === 1 ? '' : 's'}`;
 }
 
+function checksOn(config: Record<string, unknown>): string | null {
+  const severities = Object.entries(config).filter(([key]) => /severity$/i.test(key));
+  if (severities.length === 0) return null;
+
+  const on = severities.filter(([, value]) => typeof value === 'string' && value !== 'off').length;
+
+  return `${on} of ${severities.length} on`;
+}
+
 export const MODULE_AREAS: Readonly<Record<string, readonly AreaEntry[]>> = {
+  automod: [
+    {
+      id: 'checks',
+      title: 'Message checks',
+      blurb: 'Everything Proton itself looks for in a message, and how serious each one is.',
+      icon: 'list-checks',
+      sections: ['spam', 'content', 'formatting'],
+      count: checksOn,
+    },
+    {
+      id: 'response',
+      title: 'Response',
+      blurb: 'What happens when a check fires, and where Proton reports it.',
+      icon: 'gavel',
+      sections: ['general', 'response'],
+    },
+    {
+      id: 'discord',
+      title: 'Enforced by Discord',
+      blurb:
+        'Word lists and patterns Proton hands to Discord’s own AutoMod, blocked before Proton sees them.',
+      icon: 'lock',
+      sections: ['discord'],
+      panels: ['Who enforces what'],
+      count: (config) => tally(config, 'blockedWords', 'blocked word'),
+    },
+    {
+      id: 'exemptions',
+      title: 'Exemptions',
+      blurb: 'Roles, channels and bots no check applies to.',
+      icon: 'user-minus',
+      sections: ['exemptions'],
+      count: (config) => tally(config, 'exemptRoleIds', 'exempt role'),
+    },
+  ],
+
+  serverlog: [
+    {
+      id: 'routing',
+      title: 'Categories and channels',
+      blurb: 'Which categories of event are logged, and the channel each one is written to.',
+      icon: 'hash',
+      sections: ['general', 'categories'],
+    },
+    {
+      id: 'events',
+      title: 'Individual logs',
+      blurb: 'Every event Discord reports, switched on one at a time and routed on its own.',
+      icon: 'list-checks',
+      panels: ['events'],
+    },
+    {
+      id: 'filters',
+      title: 'Filters',
+      blurb: 'Channels, roles and members whose activity is never logged.',
+      icon: 'funnel',
+      sections: ['filters'],
+      count: (config) => tally(config, 'ignoredChannelIds', 'ignored channel'),
+    },
+  ],
+
   messages: [
     {
       id: 'templates',

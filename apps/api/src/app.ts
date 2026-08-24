@@ -5,6 +5,7 @@ import {
   type ModuleIndex,
   type ModuleRegistry,
   type RegistryEnvironment,
+  snowflakeSchema,
 } from '@proton/core';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { Hono } from 'hono';
@@ -15,6 +16,7 @@ import type { GuildService } from './guilds/service.ts';
 import type { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 import type { TagSearchService } from './tags/service.ts';
+import { VerificationError, type VerificationService } from './verification/service.ts';
 
 const updateBodySchema = z.object({
   enabled: z.boolean().optional(),
@@ -34,6 +36,11 @@ const ensureGuildBodySchema = z.object({
   name: z.string().min(1),
   locale: z.string().optional(),
   shardId: z.number().int().min(0).optional(),
+});
+
+const passedBodySchema = z.object({
+  userId: snowflakeSchema,
+  jti: z.string().min(1).max(64),
 });
 
 export function moduleIndex(
@@ -71,6 +78,7 @@ export interface ApiDeps {
   leaderboard: LeaderboardService;
   tags: TagSearchService;
   guilds: GuildService;
+  verification: VerificationService;
   registry: ModuleRegistry;
   bus?: EventBus;
   // What the bot actually has, for `registry.evaluate`. A function because intents come from the
@@ -290,11 +298,32 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
   });
 
+  // The dashboard has already proved the signed-in session owns this user id; the api trusts it the
+  // same way it trusts actorId on a config write, because both arrive over the shared secret.
+  app.post('/guilds/:guildId/verification/passed', async (c) => {
+    const parsed = passedBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(
+        await deps.verification.recordWebPass({
+          guildId: c.req.param('guildId'),
+          ...parsed.data,
+        }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
   return app;
 }
 
 function toErrorResponse(error: unknown): {
-  status: 400 | 404 | 500;
+  status: 400 | 404 | 500 | 503;
   body: { error: string; message?: string };
 } {
   if (error instanceof ModuleConfigError) {
@@ -303,5 +332,13 @@ function toErrorResponse(error: unknown): {
       body: { error: error.code, message: error.message },
     };
   }
+
+  if (error instanceof VerificationError) {
+    return {
+      status: error.code === 'bus_unavailable' ? 503 : 400,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
   return { status: 500, body: { error: 'internal_error' } };
 }

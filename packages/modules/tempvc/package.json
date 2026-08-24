@@ -6,15 +6,18 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./table": "./src/table.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@proton/core": "workspace:*",
+    "@proton/db": "workspace:*",
     "discord-api-types": "^0.38.53",
     "discord.js": "^14.27.0",
+    "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0",
     "zod": "^4.4.3"
   },

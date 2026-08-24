@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { callbackFor, DEFAULT_CALLBACK } from '../src/lib/callback-url.ts';
 
 const SRC = join(import.meta.dir, '..', 'src');
 
@@ -47,15 +48,72 @@ describe('third-party origins in the critical path', () => {
 });
 
 describe('where Discord sends you back to', () => {
-  test('the sign-in callback names a route that exists', () => {
-    const target = /callbackURL: '([^']+)'/.exec(signIn)?.[1];
+  test('the sign-in route asks callbackFor, so the guard below is the one that runs', () => {
+    expect(signIn).toContain('callbackURL: callbackFor(request.url)');
+  });
 
-    expect(`${target} is a route: ${routeTree.includes(`'${target}'`)}`).toBe(
-      `${target} is a route: true`,
+  test('by default the guild picker, not the door the visitor just came through', () => {
+    expect(callbackFor('http://localhost:3000/api/auth/signin/discord')).toBe(DEFAULT_CALLBACK);
+  });
+
+  test('the default names a route that exists', () => {
+    expect(`${DEFAULT_CALLBACK} is a route: ${routeTree.includes(`'${DEFAULT_CALLBACK}'`)}`).toBe(
+      `${DEFAULT_CALLBACK} is a route: true`,
     );
   });
 
-  test('and it is the guild picker, not the door the visitor just came through', () => {
-    expect(signIn).toContain("callbackURL: '/dashboard'");
+  test('a verify link comes back to itself so the member finishes where they started', () => {
+    const target = '/verify/abc.def';
+
+    expect(callbackFor(`http://localhost:3000/x?redirect=${encodeURIComponent(target)}`)).toBe(
+      target,
+    );
+  });
+
+  // A fresh session cookie is set on this hop, so an accepted off-site redirect hands it away.
+  test.each([
+    '//evil.example',
+    '/\\evil.example',
+    'https://evil.example',
+    'http://evil.example/path',
+    'evil.example',
+    '',
+  ])('refuses %p and falls back to the guild picker', (redirect) => {
+    expect(callbackFor(`http://localhost:3000/x?redirect=${encodeURIComponent(redirect)}`)).toBe(
+      DEFAULT_CALLBACK,
+    );
+  });
+});
+
+describe('the head loads the faces the stylesheet asks for', () => {
+  const styles = readFileSync(join(SRC, 'styles.css'), 'utf8');
+
+  function familiesOf(declaration: string): string[] {
+    const value = new RegExp(`--${declaration}:s*([^;]+);`).exec(styles)?.[1] ?? '';
+
+    return value.split(',').map((name) => name.trim().replace(/^["']|["']$/g, ''));
+  }
+
+  // Archivo and IBM Plex Mono were fetched here for months while --font named Onest and --mono
+  // named Spline Sans Mono, so the whole documented type ramp rendered in Segoe UI and Consolas.
+  test('the first family of --font and --mono is each requested from Google Fonts', () => {
+    for (const declaration of ['font', 'mono']) {
+      const wanted = familiesOf(declaration)[0] ?? '';
+      const requested = wanted.replaceAll(' ', '+');
+
+      expect(`${declaration} -> ${wanted}: ${root.includes(`family=${requested}:`)}`).toBe(
+        `${declaration} -> ${wanted}: true`,
+      );
+    }
+  });
+
+  test('nothing is fetched that no declaration names', () => {
+    const named = new Set([...familiesOf('font'), ...familiesOf('mono')]);
+
+    for (const match of root.matchAll(/family=([A-Za-z+]+):/g)) {
+      const family = (match[1] ?? '').replaceAll('+', ' ');
+
+      expect(`${family} is used: ${named.has(family)}`).toBe(`${family} is used: true`);
+    }
   });
 });

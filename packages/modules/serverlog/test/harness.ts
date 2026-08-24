@@ -124,7 +124,13 @@ export function collectingLogger(): { logger: Logger; lines: string[] } {
 
 export const resolver: UserResolver = {
   async resolve(userId: string): Promise<UserProfile | null> {
-    return { id: userId, username: 'admin', globalName: 'Admin', avatarUrl: 'https://cdn/a.png', avatarHash: null };
+    return {
+      id: userId,
+      username: 'admin',
+      globalName: 'Admin',
+      avatarUrl: 'https://cdn/a.png',
+      avatarHash: null,
+    };
   },
 };
 

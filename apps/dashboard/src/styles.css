@@ -99,6 +99,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* The browser's own `[hidden] { display: none }` lives in the UA sheet, which ANY author `display`
+   beats — so `.field { display: grid }` rendered every showWhen-hidden row in full while it carried
+   the attribute, and no markup test could see it. Outranking one class would work until the next
+   rule sets `display` on something hideable, which is the bug this already was. */
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: outranking the UA sheet is the entire job */
+  display: none !important;
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -508,7 +517,6 @@ i[class^="ph"] {
 }
 
 .nav-module[data-open="true"] {
-  padding-right: var(--s2);
   border-radius: var(--r-sm);
   background: var(--surface-hi);
 }
@@ -531,12 +539,6 @@ i[class^="ph"] {
   border-radius: 0 var(--r-xs) var(--r-xs) 0;
   background: var(--brand);
   transform: translateY(-50%);
-}
-
-.nav-switch {
-  flex: none;
-  transform: scale(0.78);
-  transform-origin: right center;
 }
 
 /* A module carrying areas grows a nested list, so the row has to wrap rather than stay a single
@@ -607,12 +609,15 @@ i[class^="ph"] {
   background: var(--danger);
 }
 
-.nav-module[data-open="true"] .nav-item-label::after {
-  content: none;
-}
-
 .nav-module[data-state="degraded"] .nav-item-label::after {
   background: var(--warn);
+}
+
+/* The same accent the module list gives a switched-on row's tile. Without it twenty-seven rows
+   draw a running module and a switched-off one identically, and the sidebar answers "where is
+   Automod" but never "is it on". */
+.nav-module[data-state="running"] .nav-item i {
+  color: var(--accent);
 }
 
 .nav-item-label {
@@ -633,6 +638,9 @@ i[class^="ph"] {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
+  /* The 12px scrollbar is reserved whether or not this page is long enough to need it. Without it
+     the whole centred column jumps sideways moving from a two-field module to a seven-section one. */
+  scrollbar-gutter: stable;
   scroll-padding-bottom: 116px;
   background: var(--bg);
 }
@@ -683,6 +691,28 @@ i[class^="ph"] {
   font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.2;
+}
+
+/* Quiet slate rather than the link blue: a crumb sitting directly over an h1 is orientation, and
+   a blue line above the heading reads as the louder of the two. */
+.page-trail {
+  margin-bottom: var(--s1);
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.4;
+}
+
+/* Padded and pulled back: the crumb keeps its 16px line box but the link is 24px to hit. */
+.page-trail a {
+  display: inline-block;
+  padding: 4px 0;
+  margin: -4px 0;
+  color: var(--text-3);
+}
+
+.page-trail a:hover {
+  color: var(--text-2);
+  text-decoration: none;
 }
 
 .page-lede {
@@ -1352,15 +1382,32 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   white-space: nowrap;
 }
 
-.module-desc-plain {
+/* A module blurb is prose, not the mono slash-command line the class was built for, but it still
+   holds one line: twenty-seven rows that each wrap to two is a page nobody scans. */
+.module-desc-prose {
   font-family: var(--font);
 }
 
 /* An area blurb is a sentence, not a module's one-line description, so it wraps instead of being
    cut off mid-word by the ellipsis the module rows want. */
 .module-desc-plain {
+  font-family: var(--font);
   white-space: normal;
   overflow: visible;
+}
+
+.module-group {
+  margin-bottom: var(--s8);
+}
+
+/* Muted Paper against the Paper of a module that is on, so the run of category names reads as the
+   quieter layer it is. */
+.module-group-title {
+  margin: 0 0 var(--s3);
+  font-size: var(--t-base);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-2);
 }
 
 .area-count {
@@ -1368,6 +1415,10 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-variant-numeric: tabular-nums;
   color: var(--text-3);
   white-space: nowrap;
+}
+
+.area-count-empty {
+  font-family: var(--font);
 }
 
 .area-chevron {
@@ -1387,8 +1438,11 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--danger);
 }
 
-.module-row input[type="checkbox"][role="switch"] {
+/* Pinned to the last track, not flowed into the next free one. A row that carries a warning has
+   four children and one without has three, so flowed switches sat 12px apart down the list. */
+.module-row > input[type="checkbox"][role="switch"] {
   position: relative;
+  grid-column: -2;
 }
 
 /* ---------- module settings ---------- */
@@ -1432,17 +1486,23 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text);
 }
 
-.master-switch-line i {
-  font-size: 19px;
-  color: var(--text-3);
-}
-
 .master-switch-note {
   display: block;
   margin-top: var(--s2);
+  max-width: 62ch;
   color: var(--text-3);
   font-size: var(--t-sm);
   line-height: 1.55;
+}
+
+/* Pushed to the far end of the line rather than trailing the name: it is the state readout beside
+   the switch, not a second half of the heading. */
+.master-switch-state {
+  margin-left: auto;
+  padding-left: var(--s3);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  text-align: right;
 }
 
 .generated-form {
@@ -1503,6 +1563,21 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   flex-shrink: 0;
   color: var(--text-3);
   font-size: 14px;
+}
+
+.form-section-toggle .form-section-title {
+  margin-right: auto;
+}
+
+.form-section-edited {
+  flex-shrink: 0;
+  padding: 2px var(--s2);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-full);
+  background: var(--accent-wash);
+  color: var(--accent);
+  font-size: var(--t-xs);
+  font-weight: 500;
 }
 
 .form-section-head + .form-section-body {
@@ -1908,6 +1983,167 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   display: block;
 }
 
+/* ---------- matrix ---------- */
+
+/* A real table, because that is what two parallel objects over one set of keys are. The row header
+   names the thing once and the column headers name the two controls once, instead of every label
+   being printed twice down a list of twenty-six rows. */
+.matrix {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.matrix th,
+.matrix td {
+  padding: var(--s3) var(--s5);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.matrix thead th {
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-3);
+  font: 600 var(--t-xs) / 1.4 var(--font);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.matrix tbody tr + tr th,
+.matrix tbody tr + tr td {
+  border-top: 1px solid var(--line);
+}
+
+/* The name column takes the slack so every control column shrinks to its own control. */
+.matrix tbody th[scope="row"] {
+  width: 100%;
+  min-width: 0;
+  font-size: var(--t-base);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.matrix td[data-kind="boolean"] {
+  width: 42px;
+}
+
+/* The min-width sits on the control, not the cell: in auto table layout a cell width is only a
+   suggestion, and the name column's width:100% wins every negotiation against it. */
+.matrix td[data-kind="channel-id"] .picker,
+.matrix td[data-kind="role-id"] .picker {
+  min-width: 208px;
+}
+
+.matrix td[data-kind="number"] {
+  width: 110px;
+}
+
+.matrix td[data-kind="enum"] {
+  width: 156px;
+}
+
+.matrix tbody tr:hover th[scope="row"] {
+  color: var(--text);
+}
+
+/* ---------- rule rows ---------- */
+
+/* A family of fields — a severity and the thresholds it reads, a limit and its window — is one
+   setting with parts, not three rows that happen to sit next to each other. The head keeps the
+   form's own two-column grid, so a rule and a plain field still read as one column of controls. */
+.rule {
+  padding: var(--s4) var(--s5);
+}
+
+.field + .rule,
+.rule + .rule,
+.rule + .field,
+.rule + .field-unsupported {
+  border-top: 1px solid var(--line);
+}
+
+.rule-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 340px);
+  align-items: center;
+  gap: var(--s6);
+}
+
+.rule-label {
+  min-width: 0;
+  font-size: var(--t-base);
+  font-weight: 500;
+  color: var(--text);
+}
+
+.rule-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+/* Under the head, not beside it: the thresholds are read after the severity that decides whether
+   they matter at all, and they are gone entirely while it is off. */
+.rule-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s3) var(--s5);
+  margin-top: var(--s4);
+}
+
+.rule-param {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.rule-controls > .rule-param {
+  flex: 1 1 0;
+}
+
+.rule-params > .rule-param {
+  flex: 0 1 auto;
+}
+
+.rule-param-label {
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.4;
+}
+
+.rule-params .rule-param input[type="number"] {
+  width: 110px;
+}
+
+.rule-params .rule-param input[type="text"] {
+  width: 130px;
+}
+
+.rule-params .rule-param select {
+  min-width: 156px;
+}
+
+.rule-params .rule-param .picker {
+  width: 240px;
+}
+
+.rule-param > input[type="checkbox"][role="switch"] {
+  margin-bottom: var(--s2);
+}
+
+/* Already inside the rule's padding, so it brings only the gap above it. */
+.rule-body > .field-stacked {
+  padding: var(--s4) 0 0;
+}
+
+.rule-body > .field-stacked + .field-stacked {
+  border-top: 0;
+}
+
 .field-error {
   display: block;
   margin-top: var(--s2);
@@ -1949,16 +2185,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   }
 }
 
-.saved-line {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  margin-top: var(--s5);
-  color: var(--ok);
-  font-size: var(--t-base);
-  font-weight: 500;
-}
-
 /* ---------- general settings ---------- */
 
 .identity {
@@ -1966,6 +2192,11 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   align-items: center;
   gap: var(--s4);
   margin-bottom: var(--s6);
+}
+
+/* It heads the server's own facts, which sit after the module list rather than before it. */
+.module-group + .identity {
+  margin-top: var(--s7);
 }
 
 .identity-avatar {
@@ -2048,6 +2279,11 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border: 1px solid var(--danger-line);
   border-radius: var(--r-lg);
   background: var(--danger-wash);
+}
+
+/* Directly under the switch it explains, so the coral track and the sentence are one statement. */
+.master-switch + .gap-card {
+  margin-top: calc(var(--s6) * -1 + var(--s3));
 }
 
 .gap-card-warn {
@@ -2326,8 +2562,15 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .tabs {
   display: flex;
   gap: var(--s5);
-  margin: calc(var(--s6) * -1 + var(--s1)) 0 var(--s6);
+  margin: 0 0 var(--s6);
   border-bottom: 1px solid var(--line);
+}
+
+/* Pulled up only against the head it belongs to. A module page puts its master switch between the
+   two, and the pull-up applied there left the tab row hanging 4px off the card above it. */
+.page-head + .tabs,
+.page-lede + .tabs {
+  margin-top: calc(var(--s6) * -1 + var(--s1));
 }
 
 .tab {
@@ -2555,10 +2798,25 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   box-shadow: var(--shadow-lg);
 }
 
-.save-bar-text {
+.save-bar-status {
   flex: 1;
+  min-width: 0;
+}
+
+.save-bar-text {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
   font-size: var(--t-base);
   font-weight: 500;
+}
+
+.save-bar-saved {
+  color: var(--ok);
+}
+
+.save-bar-failed {
+  color: var(--danger);
 }
 
 /* ---------- command palette ---------- */
@@ -2870,6 +3128,59 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .plain-page .back-link {
   margin-bottom: var(--s7);
+}
+
+/* ---------- verification panel publisher ---------- */
+
+.publish-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.publish-panel-actions {
+  display: flex;
+  gap: var(--s2);
+}
+
+.publish-panel-result {
+  color: var(--ok);
+  font-size: var(--t-sm);
+}
+
+.publish-panel-error {
+  color: var(--danger);
+}
+
+/* ---------- verify ---------- */
+
+.verify-page .page {
+  max-width: 520px;
+}
+
+.verify-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s5);
+  padding: var(--s7);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.verify-card h1 {
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.verify-card p {
+  max-width: 46ch;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.65;
 }
 
 /* ---------- guild picker ---------- */
@@ -3202,6 +3513,103 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
   .field-tooltip {
     max-width: 62vw;
+  }
+
+  /* A three-column table does not fit a phone, and scrolling a settings table sideways is worse
+     than not having one. Each row becomes a block and the column headers move onto the cells. */
+  .matrix,
+  .matrix thead,
+  .matrix tbody,
+  .matrix thead tr,
+  .matrix tbody tr,
+  .matrix th,
+  .matrix td {
+    display: block;
+  }
+
+  .matrix thead {
+    display: none;
+  }
+
+  .matrix tbody tr {
+    padding: var(--s4);
+  }
+
+  .matrix tbody tr + tr {
+    border-top: 1px solid var(--line);
+  }
+
+  .matrix tbody tr + tr th,
+  .matrix tbody tr + tr td {
+    border-top: 0;
+  }
+
+  /* [data-kind] carries the desktop column widths at a higher specificity than a bare `td`, so the
+     reset has to match on the attribute too or every cell keeps its column's width as a block. */
+  .matrix tbody th[scope="row"],
+  .matrix tbody td,
+  .matrix tbody td[data-kind] {
+    width: auto;
+    padding: 0;
+  }
+
+  .matrix tbody td {
+    margin-top: var(--s3);
+  }
+
+  .matrix tbody td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: var(--s1);
+    color: var(--text-3);
+    font-size: var(--t-sm);
+    line-height: 1.4;
+  }
+
+  .matrix tbody td[data-kind="boolean"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s4);
+  }
+
+  .matrix tbody td[data-kind="boolean"]::before {
+    margin-bottom: 0;
+  }
+
+  .matrix td .picker,
+  .matrix td[data-kind="channel-id"] .picker,
+  .matrix td[data-kind="role-id"] .picker {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .rule {
+    padding-left: var(--s4);
+    padding-right: var(--s4);
+  }
+
+  /* Same reasoning as .field: on a phone the rule's own control takes the line under its name,
+     and the thresholds wrap to full width rather than shrinking below a usable target. */
+  .rule-head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    row-gap: var(--s3);
+  }
+
+  /* The flex grow belongs to the param, never to the control inside it: .rule-param is a column
+     flex box, so a flex-basis on the control is a basis on its height and collapses the 36px. */
+  .rule-params .rule-param {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .rule-params .rule-param input[type="number"],
+  .rule-params .rule-param input[type="text"],
+  .rule-params .rule-param select,
+  .rule-params .rule-param .picker {
+    width: 100%;
+    min-width: 0;
   }
 
   .form-section-toggle {
@@ -4412,4 +4820,127 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .segment.is-active {
   background: var(--surface-hi);
   color: var(--text);
+}
+
+/* Where the confusion actually happens. As trailing page copy this sentence sat past the whole
+   form, and never rendered at all on an area whose only channel pickers live inside a panel. */
+.picker-note {
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+/* ---------- temporary voice channels ---------- */
+
+/* A creator channel carries far more settings than a ladder rung was built for, so its controls
+   wrap into a grid rather than one long column. */
+.tempvc-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
+  gap: var(--s4);
+}
+
+.tempvc-toggles,
+.tempvc-controls {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3) var(--s5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tempvc-controls {
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.tempvc-controls legend {
+  padding: 0 0 var(--s2);
+  color: var(--text-3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tempvc-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-2);
+  font-size: var(--t-sm);
+  cursor: pointer;
+}
+
+/* ---------- honeypot ---------- */
+
+.honeypot-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: end;
+  gap: var(--s4);
+}
+
+.honeypot-switch input {
+  justify-self: start;
+}
+
+.honeypot-hint {
+  color: var(--text-3);
+  font-size: var(--t-xs);
+  line-height: 1.5;
+}
+
+.honeypot-arming {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-md);
+  background: var(--danger-wash);
+}
+
+.honeypot-arming-text {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin: 0;
+  max-width: 62ch;
+  color: var(--danger);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+
+.honeypot-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.honeypot-notice-what {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 200px;
+}
+
+.honeypot-notice .publish-panel-result {
+  flex-basis: 100%;
+  margin: 0;
 }

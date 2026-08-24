@@ -142,13 +142,24 @@ export interface TabDescriptor {
 }
 
 // The settings tab is the absence of ?view=, not the id 'settings', which a view may legally own.
-export function tabsFor(views: readonly AnyViewEntry[], view: unknown): readonly TabDescriptor[] {
+export function tabsFor(
+  views: readonly AnyViewEntry[],
+  view: unknown,
+  area?: string | undefined,
+): readonly TabDescriptor[] {
   if (views.length === 0) return [];
 
   const active = views.find((entry) => entry.id === view);
 
   return [
-    { key: SETTINGS_TAB, title: 'Settings', search: {}, current: active === undefined },
+    // Carries the open area, or the tab marked current navigates somewhere else when clicked —
+    // to the module's hub, unmounting the settings form and the edits in it.
+    {
+      key: SETTINGS_TAB,
+      title: 'Settings',
+      search: area === undefined ? {} : { area },
+      current: active === undefined,
+    },
     ...views.map((entry) => ({
       key: `view:${entry.id}`,
       title: entry.title,

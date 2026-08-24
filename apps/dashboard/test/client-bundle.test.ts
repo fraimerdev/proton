@@ -246,7 +246,9 @@ describe('the server half of the dashboard stays on the server', () => {
       'src/lib/env.ts',
       'src/middleware/guild-access.ts',
       'src/server/audit.ts',
+      'src/server/honeypot.ts',
       'src/server/modules.ts',
+      'src/server/verification.ts',
     ]);
   });
 

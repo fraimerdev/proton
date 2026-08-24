@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardGuildIdRouteImport } from './routes/dashboard/$guildId'
+import { Route as VerifyTokenRouteImport } from './routes/verify/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as DashboardGuildIdIndexRouteImport } from './routes/dashboard/$guildId/index'
 import { Route as DashboardGuildIdModuleIdRouteImport } from './routes/dashboard/$guildId/$moduleId'
@@ -37,6 +38,11 @@ const DashboardIndexRoute = DashboardIndexRouteImport.update({
 const DashboardGuildIdRoute = DashboardGuildIdRouteImport.update({
   id: '/dashboard/$guildId',
   path: '/dashboard/$guildId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyTokenRoute = VerifyTokenRouteImport.update({
+  id: '/verify/$token',
+  path: '/verify/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
+  '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/verify/$token': typeof VerifyTokenRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
+  '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
@@ -106,6 +115,7 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy'
     | '/dashboard/$guildId'
+    | '/verify/$token'
     | '/dashboard/'
     | '/api/auth/$'
     | '/dashboard/$guildId/$moduleId'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/privacy'
+    | '/verify/$token'
     | '/dashboard'
     | '/api/auth/$'
     | '/dashboard/$guildId/$moduleId'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy'
     | '/dashboard/$guildId'
+    | '/verify/$token'
     | '/dashboard/'
     | '/api/auth/$'
     | '/dashboard/$guildId/$moduleId'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PrivacyRoute: typeof PrivacyRoute
   DashboardGuildIdRoute: typeof DashboardGuildIdRouteWithChildren
+  VerifyTokenRoute: typeof VerifyTokenRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAuthSigninDiscordRoute: typeof ApiAuthSigninDiscordRoute
@@ -173,6 +186,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard/$guildId'
       fullPath: '/dashboard/$guildId'
       preLoaderRoute: typeof DashboardGuildIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify/$token': {
+      id: '/verify/$token'
+      path: '/verify/$token'
+      fullPath: '/verify/$token'
+      preLoaderRoute: typeof VerifyTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
@@ -230,6 +250,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PrivacyRoute: PrivacyRoute,
   DashboardGuildIdRoute: DashboardGuildIdRouteWithChildren,
+  VerifyTokenRoute: VerifyTokenRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAuthSigninDiscordRoute: ApiAuthSigninDiscordRoute,

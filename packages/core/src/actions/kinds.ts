@@ -274,6 +274,21 @@ export function targetsMember(kind: ActionKind): boolean {
   return TARGETS_MEMBER[kind];
 }
 
+/**
+ * Whether Discord applies role hierarchy — and the owner exemption — to this kind. Almost every
+ * member-targeting action is subject to both, so this lists only the exceptions.
+ *
+ * A voice move is not a moderation action. `Modify Guild Member` documents `channel_id` as needing
+ * MOVE_MEMBERS and nothing else, and Discord moves the owner and members ranked above the bot
+ * without complaint. Gating it like a ban meant the server owner — the one person guaranteed to
+ * test a new module — could never be moved into the channel Proton had just built for them.
+ */
+const HIERARCHY_EXEMPT: ReadonlySet<ActionKind> = new Set<ActionKind>(['move_member']);
+
+export function hierarchyApplies(kind: ActionKind): boolean {
+  return TARGETS_MEMBER[kind] && !HIERARCHY_EXEMPT.has(kind);
+}
+
 export function reversalOf(kind: ActionKind): ActionKind | undefined {
   return REVERSAL_OF[kind];
 }

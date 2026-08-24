@@ -63,7 +63,7 @@ temp VCs, counters, native Discord polls. `automod` was filed under this phase a
 | `giveaways` | engagement | tables `giveaways`, `giveaway_entries` | `activeGiveaways` |
 | `suggestions` | engagement | tables `suggestions`, `suggestion_votes` | — |
 | `tickets` | utility | table `tickets` + config panels | `ticketPanels`, `openTicketsPerUser` |
-| `tempvc` | utility | config hubs + Redis live state | `tempVcHubs` |
+| `tempvc` | utility | config creator channels + Postgres state, Redis presence | `tempVcHubs` |
 | `counters` | utility | config | `counters` |
 
 `packages/core/src/entitlements/limits.ts` already names all ten limit keys and has since Phase 3.
@@ -244,16 +244,31 @@ Panels in config; a button opens a private channel with overwrites set **at crea
 `/ticket close|add|remove|rename`; transcript posted to a log channel on close; auto-close by durable
 schedule after configurable inactivity. Limits `ticketPanels` and `openTicketsPerUser`.
 
-### 4.I — `tempvc`
+### 4.I — `tempvc` (Temporary Voice Channels)
 
-Hubs in config. `voice.state_updated` join on a hub creates a channel in the hub's category and moves
-the member; leaving the last occupant deletes it. Occupancy in Redis. `/vc name|limit|lock|unlock`
-for the owner. Limit `tempVcHubs`.
+Creator channels in config, each with its own settings: name template, default limit, bitrate,
+privacy, the eleven owner controls, ownerless behaviour, temporary role, delete delay, per-member
+cap, creation cooldown and permission sync. `voice.state_updated` on a creator channel makes a
+channel, moves the member and posts the control panel into it. Buttons and modals for the owner,
+`/voice` for the same actions by command. Limit `tempVcHubs`.
 
-**The failure mode to design against:** the bot restarts while ten temp channels are live. Redis
-carries the channel→owner map with a TTL longer than any plausible session, and `guild.available`
-reconciles against `GUILD_CREATE`'s `voice_states` to delete channels that emptied while the worker
-was down. Without that, a restart leaks a channel per session forever.
+Ownership, access (trust/block) and roles Proton granted live in Postgres — `temp_voice_channels`,
+`temp_voice_access`, `temp_voice_roles` — because a TTL is the wrong lifetime for a fact somebody's
+permissions depend on. Redis keeps only presence, which reconcile rebuilds.
+
+**The failure mode to design against:** the create is not one step. A row is reserved *before*
+Discord is called, so a create that dies half-way leaves evidence rather than a channel nothing can
+find; the reservation also enforces the per-member cap in the same statement, which is what makes
+two joins in the same millisecond yield one channel. Deletion is deferred and re-checked, because
+Discord fires leave-then-join whenever a member switches channel and an immediate delete races the
+rejoin. Recovery has three legs, because no one of them covers a restart: `guild.available`
+reconciles against `GUILD_CREATE`'s `voice_states` (fresh IDENTIFY only), `channel.deleted` forgets
+a channel somebody removed by hand (without it that member's slot stays occupied forever), and a
+rolling per-guild patrol re-arms itself every minute while the guild has live channels — that is
+what catches a channel emptied while the worker was down, which fires no event at all.
+
+**Not a moderation action.** Every temp-voice write passes `record: false`: the case ledger is the
+product's headline feature and channel churn would bury it.
 
 ### 4.J — `counters`
 
@@ -353,7 +368,7 @@ Patterned on Gates 0–3. Every criterion proven by command output, not assertio
 | 4.F `giveaways` | done | 91 | inside-out Fisher–Yates over an injected RNG, so a winner set is reproducible |
 | 4.G `suggestions` | done | 75 | buttons not reactions; tallies recomputed from the vote table, never incremented |
 | 4.H `tickets` | done | 57 | private in the create call (G1); inactivity auto-close; reserve → create → attach |
-| 4.I `tempvc` | done | 49 | Redis live state; `guild.available` reconciliation |
+| 4.I `tempvc` | done | 119 | reserve → create → attach; deferred re-checked delete; patrol; panel + `/voice` |
 | 4.J `counters` | done | 60 | 10-minute floor, unchanged names skipped |
 | 4.K dashboard | partial | — | see below |
 

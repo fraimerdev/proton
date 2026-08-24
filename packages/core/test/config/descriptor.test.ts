@@ -101,7 +101,10 @@ describe('zodToDescriptors', () => {
 
   test('z.url() is a string field, so a link setting reaches the form at all', () => {
     const schema = z.object({
-      backgroundUrl: z.url({ protocol: /^https$/ }).max(2048).optional(),
+      backgroundUrl: z
+        .url({ protocol: /^https$/ })
+        .max(2048)
+        .optional(),
     });
 
     const [field] = zodToDescriptors(schema);
@@ -235,6 +238,143 @@ describe('zodToDescriptors', () => {
 
       expect(field?.defaultValue).toEqual([]);
       expect(field?.array).toBe(true);
+    });
+  });
+
+  describe('conditional fields and option labels', () => {
+    const verification = () =>
+      z.object({
+        mode: z.enum(['button', 'captcha']).register(protonFields, {
+          optionLabels: { button: 'Press a button', captcha: 'Solve a captcha' },
+        }),
+        captchaLength: z
+          .number()
+          .default(6)
+          .register(protonFields, { showWhen: { path: 'mode', equals: ['captcha'] } }),
+      });
+
+    test('both keys reach the descriptors they were registered on', () => {
+      const [mode, length] = zodToDescriptors(verification());
+
+      expect((mode as EnumField).optionLabels).toEqual({
+        button: 'Press a button',
+        captcha: 'Solve a captcha',
+      });
+      expect(length?.showWhen).toEqual({ path: 'mode', equals: ['captcha'] });
+    });
+
+    test('a field with neither carries neither', () => {
+      const [field] = zodToDescriptors(z.object({ mode: z.enum(['button']) }));
+
+      expect(field?.showWhen).toBeUndefined();
+      expect((field as EnumField).optionLabels).toBeUndefined();
+    });
+
+    test('optionLabels on anything but an enum is refused', () => {
+      const schema = z.object({
+        response: z.string().register(protonFields, { optionLabels: { button: 'Press' } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+      expect(() => zodToDescriptors(schema)).toThrow(/only an enum/i);
+    });
+
+    test('an optionLabels key that is not an option names it and lists the legal ones', () => {
+      const schema = z.object({
+        mode: z
+          .enum(['button', 'captcha'])
+          .register(protonFields, { optionLabels: { webiste: 'Sign in' } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(/'webiste'/);
+      expect(() => zodToDescriptors(schema)).toThrow(/button, captcha/);
+    });
+
+    test('showWhen pointing at a field this schema does not have names that path', () => {
+      const schema = z.object({
+        mode: z.enum(['button', 'captcha']),
+        captchaLength: z
+          .number()
+          .register(protonFields, { showWhen: { path: 'moed', equals: ['captcha'] } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+      expect(() => zodToDescriptors(schema)).toThrow(/'moed'/);
+    });
+
+    // The target is only known once every leaf is collected, so a field shown by one declared
+    // after it — or by a leaf of a nested object — has to pass rather than be refused as unknown.
+    test('a target declared later, or nested, is still a target', () => {
+      const schema = z.object({
+        captchaLength: z
+          .number()
+          .register(protonFields, { showWhen: { path: 'gate.mode', equals: ['captcha'] } }),
+        gate: z.object({ mode: z.enum(['button', 'captcha']) }),
+      });
+
+      expect(zodToDescriptors(schema).map((field) => field.path)).toEqual([
+        'captchaLength',
+        'gate.mode',
+      ]);
+    });
+
+    test('a showWhen value the target enum does not offer names it and lists the legal ones', () => {
+      const schema = z.object({
+        mode: z.enum(['button', 'captcha']),
+        captchaLength: z
+          .number()
+          .register(protonFields, { showWhen: { path: 'mode', equals: ['captchaa'] } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+      expect(() => zodToDescriptors(schema)).toThrow(/'captchaa'/);
+      expect(() => zodToDescriptors(schema)).toThrow(/button, captcha/);
+    });
+
+    test('a target that is not an enum has no options to check against', () => {
+      const schema = z.object({
+        strict: z.boolean(),
+        window: z
+          .number()
+          .register(protonFields, { showWhen: { path: 'strict', equals: ['true'] } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).not.toThrow();
+    });
+
+    test('showWhen on a nested object is refused rather than dropped', () => {
+      const schema = z.object({
+        mode: z.enum(['button', 'captcha']),
+        captcha: z
+          .object({ length: z.number() })
+          .register(protonFields, { showWhen: { path: 'mode', equals: ['captcha'] } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+      expect(() => zodToDescriptors(schema)).toThrow(/showWhen was registered on 'captcha'/);
+    });
+
+    test('optionLabels on a nested object is refused rather than dropped', () => {
+      const schema = z.object({
+        captcha: z
+          .object({ mode: z.enum(['button', 'captcha']) })
+          .register(protonFields, { optionLabels: { button: 'Press a button' } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+      expect(() => zodToDescriptors(schema)).toThrow(/optionLabels was registered on 'captcha'/);
+    });
+
+    test('showWhen with no value to match is refused', () => {
+      const schema = z.object({
+        mode: z.enum(['button', 'captcha']),
+        captchaLength: z
+          .number()
+          .register(protonFields, { showWhen: { path: 'mode', equals: [] } }),
+      });
+
+      expect(() => zodToDescriptors(schema)).toThrow(UnsupportedSchemaError);
+      expect(() => zodToDescriptors(schema)).toThrow(/captchaLength/);
     });
   });
 

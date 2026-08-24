@@ -45,9 +45,9 @@ describe('the module switch is not also a form field', () => {
   });
 
   // Every module config carries its own `enabled` alongside the guild_modules row, and the worker
-  // reads either being false as off. With the field hidden, the sidebar switch is the only way to
-  // set it — so the write has to carry both or a switched-on module would sit dead on a stored
-  // config saying otherwise.
+  // reads either being false as off. With the field hidden, the module page's master switch is the
+  // only way to set it — so the write has to carry both or a switched-on module would sit dead on a
+  // stored config saying otherwise.
   test('the API mirrors the switch into the stored config', () => {
     const service = readFileSync(
       join(SRC, '..', '..', 'api', 'src', 'modules', 'service.ts'),

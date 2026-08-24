@@ -20,9 +20,20 @@ describe('the manifest', () => {
 
     expect(paths).toEqual([
       'enabled',
+      'mode',
+      'panelChannelId',
+      'panelTitle',
+      'panelBody',
+      'panelButtonLabel',
       'unverifiedRoleId',
       'verifiedRoleId',
       'applyUnverifiedOnJoin',
+      'captchaDelivery',
+      'captchaLength',
+      'captchaAttempts',
+      'captchaExpiry',
+      'failureAction',
+      'failureTimeout',
       'quarantineRoleId',
     ]);
 
@@ -60,8 +71,32 @@ describe('the manifest', () => {
     expect(verificationModule.requiredIntents).toContain(GatewayIntentBits.GuildMembers);
   });
 
-  test('listens to joins and to nothing else', () => {
-    expect(verificationModule.listeners?.[0]?.types).toEqual(['member.joined']);
+  test('listens to joins, to its own components and modals, and to its own service events', () => {
+    expect(verificationModule.listeners?.map((listener) => listener.types)).toEqual([
+      ['member.joined'],
+      ['interaction.component'],
+      ['interaction.modal'],
+      ['verification.panel_requested', 'verification.web_passed'],
+    ]);
+  });
+
+  test('declares every kind its panel, captcha and failure action execute', () => {
+    // moduleExecutor throws UndeclaredActionError on anything absent here, so a failure action
+    // left off this list is a member who is told they were kicked and is not.
+    expect(new Set(verificationModule.actionKinds)).toEqual(
+      new Set([
+        'add_role',
+        'remove_role',
+        'interaction_reply',
+        'interaction_followup',
+        'send',
+        'edit_message',
+        'create_dm',
+        'kick',
+        'ban',
+        'timeout',
+      ]),
+    );
   });
 
   test('is disabled with a reason naming the intent when it cannot see joins', () => {

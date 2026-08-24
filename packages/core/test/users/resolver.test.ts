@@ -93,7 +93,13 @@ describe('createUserResolver', () => {
 
   test('a hit never reaches Discord', async () => {
     const cache = new MemoryCache();
-    await cache.put({ id: USER, username: 'cached', globalName: null, avatarUrl: null, avatarHash: null });
+    await cache.put({
+      id: USER,
+      username: 'cached',
+      globalName: null,
+      avatarUrl: null,
+      avatarHash: null,
+    });
     const rest = new FakeRest();
 
     const profile = await createUserResolver({ cache, rest }).resolve(USER);

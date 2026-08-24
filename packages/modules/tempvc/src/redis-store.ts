@@ -1,34 +1,29 @@
 import type { Redis } from 'ioredis';
-import type { TempChannel, TempVcStore } from './store.ts';
+import type { PresenceStore } from './store.ts';
 
 export const TEMPVC_PREFIX = 'tempvc';
 
-// Longer than any plausible voice session: a key that lapses while someone is still sitting in
-// the channel would orphan it, and the guild.available reconcile only runs on reconnect.
-export const TEMPVC_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/**
+ * A voice session, not a channel's lifetime. Ownership used to live under this TTL, which is how a
+ * channel someone sat in for eight days quietly orphaned itself; presence is a cache that the next
+ * reconcile rebuilds, so a short expiry is correct here.
+ */
+export const TEMPVC_TTL_MS = 24 * 60 * 60 * 1000;
 
-export interface RedisTempVcStoreOptions {
+export interface RedisPresenceStoreOptions {
   keyPrefix?: string;
   ttlMs?: number;
 }
 
-export class RedisTempVcStore implements TempVcStore {
+export class RedisPresenceStore implements PresenceStore {
   readonly #redis: Redis;
   readonly #prefix: string;
   readonly #ttlMs: number;
 
-  constructor(redis: Redis, options: RedisTempVcStoreOptions = {}) {
+  constructor(redis: Redis, options: RedisPresenceStoreOptions = {}) {
     this.#redis = redis;
     this.#prefix = options.keyPrefix ?? TEMPVC_PREFIX;
     this.#ttlMs = options.ttlMs ?? TEMPVC_TTL_MS;
-  }
-
-  #channelKey(guildId: string, channelId: string): string {
-    return `${this.#prefix}:ch:${guildId}:${channelId}`;
-  }
-
-  #ownerKey(guildId: string, userId: string): string {
-    return `${this.#prefix}:own:${guildId}:${userId}`;
   }
 
   #atKey(guildId: string, userId: string): string {
@@ -39,54 +34,8 @@ export class RedisTempVcStore implements TempVcStore {
     return `${this.#prefix}:occ:${guildId}:${channelId}`;
   }
 
-  #allKey(guildId: string): string {
-    return `${this.#prefix}:all:${guildId}`;
-  }
-
-  async claim(channel: TempChannel): Promise<void> {
-    const seconds = Math.ceil(this.#ttlMs / 1000);
-
-    await this.#redis
-      .multi()
-      .hset(this.#channelKey(channel.guildId, channel.channelId), {
-        ownerId: channel.ownerId,
-        hubChannelId: channel.hubChannelId,
-      })
-      .expire(this.#channelKey(channel.guildId, channel.channelId), seconds)
-      .set(this.#ownerKey(channel.guildId, channel.ownerId), channel.channelId, 'EX', seconds)
-      .sadd(this.#allKey(channel.guildId), channel.channelId)
-      .expire(this.#allKey(channel.guildId), seconds)
-      .exec();
-  }
-
-  async get(guildId: string, channelId: string): Promise<TempChannel | null> {
-    const row = await this.#redis.hgetall(this.#channelKey(guildId, channelId));
-    const ownerId = row.ownerId;
-    if (!ownerId) return null;
-
-    return { guildId, channelId, ownerId, hubChannelId: row.hubChannelId ?? '' };
-  }
-
-  async ownedBy(guildId: string, userId: string): Promise<string | null> {
-    return this.#redis.get(this.#ownerKey(guildId, userId));
-  }
-
-  async release(guildId: string, channelId: string): Promise<void> {
-    const channel = await this.get(guildId, channelId);
-
-    const pipeline = this.#redis
-      .multi()
-      .del(this.#channelKey(guildId, channelId))
-      .del(this.#occupantsKey(guildId, channelId))
-      .srem(this.#allKey(guildId), channelId);
-
-    if (channel) pipeline.del(this.#ownerKey(guildId, channel.ownerId));
-
-    await pipeline.exec();
-  }
-
-  async all(guildId: string): Promise<string[]> {
-    return this.#redis.smembers(this.#allKey(guildId));
+  #seconds(): number {
+    return Math.ceil(this.#ttlMs / 1000);
   }
 
   async locate(guildId: string, userId: string): Promise<string | null> {
@@ -111,7 +60,7 @@ export class RedisTempVcStore implements TempVcStore {
       .multi()
       .sadd(key, userId)
       .scard(key)
-      .expire(key, Math.ceil(this.#ttlMs / 1000))
+      .expire(key, this.#seconds())
       .exec()) as Array<[Error | null, unknown]>;
 
     return Number(size?.[1] ?? 0);
@@ -127,18 +76,34 @@ export class RedisTempVcStore implements TempVcStore {
     return Number(size?.[1] ?? 0);
   }
 
-  async occupants(guildId: string, channelId: string): Promise<number> {
-    return this.#redis.scard(this.#occupantsKey(guildId, channelId));
+  async occupants(guildId: string, channelId: string): Promise<string[]> {
+    return this.#redis.smembers(this.#occupantsKey(guildId, channelId));
   }
 
   async reset(guildId: string, channelId: string, userIds: readonly string[]): Promise<void> {
     const key = this.#occupantsKey(guildId, channelId);
 
     const pipeline = this.#redis.multi().del(key);
-    if (userIds.length > 0) {
-      pipeline.sadd(key, ...userIds).expire(key, Math.ceil(this.#ttlMs / 1000));
-    }
+    if (userIds.length > 0) pipeline.sadd(key, ...userIds).expire(key, this.#seconds());
 
     await pipeline.exec();
+  }
+}
+
+/**
+ * A per-member creation cooldown. `SET NX PX` is the whole mechanism: the first caller inside the
+ * window writes the key and is let through, and everybody after it finds the key already there.
+ */
+export class RedisCooldownGate {
+  readonly #redis: Redis;
+
+  constructor(redis: Redis) {
+    this.#redis = redis;
+  }
+
+  async hit(key: string, windowMs: number): Promise<boolean> {
+    const written = await this.#redis.set(key, '1', 'PX', Math.max(1, windowMs), 'NX');
+
+    return written === null;
   }
 }

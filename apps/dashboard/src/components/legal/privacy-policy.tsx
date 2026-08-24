@@ -43,6 +43,13 @@ export function PrivacyPolicy(): ReactElement {
           <code>guilds</code> and <code>guilds.members.read</code>; it can read which servers you
           are in and your roles there, and nothing else about your account.
         </li>
+        <li>
+          <strong>Verification</strong> — where a server uses Proton&rsquo;s website to verify new
+          members, opening the one-time link signs you in exactly as above. Proton checks that the
+          link was issued to your Discord account and tells that server you passed. The link itself
+          carries only the server id, your user id and its own expiry, and Proton keeps no record of
+          the check beyond the role it hands out and the server&rsquo;s own log of it.
+        </li>
       </ul>
 
       <h2>Message logging</h2>

@@ -6,6 +6,7 @@ import { type BackupDeps, createBackupModule } from '@proton/module-backup';
 import { type CasesDeps, createCasesModule } from '@proton/module-cases';
 import { type CountersDeps, createCountersModule } from '@proton/module-counters';
 import { createGiveawaysModule, type GiveawaysDeps } from '@proton/module-giveaways';
+import { createHoneypotModule, type HoneypotDeps } from '@proton/module-honeypot';
 import { createJoinRolesModule, type JoinRolesDeps } from '@proton/module-joinroles';
 import { createLevelingModule, type LevelingDeps } from '@proton/module-leveling';
 import { createLoggingModule, type LoggingDeps } from '@proton/module-logging';
@@ -35,6 +36,7 @@ export interface ModuleBindings {
   verification?: VerificationDeps;
   backup?: BackupDeps;
   phishing?: PhishingDeps;
+  honeypot?: HoneypotDeps;
   logging?: LoggingDeps;
   serverlog?: ServerlogDeps;
 
@@ -69,6 +71,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
     createVerificationModule(bindings.verification ?? {}) as ModuleManifest,
     createBackupModule(bindings.backup ?? {}) as ModuleManifest,
     createPhishingModule(bindings.phishing ?? {}) as ModuleManifest,
+    createHoneypotModule(bindings.honeypot ?? {}) as ModuleManifest,
     createAutomodModule(bindings.automod ?? {}) as ModuleManifest,
 
     createLevelingModule(bindings.leveling ?? {}) as ModuleManifest,

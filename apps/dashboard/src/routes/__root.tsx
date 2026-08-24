@@ -16,9 +16,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
       { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
+      // The two faces --font and --mono actually name. Archivo and IBM Plex Mono were fetched here
+      // and referenced by nothing, so every glyph in the product fell back to Segoe UI and Consolas.
       {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Archivo:wght@400..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Onest:wght@400..700&family=Spline+Sans+Mono:wght@400..600&display=swap',
       },
       { rel: 'stylesheet', href: appCss },
     ],

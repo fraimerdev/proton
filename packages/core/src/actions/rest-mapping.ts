@@ -59,6 +59,8 @@ export type PayloadResult = { call: RestCall } | { ledgerOnly: true } | { error:
 
 const LEDGER_ONLY: PayloadResult = { ledgerOnly: true };
 
+export const AUDIT_REASON_MAX = 512;
+
 function toFiles(attachments: readonly Attachment[] | undefined): {
   files?: RestFile[];
   descriptors?: Array<{ id: number; filename: string; description?: string }>;
@@ -155,7 +157,9 @@ function interactionCallbackData(
 function auditHeaders(request: ActionRequest): Record<string, string> | undefined {
   if (!request.reason) return undefined;
 
-  return { 'x-audit-log-reason': encodeURIComponent(request.reason).slice(0, 512) };
+  // Sliced before encoding, never after. Discord counts the 512 against the decoded reason, and a
+  // cut through a percent-escape leaves a tail like '%2' that decodes to nothing at all.
+  return { 'x-audit-log-reason': encodeURIComponent(request.reason.slice(0, AUDIT_REASON_MAX)) };
 }
 
 export function toRestCall(request: ActionRequest): PayloadResult {

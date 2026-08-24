@@ -1,21 +1,49 @@
 import type { EventListener, EventType, ModuleContext, ProtonEvent } from '@proton/core';
-import {
-  hubFor,
-  MODULE_ID,
-  renderChannelName,
-  type TempVcConfig,
-  VOICE_CHANNEL_TYPE,
-} from './config.ts';
-import { planReconcile, planTransition, type TempVcStep } from './decide.ts';
-import { bindStore, describeUnbound, type TempVcDeps } from './deps.ts';
-import type { TempVcStore } from './store.ts';
+import { armPatrol } from './cleanup.ts';
+import { hubFor, MODULE_ID, type TempVcConfig, type TempVcHub } from './config.ts';
+import { planReconcile, planTransition, type TempSide, type TempVcStep } from './decide.ts';
+import { bindService, describeUnbound, type TempVcDeps } from './deps.ts';
+import { logTempVoice } from './log.ts';
+import type { TempVoiceRepository } from './repository.ts';
+import type { TemporaryVoiceService } from './service.ts';
+import type { PresenceStore } from './store.ts';
+import type { TempVoiceChannelRow } from './table.ts';
 
-export const TEMPVC_EVENT_TYPES: EventType[] = ['voice.state_updated', 'guild.available'];
+/** The slice of the presence cache a transition needs, so tests can hand in a plain object. */
+export interface Presence {
+  locate(guildId: string, userId: string): Promise<string | null>;
+  place(guildId: string, userId: string, channelId: string | null): Promise<void>;
+  enter(guildId: string, channelId: string, userId: string): Promise<number>;
+  leaveAndList(guildId: string, channelId: string, userId: string): Promise<string[]>;
+}
+
+export function presenceOf(store: PresenceStore): Presence {
+  return {
+    locate: (guildId, userId) => store.locate(guildId, userId),
+    place: (guildId, userId, channelId) => store.place(guildId, userId, channelId),
+    enter: (guildId, channelId, userId) => store.enter(guildId, channelId, userId),
+
+    async leaveAndList(guildId, channelId, userId) {
+      await store.leave(guildId, channelId, userId);
+      return store.occupants(guildId, channelId);
+    },
+  };
+}
+
+export const TEMPVC_EVENT_TYPES: EventType[] = [
+  'voice.state_updated',
+  'guild.available',
+  'entity.channel_deleted',
+];
+
+/** Reservations older than this never became a channel and never will. */
+export const STALE_RESERVATION_MS = 60_000;
 
 export interface VoiceMember {
   userId: string;
   channelId: string | null;
   displayName: string;
+  username: string;
   isBot: boolean;
 }
 
@@ -36,12 +64,13 @@ export function readVoiceMember(payload: unknown): VoiceMember | null {
 
   const member = record(raw.member);
   const user = record(member?.user);
+  const username = str(user?.username) ?? `member ${userId}`;
 
   return {
     userId,
     channelId: str(raw.channel_id),
-    displayName:
-      str(member?.nick) ?? str(user?.global_name) ?? str(user?.username) ?? `member ${userId}`,
+    displayName: str(member?.nick) ?? str(user?.global_name) ?? username,
+    username,
     isBot: user?.bot === true,
   };
 }
@@ -76,223 +105,196 @@ export function readChannelIds(payload: unknown): Set<string> | null {
   return ids;
 }
 
-async function remove(
-  ctx: ModuleContext<TempVcConfig>,
-  store: TempVcStore,
-  channelId: string,
-  idempotencyKey: string,
-): Promise<void> {
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'delete_channel',
-    actorId: MODULE_ID,
-    reason: 'temporary voice channel is empty',
-    idempotencyKey,
-    dryRun: false,
-    payload: { channelId },
-  });
-
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    ctx.logger.error(
-      `an empty temporary voice channel could not be removed, so it will stay in the channel ` +
-        `list: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, channelId, code: result.failure?.code },
-    );
-    return;
-  }
-
-  await store.release(ctx.guildId, channelId);
+function sideOf(row: TempVoiceChannelRow | null): TempSide | null {
+  return row === null ? null : { id: row.id, ownerId: row.ownerId, hubChannelId: row.hubChannelId };
 }
 
 async function applyStep(
   ctx: ModuleContext<TempVcConfig>,
-  store: TempVcStore,
+  service: TemporaryVoiceService,
+  repo: TempVoiceRepository,
   step: TempVcStep,
   member: VoiceMember,
-  eventId: string,
+  deps: TempVcDeps,
 ): Promise<void> {
-  if (step.kind === 'delete') {
-    await remove(ctx, store, step.channelId, `${MODULE_ID}:${eventId}:delete:${step.channelId}`);
-    return;
-  }
+  switch (step.kind) {
+    case 'create': {
+      const outcome = await service.create(ctx, step.hub, member);
 
-  if (step.kind === 'move') {
-    await move(ctx, step.channelId, member.userId, `${MODULE_ID}:${eventId}:move`);
-    return;
-  }
+      // The guild now has something worth patrolling, and the patrol stops itself once it does not.
+      if ('created' in outcome) await armPatrol(ctx, deps);
 
-  const hub = step.hub;
-  const created = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'create_channel',
-    actorId: member.userId,
-    reason: `temporary voice channel for ${member.displayName}`,
-    idempotencyKey: `${MODULE_ID}:${eventId}:create`,
-    dryRun: false,
-    payload: {
-      name: renderChannelName(hub.nameTemplate, member.displayName),
-      type: VOICE_CHANNEL_TYPE,
-      ...(hub.categoryId ? { parentId: hub.categoryId } : {}),
-      ...(hub.userLimit > 0 ? { userLimit: hub.userLimit } : {}),
-      ...(hub.bitrate === undefined ? {} : { bitrate: hub.bitrate }),
-    },
-  });
+      if ('refused' in outcome && outcome.refused !== 'moved_existing') {
+        ctx.logger.warn(
+          `no temporary voice channel was made for ${member.displayName}: ${outcome.detail}`,
+          { guildId: ctx.guildId, moduleId: MODULE_ID, userId: member.userId },
+        );
+      }
+      return;
+    }
 
-  if (created.status !== 'executed') {
-    ctx.logger.error(
-      `${member.displayName} joined the temporary-voice hub ${hub.channelId} but no channel ` +
-        `could be made for them, so they were left in the hub: ${
-          created.failure?.humanReason ?? `the action ended as ${created.status}`
-        }`,
-      {
-        guildId: ctx.guildId,
-        moduleId: MODULE_ID,
-        userId: member.userId,
-        code: created.failure?.code,
-      },
-    );
-    return;
-  }
+    case 'move':
+      await service.move(ctx, member.userId, step.channelId);
+      return;
 
-  const channelId = str(record(created.body)?.id);
-  if (!channelId) {
-    ctx.logger.error(
-      'Discord accepted the temporary voice channel but did not say which channel it made, so ' +
-        'the member could not be moved into it and Proton will not be able to clean it up.',
-      { guildId: ctx.guildId, moduleId: MODULE_ID, userId: member.userId },
-    );
-    return;
-  }
+    case 'schedule-delete': {
+      const row = await repo.byId(step.rowId);
+      if (!row) return;
 
-  await store.claim({
-    guildId: ctx.guildId,
-    channelId,
-    ownerId: member.userId,
-    hubChannelId: hub.channelId,
-  });
+      const hub = hubOf(ctx.config, row.hubChannelId);
+      if (hub) await service.scheduleDelete(ctx, hub, row);
+      return;
+    }
 
-  await move(ctx, channelId, member.userId, `${MODULE_ID}:${eventId}:move`);
-}
+    case 'cancel-delete':
+      await repo.cancelDelete(step.rowId);
+      return;
 
-async function move(
-  ctx: ModuleContext<TempVcConfig>,
-  channelId: string,
-  userId: string,
-  idempotencyKey: string,
-): Promise<void> {
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'move_member',
-    actorId: MODULE_ID,
-    targetId: userId,
-    reason: 'moving a member into their temporary voice channel',
-    idempotencyKey,
-    dryRun: false,
-    payload: { userId, channelId },
-  });
+    case 'revoke-roles':
+      await service.revokeRoles(ctx, step.rowId, member.userId);
+      return;
 
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    ctx.logger.error(
-      `the temporary voice channel was made but the member could not be moved into it, so they ` +
-        `are still sitting in the hub: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, userId, channelId, code: result.failure?.code },
-    );
+    case 'grant-role': {
+      const hub = hubOf(ctx.config, step.hubChannelId);
+      if (hub) await service.grantRole(ctx, hub, step.rowId, member.userId, step.isOwner);
+      return;
+    }
+
+    case 'ownerless': {
+      const row = await repo.byId(step.rowId);
+      if (!row) return;
+
+      // 'keep' leaves the owner in place so nobody else inherits their controls; 'claim' clears
+      // the owner so the Claim button becomes available; 'transfer' hands it straight over.
+      if (step.mode === 'keep') return;
+
+      if (step.mode === 'claim') {
+        await repo.setOwner(step.rowId, null);
+        return;
+      }
+
+      if (step.heir !== null) {
+        const hub = hubOf(ctx.config, row.hubChannelId);
+        await service.transfer(ctx, row, step.heir, hub?.privacy ?? 'public');
+      }
+      return;
+    }
   }
 }
 
-async function alreadyServed(
-  ctx: ModuleContext<TempVcConfig>,
-  store: TempVcStore,
-  userId: string,
-  from: string | null,
-  to: string | null,
-): Promise<boolean> {
-  if (from === null || to === null || hubFor(ctx.config, to) === undefined) return false;
-
-  const channel = await store.get(ctx.guildId, from);
-  return channel !== null && channel.ownerId === userId && channel.hubChannelId === to;
+function hubOf(config: TempVcConfig, hubChannelId: string): TempVcHub | undefined {
+  return config.hubs.find((entry) => entry.channelId === hubChannelId);
 }
 
 export async function handleVoiceState(
   event: ProtonEvent,
   ctx: ModuleContext<TempVcConfig>,
-  store: TempVcStore,
+  service: TemporaryVoiceService,
+  repo: TempVoiceRepository,
+  presence: Presence,
+  deps: TempVcDeps,
 ): Promise<void> {
   const member = readVoiceMember(event.payload);
   if (member === null || member.isBot) return;
 
-  const from = await store.locate(ctx.guildId, member.userId);
+  // The payload says where they are now and nothing about where they were, so the channel they
+  // left comes from the presence cache. Read before it is rewritten, or every leave looks like a
+  // member who came from nowhere and their old channel is never emptied.
   const to = member.channelId;
+  const from = await presence.locate(ctx.guildId, member.userId);
 
   if (from === to) return;
 
-  // A redelivered hub join: the member is recorded in the channel this very join made for them, so
-  // `from === to` cannot catch it and acting again would empty and delete the channel they sit in.
-  if (await alreadyServed(ctx, store, member.userId, from, to)) return;
+  const fromRow = from === null ? null : await repo.byChannel(ctx.guildId, from);
+  const toRow = to === null ? null : await repo.byChannel(ctx.guildId, to);
 
-  await store.place(ctx.guildId, member.userId, to);
+  // Occupancy is moved before the plan is made, so `fromOccupantsAfter` means what it says.
+  const remaining =
+    from === null ? [] : await presence.leaveAndList(ctx.guildId, from, member.userId);
+  if (to !== null) await presence.enter(ctx.guildId, to, member.userId);
+  await presence.place(ctx.guildId, member.userId, to);
 
-  let fromIsTemp = false;
-  let fromOccupantsAfter = 0;
-
-  if (from !== null) {
-    fromOccupantsAfter = await store.leave(ctx.guildId, from, member.userId);
-    fromIsTemp = (await store.get(ctx.guildId, from)) !== null;
-  }
-
-  if (to !== null) await store.enter(ctx.guildId, to, member.userId);
+  const owned = await repo.ownedBy(ctx.guildId, member.userId);
 
   const plan = planTransition(ctx.config, {
     transition: { userId: member.userId, from, to },
-    fromIsTemp,
-    fromOccupantsAfter,
-    ownedChannelId: await store.ownedBy(ctx.guildId, member.userId),
+    fromTemp: sideOf(fromRow),
+    fromOccupantsAfter: remaining.length,
+    fromOccupants: remaining,
+    toTemp: sideOf(toRow),
+    ownedChannelId: owned[0]?.channelId ?? null,
   });
 
   for (const step of plan.steps) {
-    await applyStep(ctx, store, step, member, event.id);
+    await applyStep(ctx, service, repo, step, member, deps);
   }
+}
+
+/**
+ * A channel somebody deleted by hand in Discord. Without this the row survives, its owner's slot
+ * stays occupied, and they can never get another temporary channel.
+ */
+export async function handleChannelDeleted(
+  event: ProtonEvent,
+  ctx: ModuleContext<TempVcConfig>,
+  repo: TempVoiceRepository,
+): Promise<void> {
+  const channelId = str(record(event.payload)?.id);
+  if (!channelId) return;
+
+  const row = await repo.byChannel(ctx.guildId, channelId);
+  if (!row) return;
+
+  await repo.forget(row.id);
+
+  ctx.logger.info('a temporary voice channel was deleted in Discord, so Proton forgot it', {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    channelId,
+  });
 }
 
 export async function handleGuildAvailable(
   event: ProtonEvent,
   ctx: ModuleContext<TempVcConfig>,
-  store: TempVcStore,
+  service: TemporaryVoiceService,
+  repo: TempVoiceRepository,
+  deps: TempVcDeps,
+  now: () => Date = () => new Date(),
 ): Promise<void> {
-  const known = await store.all(ctx.guildId);
+  const known = await repo.liveIn(ctx.guildId);
   if (known.length === 0) return;
 
-  const occupantsByChannel = readVoiceStates(event.payload);
+  // A reconnect is also where the rolling patrol is started, so a guild whose worker restarted
+  // begins reconciling again without waiting for somebody to join a creator channel.
+  await armPatrol(ctx, deps, now());
+
+  const byId = new Map(known.map((row) => [row.id, row]));
 
   const plan = planReconcile({
-    known,
-    occupantsByChannel,
+    known: known.map((row) => ({ id: row.id, channelId: row.channelId, status: row.status })),
+    occupantsByChannel: readVoiceStates(event.payload),
     liveChannelIds: readChannelIds(event.payload),
+    staleBefore: new Date(now().getTime() - STALE_RESERVATION_MS),
+    rowCreatedAt: (row) => byId.get(row.id)?.createdAt ?? new Date(0),
   });
 
-  for (const entry of plan.reset) {
-    await store.reset(ctx.guildId, entry.channelId, entry.userIds);
-  }
+  for (const rowId of plan.keep) await repo.cancelDelete(rowId);
+  for (const rowId of plan.forget) await repo.forget(rowId);
 
-  for (const entry of plan.place) {
-    await store.place(ctx.guildId, entry.userId, entry.channelId);
-  }
-
-  for (const channelId of plan.forget) {
-    await store.release(ctx.guildId, channelId);
-  }
-
-  for (const channelId of plan.delete) {
-    await remove(ctx, store, channelId, `${MODULE_ID}:${event.id}:reconcile:${channelId}`);
+  for (const rowId of plan.delete) {
+    const row = byId.get(rowId);
+    if (row) await service.destroy(ctx, row, 'empty when Proton reconnected');
   }
 
   if (plan.delete.length > 0 || plan.forget.length > 0) {
+    await logTempVoice(ctx, 'reconciled', {
+      detail: `removed ${plan.delete.length}, forgot ${plan.forget.length}`,
+    });
+
     ctx.logger.info(
-      `reconciled temporary voice channels after reconnecting: removed ${plan.delete.length}, ` +
-        `forgot ${plan.forget.length} that no longer exist`,
+      `reconciled temporary voice channels: removed ${plan.delete.length}, forgot ` +
+        `${plan.forget.length} that no longer exist`,
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
   }
@@ -305,7 +307,7 @@ export function createTempVcListener(deps: TempVcDeps): EventListener<TempVcConf
     async handler(event, ctx) {
       if (!ctx.config.enabled) return;
 
-      const bound = bindStore(deps);
+      const bound = bindService(deps);
       if ('unbound' in bound) {
         ctx.logger.error(describeUnbound('temporary voice channels', bound.unbound), {
           guildId: ctx.guildId,
@@ -314,12 +316,21 @@ export function createTempVcListener(deps: TempVcDeps): EventListener<TempVcConf
         return;
       }
 
+      const { service, repository, presence } = bound;
+
       if (event.type === 'guild.available') {
-        await handleGuildAvailable(event, ctx, bound.store);
+        await handleGuildAvailable(event, ctx, service, repository, deps);
         return;
       }
 
-      await handleVoiceState(event, ctx, bound.store);
+      if (event.type === 'entity.channel_deleted') {
+        await handleChannelDeleted(event, ctx, repository);
+        return;
+      }
+
+      await handleVoiceState(event, ctx, service, repository, presence, deps);
     },
   };
 }
+
+export { hubFor };

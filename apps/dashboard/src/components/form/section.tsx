@@ -31,9 +31,10 @@ export interface SectionCardProps {
   id: string;
   title: string | null;
   children: ReactNode;
+  edited?: boolean | undefined;
 }
 
-export function SectionCard({ id, title, children }: SectionCardProps): ReactElement {
+export function SectionCard({ id, title, children, edited }: SectionCardProps): ReactElement {
   const bodyId = useId();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -67,6 +68,8 @@ export function SectionCard({ id, title, children }: SectionCardProps): ReactEle
           onClick={toggle}
         >
           <span className="form-section-title">{title}</span>
+          {/* The save bar says work is unsaved; on a collapsed card this says which one holds it. */}
+          {edited ? <span className="form-section-edited">Edited</span> : null}
           <Icon name={collapsed ? 'caret-down' : 'caret-up'} className="form-section-caret" />
         </button>
       </h2>

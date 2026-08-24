@@ -5,243 +5,344 @@ import {
   renderChannelName,
   type TempVcConfig,
   tempVcConfigSchema,
+  tempVcHubSchema,
 } from '../src/config.ts';
-import { planReconcile, planTransition, type TransitionFacts } from '../src/decide.ts';
+import {
+  planReconcile,
+  planTransition,
+  type ReconcileRow,
+  type TempVcStep,
+  type TransitionFacts,
+} from '../src/decide.ts';
 
 const HUB = '500000000000000001';
-const OTHER_HUB = '500000000000000004';
+const OTHER_HUB = '500000000000000003';
 const TEMP = '500000000000000002';
 const ELSEWHERE = '500000000000000005';
 
-const config: TempVcConfig = {
-  enabled: true,
-  ownerCommands: true,
-  hubs: [
-    { channelId: HUB, nameTemplate: '{user}’s room', userLimit: 0 },
-    { channelId: OTHER_HUB, nameTemplate: '{user} II', userLimit: 4 },
-  ],
-};
+const ADA = '700000000000000001';
+const BEN = '700000000000000002';
+const CAT = '700000000000000003';
+
+function configWith(overrides: Record<string, unknown> = {}): TempVcConfig {
+  return {
+    ...tempVcConfigSchema.parse({}),
+    enabled: true,
+    hubs: [
+      tempVcHubSchema.parse({ channelId: HUB, nameTemplate: '{user}’s room', ...overrides }),
+      tempVcHubSchema.parse({ channelId: OTHER_HUB, nameTemplate: '{user} II', userLimit: 4 }),
+    ],
+  };
+}
+
+const config = configWith();
 
 function facts(overrides: Partial<TransitionFacts> = {}): TransitionFacts {
   return {
-    transition: { userId: 'u', from: null, to: null },
-    fromIsTemp: false,
+    transition: { userId: ADA, from: null, to: null },
+    fromTemp: null,
     fromOccupantsAfter: 0,
+    fromOccupants: [],
+    toTemp: null,
     ownedChannelId: null,
     ...overrides,
   };
 }
 
-describe('planTransition', () => {
-  test('does nothing when the member did not change channel', () => {
-    const plan = planTransition(config, facts({ transition: { userId: 'u', from: HUB, to: HUB } }));
+const kinds = (steps: readonly TempVcStep[]): string[] => steps.map((step) => step.kind);
 
-    expect(plan.steps).toEqual([]);
-  });
-
-  test('joining a hub creates a channel', () => {
+describe('joining a creator channel', () => {
+  test('makes a channel', () => {
     const plan = planTransition(
       config,
-      facts({ transition: { userId: 'u', from: null, to: HUB } }),
+      facts({ transition: { userId: ADA, from: null, to: HUB } }),
     );
 
-    expect(plan.steps).toEqual([{ kind: 'create', hub: config.hubs[0] as never }]);
+    expect(kinds(plan.steps)).toEqual(['create']);
   });
 
-  test('joining the second hub creates from that hub, not the first', () => {
+  test('sends a member who already has one to it instead of making a second', () => {
     const plan = planTransition(
       config,
-      facts({ transition: { userId: 'u', from: null, to: OTHER_HUB } }),
-    );
-
-    expect(plan.steps).toEqual([{ kind: 'create', hub: config.hubs[1] as never }]);
-  });
-
-  test('a member who already owns a channel is sent to it instead of getting a second', () => {
-    const plan = planTransition(
-      config,
-      facts({ transition: { userId: 'u', from: null, to: HUB }, ownedChannelId: TEMP }),
+      facts({ transition: { userId: ADA, from: null, to: HUB }, ownedChannelId: TEMP }),
     );
 
     expect(plan.steps).toEqual([{ kind: 'move', channelId: TEMP }]);
   });
 
-  test('leaving a temporary channel that is now empty deletes it', () => {
-    const plan = planTransition(
-      config,
-      facts({
-        transition: { userId: 'u', from: TEMP, to: null },
-        fromIsTemp: true,
-        fromOccupantsAfter: 0,
-      }),
-    );
+  test('a disabled creator channel is not a creator channel', () => {
+    const off = configWith({ enabled: false });
 
-    expect(plan.steps).toEqual([{ kind: 'delete', channelId: TEMP }]);
+    expect(hubFor(off, HUB)).toBeUndefined();
+    expect(
+      planTransition(off, facts({ transition: { userId: ADA, from: null, to: HUB } })).steps,
+    ).toEqual([]);
   });
 
-  test('leaving a temporary channel that still has people in it deletes nothing', () => {
-    const plan = planTransition(
-      config,
-      facts({
-        transition: { userId: 'u', from: TEMP, to: null },
-        fromIsTemp: true,
-        fromOccupantsAfter: 2,
-      }),
-    );
-
-    expect(plan.steps).toEqual([]);
+  test('joining anything else does nothing', () => {
+    expect(
+      planTransition(config, facts({ transition: { userId: ADA, from: null, to: ELSEWHERE } }))
+        .steps,
+    ).toEqual([]);
   });
 
-  test('leaving an ordinary channel deletes nothing, however empty it is', () => {
+  test('a member who did not move is left alone', () => {
+    expect(
+      planTransition(config, facts({ transition: { userId: ADA, from: HUB, to: HUB } })).steps,
+    ).toEqual([]);
+  });
+});
+
+describe('leaving a temporary channel', () => {
+  const temp = { id: 'row-1', ownerId: ADA, hubChannelId: HUB };
+
+  test('the last one out schedules the delete rather than doing it', () => {
     const plan = planTransition(
       config,
-      facts({
-        transition: { userId: 'u', from: ELSEWHERE, to: null },
-        fromIsTemp: false,
-        fromOccupantsAfter: 0,
-      }),
+      facts({ transition: { userId: ADA, from: TEMP, to: null }, fromTemp: temp }),
     );
 
-    expect(plan.steps).toEqual([]);
+    expect(kinds(plan.steps)).toEqual(['revoke-roles', 'schedule-delete']);
   });
 
-  test('leaving your own empty channel for a hub deletes it and then makes a new one', () => {
+  test('a channel other people are still in is not scheduled at all', () => {
     const plan = planTransition(
       config,
       facts({
-        transition: { userId: 'u', from: TEMP, to: HUB },
-        fromIsTemp: true,
-        fromOccupantsAfter: 0,
-        ownedChannelId: TEMP,
-      }),
-    );
-
-    expect(plan.steps).toEqual([
-      { kind: 'delete', channelId: TEMP },
-      { kind: 'create', hub: config.hubs[0] as never },
-    ]);
-  });
-
-  test('a channel that is being deleted is never also the one you are moved into', () => {
-    const plan = planTransition(
-      config,
-      facts({
-        transition: { userId: 'u', from: TEMP, to: HUB },
-        fromIsTemp: true,
-        fromOccupantsAfter: 0,
-        ownedChannelId: TEMP,
-      }),
-    );
-
-    expect(plan.steps.some((step) => step.kind === 'move')).toBe(false);
-  });
-
-  test('an owned channel someone else is still sitting in is reused, not rebuilt', () => {
-    const plan = planTransition(
-      config,
-      facts({
-        transition: { userId: 'u', from: TEMP, to: HUB },
-        fromIsTemp: true,
+        transition: { userId: BEN, from: TEMP, to: null },
+        fromTemp: temp,
         fromOccupantsAfter: 1,
-        ownedChannelId: TEMP,
+        fromOccupants: [ADA],
       }),
     );
 
-    expect(plan.steps).toEqual([{ kind: 'move', channelId: TEMP }]);
+    expect(kinds(plan.steps)).toEqual(['revoke-roles']);
+  });
+
+  /** This is the case the deferred delete exists for: Discord fires leave-then-join on a switch. */
+  test('walking back in cancels the pending delete', () => {
+    const plan = planTransition(
+      config,
+      facts({ transition: { userId: ADA, from: ELSEWHERE, to: TEMP }, toTemp: temp }),
+    );
+
+    expect(kinds(plan.steps)).toEqual(['cancel-delete', 'grant-role']);
   });
 });
 
-describe('planReconcile', () => {
-  test('deletes a temporary channel nobody is in after a reconnect', () => {
+describe('when the owner walks out', () => {
+  const temp = { id: 'row-1', ownerId: ADA, hubChannelId: HUB };
+
+  function ownerLeaves(mode: string) {
+    return planTransition(
+      configWith({ ownerlessMode: mode }),
+      facts({
+        transition: { userId: ADA, from: TEMP, to: null },
+        fromTemp: temp,
+        fromOccupantsAfter: 2,
+        fromOccupants: [BEN, CAT],
+      }),
+    );
+  }
+
+  test('claim leaves it open for whoever is inside', () => {
+    const step = ownerLeaves('claim').steps.find((s) => s.kind === 'ownerless');
+
+    expect(step).toMatchObject({ mode: 'claim', heir: null });
+  });
+
+  test('transfer names the member who has been there longest', () => {
+    const step = ownerLeaves('transfer').steps.find((s) => s.kind === 'ownerless');
+
+    expect(step).toMatchObject({ mode: 'transfer', heir: BEN });
+  });
+
+  test('keep asks for nothing to change', () => {
+    const step = ownerLeaves('keep').steps.find((s) => s.kind === 'ownerless');
+
+    expect(step).toMatchObject({ mode: 'keep' });
+  });
+
+  test('a non-owner leaving never triggers it', () => {
+    const plan = planTransition(
+      config,
+      facts({
+        transition: { userId: BEN, from: TEMP, to: null },
+        fromTemp: temp,
+        fromOccupantsAfter: 1,
+        fromOccupants: [ADA],
+      }),
+    );
+
+    expect(kinds(plan.steps)).not.toContain('ownerless');
+  });
+});
+
+describe('reconciling after a restart', () => {
+  const NOW = new Date('2026-08-23T12:00:00Z');
+  const STALE = new Date(NOW.getTime() - 60_000);
+
+  function rows(...entries: ReconcileRow[]) {
+    return entries;
+  }
+
+  test('an occupied channel is kept and its stale deadline cleared', () => {
     const plan = planReconcile({
-      known: [TEMP],
-      occupantsByChannel: new Map(),
+      known: rows({ id: 'a', channelId: TEMP, status: 'live' }),
+      occupantsByChannel: new Map([[TEMP, [ADA]]]),
       liveChannelIds: new Set([TEMP]),
+      staleBefore: STALE,
+      rowCreatedAt: () => NOW,
     });
 
-    expect(plan.delete).toEqual([TEMP]);
+    expect(plan.keep).toEqual(['a']);
+    expect(plan.delete).toEqual([]);
+  });
+
+  test('an empty channel is deleted', () => {
+    const plan = planReconcile({
+      known: rows({ id: 'a', channelId: TEMP, status: 'live' }),
+      occupantsByChannel: new Map(),
+      liveChannelIds: new Set([TEMP]),
+      staleBefore: STALE,
+      rowCreatedAt: () => NOW,
+    });
+
+    expect(plan.delete).toEqual(['a']);
+  });
+
+  test('a channel Discord no longer lists is forgotten, not deleted again', () => {
+    const plan = planReconcile({
+      known: rows({ id: 'a', channelId: TEMP, status: 'live' }),
+      occupantsByChannel: new Map(),
+      liveChannelIds: new Set(),
+      staleBefore: STALE,
+      rowCreatedAt: () => NOW,
+    });
+
+    expect(plan.forget).toEqual(['a']);
+    expect(plan.delete).toEqual([]);
+  });
+
+  /** A reservation whose create died half-way. Forgetting it frees the owner's slot. */
+  test('an old reservation that never became a channel is forgotten', () => {
+    const plan = planReconcile({
+      known: rows({ id: 'a', channelId: null, status: 'reserving' }),
+      occupantsByChannel: new Map(),
+      liveChannelIds: new Set(),
+      staleBefore: STALE,
+      rowCreatedAt: () => new Date(NOW.getTime() - 120_000),
+    });
+
+    expect(plan.forget).toEqual(['a']);
+  });
+
+  test('a reservation made a moment ago is left alone, because it is still in flight', () => {
+    const plan = planReconcile({
+      known: rows({ id: 'a', channelId: null, status: 'reserving' }),
+      occupantsByChannel: new Map(),
+      liveChannelIds: new Set(),
+      staleBefore: STALE,
+      rowCreatedAt: () => NOW,
+    });
+
     expect(plan.forget).toEqual([]);
-  });
-
-  test('keeps one that is still occupied and rebuilds its occupancy', () => {
-    const plan = planReconcile({
-      known: [TEMP],
-      occupantsByChannel: new Map([[TEMP, ['a', 'b']]]),
-      liveChannelIds: new Set([TEMP]),
-    });
-
-    expect(plan.delete).toEqual([]);
-    expect(plan.reset).toEqual([{ channelId: TEMP, userIds: ['a', 'b'] }]);
-  });
-
-  test('forgets a channel Discord no longer lists rather than deleting it again', () => {
-    const plan = planReconcile({
-      known: [TEMP],
-      occupantsByChannel: new Map(),
-      liveChannelIds: new Set([HUB]),
-    });
-
-    expect(plan.forget).toEqual([TEMP]);
     expect(plan.delete).toEqual([]);
   });
 
-  test('without a channel list it trusts occupancy alone', () => {
+  test('with no channel list nothing is assumed gone', () => {
     const plan = planReconcile({
-      known: [TEMP],
-      occupantsByChannel: new Map(),
+      known: rows({ id: 'a', channelId: TEMP, status: 'live' }),
+      occupantsByChannel: new Map([[TEMP, [ADA]]]),
       liveChannelIds: null,
+      staleBefore: STALE,
+      rowCreatedAt: () => NOW,
     });
 
-    expect(plan.delete).toEqual([TEMP]);
+    expect(plan.forget).toEqual([]);
+    expect(plan.keep).toEqual(['a']);
   });
 });
+
+function named(displayName: string) {
+  return { displayName, username: 'ada', userId: ADA };
+}
 
 describe('renderChannelName', () => {
-  test('substitutes the owner', () => {
-    expect(renderChannelName('{user}’s room', 'Ada')).toBe('Ada’s room');
+  test('fills the owner placeholder', () => {
+    expect(renderChannelName('{user}’s room', named('Ada'))).toBe('Ada’s room');
   });
 
-  test('substitutes every occurrence', () => {
-    expect(renderChannelName('{user} and {user}', 'Ada')).toBe('Ada and Ada');
+  test('fills every placeholder the spec names', () => {
+    expect(renderChannelName('{displayName} {username} {userId}', named('Ada'))).toBe(
+      `Ada ada ${ADA}`,
+    );
   });
 
-  test('never exceeds the channel name cap', () => {
-    expect(renderChannelName('{user}', 'x'.repeat(500))).toHaveLength(CHANNEL_NAME_MAX);
+  test('fills a repeated placeholder every time', () => {
+    expect(renderChannelName('{user} and {user}', named('Ada'))).toBe('Ada and Ada');
+  });
+
+  test('clamps to what Discord accepts', () => {
+    expect(renderChannelName('{user}', named('x'.repeat(500)))).toHaveLength(CHANNEL_NAME_MAX);
+  });
+
+  test('a template that renders to nothing falls back to the name', () => {
+    expect(renderChannelName('{username}', { displayName: 'Ada', username: '', userId: ADA })).toBe(
+      'Ada',
+    );
   });
 });
 
-describe('hubFor', () => {
-  test('finds nothing for a null channel', () => {
-    expect(hubFor(config, null)).toBeUndefined();
-  });
-
-  test('finds nothing for a channel that is not a hub', () => {
-    expect(hubFor(config, ELSEWHERE)).toBeUndefined();
-  });
-});
-
-describe('tempVcConfigSchema', () => {
+describe('the config schema', () => {
   test('refuses a name template with no placeholder, because every channel would share a name', () => {
-    const parsed = tempVcConfigSchema.safeParse({
-      hubs: [{ channelId: HUB, nameTemplate: 'Voice' }],
-    });
-
-    expect(parsed.success).toBe(false);
+    expect(
+      tempVcConfigSchema.safeParse({ hubs: [{ channelId: HUB, nameTemplate: 'Voice' }] }).success,
+    ).toBe(false);
   });
 
-  test('refuses two hubs on the same channel', () => {
-    const parsed = tempVcConfigSchema.safeParse({
-      hubs: [{ channelId: HUB }, { channelId: HUB }],
-    });
-
-    expect(parsed.success).toBe(false);
+  test('refuses two creator channels on the same channel', () => {
+    expect(
+      tempVcConfigSchema.safeParse({ hubs: [{ channelId: HUB }, { channelId: HUB }] }).success,
+    ).toBe(false);
   });
 
-  test('defaults leave the module off with no hubs', () => {
-    expect(tempVcConfigSchema.parse({})).toEqual({
-      enabled: false,
+  test('refuses a temporary role mode with no role to hand out', () => {
+    expect(
+      tempVcConfigSchema.safeParse({
+        hubs: [{ channelId: HUB, temporaryRoleMode: 'owner' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  test('refuses a delete delay longer than the bound', () => {
+    expect(
+      tempVcConfigSchema.safeParse({ hubs: [{ channelId: HUB, emptyDeleteDelay: '2h' }] }).success,
+    ).toBe(false);
+  });
+
+  /** A stored v1 creator channel is five keys. It must survive the reshape untouched. */
+  test('a v1 creator channel parses into the new shape on its defaults', () => {
+    const parsed = tempVcConfigSchema.parse({
+      enabled: true,
       ownerCommands: true,
-      hubs: [],
+      hubs: [{ channelId: HUB, categoryId: ELSEWHERE, nameTemplate: '{user}', userLimit: 3 }],
     });
+
+    expect(parsed.hubs[0]).toMatchObject({
+      channelId: HUB,
+      userLimit: 3,
+      enabled: true,
+      privacy: 'public',
+      ownerlessMode: 'claim',
+      maxChannelsPerUser: 1,
+      emptyDeleteDelay: '5s',
+    });
+
+    expect(parsed.hubs[0]?.allow.rename).toBe(true);
+  });
+
+  test('defaults leave the module off with no creator channels', () => {
+    expect(tempVcConfigSchema.parse({})).toMatchObject({ enabled: false, hubs: [] });
   });
 });

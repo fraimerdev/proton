@@ -34,7 +34,7 @@ export type ProtonActionExecuted = z.infer<typeof protonActionExecutedSchema>;
 
 export const protonSecurityTrippedSchema = z.object({
   guildId: snowflakeSchema,
-  moduleId: z.enum(['antinuke', 'antiraid']),
+  moduleId: z.enum(['antinuke', 'antiraid', 'honeypot']),
   trigger: z.string().min(1).max(100),
   actorId: z.string().nullable().default(null),
   summary: z.string().max(1024),

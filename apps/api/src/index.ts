@@ -14,6 +14,7 @@ import { GuildService } from './guilds/service.ts';
 import { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigService } from './modules/service.ts';
 import { TagSearchService } from './tags/service.ts';
+import { VerificationService } from './verification/service.ts';
 
 const env = loadEnv();
 
@@ -49,6 +50,7 @@ const app = createApiApp({
           `recompiled, so the old ones are still in force: ${detail}`,
       ),
   }),
+  verification: new VerificationService({ ...(bus ? { bus } : {}) }),
   cards: new CardPreviewService(),
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),

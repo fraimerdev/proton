@@ -25,7 +25,10 @@ import {
   configurableDescriptors,
   isCategory,
   moduleIcon,
+  moduleState,
 } from './module-meta.ts';
+
+export { type ModuleState, moduleState } from './module-meta.ts';
 
 export function browsableViews(modules: readonly ModuleSummary[]): BrowseView[] {
   return BROWSE_VIEWS.filter((entry) => modules.some((m) => m.id === entry.moduleId));
@@ -35,15 +38,6 @@ export interface ShellUser {
   id: string;
   name: string;
   image: string | null;
-}
-
-export type ModuleState = 'off' | 'running' | 'blocked' | 'degraded';
-
-export function moduleState(module: ModuleSummary): ModuleState {
-  if (!module.enabled) return 'off';
-  if (!module.status || module.status.enabled) return 'running';
-
-  return module.status.disabledReason?.code === 'insufficient_entitlement' ? 'degraded' : 'blocked';
 }
 
 export function initialsOf(name: string): string {
@@ -75,6 +69,7 @@ export interface PaletteEntry {
   moduleId: string;
   field?: string;
   area?: string;
+  view?: string;
 }
 
 const FOCUSABLE =
@@ -108,14 +103,18 @@ function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean): void
 
 export interface PageHeadProps {
   title: string;
+  trail?: ReactNode;
+  aside?: ReactNode;
 }
 
-export function PageHead({ title }: PageHeadProps): ReactElement {
+export function PageHead({ title, trail, aside }: PageHeadProps): ReactElement {
   return (
     <div className="page-head">
       <div className="page-heading">
+        {trail ? <div className="page-trail">{trail}</div> : null}
         <h1 className="page-title">{title}</h1>
       </div>
+      {aside}
     </div>
   );
 }
@@ -131,7 +130,6 @@ export interface AppShellProps {
   guilds: readonly SessionGuild[];
   user: ShellUser;
   modules: readonly ModuleSummary[];
-  onToggleModule: (module: ModuleSummary, enabled: boolean) => void;
   children: ReactNode;
 }
 
@@ -140,7 +138,6 @@ export function AppShell({
   guilds,
   user,
   modules,
-  onToggleModule,
   children,
 }: AppShellProps): ReactElement {
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -187,7 +184,7 @@ export function AppShell({
   // biome-ignore lint/correctness/useExhaustiveDependencies: navigation is the trigger, not an input
   useEffect(() => {
     setDrawerOpen(false);
-  }, [pathname, section, view]);
+  }, [pathname, section, view, area]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
@@ -322,7 +319,7 @@ export function AppShell({
                 className="nav-item"
                 aria-current={onGeneral ? 'page' : undefined}
               >
-                <NavInner icon="sliders-horizontal" label="General settings" current={onGeneral} />
+                <NavInner icon="sliders-horizontal" label="Modules" current={onGeneral} />
               </Link>
             </div>
 
@@ -362,7 +359,6 @@ export function AppShell({
                       guildId={guildId}
                       module={module}
                       open={openModuleId === module.id}
-                      onToggle={onToggleModule}
                     />
                   ))}
                 </div>
@@ -409,13 +405,11 @@ function ModuleNavItem({
   guildId,
   module,
   open,
-  onToggle,
 }: {
   area: string | undefined;
   guildId: string;
   module: ModuleSummary;
   open: boolean;
-  onToggle: (module: ModuleSummary, enabled: boolean) => void;
 }): ReactElement {
   const state = moduleState(module);
   const areas = areasFor(module.id);
@@ -439,18 +433,6 @@ function ModuleNavItem({
       >
         <NavInner icon={moduleIcon(module.dashboard?.icon)} label={module.name} current={open} />
       </Link>
-
-      {open ? (
-        <input
-          type="checkbox"
-          role="switch"
-          className="nav-switch"
-          checked={module.enabled}
-          aria-checked={module.enabled}
-          aria-label={`${module.enabled ? 'Switch off' : 'Switch on'} ${module.name}`}
-          onChange={(event) => onToggle(module, event.target.checked)}
-        />
-      ) : null}
 
       {nested ? (
         <AreaNav areas={areas} current={area} guildId={guildId} moduleId={module.id} />
@@ -569,6 +551,37 @@ export function paletteIndex(modules: readonly ModuleSummary[]): PaletteEntry[] 
       moduleId: module.id,
     });
 
+    // The three destinations the sidebar promotes to the top were the three the search could not
+    // reach: typing "leaderboard" answered "Nothing matches that" with the Leaderboard row visible
+    // behind the dialog.
+    for (const browse of BROWSE_VIEWS.filter((entry) => entry.moduleId === module.id)) {
+      const viewTrail = `${module.name} / views`;
+
+      entries.push({
+        key: `view:${module.id}:${browse.viewId}`,
+        label: browse.title,
+        trail: viewTrail,
+        haystack: `${browse.title} ${viewTrail}`.toLowerCase(),
+        icon: browse.icon,
+        moduleId: module.id,
+        view: browse.viewId,
+      });
+    }
+
+    for (const area of areasFor(module.id)) {
+      const areaTrail = `${module.name} / settings`;
+
+      entries.push({
+        key: `area:${module.id}:${area.id}`,
+        label: area.title,
+        trail: areaTrail,
+        haystack: `${area.title} ${area.blurb} ${areaTrail}`.toLowerCase(),
+        icon: area.icon,
+        moduleId: module.id,
+        area: area.id,
+      });
+    }
+
     for (const field of configurableDescriptors(module.fields)) {
       const area = areaForField(module.id, field.path, module.dashboard?.sections);
       const fieldTrail = `${module.name} / ${area ? area.title : 'settings'}`;
@@ -634,7 +647,12 @@ function CommandPalette({
     void navigate({
       to: '/dashboard/$guildId/$moduleId',
       params: { guildId, moduleId: entry.moduleId },
-      search: entry.area === undefined ? {} : { area: entry.area },
+      search:
+        entry.view !== undefined
+          ? { view: entry.view }
+          : entry.area === undefined
+            ? {}
+            : { area: entry.area },
       hash: entry.field ?? '',
     });
   }

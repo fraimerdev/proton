@@ -914,7 +914,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'proton.security_tripped',
     category: 'proton',
-    label: 'Anti-nuke or anti-raid tripped',
+    label: 'A security module tripped',
     colour: ServerLogColors.Remove,
     triggers: ['proton.security_tripped'],
     primary: 'immediate',

@@ -57,3 +57,52 @@ describe('groupBySection', () => {
     expect(new Set(flattened.map((d) => d.path)).size).toBe(descriptors.length);
   });
 });
+
+describe('what the generator refuses to render', () => {
+  // An area declaring only panels reaches here with nothing to show, and the untitled group it used
+  // to return rendered as an empty bordered card above the panel.
+  test('nothing to show is no groups, not one empty group', () => {
+    expect(groupBySection([], SECTIONS)).toEqual([]);
+    expect(groupBySection([], undefined)).toEqual([]);
+  });
+});
+
+describe('field order comes from the section, not the schema', () => {
+  const paired: FormSection[] = [
+    { id: 'routing', title: 'Routing', fields: ['toggles', 'channels'] },
+  ];
+
+  // Serverlog declares its categories as two parallel objects. Walking the Zod shape puts all
+  // thirteen switches before all thirteen pickers; the manifest's own order interleaves them.
+  test('two roots interleave in the order the manifest lists them', () => {
+    const groups = groupBySection(
+      [
+        field('channels.server'),
+        field('channels.roles'),
+        field('toggles.server'),
+        field('toggles.roles'),
+      ],
+      paired,
+    );
+
+    expect(groups[0]?.descriptors.map((d) => d.path)).toEqual([
+      'toggles.server',
+      'toggles.roles',
+      'channels.server',
+      'channels.roles',
+    ]);
+  });
+
+  test('order within one root is left exactly as the schema gave it', () => {
+    const groups = groupBySection(
+      [field('toggles.b'), field('toggles.a'), field('toggles.c')],
+      paired,
+    );
+
+    expect(groups[0]?.descriptors.map((d) => d.path)).toEqual([
+      'toggles.b',
+      'toggles.a',
+      'toggles.c',
+    ]);
+  });
+});

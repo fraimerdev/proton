@@ -9,7 +9,7 @@ import type {
   StringField,
 } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useId } from 'react';
 import { Icon } from '../shell/icon.tsx';
 import type { DiscordChannel, DiscordRole } from './picker.tsx';
@@ -31,6 +31,64 @@ export interface FieldProps<D extends FieldDescriptor = FieldDescriptor> {
   onChange: (value: unknown) => void;
   channels?: readonly DiscordChannel[] | undefined;
   roles?: readonly DiscordRole[] | undefined;
+
+  // Set when the field is one cell of a rule row or a matrix rather than a row of its own.
+  param?: FieldSlot | undefined;
+
+  // On the field's own root, never on a wrapper: the form's only row separator is `.field + .field`,
+  // and an element in between stops the adjacent sibling matching at all.
+  hidden?: boolean | undefined;
+}
+
+export interface FieldSlot {
+  label: string | undefined;
+
+  // The accessible name, where every control in a column shares one label and the row it sits on
+  // is what tells them apart.
+  name?: string | undefined;
+
+  emptyLabel?: string | undefined;
+}
+
+function Shell({
+  descriptor,
+  param,
+  controlId,
+  describedBy,
+  className,
+  hidden,
+  children,
+}: {
+  descriptor: FieldDescriptor;
+  param: FieldSlot | undefined;
+  controlId?: string | undefined;
+  describedBy: string;
+  className: string;
+  hidden?: boolean | undefined;
+  children: ReactNode;
+}): ReactElement {
+  if (!param) {
+    return (
+      <div className={`field ${className}`} data-path={descriptor.path} hidden={hidden}>
+        <Head descriptor={descriptor} controlId={controlId} describedBy={describedBy} />
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <span className={`rule-param ${className}`} data-path={descriptor.path} hidden={hidden}>
+      {/* Named even when the rule's own label has already said it: two controls whose only
+          difference is their type are two identical names in the accessibility tree. */}
+      <label
+        className={param.label === undefined ? 'sr-only' : 'rule-param-label'}
+        htmlFor={controlId}
+      >
+        {param.label ?? param.name ?? descriptor.label}
+      </label>
+      {children}
+    </span>
+  );
 }
 
 function Head({
@@ -39,7 +97,7 @@ function Head({
   describedBy,
 }: {
   descriptor: FieldDescriptor;
-  controlId?: string;
+  controlId?: string | undefined;
   describedBy: string;
 }): ReactElement {
   return (
@@ -74,14 +132,26 @@ function describedBy(descriptor: FieldDescriptor, id: string): string | undefine
   return descriptor.description ? id : undefined;
 }
 
-export function BooleanFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
+export function BooleanFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
   const field = descriptor as BooleanField;
   const id = useId();
   const controlId = `${id}-control`;
 
   return (
-    <div className="field field-boolean" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-boolean"
+      hidden={hidden}
+    >
       <input
         id={controlId}
         type="checkbox"
@@ -91,18 +161,30 @@ export function BooleanFieldInput({ descriptor, value, onChange }: FieldProps): 
         checked={value === true}
         onChange={(e) => onChange(e.target.checked)}
       />
-    </div>
+    </Shell>
   );
 }
 
-export function StringFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
+export function StringFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
   const field = descriptor as StringField;
   const id = useId();
   const controlId = `${id}-control`;
 
   return (
-    <div className="field field-string" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-string"
+      hidden={hidden}
+    >
       <input
         id={controlId}
         type="text"
@@ -113,18 +195,30 @@ export function StringFieldInput({ descriptor, value, onChange }: FieldProps): R
         aria-describedby={describedBy(field, id)}
         onChange={(e) => onChange(e.target.value)}
       />
-    </div>
+    </Shell>
   );
 }
 
-export function NumberFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
+export function NumberFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
   const field = descriptor as NumberField;
   const id = useId();
   const controlId = `${id}-control`;
 
   return (
-    <div className="field field-number" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-number"
+      hidden={hidden}
+    >
       <input
         id={controlId}
         type="number"
@@ -135,7 +229,7 @@ export function NumberFieldInput({ descriptor, value, onChange }: FieldProps): R
         aria-describedby={describedBy(field, id)}
         onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
       />
-    </div>
+    </Shell>
   );
 }
 
@@ -143,15 +237,27 @@ function hexOf(value: unknown): string {
   return `#${(typeof value === 'number' ? value : 0).toString(16).padStart(6, '0')}`;
 }
 
-export function ColourFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
+export function ColourFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
   const field = descriptor as ColourField;
   const id = useId();
   const controlId = `${id}-control`;
   const hex = hexOf(value);
 
   return (
-    <div className="field field-colour" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-colour"
+      hidden={hidden}
+    >
       <span className="colour-input">
         <input
           id={controlId}
@@ -174,18 +280,30 @@ export function ColourFieldInput({ descriptor, value, onChange }: FieldProps): R
           }}
         />
       </span>
-    </div>
+    </Shell>
   );
 }
 
-export function EnumFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
+export function EnumFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
   const field = descriptor as EnumField;
   const id = useId();
   const controlId = `${id}-control`;
 
   return (
-    <div className="field field-enum" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-enum"
+      hidden={hidden}
+    >
       <select
         id={controlId}
         value={typeof value === 'string' ? value : ''}
@@ -195,11 +313,11 @@ export function EnumFieldInput({ descriptor, value, onChange }: FieldProps): Rea
         {field.optional ? <option value="">Not set</option> : null}
         {field.options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {field.optionLabels?.[option] ?? option}
           </option>
         ))}
       </select>
-    </div>
+    </Shell>
   );
 }
 
@@ -208,27 +326,41 @@ export function ChannelIdFieldInput({
   value,
   onChange,
   channels = [],
+  param,
+  hidden,
 }: FieldProps): ReactElement {
   const field = descriptor as ChannelIdField;
   const id = useId();
   const controlId = `${id}-control`;
 
+  // A field carrying a default is never required, and clearing it means going back to that default
+  // rather than to null — which is not a value its schema accepts. Serverlog's per-category
+  // channels default to '' meaning "inherit", and without this they could be set but never unset.
+  const fallback = typeof field.defaultValue === 'string' ? field.defaultValue : null;
+  const clearable = field.optional || fallback !== null;
+
   return (
-    <div className="field field-channel-id" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-channel-id"
+      hidden={hidden}
+    >
       <span className="field-control">
         <SinglePicker
           id={controlId}
-          label={field.label}
+          label={param?.name ?? field.label}
           options={channelOptions(channels, field.channelTypes)}
           value={typeof value === 'string' ? value : null}
-          onChange={onChange}
-          emptyLabel={field.optional ? 'No channel' : 'Select a channel'}
-          clearable={field.optional}
+          onChange={(next) => onChange(next ?? fallback ?? undefined)}
+          emptyLabel={param?.emptyLabel ?? (clearable ? 'No channel' : 'Select a channel')}
+          clearable={clearable}
           describedBy={describedBy(field, id)}
         />
       </span>
-    </div>
+    </Shell>
   );
 }
 
@@ -237,13 +369,21 @@ export function RoleIdFieldInput({
   value,
   onChange,
   roles = [],
+  param,
+  hidden,
 }: FieldProps): ReactElement {
   const id = useId();
   const controlId = `${id}-control`;
 
   return (
-    <div className="field field-role-id" data-path={descriptor.path}>
-      <Head descriptor={descriptor} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={descriptor}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-role-id"
+      hidden={hidden}
+    >
       <span className="field-control">
         <SinglePicker
           id={controlId}
@@ -256,11 +396,17 @@ export function RoleIdFieldInput({
           describedBy={describedBy(descriptor, id)}
         />
       </span>
-    </div>
+    </Shell>
   );
 }
 
-export function DurationFieldInput({ descriptor, value, onChange }: FieldProps): ReactElement {
+export function DurationFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
   const field = descriptor as DurationField;
   const id = useId();
   const controlId = `${id}-control`;
@@ -270,8 +416,14 @@ export function DurationFieldInput({ descriptor, value, onChange }: FieldProps):
   const invalid = text !== '' && tryParseDuration(text) === null;
 
   return (
-    <div className="field field-duration" data-path={field.path}>
-      <Head descriptor={field} controlId={controlId} describedBy={id} />
+    <Shell
+      descriptor={field}
+      param={param}
+      controlId={controlId}
+      describedBy={id}
+      className="field-duration"
+      hidden={hidden}
+    >
       <span className="field-control">
         <input
           id={controlId}
@@ -292,7 +444,7 @@ export function DurationFieldInput({ descriptor, value, onChange }: FieldProps):
           </span>
         ) : null}
       </span>
-    </div>
+    </Shell>
   );
 }
 
@@ -313,6 +465,7 @@ export function ArrayFieldInput({
   onChange,
   channels = [],
   roles = [],
+  hidden,
 }: FieldProps): ReactElement {
   const id = useId();
   const controlId = `${id}-control`;
@@ -328,7 +481,7 @@ export function ArrayFieldInput({
           : null;
 
   return (
-    <div className="field field-array field-stacked" data-path={descriptor.path}>
+    <div className="field field-array field-stacked" data-path={descriptor.path} hidden={hidden}>
       <Head descriptor={descriptor} {...(options === null ? { controlId } : {})} describedBy={id} />
       {options === null ? (
         <TokenInput
@@ -354,9 +507,14 @@ export function ArrayFieldInput({
   );
 }
 
-export function UnsupportedFieldInput({ descriptor }: FieldProps): ReactElement {
+export function UnsupportedFieldInput({ descriptor, hidden }: FieldProps): ReactElement {
   return (
-    <div className="field field-unsupported" role="alert" data-path={descriptor.path}>
+    <div
+      className="field field-unsupported"
+      role="alert"
+      data-path={descriptor.path}
+      hidden={hidden}
+    >
       Cannot render “{descriptor.label}”: unsupported field type “
       {(descriptor as { kind: string }).kind}”. This is a bug in Proton, not in your configuration.
     </div>

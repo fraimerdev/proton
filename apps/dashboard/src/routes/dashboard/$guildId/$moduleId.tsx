@@ -1,4 +1,5 @@
-import type { ModuleConfigView, ModuleSummary } from '@proton/core';
+import type { FieldDescriptor, ModuleConfigView, ModuleSummary } from '@proton/core';
+import { tryParseDuration } from '@proton/core';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import {
   createFileRoute,
@@ -9,7 +10,7 @@ import {
 } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
-import { GeneratedForm, sectionKey } from '../../../components/form/generated-form.tsx';
+import { GeneratedForm, hiddenBy, sectionKey } from '../../../components/form/generated-form.tsx';
 import { SectionCard } from '../../../components/form/section.tsx';
 import {
   type AreaEntry,
@@ -25,9 +26,16 @@ import {
   panelDescriptors,
   panelsFor,
 } from '../../../components/panels/registry.ts';
-import { moduleState, PageHead } from '../../../components/shell/app-shell.tsx';
+import { PageHead } from '../../../components/shell/app-shell.tsx';
 import { Icon } from '../../../components/shell/icon.tsx';
-import { configurableDescriptors, whereToFix } from '../../../components/shell/module-meta.ts';
+import { ModuleHeader } from '../../../components/shell/module-header.tsx';
+import {
+  configurableDescriptors,
+  type ModuleState,
+  moduleIcon,
+  moduleState,
+  shortReason,
+} from '../../../components/shell/module-meta.ts';
 import {
   type AnyViewEntry,
   activeView,
@@ -104,6 +112,41 @@ interface Baseline {
   panelValues: Record<string, unknown>;
 }
 
+/**
+ * What a successful write actually changed in Discord. Branched on the module's state and not on
+ * its switch: a module that is on but missing a permission is not running, and telling its admin
+ * the change is live is the one thing the product promises never to do.
+ */
+export function savedLine(
+  state: ModuleState,
+  summary: { name: string; status?: { disabledReason?: { code: string } | undefined } | null },
+  guildName: string,
+): string {
+  if (state === 'running') return `Saved. Changes are live in ${guildName}.`;
+  if (state === 'off')
+    return `Saved. ${summary.name} is switched off, so nothing changes in ${guildName} yet.`;
+
+  return `Saved, but ${summary.name} is not running: ${shortReason(
+    summary.status?.disabledReason?.code,
+  ).toLowerCase()}.`;
+}
+
+// Why Save is refusing, named alongside the setting holding the field off the page: two of
+// verification's durations sit behind a showWhen, and dropping hidden descriptors from the gate
+// instead would only move the same refusal to the API, which cannot see the mode at all.
+export function unreadableLine(
+  descriptor: FieldDescriptor,
+  descriptors: readonly FieldDescriptor[],
+  values: Record<string, unknown>,
+): string {
+  const opening = `“${descriptor.label}” is not a duration yet`;
+  const holding = hiddenBy(descriptor, descriptors, values);
+
+  return holding === null
+    ? `${opening}.`
+    : `${opening}, and this page only shows it while ${holding}.`;
+}
+
 function moduleOf(modules: readonly ModuleSummary[], moduleId: string): ModuleSummary {
   const found = modules.find((candidate) => candidate.id === moduleId);
   if (!found) throw new Error(`unknown module '${moduleId}'`);
@@ -126,15 +169,22 @@ function ModulePage(): ReactElement {
   );
 
   const entry = activeView(moduleId, search.view);
-  const tabs = tabsFor(viewsFor(moduleId), search.view);
 
   const areas = areasFor(moduleId);
   const area = areas.find((candidate) => candidate.id === search.area);
+  const tabs = tabsFor(viewsFor(moduleId), search.view, area?.id);
   const onHub = !entry && areas.length > 0 && area === undefined;
 
   return (
     <>
-      <PageHead title={area ? area.title : summary.name} />
+      {/* Above the tabs, not inside the settings tab: the switch governs the whole module, and a
+          data view is a face of the same module rather than a separate thing to turn on. */}
+      <ModuleHeader
+        guildId={guildId}
+        summary={summary}
+        area={entry ? undefined : area}
+        showLede={!entry}
+      />
 
       {tabs.length > 0 ? (
         <nav className="tabs" aria-label={`${summary.name} views`}>
@@ -179,14 +229,31 @@ function ModulePage(): ReactElement {
   );
 }
 
-// The blocker hands whole locations, and every route's search schema in the union: read the one
-// key that decides whether ModuleSettings survives the move.
-function viewOf(location: { search: unknown }): unknown {
+// The blocker hands whole locations, and every route's search schema in the union: read the keys
+// that decide whether ModuleSettings survives the move.
+function searchKey(location: { search: unknown }, key: string): unknown {
   const search = location.search;
 
   return typeof search === 'object' && search !== null
-    ? (search as Record<string, unknown>).view
+    ? (search as Record<string, unknown>)[key]
     : undefined;
+}
+
+/**
+ * Whether the settings form is still on screen after the move, and so still holding its edits.
+ * Two areas of one module keep it mounted; leaving the last area for the hub does not, because
+ * the hub replaces the whole subtree — and that discard used to happen with no confirmation at all.
+ */
+export function settingsSurvives(
+  moduleId: string,
+  current: { pathname: string; search: unknown },
+  next: { pathname: string; search: unknown },
+): boolean {
+  if (current.pathname !== next.pathname) return false;
+  if (searchKey(current, 'view') !== searchKey(next, 'view')) return false;
+  if (areasFor(moduleId).length === 0) return true;
+
+  return searchKey(current, 'area') !== undefined && searchKey(next, 'area') !== undefined;
 }
 
 function AreaHub({
@@ -219,7 +286,11 @@ function AreaHub({
               <span className="module-name">{area.title}</span>
               <span className="module-desc module-desc-plain">{area.blurb}</span>
             </Link>
-            <span className="area-count">{count}</span>
+            {count === undefined ? null : (
+              <span className={`area-count${count === null ? ' area-count-empty' : ''}`}>
+                {count ?? 'None yet'}
+              </span>
+            )}
             <Icon name="arrow-right" className="area-chevron" />
           </div>
         );
@@ -271,6 +342,10 @@ function ModuleSettings({
   const [panelValues, setPanelValues] = useState(() => seed(settings).panelValues);
   const [baseline, setBaseline] = useState<Baseline>(() => seed(settings));
 
+  // Holds the save bar open through the confirmation. Without it the bar — and the only place the
+  // outcome is reported — vanishes in the same frame the write lands.
+  const [settled, setSettled] = useState(false);
+
   function reseed(stored: ModuleConfigView): void {
     const next = seed(stored);
 
@@ -300,19 +375,27 @@ function ModuleSettings({
       queryClient.setQueryData(moduleConfigQuery(guildId, moduleId).queryKey, result.after);
       void queryClient.invalidateQueries({ queryKey: queryKeys.modules(guildId) });
       reseed(result.after);
+      setSettled(true);
     },
   });
+
+  useEffect(() => {
+    if (!settled) return;
+
+    const timer = setTimeout(() => setSettled(false), 4000);
+    return () => clearTimeout(timer);
+  }, [settled]);
 
   const dirty =
     JSON.stringify(values) !== JSON.stringify(baseline.values) ||
     JSON.stringify(panelValues) !== JSON.stringify(baseline.panelValues);
 
   const blocker = useBlocker({
-    // Moving between areas keeps this component mounted, so the edits survive the move and there
-    // is nothing to lose — confirming a discard there would be confirming a loss that cannot
-    // happen. Switching to a data view does unmount it, and is still blocked.
-    shouldBlockFn: ({ current, next }) =>
-      dirty && !(current.pathname === next.pathname && viewOf(current) === viewOf(next)),
+    // Moving between two areas keeps this component mounted, so the edits survive the move and
+    // confirming a discard there would be confirming a loss that cannot happen. Leaving the last
+    // area for the hub does unmount it — `onHub` swaps the whole subtree — as does switching to a
+    // data view, and both are blocked.
+    shouldBlockFn: ({ current, next }) => dirty && !settingsSurvives(moduleId, current, next),
     enableBeforeUnload: () => dirty,
     withResolver: true,
   });
@@ -337,6 +420,18 @@ function ModuleSettings({
       body.parentElement?.querySelector<HTMLButtonElement>('.form-section-toggle')?.click();
     }
 
+    // Everything else between the target and the page that renders hidden rather than unmounting:
+    // an off rule's body, a field the current mode does not show, a section none of whose fields
+    // are shown. Scrolling to a display:none element moves nothing and looks like a dead link.
+    // The collapsed body above is not one of these — it is React state, and the toggle owns it.
+    for (
+      let node = target instanceof HTMLElement ? target : null;
+      node !== null;
+      node = node.parentElement
+    ) {
+      if (node.hidden && !node.classList.contains('form-section-body')) node.hidden = false;
+    }
+
     const frame = requestAnimationFrame(() => {
       target.scrollIntoView({ block: 'center' });
       target.classList.add('field-flash');
@@ -352,6 +447,7 @@ function ModuleSettings({
   function reset(): void {
     setValues(baseline.values);
     setPanelValues(baseline.panelValues);
+    setSettled(false);
     save.reset();
   }
 
@@ -366,8 +462,6 @@ function ModuleSettings({
     if (!dirty) reseed(settings);
   });
 
-  const state = moduleState(summary);
-  const enabled = summary.enabled;
   const guildName = guilds.find((guild) => guild.id === guildId)?.name ?? 'this server';
 
   // Rendering only. `descriptors` and `panels` stay whole above, because toConfig rebuilds the
@@ -377,49 +471,56 @@ function ModuleSettings({
   const fields = shownDescriptors(area, descriptors, summary.dashboard?.sections);
   const areaPanels = shownPanels(area, panels);
 
-  const hasChannelField = fields.some((descriptor) => descriptor.kind === 'channel-id');
+  // Which sections a collapsed form is hiding an edit inside. The save bar says work is unsaved;
+  // on a seven-section module it cannot say where, and reopening every card to find it is the
+  // whole complaint.
+  const changed = new Set(
+    Object.keys(values).filter(
+      (path) => JSON.stringify(values[path]) !== JSON.stringify(baseline.values[path]),
+    ),
+  );
+
+  // Checked over every descriptor, not just this area's: the save writes the whole config, so a
+  // duration left unreadable on another area would be rejected by the API with the field named and
+  // nothing on screen to fix. Naming it here is the difference between the two.
+  const unreadable = descriptors.find(
+    (descriptor) =>
+      descriptor.kind === 'duration' &&
+      typeof values[descriptor.path] === 'string' &&
+      values[descriptor.path] !== '' &&
+      tryParseDuration(values[descriptor.path] as string) === null,
+  );
+
+  if (fields.length === 0 && areaPanels.length === 0) {
+    return (
+      <div className="card">
+        <div className="empty-state">
+          <span className="tile">
+            <Icon name={moduleIcon(summary.dashboard?.icon)} />
+          </span>
+          <span className="empty-state-title">{summary.name} has nothing to configure.</span>
+          <p className="status">
+            It runs on the switch above. Everything else about it is decided by Proton’s own
+            deployment, not by this server.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-      {enabled && (state === 'blocked' || state === 'degraded') ? (
-        <div className={`gap-card${state === 'degraded' ? ' gap-card-warn' : ''}`}>
-          <div className="gap-body">
-            <span className="gap-head">
-              <Icon
-                name={state === 'degraded' ? 'warning' : 'warning-circle'}
-                weight="fill"
-                className={`state-${state}`}
-              />
-              <span className="gap-name">Not running</span>
-            </span>
-            <p className="gap-text" role="alert">
-              {summary.status?.disabledReason?.humanReason}
-            </p>
-            {whereToFix(summary.status?.disabledReason?.code) ? (
-              <span className="where">
-                <Icon name="arrow-elbow-down-right" />
-                {whereToFix(summary.status?.disabledReason?.code)}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       <GeneratedForm
         descriptors={fields}
         values={values}
+        changed={changed}
         channels={channels}
         roles={roles}
         sections={sections}
         scope={moduleId}
+        suppressTitle={area?.title}
         onChange={(path, value) => setValues((prev) => ({ ...prev, [path]: value }))}
       />
-
-      {hasChannelField ? (
-        <p className="status">
-          Channels Proton cannot view are not listed here, because Discord never returns them.
-        </p>
-      ) : null}
 
       {areaPanels.map((panel) => {
         const key = panel.key;
@@ -429,7 +530,11 @@ function ModuleSettings({
           <SectionCard
             key={key ?? panel.title}
             id={sectionKey(moduleId, `panel:${key ?? panel.title}`)}
-            title={panel.title}
+            title={panel.title === area?.title ? null : panel.title}
+            edited={
+              key !== null &&
+              JSON.stringify(panelValues[key]) !== JSON.stringify(baseline.panelValues[key])
+            }
           >
             <Panel
               value={key === null ? undefined : panelValues[key]}
@@ -447,36 +552,48 @@ function ModuleSettings({
         );
       })}
 
-      <div aria-live="polite">
-        {save.isSuccess && !dirty ? (
-          <span className="saved-line">
-            <Icon name="check-circle" weight="fill" />
-            Saved. Changes are live in {guildName}.
-          </span>
-        ) : null}
-      </div>
-
-      {save.error ? (
-        <p className="field-error" role="alert">
-          {save.error.message}
-        </p>
-      ) : null}
-
-      {dirty ? (
+      {/* Both outcomes belong in the bar that triggered them. Rendered in flow they landed after
+          seven cards and a panel, so a save that failed from a sticky button at the bottom of the
+          viewport reported itself three thousand pixels away. */}
+      {dirty || save.error || settled ? (
         <div className="save-bar">
           <div className="save-bar-inner">
-            <span className="save-bar-text">You have unsaved changes.</span>
-            <button type="button" className="button button-ghost" onClick={reset}>
-              Reset
-            </button>
-            <button
-              type="button"
-              className="button"
-              disabled={save.isPending}
-              onClick={() => save.mutate({ values, panelValues })}
-            >
-              {save.isPending ? 'Saving…' : 'Save changes'}
-            </button>
+            <span className="save-bar-status" aria-live="polite">
+              {save.error ? (
+                <span className="save-bar-text save-bar-failed" role="alert">
+                  <Icon name="warning-circle" weight="fill" />
+                  Could not save: {save.error.message}
+                </span>
+              ) : settled ? (
+                <span className="save-bar-text save-bar-saved">
+                  <Icon name="check-circle" weight="fill" />
+                  {savedLine(moduleState(summary), summary, guildName)}
+                </span>
+              ) : unreadable ? (
+                <span className="save-bar-text save-bar-failed" role="alert">
+                  <Icon name="warning-circle" weight="fill" />
+                  {unreadableLine(unreadable, descriptors, values)}
+                </span>
+              ) : (
+                <span className="save-bar-text">You have unsaved changes.</span>
+              )}
+            </span>
+
+            {dirty ? (
+              <>
+                <button type="button" className="button button-ghost" onClick={reset}>
+                  Reset
+                </button>
+                <button
+                  type="button"
+                  className="button"
+                  disabled={save.isPending || unreadable !== undefined}
+                  onClick={() => save.mutate({ values, panelValues })}
+                >
+                  {save.isPending ? 'Saving…' : 'Save changes'}
+                </button>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -513,8 +630,34 @@ function LeaveConfirm({
   onStay: () => void;
   onLeave: () => void;
 }): ReactElement {
+  const stay = useRef<HTMLButtonElement>(null);
+
+  // Focus lands on the safe choice, not on the page behind the dialog — a confirm nobody's keyboard
+  // is inside is a confirm the next Enter or Tab goes around.
+  useEffect(() => {
+    stay.current?.focus();
+
+    function onKey(event: KeyboardEvent): void {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onStay();
+      }
+    }
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onStay]);
+
   return (
     <div className="palette-scrim">
+      <button
+        type="button"
+        className="palette-backdrop"
+        aria-label="Keep editing"
+        tabIndex={-1}
+        onClick={onStay}
+      />
+
       <div className="confirm" role="alertdialog" aria-modal="true" aria-labelledby="leave-title">
         <h2 className="confirm-title" id="leave-title">
           Leave {moduleName} without saving?
@@ -523,7 +666,7 @@ function LeaveConfirm({
           The changes on this page have not been sent to Proton yet. Leaving discards them.
         </p>
         <div className="confirm-actions">
-          <button type="button" className="button button-quiet" onClick={onStay}>
+          <button ref={stay} type="button" className="button button-quiet" onClick={onStay}>
             Keep editing
           </button>
           <button type="button" className="button button-danger" onClick={onLeave}>
@@ -536,6 +679,8 @@ function LeaveConfirm({
 }
 
 function ModuleError({ error }: { error: Error }): ReactElement {
+  const { guildId, moduleId } = Route.useParams();
+
   return (
     <>
       <PageHead title="This page did not load" />
@@ -549,6 +694,17 @@ function ModuleError({ error }: { error: Error }): ReactElement {
             {error.message}
           </p>
         </div>
+
+        {/* A stale ?area= or ?view= link is the common way in here, and the address bar is not a
+            recovery. Both links drop the search that caused it. */}
+        <Link
+          to="/dashboard/$guildId/$moduleId"
+          params={{ guildId, moduleId }}
+          search={{}}
+          className="button button-quiet"
+        >
+          Open its settings
+        </Link>
       </div>
     </>
   );

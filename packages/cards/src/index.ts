@@ -10,6 +10,14 @@ export {
   nullImageFetcher,
 } from './avatar.ts';
 export {
+  CAPTCHA_ALPHABET,
+  type CaptchaDeps,
+  type CaptchaInput,
+  captchaInputSchema,
+  newCaptchaAnswer,
+  renderCaptcha,
+} from './captcha.ts';
+export {
   CARD_SIZES,
   type CardDescriptor,
   type CardDescriptorInput,

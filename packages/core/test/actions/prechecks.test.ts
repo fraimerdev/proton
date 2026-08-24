@@ -145,3 +145,53 @@ describe('runPrechecks', () => {
     expect(failure?.code).toBe('missing_permission');
   });
 });
+
+/**
+ * A voice move is not a moderation action. Discord's Modify Guild Member documents `channel_id` as
+ * requiring MOVE_MEMBERS and nothing else — no ranking, no owner exemption — so ranking it like a
+ * ban meant the server owner could never be moved into the temporary channel just built for them.
+ */
+describe('a kind Discord does not rank', () => {
+  test('the owner is movable', () => {
+    expect(
+      runPrechecks(input({ hierarchy: false, target: { id: OWNER, highestRolePosition: 0 } })),
+    ).toBeNull();
+  });
+
+  test('a member ranked above the bot is movable', () => {
+    expect(
+      runPrechecks(input({ hierarchy: false, target: { id: TARGET, highestRolePosition: 99 } })),
+    ).toBeNull();
+  });
+
+  test('a member merely tying the bot is movable, which `>=` used to refuse', () => {
+    expect(
+      runPrechecks(input({ hierarchy: false, target: { id: TARGET, highestRolePosition: 10 } })),
+    ).toBeNull();
+  });
+
+  test('the bot still refuses to act on itself', () => {
+    expect(
+      runPrechecks(input({ hierarchy: false, target: { id: BOT, highestRolePosition: 0 } }))?.code,
+    ).toBe('target_is_self');
+  });
+
+  test('a missing permission is still a missing permission', () => {
+    expect(
+      runPrechecks(
+        input({
+          hierarchy: false,
+          requiredPermissions: Permissions.MoveMembers,
+          botChannelPermissions: Permissions.ViewChannel,
+          target: { id: OWNER, highestRolePosition: 0 },
+        }),
+      )?.code,
+    ).toBe('missing_permission');
+  });
+
+  test('a ranked kind is unchanged: the owner is still refused', () => {
+    expect(runPrechecks(input({ target: { id: OWNER, highestRolePosition: 0 } }))?.code).toBe(
+      'target_is_owner',
+    );
+  });
+});

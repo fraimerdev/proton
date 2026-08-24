@@ -1,9 +1,10 @@
 import type { ModuleSummary } from '@proton/core';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, useCallback, useState } from 'react';
 import { AppShell } from '../../components/shell/app-shell.tsx';
 import { Icon } from '../../components/shell/icon.tsx';
+import { ModuleToggleProvider } from '../../components/shell/module-toggle.tsx';
 
 import { isAccessError } from '../../lib/errors.ts';
 import { modulesQuery, sessionQuery } from '../../lib/queries.ts';
@@ -81,25 +82,26 @@ function GuildShell(): ReactElement {
     },
   });
 
-  return (
-    <AppShell
-      guildId={guildId}
-      guilds={guilds}
-      user={user}
-      modules={modules}
-      onToggleModule={(module, enabled) => toggle.mutate({ module, enabled })}
-    >
-      <div aria-live="assertive">
-        {failure ? (
-          <div className="alert-banner">
-            <Icon name="warning-circle" weight="fill" />
-            <span className="alert-banner-text">{failure}</span>
-          </div>
-        ) : null}
-      </div>
+  const onToggleModule = useCallback(
+    (module: ModuleSummary, enabled: boolean) => toggle.mutate({ module, enabled }),
+    [toggle.mutate],
+  );
 
-      <Outlet />
-    </AppShell>
+  return (
+    <ModuleToggleProvider value={onToggleModule}>
+      <AppShell guildId={guildId} guilds={guilds} user={user} modules={modules}>
+        <div aria-live="assertive">
+          {failure ? (
+            <div className="alert-banner">
+              <Icon name="warning-circle" weight="fill" />
+              <span className="alert-banner-text">{failure}</span>
+            </div>
+          ) : null}
+        </div>
+
+        <Outlet />
+      </AppShell>
+    </ModuleToggleProvider>
   );
 }
 

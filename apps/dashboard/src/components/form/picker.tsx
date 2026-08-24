@@ -70,7 +70,14 @@ export interface PickerOption {
   colour?: number | undefined;
   icon?: IconName | undefined;
   group?: string | undefined;
+
+  // Stamped by channelOptions alone, so every channel list — generated form and hand-built panel
+  // both — carries the note explaining why a channel somebody expected is not in it.
+  kind?: 'channel' | undefined;
 }
+
+export const CHANNEL_NOTE =
+  'Channels Proton cannot see are not listed here, because Discord never returns them.';
 
 export function roleOptions(roles: readonly DiscordRole[]): PickerOption[] {
   return roles.map((role) => ({ id: role.id, label: role.name, colour: role.color }));
@@ -85,6 +92,7 @@ export function channelOptions(
     .map((channel) => ({
       id: channel.id,
       label: channel.name,
+      kind: 'channel' as const,
       icon: channelIcon(channel.type),
       ...(channel.parentName ? { group: channel.parentName } : {}),
     }));
@@ -250,6 +258,10 @@ function Popover({
 
         {matches.length === 0 ? <p className="picker-empty">Nothing matches that.</p> : null}
       </div>
+
+      {options.some((option) => option.kind === 'channel') ? (
+        <p className="picker-note">{CHANNEL_NOTE}</p>
+      ) : null}
     </div>
   );
 }

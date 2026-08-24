@@ -1,0 +1,20 @@
+{
+  "name": "@proton/module-honeypot",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "ioredis": "^6.0.0",
+    "zod": "^4.4.3"
+  }
+}

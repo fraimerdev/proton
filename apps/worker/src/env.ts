@@ -1,3 +1,4 @@
+import { VERIFY_LINK_SECRET_MIN } from '@proton/core';
 import { createEnv } from '@proton/core/env';
 import { z } from 'zod';
 
@@ -44,6 +45,10 @@ export const envSchema = z.object({
   // Never called, only linked: a refusal that names the settings page is the difference
   // between "the bot did nothing" and a fix the admin can perform.
   DASHBOARD_URL: z.string().min(1).default('http://localhost:3000'),
+
+  // Optional so a deployment that never verifies on the website still boots. Verification names
+  // it as the missing port if an admin switches that mode on without it.
+  VERIFY_LINK_SECRET: z.string().min(VERIFY_LINK_SECRET_MIN).optional(),
 });
 
 export type WorkerEnv = z.infer<typeof envSchema>;

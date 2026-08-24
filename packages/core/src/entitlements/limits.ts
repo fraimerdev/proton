@@ -10,6 +10,7 @@ export const LIMIT_KEYS = [
   'tempVcHubs',
   'savedTemplates',
   'activePolls',
+  'honeypotChannels',
 ] as const;
 
 export type LimitKey = (typeof LIMIT_KEYS)[number];
@@ -24,6 +25,7 @@ export const LIMIT_LABELS: Record<LimitKey, string> = {
   tempVcHubs: 'temporary-voice hubs',
   savedTemplates: 'saved templates',
   activePolls: 'running polls',
+  honeypotChannels: 'honeypot channels',
 };
 
 export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
@@ -37,6 +39,7 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     tempVcHubs: 2,
     savedTemplates: 10,
     activePolls: 3,
+    honeypotChannels: 3,
   },
   plus: {
     tags: 125,
@@ -48,6 +51,7 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     tempVcHubs: 10,
     savedTemplates: 50,
     activePolls: 15,
+    honeypotChannels: 10,
   },
   pro: {
     tags: 500,
@@ -59,6 +63,7 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     tempVcHubs: 40,
     savedTemplates: 200,
     activePolls: 60,
+    honeypotChannels: 25,
   },
 };
 

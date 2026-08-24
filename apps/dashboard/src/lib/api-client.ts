@@ -8,6 +8,7 @@ import type {
   ModuleDescriptors,
   ModuleIndex,
   ModuleUpdateResult,
+  VerificationRequestResult,
 } from '@proton/core';
 import {
   guildOverviewSchema,
@@ -16,6 +17,7 @@ import {
   moduleDescriptorsSchema,
   moduleIndexSchema,
   moduleUpdateResultSchema,
+  verificationRequestResultSchema,
 } from '@proton/core';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
 import type { z } from 'zod';
@@ -103,6 +105,16 @@ export class ApiClient {
       `/guilds/${guildId}/modules/${moduleId}/descriptors`,
       moduleDescriptorsSchema,
     );
+  }
+
+  recordVerificationPass(
+    guildId: string,
+    body: { userId: string; jti: string },
+  ): Promise<VerificationRequestResult> {
+    return this.#parsed(`/guilds/${guildId}/verification/passed`, verificationRequestResultSchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   }
 
   searchCases(guildId: string, query: CaseQuery): Promise<CaseSearchResult> {
