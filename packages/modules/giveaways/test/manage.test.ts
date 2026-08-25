@@ -132,7 +132,7 @@ describe('pause holds the remaining time', () => {
 
     await pauseGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
     clock.now += 90 * 60 * 1000;
-    await resumeGiveaway(h.ctx, deps, { giveawayId: 'g1' });
+    await resumeGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
 
     const after = await store.get(GUILD, 'g1');
 
@@ -151,7 +151,7 @@ describe('pause holds the remaining time', () => {
     for (const held of [30, 45]) {
       await pauseGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
       clock.now += held * 60 * 1000;
-      await resumeGiveaway(h.ctx, deps, { giveawayId: 'g1' });
+      await resumeGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
     }
 
     const after = await store.get(GUILD, 'g1');
@@ -167,7 +167,7 @@ describe('pause holds the remaining time', () => {
 
     await pauseGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
     clock.now += HOUR;
-    await resumeGiveaway(h.ctx, deps, { giveawayId: 'g1' });
+    await resumeGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
 
     const end = h.scheduled.filter((row) => row.jobId === END_JOB_ID);
 
@@ -192,7 +192,7 @@ describe('pause holds the remaining time', () => {
     const clock = { now: NOW.getTime() };
     const { deps } = await seeded(clock);
 
-    const outcome = await resumeGiveaway(harness(clock).ctx, deps, { giveawayId: 'g1' });
+    const outcome = await resumeGiveaway(harness(clock).ctx, deps, { giveawayId: 'g1', by: HOST });
 
     expect(outcome.outcome).toBe('wrong-state');
   });
@@ -213,7 +213,11 @@ describe('extend and shorten move the persisted deadline', () => {
     const { store, deps } = await seeded(clock);
     const h = harness(clock);
 
-    const outcome = await shiftDeadline(h.ctx, deps, { giveawayId: 'g1', byMs: 2 * HOUR });
+    const outcome = await shiftDeadline(h.ctx, deps, {
+      giveawayId: 'g1',
+      by: HOST,
+      byMs: 2 * HOUR,
+    });
 
     expect(outcome.outcome).toBe('ok');
     expect((await store.get(GUILD, 'g1'))?.endsAt.getTime()).toBe(NOW.getTime() + 6 * HOUR);
@@ -224,7 +228,7 @@ describe('extend and shorten move the persisted deadline', () => {
     const clock = { now: NOW.getTime() };
     const { store, deps } = await seeded(clock);
 
-    await shiftDeadline(harness(clock).ctx, deps, { giveawayId: 'g1', byMs: -2 * HOUR });
+    await shiftDeadline(harness(clock).ctx, deps, { giveawayId: 'g1', by: HOST, byMs: -2 * HOUR });
 
     expect((await store.get(GUILD, 'g1'))?.endsAt.getTime()).toBe(NOW.getTime() + 2 * HOUR);
   });
@@ -238,6 +242,7 @@ describe('extend and shorten move the persisted deadline', () => {
     const outcome = await shiftDeadline(harness(clock).ctx, deps, {
       giveawayId: 'g1',
       byMs: -5 * HOUR,
+      by: HOST,
     });
 
     expect(outcome.outcome).toBe('too-short');
@@ -252,6 +257,7 @@ describe('extend and shorten move the persisted deadline', () => {
     const outcome = await shiftDeadline(harness(clock).ctx, deps, {
       giveawayId: 'g1',
       byMs: HOUR,
+      by: HOST,
     });
 
     expect(outcome.outcome).toBe('wrong-state');
@@ -263,7 +269,7 @@ describe('extend and shorten move the persisted deadline', () => {
     const h = harness(clock);
 
     await pauseGiveaway(h.ctx, deps, { giveawayId: 'g1', by: HOST });
-    const outcome = await shiftDeadline(h.ctx, deps, { giveawayId: 'g1', byMs: HOUR });
+    const outcome = await shiftDeadline(h.ctx, deps, { giveawayId: 'g1', by: HOST, byMs: HOUR });
 
     expect(outcome.outcome).toBe('ok');
     expect((await store.get(GUILD, 'g1'))?.status).toBe('paused');
@@ -279,6 +285,7 @@ describe('editing a live giveaway', () => {
     const outcome = await editGiveawayFields(h.ctx, deps, {
       giveawayId: 'g1',
       patch: { title: 'A better prize', winnerCount: 3 },
+      by: HOST,
     });
 
     expect(outcome.outcome).toBe('ok');
@@ -298,6 +305,7 @@ describe('editing a live giveaway', () => {
     await editGiveawayFields(h.ctx, deps, {
       giveawayId: 'g1',
       patch: { endsAt: new Date(clock.now + 9 * HOUR) },
+      by: HOST,
     });
 
     expect(h.scheduled.some((row) => row.jobId === END_JOB_ID && row.replace)).toBe(true);
@@ -310,6 +318,7 @@ describe('editing a live giveaway', () => {
     const outcome = await editGiveawayFields(harness(clock).ctx, deps, {
       giveawayId: 'g1',
       patch: {},
+      by: HOST,
     });
 
     expect(outcome.outcome).toBe('wrong-state');
@@ -323,6 +332,7 @@ describe('editing a live giveaway', () => {
     const outcome = await editGiveawayFields(harness(clock).ctx, deps, {
       giveawayId: 'g1',
       patch: { title: 'nope' },
+      by: HOST,
     });
 
     expect(outcome.outcome).toBe('wrong-state');

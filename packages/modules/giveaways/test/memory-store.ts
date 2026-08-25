@@ -6,22 +6,27 @@ import type {
   CreateGiveawayInput,
   Disqualification,
   DrawRecord,
+  DropOutcome,
   EnterOutcome,
   EntrantRow,
   Giveaway,
+  GiveawayEvent,
   GiveawayPatch,
+  GiveawayStats,
   GiveawayStatus,
   GiveawayStore,
   ListGiveawaysQuery,
   MultiplierRow,
   NewBonus,
   NewEntry,
+  NewGiveawayEvent,
   RecordDrawInput,
   RequirementRow,
   Reweigh,
   TemplateRecord,
   WinRecord,
 } from '../src/store.ts';
+import { GIVEAWAY_STATUSES } from '../src/store.ts';
 
 interface EntryRow extends EntrantRow {
   giveawayId: string;
@@ -48,6 +53,15 @@ export class MemoryGiveawayStore implements GiveawayStore {
   readonly drawRows: DrawRecord[] = [];
   readonly winRows: WinRecord[] = [];
   readonly bonusRows: BonusGrant[] = [];
+  readonly eventRows: GiveawayEvent[] = [];
+
+  // Monotonic rather than Date.now(): several history lines written inside one millisecond must
+  // still sort in the order they happened.
+  #tick = 0;
+  #clock(): number {
+    this.#tick += 1;
+    return Date.UTC(2026, 0, 1) + this.#tick;
+  }
   readonly blacklistRows = new Map<string, BlacklistEntry[]>();
   readonly templateRows = new Map<string, TemplateRecord>();
 
@@ -74,6 +88,7 @@ export class MemoryGiveawayStore implements GiveawayStore {
       buttonStyle: input.buttonStyle ?? 1,
       winnerCount: input.winnerCount,
       requirementLogic: input.requirementLogic ?? 'all',
+      requirementTree: input.requirementTree ?? null,
       maxEntriesPerUser: input.maxEntriesPerUser ?? null,
       verifyOn: input.verifyOn ?? 'both',
       startsAt: input.startsAt ?? null,
@@ -90,8 +105,12 @@ export class MemoryGiveawayStore implements GiveawayStore {
       claimWindowSeconds: input.claimWindowSeconds ?? null,
       dmWinners: input.dmWinners ?? false,
       winMessage: input.winMessage ?? null,
+      prizes: input.prizes ?? null,
+      rewardRoleId: input.rewardRoleId ?? null,
       templateId: input.templateId ?? null,
       recurrence: input.recurrence ?? null,
+      recurrenceConfig: input.recurrenceConfig ?? null,
+      recurrenceLeft: input.recurrenceLeft ?? null,
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
@@ -272,6 +291,50 @@ export class MemoryGiveawayStore implements GiveawayStore {
         totalEntries: row.totalEntries,
         memberSnapshot: row.memberSnapshot,
       }));
+  }
+
+  async stats(guildId: string): Promise<GiveawayStats> {
+    const mine = [...this.giveaways.values()].filter((row) => row.guildId === guildId);
+    const ids = new Set(mine.map((row) => row.id));
+
+    const byStatus = Object.fromEntries(GIVEAWAY_STATUSES.map((status) => [status, 0])) as Record<
+      GiveawayStatus,
+      number
+    >;
+    for (const row of mine) byStatus[row.status] += 1;
+
+    const live = this.entries.filter(
+      (row) => ids.has(row.giveawayId) && row.disqualifiedAt === null && row.leftAt === null,
+    );
+
+    return {
+      byStatus,
+      totalGiveaways: mine.length,
+      totalEntries: live.reduce((sum, row) => sum + row.totalEntries, 0),
+      uniqueEntrants: new Set(live.map((row) => row.userId)).size,
+      totalWinners: this.winRows.filter((row) => ids.has(row.giveawayId)).length,
+      draws: this.drawRows.filter((row) => ids.has(row.giveawayId)).length,
+    };
+  }
+
+  async appendEvent(event: NewGiveawayEvent): Promise<boolean> {
+    if (
+      event.idempotencyKey != null &&
+      this.eventRows.some((row) => row.idempotencyKey === event.idempotencyKey)
+    ) {
+      return false;
+    }
+
+    this.eventRows.push({ ...event, at: new Date(this.#clock()) });
+    return true;
+  }
+
+  async history(giveawayId: string, limit: number): Promise<GiveawayEvent[]> {
+    return this.eventRows
+      .filter((row) => row.giveawayId === giveawayId)
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .slice(0, limit)
+      .map((row) => ({ ...row }));
   }
 
   async disqualify(
@@ -666,6 +729,54 @@ export class MemoryGiveawayStore implements GiveawayStore {
     }
 
     return this.get(guildId, reference);
+  }
+
+  async claimDrop(
+    guildId: string,
+    giveawayId: string,
+    userId: string,
+    at: Date,
+  ): Promise<DropOutcome> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId) return { outcome: 'closed' };
+
+    // Mirrors the Drizzle conditional update: the status flip is the race, so a second presser
+    // finds it already ended.
+    if (giveaway.status !== 'running' || giveaway.entryMethod !== 'drop') {
+      return { outcome: 'taken' };
+    }
+
+    const ended: Giveaway = { ...giveaway, status: 'ended', endedAt: at, updatedAt: at };
+    this.giveaways.set(giveawayId, ended);
+
+    const drawId = `${giveawayId}:drop`;
+
+    this.drawRows.push({
+      id: drawId,
+      giveawayId,
+      drawNumber: 1,
+      seed: 'drop',
+      snapshotHash: 'drop',
+      entrantCount: 1,
+      totalEntries: 1,
+      winnerIds: [userId],
+      degradedProviders: [],
+      drawnAt: at,
+      drawnBy: userId,
+      reason: 'first eligible presser',
+    });
+
+    this.winRows.push({
+      giveawayId,
+      drawId,
+      userId,
+      claimedAt: null,
+      forfeitedAt: null,
+      rerolledAt: null,
+      claimDeadline: null,
+    });
+
+    return { outcome: 'won', giveaway: { ...ended }, drawId };
   }
 
   async markRerolled(drawId: string, userIds: readonly string[], at: Date): Promise<number> {

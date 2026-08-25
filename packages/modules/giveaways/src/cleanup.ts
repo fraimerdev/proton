@@ -1,6 +1,7 @@
 import type { EventListener, EventType, ModuleContext, ProtonEvent } from '@proton/core';
 import { type GiveawaysConfig, MODULE_ID } from './config.ts';
 import { bindStore, type GiveawaysDeps } from './deps.ts';
+import { publishOrphaned } from './events.ts';
 
 export const CLEANUP_EVENT_TYPES: EventType[] = [
   'message.deleted',
@@ -56,7 +57,10 @@ export async function handleMessageDeleted(
     const giveaway = await bound.bound.store.byMessage(ctx.guildId, messageId);
     if (!giveaway) continue;
 
-    if (await bound.bound.store.clearMessage(ctx.guildId, giveaway.id)) orphaned += 1;
+    if (await bound.bound.store.clearMessage(ctx.guildId, giveaway.id)) {
+      orphaned += 1;
+      await publishOrphaned(ctx, bound.bound.store, giveaway, 'message-deleted');
+    }
 
     ctx.logger.warn(
       `the giveaway message for '${giveaway.title}' was deleted, so Proton has stopped trying to ` +
@@ -85,7 +89,10 @@ export async function handleChannelDeleted(
 
   let orphaned = 0;
   for (const giveaway of affected) {
-    if (await bound.bound.store.clearMessage(ctx.guildId, giveaway.id)) orphaned += 1;
+    if (await bound.bound.store.clearMessage(ctx.guildId, giveaway.id)) {
+      orphaned += 1;
+      await publishOrphaned(ctx, bound.bound.store, giveaway, 'channel-deleted');
+    }
   }
 
   if (orphaned > 0) {

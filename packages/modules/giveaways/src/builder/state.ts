@@ -17,20 +17,54 @@ export interface DraftMultiplier extends DraftItem {
   mode: MultiplierMode;
 }
 
+export const BUILDER_STEPS = ['basics', 'rules', 'bonus', 'look', 'winners', 'review'] as const;
+
+export type BuilderStep = (typeof BUILDER_STEPS)[number];
+
+export const STEP_LABELS: Record<BuilderStep, string> = {
+  basics: 'Prize & timing',
+  rules: 'Requirements',
+  bonus: 'Bonus entries',
+  look: 'Appearance',
+  winners: 'Winner settings',
+  review: 'Review & publish',
+};
+
+export const STEP_HINTS: Record<BuilderStep, string> = {
+  basics: 'What is being given away, and how long it runs.',
+  rules: 'Who is allowed to enter.',
+  bonus: 'Who gets more than one entry.',
+  look: 'How the giveaway message looks.',
+  winners: 'How winners are told, and what they get.',
+  review: 'Check it over, then publish.',
+};
+
 export interface GiveawayDraft {
   guildId: string;
   channelId: string;
   hostId: string;
 
+  step: BuilderStep;
+
   title: string;
   description: string | null;
   durationMs: number;
+  startsInMs: number | null;
   winnerCount: number;
 
   requirementLogic: RequirementLogic;
   verifyOn: VerifyOn;
   maxEntriesPerUser: number | null;
   claimWindowSeconds: number | null;
+
+  bannerUrl: string | null;
+  color: number | null;
+  emoji: string | null;
+  buttonStyle: number;
+
+  dmWinners: boolean;
+  winMessage: string | null;
+  rewardRoleId: string | null;
 
   requirements: DraftItem[];
   multipliers: DraftMultiplier[];
@@ -61,14 +95,23 @@ export function emptyDraft(
     guildId,
     channelId,
     hostId,
+    step: 'basics',
     title: '',
     description: null,
     durationMs: 24 * 60 * 60 * 1000,
+    startsInMs: null,
     winnerCount: defaults.winnerCount,
     requirementLogic: 'all',
     verifyOn: 'both',
     maxEntriesPerUser: null,
     claimWindowSeconds: defaults.claimWindowSeconds ?? null,
+    bannerUrl: null,
+    color: null,
+    emoji: null,
+    buttonStyle: 1,
+    dmWinners: false,
+    winMessage: null,
+    rewardRoleId: null,
     requirements: [],
     multipliers: [],
     updatedAt: now,

@@ -5,7 +5,9 @@ import { type GiveawaysConfig, MODULE_ID } from './config.ts';
 import { flushCounts } from './counter.ts';
 import { bindDraw, clockOf, type GiveawaysDeps } from './deps.ts';
 import { drawGiveaway } from './end.ts';
+import { publishStarted } from './events.ts';
 import { reconcile } from './reconcile.ts';
+import { scheduleNextRun } from './recurrence.ts';
 import { rerollGiveaway } from './reroll.ts';
 
 export const START_JOB_ID = 'start';
@@ -63,6 +65,8 @@ export function createStartHandler(deps: GiveawaysDeps): ScheduledHandler<Giveaw
     await ctx.schedule?.(END_JOB_ID, started.endsAt, `${MODULE_ID}:${started.id}`, {
       giveawayId: started.id,
     });
+
+    await publishStarted(ctx, bound.bound.store, started);
   };
 }
 
@@ -135,6 +139,14 @@ export function createEndHandler(deps: GiveawaysDeps): ScheduledHandler<Giveaway
 
     await publishResult(ctx, bound.bound, { giveaway: drawn.giveaway, summary: drawn.summary });
     await deps.dirty?.clear(ctx.guildId, giveawayId);
+
+    await scheduleNextRun(
+      ctx,
+      bound.bound.store,
+      drawn.giveaway,
+      START_JOB_ID,
+      new Date(clockOf(deps)()),
+    );
   };
 }
 
@@ -194,6 +206,7 @@ export function createReconcileHandler(deps: GiveawaysDeps): ScheduledHandler<Gi
         await ctx.schedule?.(END_JOB_ID, started.endsAt, `${MODULE_ID}:${started.id}`, {
           giveawayId: started.id,
         });
+        await publishStarted(ctx, bound.bound.store, started);
       }
 
       for (const giveaway of result.overdue) {
@@ -212,6 +225,8 @@ export function createReconcileHandler(deps: GiveawaysDeps): ScheduledHandler<Gi
             giveaway: drawn.giveaway,
             summary: drawn.summary,
           });
+
+          await scheduleNextRun(ctx, bound.bound.store, drawn.giveaway, START_JOB_ID, now);
         }
       }
 
@@ -274,6 +289,7 @@ export function createClaimHandler(deps: GiveawaysDeps): ScheduledHandler<Giveaw
             giveaway: rerolled.giveaway,
             summary: rerolled.summary,
             reroll: true,
+            replacedIds: rerolled.replaced,
           });
         }
       }

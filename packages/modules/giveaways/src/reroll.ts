@@ -2,7 +2,7 @@ import { type DrawDeps, type DrawSummary, drawGiveaway } from './end.ts';
 import type { Giveaway } from './store.ts';
 
 export type RerollOutcome =
-  | { outcome: 'rerolled'; giveaway: Giveaway; summary: DrawSummary }
+  | { outcome: 'rerolled'; giveaway: Giveaway; summary: DrawSummary; replaced: string[] }
   | { outcome: 'still-running'; giveaway: Giveaway }
   | { outcome: 'cancelled'; giveaway: Giveaway }
   | { outcome: 'nobody-left'; giveaway: Giveaway; summary: DrawSummary }
@@ -80,5 +80,10 @@ export async function rerollGiveaway(deps: DrawDeps, input: RerollInput): Promis
     );
   }
 
-  return { outcome: 'rerolled', giveaway: drawn.giveaway, summary: drawn.summary };
+  return {
+    outcome: 'rerolled',
+    giveaway: drawn.giveaway,
+    summary: drawn.summary,
+    replaced: superseded.map((win) => win.userId),
+  };
 }

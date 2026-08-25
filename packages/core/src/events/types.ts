@@ -57,6 +57,16 @@ export const EVENT_TYPES = [
 
   'moderation.warned',
 
+  'giveaways.created',
+  'giveaways.started',
+  'giveaways.edited',
+  'giveaways.paused',
+  'giveaways.resumed',
+  'giveaways.cancelled',
+  'giveaways.ended',
+  'giveaways.rerolled',
+  'giveaways.bonus_granted',
+
   'tickets.opened',
   'tickets.claimed',
   'tickets.closed',

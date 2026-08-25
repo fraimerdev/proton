@@ -13,6 +13,10 @@ export const TOP_ENTRANTS = 10;
 export const MAX_ENTRIES_PER_USER_MAX = 1000;
 export const ROLE_LIST_MAX = 25;
 export const BONUS_LIST_MAX = 20;
+export const HISTORY_MAX = 40;
+
+// Discord's own ceiling for a message body; a long history is trimmed rather than refused.
+export const MESSAGE_CONTENT_MAX = 2000;
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 

@@ -23,6 +23,7 @@ import { formatShortCode } from './short-code.ts';
 export const GIVEAWAY_CARDS = [
   'scheduled',
   'active',
+  'drop',
   'paused',
   'drawing',
   'ended',
@@ -229,6 +230,29 @@ export function buildActive(input: CardInput): ComponentsResult {
   return container(input, body);
 }
 
+/**
+ * A drop has no countdown and no entrant count — there is nothing to count down to and nobody is
+ * entered. It is won by pressing first, so the card says that and nothing else.
+ */
+export function buildDrop(input: CardInput): ComponentsResult {
+  const body = opening(input);
+
+  body.push(
+    text('\u{1F381} **DROP**\nFirst eligible member to press it wins. No draw, no waiting.'),
+    text(`\u{1F464} **Hosted by**\n<@${input.view.hostId}>`),
+  );
+
+  const requirements = requirementBlock(input);
+  if (requirements) body.push(requirements);
+
+  const rows = entryRows(input, true);
+  if (!rows.ok) return rows;
+
+  body.push(separator(), ...rows.components, footer(input.view));
+
+  return container(input, body);
+}
+
 export function buildPaused(input: CardInput): ComponentsResult {
   const body = opening(input);
 
@@ -341,6 +365,7 @@ export function buildCancelled(input: CardInput): ComponentsResult {
 const BUILDERS: Record<GiveawayCard, (input: CardInput) => ComponentsResult> = {
   scheduled: buildScheduled,
   active: buildActive,
+  drop: buildDrop,
   paused: buildPaused,
   drawing: buildDrawing,
   ended: buildEnded,
@@ -349,7 +374,13 @@ const BUILDERS: Record<GiveawayCard, (input: CardInput) => ComponentsResult> = {
   rerolled: buildRerolled,
 };
 
-export function cardFor(status: string, winnerIds: readonly string[] = []): GiveawayCard {
+export function cardFor(
+  status: string,
+  winnerIds: readonly string[] = [],
+  entryMethod: string = 'button',
+): GiveawayCard {
+  if (status === 'running' && entryMethod === 'drop') return 'drop';
+
   switch (status) {
     case 'scheduled':
       return 'scheduled';

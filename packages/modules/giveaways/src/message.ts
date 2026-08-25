@@ -127,28 +127,32 @@ export function claimRow(giveawayId: string, drawNumber: number): ComponentsResu
   };
 }
 
+// `prize` is the prize list where one is configured, so a multi-prize giveaway announces what was
+// actually on offer rather than only the title.
 export function announcement(
   view: GiveawayView,
   winnerIds: readonly string[],
   link: string,
+  prize: string = view.title,
 ): string {
   if (winnerIds.length === 0) {
-    return `Nobody qualified for **${view.title}**, so it went undrawn. ${link}`;
+    return `Nobody qualified for **${prize}**, so it went undrawn. ${link}`;
   }
 
-  return `${mentionAll(winnerIds)} — you won **${view.title}**! ` + `Congratulations. ${link}`;
+  return `${mentionAll(winnerIds)} — you won **${prize}**! Congratulations. ${link}`;
 }
 
 export function rerollAnnouncement(
   view: GiveawayView,
   winnerIds: readonly string[],
   link: string,
+  prize: string = view.title,
 ): string {
   if (winnerIds.length === 0) {
-    return `There was nobody left to reroll for **${view.title}**. ${link}`;
+    return `There was nobody left to reroll for **${prize}**. ${link}`;
   }
 
-  return `${mentionAll(winnerIds)} — you won the reroll for **${view.title}**! ${link}`;
+  return `${mentionAll(winnerIds)} — you won the reroll for **${prize}**! ${link}`;
 }
 
 export interface ListEntry {

@@ -1,6 +1,7 @@
 import type { ProviderRegistry } from '@proton/core';
 import { refreshMessage } from './announce.ts';
 import { MODULE_ID } from './config.ts';
+import { publishEdited, publishPaused, publishResumed } from './events.ts';
 import type { Ctx } from './perform.ts';
 import { END_JOB_ID } from './schedule.ts';
 import type { Giveaway, GiveawayPatch, GiveawayStore } from './store.ts';
@@ -59,6 +60,7 @@ export async function pauseGiveaway(
   // The end job is left where it is: resume pushes ends_at forward and reschedules, and a job that
   // fires while paused finds a non-running row and draws nothing.
   await repaint(ctx, deps, paused, `giveaways:${paused.id}:pause:${at.getTime()}`);
+  await publishPaused(ctx, deps.store, paused, input.by);
 
   return { outcome: 'ok', giveaway: paused };
 }
@@ -66,15 +68,23 @@ export async function pauseGiveaway(
 export async function resumeGiveaway(
   ctx: Ctx,
   deps: ManageDeps,
-  input: { giveawayId: string },
+  input: { giveawayId: string; by: string },
 ): Promise<ManageOutcome> {
   const at = new Date(deps.now?.() ?? Date.now());
+
+  // Read before the write: pausedMs is cumulative across every pause, so the time held by *this*
+  // one is only knowable as the difference.
+  const before = await deps.store.get(ctx.guildId, input.giveawayId);
 
   const resumed = await deps.store.resume(ctx.guildId, input.giveawayId, at);
   if (!resumed) return wrongState(deps, ctx.guildId, input.giveawayId);
 
   await rescheduleEnd(ctx, resumed);
   await repaint(ctx, deps, resumed, `giveaways:${resumed.id}:resume:${at.getTime()}`);
+  await publishResumed(ctx, deps.store, resumed, {
+    actorId: input.by,
+    heldMs: resumed.pausedMs - (before?.pausedMs ?? 0),
+  });
 
   return { outcome: 'ok', giveaway: resumed };
 }
@@ -89,7 +99,7 @@ export type ShiftOutcome = ManageOutcome | { outcome: 'too-short'; giveaway: Giv
 export async function shiftDeadline(
   ctx: Ctx,
   deps: ManageDeps,
-  input: { giveawayId: string; byMs: number },
+  input: { giveawayId: string; byMs: number; by: string },
 ): Promise<ShiftOutcome> {
   const at = new Date(deps.now?.() ?? Date.now());
 
@@ -110,6 +120,12 @@ export async function shiftDeadline(
 
   await rescheduleEnd(ctx, patched);
   await repaint(ctx, deps, patched, `giveaways:${patched.id}:shift:${endsAt.getTime()}`);
+  await publishEdited(ctx, deps.store, patched, {
+    actorId: input.by,
+    kind: input.byMs > 0 ? 'extended' : 'shortened',
+    changed: [input.byMs > 0 ? 'extended' : 'shortened'],
+    endsAtBefore: current.endsAt,
+  });
 
   return { outcome: 'ok', giveaway: patched };
 }
@@ -117,8 +133,10 @@ export async function shiftDeadline(
 export async function editGiveawayFields(
   ctx: Ctx,
   deps: ManageDeps,
-  input: { giveawayId: string; patch: GiveawayPatch },
+  input: { giveawayId: string; patch: GiveawayPatch; by: string },
 ): Promise<ManageOutcome> {
+  const before = await deps.store.get(ctx.guildId, input.giveawayId);
+
   const patched = await deps.store.patch(
     ctx.guildId,
     input.giveawayId,
@@ -132,6 +150,11 @@ export async function editGiveawayFields(
 
   // Keyed on updatedAt so two different edits are two different edits, and a redelivered one is not.
   await repaint(ctx, deps, patched, `giveaways:${patched.id}:edit:${patched.updatedAt.getTime()}`);
+  await publishEdited(ctx, deps.store, patched, {
+    actorId: input.by,
+    changed: Object.keys(input.patch),
+    endsAtBefore: before?.endsAt ?? null,
+  });
 
   return { outcome: 'ok', giveaway: patched };
 }

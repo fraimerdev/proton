@@ -8,6 +8,7 @@ import {
   giveawaysDefaultConfig,
 } from './config.ts';
 import type { GiveawaysDeps } from './deps.ts';
+import { GIVEAWAY_EMITS } from './events.ts';
 import {
   createBuilderModalListener,
   createEnterListener,
@@ -37,6 +38,7 @@ export {
   handleAutocomplete,
   stateFor,
 } from './autocomplete.ts';
+export { blockingConflicts, type Conflict, findConflicts } from './builder/conflicts.ts';
 export {
   type BuilderDeps,
   type BuilderReply,
@@ -68,12 +70,12 @@ export {
   BUILDER_PREVIEW,
   BUILDER_REMOVE,
   BUILDER_START,
-  basicsModal,
-  builderScreen,
   ITEM_MODAL,
   type ScreenResult,
 } from './builder/screens.ts';
 export {
+  BUILDER_STEPS,
+  type BuilderStep,
   DRAFT_PREFIX,
   DRAFT_TTL_MS,
   type DraftItem,
@@ -84,7 +86,28 @@ export {
   type GiveawayDraft,
   MemoryDraftStore,
   RedisDraftStore,
+  STEP_HINTS,
+  STEP_LABELS,
 } from './builder/state.ts';
+export {
+  applyStepModal,
+  STEP_MODAL,
+  stepModal,
+} from './builder/step-modals.ts';
+export {
+  BUILDER_CATEGORY,
+  BUILDER_EDIT_STEP,
+  BUILDER_ITEM_EDIT,
+  BUILDER_ITEM_REMOVE,
+  BUILDER_MODE,
+  BUILDER_NAV,
+  BUILDER_PICK,
+  categoriesOf,
+  categoryLabel,
+  readyToPublish,
+  type StepResult,
+  stepScreen,
+} from './builder/steps.ts';
 export {
   CLEANUP_EVENT_TYPES,
   type CleanupOutcome,
@@ -189,6 +212,18 @@ export {
   RedisEntryBucket,
   snapshotOf,
 } from './entry.ts';
+export {
+  GIVEAWAY_EMITS,
+  publishBonus,
+  publishCancelled,
+  publishCreated,
+  publishDrawn,
+  publishEdited,
+  publishOrphaned,
+  publishPaused,
+  publishResumed,
+  publishStarted,
+} from './events.ts';
 export {
   type EnterId,
   type EnterOutcome as EnterPressOutcome,
@@ -295,19 +330,28 @@ export {
   BLACKLIST_SUBJECTS,
   type BlacklistEntry,
   type BlacklistSubject,
+  BONUS_MAX,
+  BONUS_MIN,
+  type BonusGrant,
   type CreateGiveawayInput,
   type Disqualification,
   type DrawRecord,
   type EnterOutcome,
   type EntrantRow,
+  GIVEAWAY_EVENT_KINDS,
   GIVEAWAY_STATUSES,
   type Giveaway,
+  type GiveawayEvent,
+  type GiveawayEventKind,
+  type GiveawayStats,
   type GiveawayStatus,
   type GiveawayStore,
   type ListGiveawaysQuery,
   type MemberSnapshot,
   type MultiplierRow,
+  type NewBonus,
   type NewEntry,
+  type NewGiveawayEvent,
   REQUIREMENT_LOGICS,
   type RecordDrawInput,
   type RequirementLogic,
@@ -320,16 +364,20 @@ export {
 } from './store.ts';
 export {
   type GiveawayBlacklistRow,
+  type GiveawayBonusRow,
   type GiveawayDrawRow,
   type GiveawayEntryRow,
+  type GiveawayEventRow,
   type GiveawayMultiplierRow,
   type GiveawayRequirementRow,
   type GiveawayRow,
   type GiveawayTemplateRow,
   type GiveawayWinRow,
   giveawayBlacklist,
+  giveawayBonusEntries,
   giveawayDraws,
   giveawayEntries,
+  giveawayEvents,
   giveawayMultipliers,
   giveawayRequirements,
   giveaways,
@@ -367,6 +415,8 @@ export function createGiveawaysModule(
       'giveaway_draw',
       'create_dm',
     ],
+
+    emits: GIVEAWAY_EMITS,
 
     commands: giveawayCommands(deps),
     listeners: [

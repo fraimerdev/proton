@@ -8,8 +8,8 @@ import {
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import { publishResult, refreshMessage } from './announce.ts';
-import { builderScreen } from './builder/screens.ts';
 import { draftKey, emptyDraft } from './builder/state.ts';
+import { stepScreen } from './builder/steps.ts';
 import {
   DESCRIPTION_MAX,
   GIVEAWAY_LIST_MAX,
@@ -24,13 +24,18 @@ import {
 import { bindBuilder, bindDraw, bindStore, describeUnbound, type GiveawaysDeps } from './deps.ts';
 import { renderCard } from './embed.ts';
 import { cancelGiveaway, drawGiveaway } from './end.ts';
+import { publishCancelled, publishCreated } from './events.ts';
 import {
   bonusCommand,
   editCommand,
+  entrantsCommand,
+  exportCommand,
+  historyCommand,
   infoCommand,
   pauseCommand,
   resumeCommand,
   shiftCommand,
+  statsCommand,
 } from './manage-commands.ts';
 import { renderList, viewOf } from './message.ts';
 import {
@@ -41,8 +46,9 @@ import {
   sentMessageId,
   succeeded,
 } from './perform.ts';
+import { scheduleNextRun } from './recurrence.ts';
 import { rerollGiveaway } from './reroll.ts';
-import { END_JOB_ID } from './schedule.ts';
+import { END_JOB_ID, START_JOB_ID } from './schedule.ts';
 import type { GiveawayStore } from './store.ts';
 import { BONUS_MAX, BONUS_MIN } from './store.ts';
 import { templatePayloadSchema } from './templates.ts';
@@ -85,6 +91,31 @@ function builder(): SlashCommandBuilder {
           .setDescription('How many members win. Defaults to this server’s setting.')
           .setMinValue(1)
           .setMaxValue(WINNER_COUNT_MAX),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('description')
+          .setDescription('Extra detail shown under the title.')
+          .setMaxLength(DESCRIPTION_MAX),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('drop')
+      .setDescription('Post a drop — the first eligible member to press it wins, with no draw.')
+      .addStringOption((option) =>
+        option
+          .setName('prize')
+          .setDescription('What is being dropped.')
+          .setRequired(true)
+          .setMaxLength(TITLE_MAX),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('expires')
+          .setDescription('How long before it gives up unclaimed. Defaults to 24h.')
+          .setMaxLength(16),
       )
       .addStringOption((option) =>
         option
@@ -268,6 +299,52 @@ function builder(): SlashCommandBuilder {
           .setRequired(true)
           .setAutocomplete(true),
       ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('entrants')
+      .setDescription('Page through everybody in a giveaway and how many entries they hold.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addIntegerOption((option) =>
+        option.setName('page').setDescription('Which page.').setMinValue(1),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('export')
+      .setDescription('Download the entrant list as a CSV, for an audit.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('history')
+      .setDescription('Everything that has happened to one giveaway, in order.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub.setName('stats').setDescription('Giveaway totals for this server.'),
   );
 
   command.addSubcommand((sub) =>
@@ -456,6 +533,96 @@ async function refuseUnbound(ctx: Ctx, what: string, unbound: readonly string[])
   await reply(ctx, NOT_WIRED);
 }
 
+/**
+ * A drop is a giveaway with `entry_method = 'drop'` and one winner. `ends_at` is not a deadline
+ * anybody counts down to — it is the point at which an unclaimed drop gives up, so the end job
+ * still needs one.
+ */
+async function drop(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promise<void> {
+  const raw = ctx.options.getString('expires');
+  const expiry = parseGiveawayDuration(raw ?? '24h');
+  if (!expiry.ok) {
+    await reply(ctx, expiry.humanReason);
+    return;
+  }
+
+  const title = (ctx.options.getString('prize') ?? '').trim();
+  if (title.length === 0) {
+    await reply(ctx, 'A drop needs something to drop. Say what the prize is.');
+    return;
+  }
+
+  const running = await store.countRunning(ctx.guildId);
+  const limit = checkLimit(tierOf(ctx), 'activeGiveaways', running);
+  if (!limit.ok) {
+    await reply(ctx, limit.humanReason);
+    return;
+  }
+
+  const id = newId();
+  const endsAt = new Date((deps.now?.() ?? Date.now()) + expiry.ms);
+
+  const giveaway = await store.create({
+    id,
+    guildId: ctx.guildId,
+    channelId: ctx.channelId,
+    messageId: null,
+    hostId: ctx.userId,
+    title,
+    description: ctx.options.getString('description') ?? null,
+    winnerCount: 1,
+    entryMethod: 'drop',
+    endsAt,
+    createdBy: ctx.userId,
+  });
+
+  const rendered = renderCard('drop', {
+    view: viewOf(giveaway),
+    entrantCount: 0,
+    requirements: [],
+    multipliers: [],
+    accentColor: ctx.config.embedColor,
+  });
+
+  if (!rendered.ok) {
+    await reply(ctx, `I could not build the drop message: ${rendered.humanReason}`);
+    return;
+  }
+
+  const posted = await postGiveaway(ctx, {
+    channelId: ctx.channelId,
+    actorId: ctx.userId,
+    components: rendered.components,
+    idempotencyKey: `${ctx.idempotencyKey}:drop`,
+  });
+
+  if (!succeeded(posted)) {
+    await reply(
+      ctx,
+      `The drop was created but I could not post it: ${
+        posted.failure?.humanReason ?? 'Discord refused the message.'
+      }`,
+    );
+    return;
+  }
+
+  const messageId = sentMessageId(posted);
+  if (messageId) await store.setMessageId(id, messageId);
+
+  await ctx.schedule?.(END_JOB_ID, endsAt, `${MODULE_ID}:${id}`, { giveawayId: id });
+  await publishCreated(
+    ctx,
+    store,
+    { ...giveaway, messageId: messageId ?? null },
+    {
+      requirements: 0,
+      multipliers: 0,
+    },
+  );
+
+  await reply(ctx, `**${title}** is up for grabs. First eligible member to press it takes it.`);
+}
+
 async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promise<void> {
   const duration = parseGiveawayDuration(ctx.options.getString('duration') ?? '');
   if (!duration.ok) {
@@ -533,6 +700,13 @@ async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promi
   // up even if the schedule row itself was never written.
   await ctx.schedule?.(END_JOB_ID, endsAt, `${MODULE_ID}:${id}`, { giveawayId: id });
 
+  await publishCreated(
+    ctx,
+    store,
+    { ...giveaway, messageId: messageId ?? null },
+    { requirements: 0, multipliers: 0 },
+  );
+
   await reply(
     ctx,
     `**${title}** is live — ${plural(winnerCount, 'winner')}, drawn <t:${Math.floor(
@@ -573,7 +747,7 @@ async function create(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
     ctx.guildId,
     bound.bound.availability,
   );
-  const screen = builderScreen(draft, bound.bound.providers, available);
+  const screen = stepScreen(draft, bound.bound.providers, available);
 
   if (!screen.ok) {
     await reply(ctx, `I could not open the builder: ${screen.humanReason}`);
@@ -702,7 +876,7 @@ async function template(
     ctx.guildId,
     bound.bound.availability,
   );
-  const screen = builderScreen(draft, bound.bound.providers, available);
+  const screen = stepScreen(draft, bound.bound.providers, available);
 
   if (!screen.ok) {
     await reply(ctx, `I could not open the builder: ${screen.humanReason}`);
@@ -753,6 +927,7 @@ async function end(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
         summary: drawn.summary,
       });
       await deps.dirty?.clear(ctx.guildId, giveawayId);
+      await scheduleNextRun(ctx, bound.bound.store, drawn.giveaway, START_JOB_ID);
 
       await reply(
         ctx,
@@ -790,6 +965,11 @@ async function cancel(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
     await reply(ctx, 'That giveaway is not running, so there was nothing to cancel.');
     return;
   }
+
+  await publishCancelled(ctx, bound.bound.store, outcome.giveaway, {
+    actorId: ctx.userId,
+    entrantCount: await bound.bound.store.entrantCount(outcome.giveaway.id),
+  });
 
   await reply(ctx, `**${outcome.giveaway.title}** was cancelled. Nobody was drawn.`);
 }
@@ -836,6 +1016,7 @@ async function reroll(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
         giveaway: outcome.giveaway,
         summary: outcome.summary,
         reroll: true,
+        replacedIds: outcome.replaced,
       });
       await reply(ctx, `Rerolled. ${plural(outcome.summary.winnerIds.length, 'new winner')}.`);
       return;
@@ -1001,6 +1182,9 @@ export function giveawayCommands(deps: GiveawaysDeps): CommandDefinition<Giveawa
           case 'start':
             await start(ctx, deps, store);
             return;
+          case 'drop':
+            await drop(ctx, deps, store);
+            return;
           case 'end':
             await end(ctx, deps);
             return;
@@ -1027,6 +1211,18 @@ export function giveawayCommands(deps: GiveawaysDeps): CommandDefinition<Giveawa
             return;
           case 'info':
             await infoCommand(ctx, deps, store);
+            return;
+          case 'entrants':
+            await entrantsCommand(ctx, store);
+            return;
+          case 'export':
+            await exportCommand(ctx, store);
+            return;
+          case 'history':
+            await historyCommand(ctx, store);
+            return;
+          case 'stats':
+            await statsCommand(ctx, store);
             return;
           case 'list':
             await list(ctx, store);

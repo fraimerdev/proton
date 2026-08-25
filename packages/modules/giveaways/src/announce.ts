@@ -1,15 +1,18 @@
 import { describeMultipliers, describeRequirements, type ProviderRegistry } from '@proton/core';
 import { cardFor, renderCard } from './embed.ts';
 import type { DrawSummary } from './end.ts';
+import { publishDrawn } from './events.ts';
 import { announcement, claimRow, rerollAnnouncement, viewOf } from './message.ts';
 import {
   announceWinners,
   type Ctx,
   dmWinner,
   editGiveaway,
+  grantRewardRole,
   notifyHost,
   recordDrawCase,
 } from './perform.ts';
+import { describePrizes, parsePrizes, prizesForWinners } from './prizes.ts';
 import type { Giveaway, GiveawayStore } from './store.ts';
 
 export interface PublishDeps {
@@ -55,7 +58,7 @@ export async function refreshMessage(
     deps.store.entrantCount(giveaway.id),
   ]);
 
-  const rendered = renderCard(cardFor(giveaway.status), {
+  const rendered = renderCard(cardFor(giveaway.status, [], giveaway.entryMethod), {
     view: viewOf(giveaway),
     entrantCount,
     requirements,
@@ -89,6 +92,7 @@ export interface PublishInput {
   giveaway: Giveaway;
   summary: DrawSummary;
   reroll?: boolean;
+  replacedIds?: readonly string[];
 }
 
 export async function publishResult(
@@ -101,6 +105,7 @@ export async function publishResult(
   const root = `${giveaway.guildId}:${giveaway.id}:${summary.drawNumber}`;
 
   const { requirements, multipliers } = await describeBoth(deps, giveaway);
+  const prizeLabel = describePrizes(parsePrizes(giveaway.prizes), giveaway.title);
 
   // A reroll repaints too: leaving the first winners standing on the message while a different
   // set is announced below it is the single most confusing thing this module can do.
@@ -130,6 +135,11 @@ export async function publishResult(
       });
     }
   }
+
+  await publishDrawn(ctx, deps.store, giveaway, summary, {
+    ...(input.reroll ? { reroll: true } : {}),
+    ...(input.replacedIds ? { replacedIds: input.replacedIds } : {}),
+  });
 
   await recordDrawCase(ctx, {
     giveawayId: giveaway.id,
@@ -164,12 +174,43 @@ export async function publishResult(
       channelId: giveaway.channelId,
       actorId: giveaway.hostId,
       content: input.reroll
-        ? rerollAnnouncement(view, summary.winnerIds, link)
-        : announcement(view, summary.winnerIds, link),
+        ? rerollAnnouncement(view, summary.winnerIds, link, prizeLabel)
+        : announcement(view, summary.winnerIds, link, prizeLabel),
       ping: summary.winnerIds,
       ...(claim?.ok ? { components: claim.components } : {}),
       idempotencyKey: `giveaways:${root}:announce`,
     });
+  }
+
+  // Reward roles before the DM: a winner reading "you won" should already have the role, and a
+  // hierarchy refusal has to reach the host rather than sitting in a warn log nobody opens.
+  if (giveaway.rewardRoleId !== null && summary.winnerIds.length > 0) {
+    const refusals: string[] = [];
+
+    for (const userId of summary.winnerIds) {
+      const granted = await grantRewardRole(
+        ctx,
+        userId,
+        giveaway.rewardRoleId,
+        `giveaways:${root}:reward:${userId}`,
+      );
+
+      if (!granted.ok) refusals.push(`<@${userId}> — ${granted.humanReason}`);
+    }
+
+    if (refusals.length > 0 && ctx.config.logChannelId) {
+      await notifyHost(
+        ctx,
+        ctx.config.logChannelId,
+        giveaway.hostId,
+        `<@${giveaway.hostId}> — the reward role for **${giveaway.title}** could not be given ` +
+          `to ${refusals.length === 1 ? 'a winner' : 'some winners'}:\n` +
+          refusals.map((line) => `• ${line}`).join('\n') +
+          '\nProton needs Manage Roles, and its own highest role has to sit above the reward ' +
+          'role.',
+        `giveaways:${root}:reward-failed`,
+      );
+    }
   }
 
   // A member with DMs closed is skipped rather than retried: the channel announcement is the
@@ -180,12 +221,21 @@ export async function publishResult(
         ? ''
         : ` ${`https://discord.com/channels/${giveaway.guildId}/${giveaway.channelId}/${giveaway.messageId}`}`;
 
+    // Per winner, so a multi-prize giveaway tells each of them what they actually won.
+    const prizes = prizesForWinners(
+      parsePrizes(giveaway.prizes),
+      summary.winnerIds.length,
+      giveaway.title,
+    );
+
     let closed = 0;
-    for (const userId of summary.winnerIds) {
+    for (const [index, userId] of summary.winnerIds.entries()) {
+      const won = prizes[index] ?? giveaway.title;
+
       const outcome = await dmWinner(
         ctx,
         userId,
-        giveaway.winMessage ?? `You won **${giveaway.title}**! Congratulations.${link}`,
+        giveaway.winMessage ?? `You won **${won}**! Congratulations.${link}`,
         `giveaways:${root}:${userId}`,
       );
 

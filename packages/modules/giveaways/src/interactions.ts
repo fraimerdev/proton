@@ -1,5 +1,6 @@
 import {
   absentMemberContext,
+  evaluateRequirement,
   interactionRef,
   memberContextFromGuildMember,
   type ProtonEvent,
@@ -8,7 +9,7 @@ import {
 } from '@proton/core';
 import { MODULE_ID } from './config.ts';
 import { bindEntry, clockOf, type GiveawaysDeps } from './deps.ts';
-import { describeJoin, join } from './entry.ts';
+import { describeJoin, isBlacklisted, join } from './entry.ts';
 import { inspectRequirements, renderMultipliers, renderRequirements } from './inspect.ts';
 import {
   CLAIM_ACTION,
@@ -160,6 +161,58 @@ export async function handleEnter(
       root,
       'I could not read who you are from that button press. Try again.',
     );
+    return 'answered';
+  }
+
+  // A drop is decided at the press, not at a deadline: requirements are evaluated exactly as for a
+  // normal entry, and the first member who clears them takes it.
+  if (giveaway.entryMethod === 'drop' && id.action === ENTER_ACTION) {
+    const verdict = await evaluateRequirement(
+      providers,
+      memberCtx,
+      requirementRows.map((row) => ({ providerId: row.providerId, config: row.config })),
+      giveaway.requirementLogic,
+    );
+
+    if (isBlacklisted(blacklist, interaction.userId, memberCtx.member?.roleIds ?? null)) {
+      await tellEntrant(
+        ctx,
+        { applicationId, interaction: ref },
+        interaction.userId,
+        root,
+        'You are not eligible for giveaways in this server.',
+      );
+      return 'answered';
+    }
+
+    if (!verdict.passed) {
+      await tellEntrant(
+        ctx,
+        { applicationId, interaction: ref },
+        interaction.userId,
+        root,
+        [
+          `You cannot claim **${giveaway.title}**. Here is what is missing:`,
+          ...verdict.failures.map((failure) => `• ${failure.humanReason}`),
+        ].join('\n'),
+      );
+      return 'answered';
+    }
+
+    const dropped = await store.claimDrop(ctx.guildId, giveaway.id, interaction.userId, now);
+
+    await tellEntrant(
+      ctx,
+      { applicationId, interaction: ref },
+      interaction.userId,
+      root,
+      dropped.outcome === 'won'
+        ? `You claimed **${giveaway.title}**. It is yours.`
+        : dropped.outcome === 'taken'
+          ? `Somebody was faster — **${giveaway.title}** has already gone.`
+          : 'That giveaway no longer exists.',
+    );
+
     return 'answered';
   }
 

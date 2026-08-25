@@ -24,10 +24,14 @@ import type {
   CreateGiveawayInput,
   Disqualification,
   DrawRecord,
+  DropOutcome,
   EnterOutcome,
   EntrantRow,
   Giveaway,
+  GiveawayEvent,
+  GiveawayEventKind,
   GiveawayPatch,
+  GiveawayStats,
   GiveawayStatus,
   GiveawayStore,
   ListGiveawaysQuery,
@@ -35,12 +39,14 @@ import type {
   MultiplierRow,
   NewBonus,
   NewEntry,
+  NewGiveawayEvent,
   RecordDrawInput,
   RequirementRow,
   Reweigh,
   TemplateRecord,
   WinRecord,
 } from './store.ts';
+import { GIVEAWAY_STATUSES } from './store.ts';
 import {
   type GiveawayBonusRow,
   type GiveawayRow,
@@ -48,6 +54,7 @@ import {
   giveawayBonusEntries,
   giveawayDraws,
   giveawayEntries,
+  giveawayEvents,
   giveawayMultipliers,
   giveawayRequirements,
   giveaways,
@@ -70,6 +77,7 @@ function toGiveaway(row: GiveawayRow): Giveaway {
     buttonStyle: row.buttonStyle,
     winnerCount: row.winnerCount,
     requirementLogic: row.requirementLogic === 'any' ? 'any' : 'all',
+    requirementTree: row.requirementTree,
     maxEntriesPerUser: row.maxEntriesPerUser,
     verifyOn: row.verifyOn === 'join' ? 'join' : row.verifyOn === 'draw' ? 'draw' : 'both',
     startsAt: row.startsAt,
@@ -87,8 +95,12 @@ function toGiveaway(row: GiveawayRow): Giveaway {
     claimWindowSeconds: row.claimWindowSeconds,
     dmWinners: row.dmWinners,
     winMessage: row.winMessage,
+    prizes: row.prizes,
+    rewardRoleId: row.rewardRoleId,
     templateId: row.templateId,
     recurrence: row.recurrence,
+    recurrenceConfig: row.recurrenceConfig,
+    recurrenceLeft: row.recurrenceLeft,
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -148,6 +160,7 @@ export class DrizzleGiveawayStore implements GiveawayStore {
           buttonStyle: input.buttonStyle ?? 1,
           winnerCount: input.winnerCount,
           requirementLogic: input.requirementLogic ?? 'all',
+          requirementTree: input.requirementTree ?? null,
           maxEntriesPerUser: input.maxEntriesPerUser ?? null,
           verifyOn: input.verifyOn ?? 'both',
           startsAt: input.startsAt ?? null,
@@ -158,8 +171,12 @@ export class DrizzleGiveawayStore implements GiveawayStore {
           claimWindowSeconds: input.claimWindowSeconds ?? null,
           dmWinners: input.dmWinners ?? false,
           winMessage: input.winMessage ?? null,
+          prizes: input.prizes ?? null,
+          rewardRoleId: input.rewardRoleId ?? null,
           templateId: input.templateId ?? null,
           recurrence: input.recurrence ?? null,
+          recurrenceConfig: input.recurrenceConfig ?? null,
+          recurrenceLeft: input.recurrenceLeft ?? null,
           createdBy: input.createdBy,
         })
         .returning();
@@ -363,7 +380,11 @@ export class DrizzleGiveawayStore implements GiveawayStore {
       .select({ value: count() })
       .from(giveawayEntries)
       .where(
-        and(eq(giveawayEntries.giveawayId, giveawayId), isNull(giveawayEntries.disqualifiedAt)),
+        and(
+          eq(giveawayEntries.giveawayId, giveawayId),
+          isNull(giveawayEntries.disqualifiedAt),
+          isNull(giveawayEntries.leftAt),
+        ),
       );
 
     return row?.value ?? 0;
@@ -379,6 +400,7 @@ export class DrizzleGiveawayStore implements GiveawayStore {
         and(
           inArray(giveawayEntries.giveawayId, [...giveawayIds]),
           isNull(giveawayEntries.disqualifiedAt),
+          isNull(giveawayEntries.leftAt),
         ),
       )
       .groupBy(giveawayEntries.giveawayId);
@@ -395,6 +417,7 @@ export class DrizzleGiveawayStore implements GiveawayStore {
       const filters = [
         eq(giveawayEntries.giveawayId, giveawayId),
         isNull(giveawayEntries.disqualifiedAt),
+        isNull(giveawayEntries.leftAt),
       ];
       if (after !== null) filters.push(gt(giveawayEntries.userId, after));
 
@@ -424,7 +447,11 @@ export class DrizzleGiveawayStore implements GiveawayStore {
       .select()
       .from(giveawayEntries)
       .where(
-        and(eq(giveawayEntries.giveawayId, giveawayId), isNull(giveawayEntries.disqualifiedAt)),
+        and(
+          eq(giveawayEntries.giveawayId, giveawayId),
+          isNull(giveawayEntries.disqualifiedAt),
+          isNull(giveawayEntries.leftAt),
+        ),
       )
       .orderBy(desc(giveawayEntries.totalEntries), asc(giveawayEntries.userId))
       .limit(limit);
@@ -433,6 +460,101 @@ export class DrizzleGiveawayStore implements GiveawayStore {
       userId: row.userId,
       totalEntries: row.totalEntries,
       memberSnapshot: toSnapshot(row.memberSnapshot),
+    }));
+  }
+
+  // Four aggregates rather than one join: joining entries and wins against giveaways in a single
+  // statement multiplies the rows and double-counts every entry by the number of draws.
+  async stats(guildId: string): Promise<GiveawayStats> {
+    const scoped = eq(giveaways.guildId, guildId);
+
+    const [statuses, entries, winners, draws] = await Promise.all([
+      this.#handle.db
+        .select({ status: giveaways.status, value: count() })
+        .from(giveaways)
+        .where(scoped)
+        .groupBy(giveaways.status),
+
+      this.#handle.db
+        .select({
+          entries: sql<number>`coalesce(sum(${giveawayEntries.totalEntries}), 0)`,
+          entrants: sql<number>`count(distinct ${giveawayEntries.userId})`,
+        })
+        .from(giveawayEntries)
+        .innerJoin(giveaways, eq(giveaways.id, giveawayEntries.giveawayId))
+        .where(and(scoped, isNull(giveawayEntries.disqualifiedAt), isNull(giveawayEntries.leftAt))),
+
+      this.#handle.db
+        .select({ value: count() })
+        .from(giveawayWins)
+        .innerJoin(giveaways, eq(giveaways.id, giveawayWins.giveawayId))
+        .where(scoped),
+
+      this.#handle.db
+        .select({ value: count() })
+        .from(giveawayDraws)
+        .innerJoin(giveaways, eq(giveaways.id, giveawayDraws.giveawayId))
+        .where(scoped),
+    ]);
+
+    const byStatus = Object.fromEntries(GIVEAWAY_STATUSES.map((status) => [status, 0])) as Record<
+      GiveawayStatus,
+      number
+    >;
+
+    let totalGiveaways = 0;
+    for (const row of statuses) {
+      if ((GIVEAWAY_STATUSES as readonly string[]).includes(row.status)) {
+        byStatus[row.status as GiveawayStatus] = row.value;
+      }
+      totalGiveaways += row.value;
+    }
+
+    return {
+      byStatus,
+      totalGiveaways,
+      totalEntries: Number(entries[0]?.entries ?? 0),
+      uniqueEntrants: Number(entries[0]?.entrants ?? 0),
+      totalWinners: winners[0]?.value ?? 0,
+      draws: draws[0]?.value ?? 0,
+    };
+  }
+
+  async appendEvent(event: NewGiveawayEvent): Promise<boolean> {
+    const rows = await this.#handle.db
+      .insert(giveawayEvents)
+      .values({
+        id: event.id,
+        guildId: event.guildId,
+        giveawayId: event.giveawayId,
+        kind: event.kind,
+        actorId: event.actorId,
+        detail: event.detail ?? null,
+        idempotencyKey: event.idempotencyKey ?? null,
+      })
+      .onConflictDoNothing()
+      .returning({ id: giveawayEvents.id });
+
+    return rows.length > 0;
+  }
+
+  async history(giveawayId: string, limit: number): Promise<GiveawayEvent[]> {
+    const rows = await this.#handle.db
+      .select()
+      .from(giveawayEvents)
+      .where(eq(giveawayEvents.giveawayId, giveawayId))
+      .orderBy(asc(giveawayEvents.at))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      id: row.id,
+      guildId: row.guildId,
+      giveawayId: row.giveawayId,
+      kind: row.kind as GiveawayEventKind,
+      actorId: row.actorId,
+      detail: row.detail,
+      idempotencyKey: row.idempotencyKey,
+      at: row.at,
     }));
   }
 
@@ -805,6 +927,63 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     }
 
     return this.get(guildId, reference);
+  }
+
+  async claimDrop(
+    guildId: string,
+    giveawayId: string,
+    userId: string,
+    at: Date,
+  ): Promise<DropOutcome> {
+    return this.#handle.db.transaction(async (tx) => {
+      // The whole race, in one statement: two hundred presses land here and Postgres lets exactly
+      // one row match `status = 'running'`. That caller is the winner; everybody else sees zero
+      // rows and is told somebody was faster.
+      const [row] = await tx
+        .update(giveaways)
+        .set({ status: 'ended', endedAt: at, updatedAt: at })
+        .where(
+          and(
+            eq(giveaways.guildId, guildId),
+            eq(giveaways.id, giveawayId),
+            eq(giveaways.status, 'running'),
+            eq(giveaways.entryMethod, 'drop'),
+          ),
+        )
+        .returning();
+
+      if (!row) {
+        const [current] = await tx
+          .select({ status: giveaways.status })
+          .from(giveaways)
+          .where(and(eq(giveaways.guildId, guildId), eq(giveaways.id, giveawayId)))
+          .limit(1);
+
+        return current === undefined ? { outcome: 'closed' } : { outcome: 'taken' };
+      }
+
+      const drawId = `${giveawayId}:drop`;
+
+      await tx.insert(giveawayDraws).values({
+        id: drawId,
+        giveawayId,
+        drawNumber: 1,
+        // A drop is not sampled, so there is no seed to reproduce and no snapshot to attest to.
+        // The audit row still exists so a drop appears in the ledger like every other result.
+        seed: 'drop',
+        snapshotHash: 'drop',
+        entrantCount: 1,
+        totalEntries: 1,
+        winnerIds: [userId],
+        degradedProviders: [],
+        drawnBy: userId,
+        reason: 'first eligible presser',
+      });
+
+      await tx.insert(giveawayWins).values({ giveawayId, drawId, userId });
+
+      return { outcome: 'won', giveaway: toGiveaway(row), drawId };
+    });
   }
 
   async markRerolled(drawId: string, userIds: readonly string[], at: Date): Promise<number> {

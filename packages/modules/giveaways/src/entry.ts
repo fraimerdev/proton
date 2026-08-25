@@ -1,6 +1,5 @@
 import {
   type DegradedProvider,
-  evaluateRequirement,
   evaluateWeight,
   type MemberContext,
   type MultiplierSpec,
@@ -8,6 +7,7 @@ import {
   type RequirementSpec,
 } from '@proton/core';
 import type { Redis } from 'ioredis';
+import { evaluateRulesFor, requirementTreeOf } from './rules.ts';
 import type { Giveaway, GiveawayStore, MemberSnapshot } from './store.ts';
 
 export interface EntryBucket {
@@ -164,7 +164,7 @@ export async function join(deps: JoinDeps, input: JoinInput): Promise<JoinOutcom
 
   const verdict = bypassed
     ? { passed: true, failures: [], degraded: [] }
-    : await evaluateRequirement(deps.providers, ctx, input.requirements, giveaway.requirementLogic);
+    : await evaluateRulesFor(deps.providers, ctx, requirementTreeOf(giveaway, input.requirements));
 
   if (!verdict.passed) {
     return {

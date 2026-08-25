@@ -89,14 +89,18 @@ function selectFor(
 // There is no numeric modal component — Text Input has two styles and neither is a number — so a
 // number is a Short input parsed on submit. Discord cannot enforce the range for us.
 function textFor(descriptor: FieldDescriptor, current: unknown): ModalComponent {
-  const value = asString(current);
+  // Colour renders as hex both ways: a stored 5793266 shown as 5793266 is not a value anybody can
+  // recognise or retype.
+  const value = descriptor.kind === 'colour' ? formatColour(current) : asString(current);
 
   const placeholder =
     descriptor.kind === 'duration'
       ? 'For example 30m, 12h or 7d'
-      : descriptor.kind === 'number'
-        ? numberHint(descriptor)
-        : undefined;
+      : descriptor.kind === 'colour'
+        ? 'A hex colour like #5865F2'
+        : descriptor.kind === 'number'
+          ? numberHint(descriptor)
+          : undefined;
 
   return {
     type: ComponentType.TextInput,
@@ -107,6 +111,38 @@ function textFor(descriptor: FieldDescriptor, current: unknown): ModalComponent 
     ...(placeholder ? { placeholder: clamp(placeholder, DESCRIPTION_MAX) } : {}),
     ...(value !== undefined ? { value: clamp(value, TEXT_INPUT_MAX) } : {}),
   };
+}
+
+export const COLOUR_MAX = 0xffffff;
+
+/**
+ * Colour is stored as a number and typed by hand as hex — `#5865F2` is what a host copies out of
+ * Discord, and `5793266` is not. Accepts either, and the decimal form so a value read back out of
+ * config round-trips.
+ */
+export function parseColour(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return null;
+
+  // A leading # forces hex. Without this "#12345" falls through to the decimal branch and becomes
+  // 12345 — a colour nobody asked for, from an input that was plainly a mistyped hex code.
+  const hashed = trimmed.startsWith('#');
+  const body = hashed ? trimmed.slice(1) : trimmed;
+
+  const value = /^[0-9a-fA-F]{6}$/.test(body)
+    ? Number.parseInt(body, 16)
+    : !hashed && /^\d+$/.test(body)
+      ? Number.parseInt(body, 10)
+      : Number.NaN;
+
+  if (!Number.isInteger(value) || value < 0 || value > COLOUR_MAX) return null;
+
+  return value;
+}
+
+export function formatColour(value: unknown): string | undefined {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return undefined;
+  return `#${value.toString(16).padStart(6, '0').toUpperCase()}`;
 }
 
 function numberHint(descriptor: Extract<FieldDescriptor, { kind: 'number' }>): string {
@@ -261,6 +297,30 @@ export function readDescriptorValues(
         if (!parsed.ok) return parsed;
 
         config[path] = parsed.value;
+        break;
+      }
+
+      case 'colour': {
+        if (text === undefined || text.trim().length === 0) {
+          if (!descriptor.optional) {
+            return { ok: false, humanReason: `${descriptor.label} needs a colour.` };
+          }
+          break;
+        }
+
+        // Parsed to a number here: the field is a z.number(), and storing the typed string sails
+        // past the modal and fails at parseConfig with a message about the wrong type.
+        const colour = parseColour(text);
+        if (colour === null) {
+          return {
+            ok: false,
+            humanReason:
+              `“${text}” is not a colour I can read. Give a hex code like #5865F2, or a plain ` +
+              'number between 0 and 16777215.',
+          };
+        }
+
+        config[path] = colour;
         break;
       }
 

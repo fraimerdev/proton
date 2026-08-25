@@ -5,8 +5,16 @@ import {
   newId,
 } from '@proton/core';
 import { canManage, refuseManage } from './authorize.ts';
-import { BONUS_LIST_MAX, type GiveawaysConfig, parseGiveawayDuration, plural } from './config.ts';
+import {
+  BONUS_LIST_MAX,
+  type GiveawaysConfig,
+  HISTORY_MAX,
+  MESSAGE_CONTENT_MAX,
+  parseGiveawayDuration,
+  plural,
+} from './config.ts';
 import { bindDraw, type GiveawaysDeps } from './deps.ts';
+import { publishBonus } from './events.ts';
 import {
   editGiveawayFields,
   type ManageDeps,
@@ -16,7 +24,14 @@ import {
   type ShiftOutcome,
   shiftDeadline,
 } from './manage.ts';
-import { NOT_WIRED, reply } from './perform.ts';
+import { NOT_WIRED, reply, replyWithFile } from './perform.ts';
+import {
+  ENTRANT_PAGE_SIZE,
+  EXPORT_ROW_MAX,
+  entrantPage,
+  exportEntrants,
+  renderStats,
+} from './reports.ts';
 import { formatShortCode } from './short-code.ts';
 import {
   BONUS_MAX,
@@ -131,7 +146,10 @@ export async function resumeCommand(
     return;
   }
 
-  const outcome = await resumeGiveaway(ctx, manage, { giveawayId: found.giveaway.id });
+  const outcome = await resumeGiveaway(ctx, manage, {
+    giveawayId: found.giveaway.id,
+    by: ctx.userId,
+  });
 
   await reply(
     ctx,
@@ -169,6 +187,7 @@ export async function shiftCommand(
   const outcome = await shiftDeadline(ctx, manage, {
     giveawayId: found.giveaway.id,
     byMs: duration.ms * direction,
+    by: ctx.userId,
   });
 
   await reply(
@@ -220,6 +239,7 @@ export async function editCommand(
   const outcome = await editGiveawayFields(ctx, manage, {
     giveawayId: found.giveaway.id,
     patch,
+    by: ctx.userId,
   });
 
   await reply(
@@ -348,6 +368,16 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
   if (action === 'remove') {
     const taken = await store.revokeBonus(giveaway.id, userId, ctx.userId, new Date());
 
+    if (taken > 0) {
+      await publishBonus(ctx, store, giveaway, {
+        actorId: ctx.userId,
+        subjectId: userId,
+        amount: taken,
+        reason: null,
+        revoked: true,
+      });
+    }
+
     await reply(
       ctx,
       taken === 0
@@ -374,6 +404,14 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
     grantedBy: ctx.userId,
   });
 
+  await publishBonus(ctx, store, giveaway, {
+    actorId: ctx.userId,
+    subjectId: userId,
+    amount: grant.amount,
+    reason: grant.reason,
+    revoked: false,
+  });
+
   const entered = (await store.entry(giveaway.id, userId)) !== null;
 
   await reply(
@@ -382,5 +420,127 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
       `in **${giveaway.title}**` +
       `${grant.reason === null ? '' : ` — ${grant.reason}`}.` +
       `${entered ? '' : ' They are not in the draw yet; it will count when they enter.'}`,
+  );
+}
+
+export async function entrantsCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
+  const found = await target(ctx, store);
+  if ('refusal' in found) {
+    await reply(ctx, found.refusal);
+    return;
+  }
+
+  const { giveaway } = found;
+  const page = await entrantPage(store, giveaway.id, ctx.options.getInteger('page') ?? 1);
+
+  if (page.total === 0) {
+    await reply(ctx, `Nobody has entered **${giveaway.title}** yet.`);
+    return;
+  }
+
+  const start = (page.page - 1) * ENTRANT_PAGE_SIZE;
+  const lines = page.rows.map(
+    (row, index) =>
+      `\`${String(start + index + 1).padStart(3)}.\` <@${row.userId}> — ` +
+      `${plural(row.totalEntries, 'entry')}`,
+  );
+
+  await reply(
+    ctx,
+    [
+      `**${giveaway.title}** — ${plural(page.total, 'entrant')}`,
+      ...lines,
+      page.pages > 1 ? `Page ${page.page} of ${page.pages}.` : '',
+    ]
+      .filter((line) => line.length > 0)
+      .join('\n'),
+  );
+}
+
+export async function exportCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
+  const found = await target(ctx, store);
+  if ('refusal' in found) {
+    await reply(ctx, found.refusal);
+    return;
+  }
+
+  const { giveaway } = found;
+  const exported = await exportEntrants(store, giveaway.id);
+
+  if (exported.rows === 0) {
+    await reply(ctx, `Nobody has entered **${giveaway.title}**, so there is nothing to export.`);
+    return;
+  }
+
+  const code = formatShortCode(giveaway.shortCode) ?? giveaway.id;
+
+  await replyWithFile(
+    ctx,
+    `**${giveaway.title}** — ${plural(exported.rows, 'entrant')} exported.` +
+      (exported.truncated
+        ? ` Capped at ${EXPORT_ROW_MAX} rows, so this is not the whole list.`
+        : ''),
+    {
+      filename: `giveaway-${code}-entrants.csv`,
+      contentType: 'text/csv',
+      data: new TextEncoder().encode(exported.csv),
+    },
+  );
+}
+
+export async function statsCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
+  await reply(ctx, renderStats(await store.stats(ctx.guildId)));
+}
+
+const HISTORY_WORDS: Record<string, string> = {
+  created: 'created',
+  started: 'started',
+  edited: 'edited',
+  extended: 'extended',
+  shortened: 'shortened',
+  paused: 'paused',
+  resumed: 'resumed',
+  cancelled: 'cancelled',
+  drawn: 'drawn',
+  rerolled: 'rerolled',
+  'bonus-granted': 'granted extra entries',
+  'bonus-revoked': 'took back extra entries',
+  claimed: 'claimed',
+  forfeited: 'forfeited',
+  orphaned: 'lost its message',
+};
+
+export async function historyCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
+  const found = await target(ctx, store);
+  if ('refusal' in found) {
+    await reply(ctx, found.refusal);
+    return;
+  }
+
+  const { giveaway } = found;
+  const events = await store.history(giveaway.id, HISTORY_MAX);
+
+  if (events.length === 0) {
+    await reply(
+      ctx,
+      `**${giveaway.title}** has no recorded history. Giveaways started before history was ` +
+        'added carry none.',
+    );
+    return;
+  }
+
+  const lines = events.map((event) => {
+    const who = event.actorId.startsWith('proton:')
+      ? `_${event.actorId.slice('proton:'.length)}_`
+      : `<@${event.actorId}>`;
+
+    return `<t:${Math.floor(event.at.getTime() / 1000)}:f> — ${
+      HISTORY_WORDS[event.kind] ?? event.kind
+    } by ${who}`;
+  });
+
+  await reply(
+    ctx,
+    [`**${giveaway.title}** — history`, ...lines].join('\n').slice(0, MESSAGE_CONTENT_MAX),
   );
 }

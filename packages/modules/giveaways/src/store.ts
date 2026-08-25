@@ -75,6 +75,10 @@ export interface Giveaway {
 
   winnerCount: number;
   requirementLogic: RequirementLogic;
+
+  /** Null on giveaways written before nested rules existed — the flat rows are the fallback. */
+  requirementTree: unknown;
+
   maxEntriesPerUser: number | null;
   verifyOn: VerifyOn;
 
@@ -97,8 +101,13 @@ export interface Giveaway {
   dmWinners: boolean;
   winMessage: string | null;
 
+  prizes: unknown;
+  rewardRoleId: string | null;
+
   templateId: string | null;
   recurrence: string | null;
+  recurrenceConfig: unknown;
+  recurrenceLeft: number | null;
 
   createdBy: string;
   createdAt: Date;
@@ -121,6 +130,7 @@ export interface CreateGiveawayInput {
 
   winnerCount: number;
   requirementLogic?: RequirementLogic;
+  requirementTree?: unknown;
   maxEntriesPerUser?: number | null;
   verifyOn?: VerifyOn;
 
@@ -134,8 +144,13 @@ export interface CreateGiveawayInput {
   dmWinners?: boolean;
   winMessage?: string | null;
 
+  prizes?: unknown;
+  rewardRoleId?: string | null;
+
   templateId?: string | null;
   recurrence?: string | null;
+  recurrenceConfig?: unknown;
+  recurrenceLeft?: number | null;
 
   createdBy: string;
 
@@ -185,6 +200,59 @@ export interface Reweigh {
   userId: string;
   totalEntries: number;
   breakdown: EntryBreakdown[];
+}
+
+export const GIVEAWAY_EVENT_KINDS = [
+  'created',
+  'started',
+  'edited',
+  'extended',
+  'shortened',
+  'paused',
+  'resumed',
+  'cancelled',
+  'drawn',
+  'rerolled',
+  'bonus-granted',
+  'bonus-revoked',
+  'claimed',
+  'forfeited',
+  'orphaned',
+] as const;
+
+export type GiveawayEventKind = (typeof GIVEAWAY_EVENT_KINDS)[number];
+
+export interface NewGiveawayEvent {
+  id: string;
+  guildId: string;
+  giveawayId: string;
+  kind: GiveawayEventKind;
+  actorId: string;
+  detail?: unknown;
+
+  /** Set to make a redelivered transition a no-op rather than a duplicate history line. */
+  idempotencyKey?: string | null;
+}
+
+export interface GiveawayEvent extends NewGiveawayEvent {
+  at: Date;
+}
+
+export type DropOutcome =
+  | { outcome: 'won'; giveaway: Giveaway; drawId: string }
+  | { outcome: 'taken' }
+  | { outcome: 'closed' };
+
+export interface GiveawayStats {
+  byStatus: Record<GiveawayStatus, number>;
+  totalGiveaways: number;
+
+  /** Live entries only — leavers and disqualified entrants are excluded, as the draw excludes them. */
+  totalEntries: number;
+  uniqueEntrants: number;
+
+  totalWinners: number;
+  draws: number;
 }
 
 export const BONUS_MIN = 1;
@@ -294,6 +362,13 @@ export interface GiveawayStore {
   /** Heaviest entries first, for the host's view of who is most likely to win. */
   topEntrants(giveawayId: string, limit: number): Promise<EntrantRow[]>;
 
+  /** Guild-wide counts for `/giveaway stats`. */
+  stats(guildId: string): Promise<GiveawayStats>;
+
+  /** Appends one line to a giveaway's timeline. Returns false when the key was already recorded. */
+  appendEvent(event: NewGiveawayEvent): Promise<boolean>;
+  history(giveawayId: string, limit: number): Promise<GiveawayEvent[]>;
+
   disqualify(giveawayId: string, rows: readonly Disqualification[], at: Date): Promise<number>;
 
   /**
@@ -333,6 +408,13 @@ export interface GiveawayStore {
 
   /** Audit only — a superseded winner is still excluded from later draws. */
   markRerolled(drawId: string, userIds: readonly string[], at: Date): Promise<number>;
+
+  /**
+   * A drop has no deferred sample: the first eligible presser wins outright. The conditional
+   * `running -> ended` update *is* the race — exactly one caller flips it, and that caller is the
+   * winner. Deliberately not routed through beginDraw/recordDraw, which assume a sampled draw.
+   */
+  claimDrop(guildId: string, giveawayId: string, userId: string, at: Date): Promise<DropOutcome>;
 
   /** Conditional on `running`. Returns the row as it was before the pause, or null if it lost. */
   pause(

@@ -91,6 +91,36 @@ export async function reply(
   );
 }
 
+// Ephemeral and never announced: an entrant export names every member who took part, so it goes
+// to the person who asked and nowhere else.
+export async function replyWithFile(
+  ctx: CommandContext<GiveawaysConfig>,
+  content: string,
+  file: { filename: string; contentType: string; data: Uint8Array },
+): Promise<ActionResult> {
+  return run(
+    ctx,
+    {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      kind: 'interaction_reply',
+      actorId: ctx.userId,
+      idempotencyKey: `${ctx.idempotencyKey}:export`,
+      dryRun: false,
+      record: false,
+      payload: {
+        interactionId: ctx.interaction.id,
+        interactionToken: ctx.interaction.token,
+        content: content.slice(0, MESSAGE_CONTENT_MAX),
+        files: [file],
+        ephemeral: true,
+        allowedMentions: MENTIONS_OFF,
+      },
+    },
+    'send the entrant export',
+  );
+}
+
 export async function replyWithComponents(
   ctx: CommandContext<GiveawaysConfig>,
   content: string,
@@ -326,6 +356,41 @@ export async function announceWinners(ctx: Ctx, input: AnnounceInput): Promise<A
 
 // Two executor calls, both through the REST proxy: open the DM channel, then send into it.
 // ActionResult.body carries the channel id back, which is what makes the second call possible.
+/**
+ * Gives a winner the configured reward role. The executor hierarchy-checks `add_role`, so a role
+ * above the bot fails the precheck rather than 403ing — the refusal is returned so the host can be
+ * told, because a reward that silently never lands is worse than no reward.
+ */
+export async function grantRewardRole(
+  ctx: Ctx,
+  userId: string,
+  roleId: string,
+  idempotencyKey: string,
+): Promise<{ ok: true } | { ok: false; humanReason: string }> {
+  const result = await run(
+    ctx,
+    {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      kind: 'add_role',
+      actorId: userId,
+      targetId: userId,
+      idempotencyKey,
+      dryRun: false,
+      record: false,
+      payload: { userId, roleId },
+    },
+    'give a winner their reward role',
+  );
+
+  if (succeeded(result)) return { ok: true };
+
+  return {
+    ok: false,
+    humanReason: result.failure?.humanReason ?? 'Discord refused the role change.',
+  };
+}
+
 export async function dmWinner(
   ctx: Ctx,
   userId: string,

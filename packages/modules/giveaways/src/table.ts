@@ -33,6 +33,11 @@ export const giveaways = pgTable(
 
     winnerCount: integer('winner_count').notNull(),
     requirementLogic: text('requirement_logic').notNull().default('all'),
+
+    // The tree supersedes giveaway_requirements + requirement_logic. Null means "not migrated
+    // yet"; the reader falls back to the flat rows so a giveaway written before this column
+    // existed still evaluates.
+    requirementTree: jsonb('requirement_tree'),
     maxEntriesPerUser: integer('max_entries_per_user'),
     verifyOn: text('verify_on').notNull().default('both'),
 
@@ -58,8 +63,16 @@ export const giveaways = pgTable(
     dmWinners: boolean('dm_winners').notNull().default(false),
     winMessage: text('win_message'),
 
+    // Ordered: winner i takes prize i. Null means the title is the only prize.
+    prizes: jsonb('prizes'),
+    rewardRoleId: text('reward_role_id'),
+
     templateId: text('template_id'),
     recurrence: text('recurrence'),
+    recurrenceConfig: jsonb('recurrence_config'),
+
+    /** Counts down to zero; null means bounded by `until` instead. */
+    recurrenceLeft: integer('recurrence_left'),
 
     createdBy: text('created_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -76,6 +89,7 @@ export const giveaways = pgTable(
     uniqueIndex('giveaways_short_code_uq')
       .on(t.guildId, t.shortCode)
       .where(sql`${t.shortCode} is not null`),
+    index('giveaways_recurring_idx').on(t.guildId).where(sql`${t.recurrenceConfig} is not null`),
   ],
 );
 
@@ -219,6 +233,32 @@ export const giveawayBonusEntries = pgTable(
   ],
 );
 
+// Deliberately no foreign key. Every other giveaway table cascades from `giveaways`, which
+// cascades from `guilds`; an audit trail that deletes itself when the thing it audits goes away is
+// not an audit trail. The partial unique index on idempotency_key is what makes a redelivered
+// event a no-op rather than a duplicate line in the history.
+export const giveawayEvents = pgTable(
+  'giveaway_events',
+  {
+    id: text('id').primaryKey(),
+    guildId: text('guild_id').notNull(),
+    giveawayId: text('giveaway_id').notNull(),
+
+    kind: text('kind').notNull(),
+    actorId: text('actor_id').notNull(),
+    detail: jsonb('detail'),
+
+    idempotencyKey: text('idempotency_key'),
+    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('giveaway_events_timeline_idx').on(t.giveawayId, t.at),
+    uniqueIndex('giveaway_events_once')
+      .on(t.idempotencyKey)
+      .where(sql`${t.idempotencyKey} is not null`),
+  ],
+);
+
 export const giveawayTemplates = pgTable(
   'giveaway_templates',
   {
@@ -263,5 +303,6 @@ export type NewGiveawayEntryRow = typeof giveawayEntries.$inferInsert;
 export type GiveawayDrawRow = typeof giveawayDraws.$inferSelect;
 export type GiveawayWinRow = typeof giveawayWins.$inferSelect;
 export type GiveawayBonusRow = typeof giveawayBonusEntries.$inferSelect;
+export type GiveawayEventRow = typeof giveawayEvents.$inferSelect;
 export type GiveawayTemplateRow = typeof giveawayTemplates.$inferSelect;
 export type GiveawayBlacklistRow = typeof giveawayBlacklist.$inferSelect;
