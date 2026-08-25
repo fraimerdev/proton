@@ -414,6 +414,22 @@ export const unlockPayloadSchema = z.object({
 
 export const deleteChannelPayloadSchema = z.object({ channelId: snowflakeSchema });
 
+// One overwrite at a time, unlike edit_channel, which replaces the whole array: two people adding
+// somebody to the same ticket at once would otherwise each write back the array they read before
+// the other, and the slower write would revoke the faster one.
+export const setChannelOverwritePayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  overwriteId: snowflakeSchema,
+  type: z.union([z.literal(0), z.literal(1)]),
+  allow: z.string().regex(/^\d+$/).default('0'),
+  deny: z.string().regex(/^\d+$/).default('0'),
+});
+
+export const deleteChannelOverwritePayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  overwriteId: snowflakeSchema,
+});
+
 export const editChannelPayloadSchema = z.object({
   channelId: snowflakeSchema,
   name: z.string().min(1).max(100).optional(),
@@ -577,6 +593,8 @@ export type LockdownPayload = z.infer<typeof lockdownPayloadSchema>;
 export type CreateChannelPayload = z.infer<typeof createChannelPayloadSchema>;
 export type CreateRolePayload = z.infer<typeof createRolePayloadSchema>;
 export type DeleteChannelPayload = z.infer<typeof deleteChannelPayloadSchema>;
+export type SetChannelOverwritePayload = z.infer<typeof setChannelOverwritePayloadSchema>;
+export type DeleteChannelOverwritePayload = z.infer<typeof deleteChannelOverwritePayloadSchema>;
 export type EditChannelPayload = z.infer<typeof editChannelPayloadSchema>;
 export type CreateThreadPayload = z.infer<typeof createThreadPayloadSchema>;
 export type MoveMemberPayload = z.infer<typeof moveMemberPayloadSchema>;

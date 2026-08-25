@@ -18,6 +18,10 @@ export interface ComponentInteraction extends InteractionBase {
   componentType: number;
   values: string[];
   messageId: string | null;
+
+  // An ephemeral message is reachable only through the interaction webhook, so editing one by its
+  // channel and message id is a guaranteed 404.
+  messageFlags: number | null;
 }
 
 export interface ModalInteraction extends InteractionBase {
@@ -93,6 +97,20 @@ function readBase(event: ProtonEvent, expected: InteractionType): Interaction | 
   };
 }
 
+// The invoking member's permissions, already resolved for this channel by Discord — not
+// app_permissions, which is the bot's. Absent outside a guild, and 0n reads as "may do nothing",
+// so a gate built on this fails closed.
+export function readMemberPermissions(event: ProtonEvent): bigint {
+  const raw = record(record(event.payload)?.member)?.permissions;
+  if (typeof raw !== 'string') return 0n;
+
+  try {
+    return BigInt(raw);
+  } catch {
+    return 0n;
+  }
+}
+
 export function readComponentInteraction(event: ProtonEvent): ComponentInteraction | null {
   const read = readBase(event, InteractionType.MessageComponent);
   if (!read) return null;
@@ -100,12 +118,15 @@ export function readComponentInteraction(event: ProtonEvent): ComponentInteracti
   const customId = str(read.data?.custom_id);
   if (!customId) return null;
 
+  const flags = record(read.d.message)?.flags;
+
   return {
     ...read.base,
     customId,
     componentType: typeof read.data?.component_type === 'number' ? read.data.component_type : 0,
     values: strings(read.data?.values),
     messageId: str(record(read.d.message)?.id),
+    messageFlags: typeof flags === 'number' ? flags : null,
   };
 }
 

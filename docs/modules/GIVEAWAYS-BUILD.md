@@ -243,3 +243,154 @@ carries one filler option for the same reason.
 - **`recurrence`.** The column exists and is carried through templates; nothing schedules a repeat.
 - **`leveling.messages_in_channels`** — deferred, see deviation 12.
 - **Reaction entry** — deliberately out, per the owner's §8 answer.
+
+---
+
+# Part two — the Dasu-parity pass (2026-08-25)
+
+A second pass against a 100-point brief asking for Dasu-level parity. Audited first: ten parallel
+readers over the module and every system it consumes, then a gap matrix. Most of the brief's
+architecture — the shared provider registry, weighted A-ExpJ draws, seeded reproducibility,
+exactly-once ending, the debounced counter, claim windows, the blacklist, templates — was already
+built by part one and is untouched here.
+
+## 7. The bugs the audit found
+
+These were live defects, not gaps. Each is fixed and each has a test that fails without the fix.
+
+1. **The entire ops layer was dead code.** The manifest declared four schedules and only ever wrote
+   one. `flush-counts`, `reconcile` and `claim-expiry` had handlers, were listed in `schedules`,
+   and were **never passed to `ctx.schedule`** by anything. In production that meant live entry
+   counts never updated, a giveaway whose worker died mid-draw stayed in `drawing` forever, and no
+   claim window ever expired. Fixed with `armPatrols()` plus a `guild.available` /
+   `proton.config_changed` listener, each handler re-arming itself in a `finally`.
+
+2. **`finishDraw` had no status predicate.** `update … where guild_id = ? and id = ?` and nothing
+   else. Combined with (3) this falsified the exactly-once guarantee `beginDraw` exists to provide.
+   It now takes a `from: GiveawayStatus[]` guard.
+
+3. **`rerollGiveaway` rejected only `'running'`.** A **cancelled** giveaway could be rerolled back
+   to life and award a prize the host had deliberately withdrawn; a giveaway in `drawing` could be
+   yanked back to `running` beside the draw already in flight, so two draws both wrote winners.
+   Reroll now accepts only `'ended'`, and the previously-unreachable `'cancelled'` outcome is
+   constructed.
+
+4. **`cancelGiveaway` was read-then-write.** It lost to an in-flight draw and told the host "nobody
+   was drawn" while the draw it lost to announced winners. Now a conditional update.
+
+5. **`rerolled_at` was never written**, so the reroll exclusion's `.filter(win => win.rerolledAt === null)`
+   was a tautology. It is written now — and the exclusion no longer depends on it, because a
+   superseded winner must stay excluded, not become eligible again.
+
+6. **`claim()` ignored `claim_deadline`.** A winner could claim past their window until the expiry
+   sweep ran — and the sweep never ran, per (1).
+
+7. **The claim sweep bucketed by giveaway, not by draw.** A giveaway whose second draw also went
+   unclaimed had those winners forfeited against the first draw's id, matching nothing. The prize
+   was silently lost.
+
+8. **Four sweep queries had no `guild_id` predicate** but ran from a per-guild `ModuleContext`:
+   `overdue`, `running`, `stalledDraws`, `expiredClaims`. Guild A's tick could draw guild B's
+   giveaway using guild A's channel, config and ledger. The dirty-count set was one global Redis
+   key. All five are now guild-scoped.
+
+9. **`enter()` had no status guard.** A press landing between the caller's read and the insert
+   entered a giveaway that had since been paused, cancelled or drawn. The insert now carries
+   `where exists (… status = 'running')`, and `join()` reports the new `'closed'` outcome rather
+   than telling the member they are in a draw they are not in.
+
+10. **The autocomplete title filter did not escape LIKE metacharacters.** Typing `%` matched every
+    giveaway in the guild.
+
+11. **A cancelled giveaway was never repainted** — `endedMessage`'s `cancelled` branch had zero
+    callers, so a cancelled giveaway kept a live Enter button forever. **A reroll never repainted
+    either**, so the original winners stood on the message while a different set was announced
+    below it.
+
+12. **`draw-fairness.test.ts` had a latent flake** — 100k draws sat on Bun's 5s default, passing
+    alone and timing out under a full-suite run. Given an explicit budget.
+
+## 8. What was added
+
+| Area | What |
+|---|---|
+| Lifecycle | `paused` status with `paused_at`/`paused_by`/`pause_reason`/`paused_ms`; resume pushes `ends_at` by exactly the time held. Scheduled start (`START_JOB_ID` + `activate()`), which existed as a dead status and column. `patch()` for edit/extend/shorten, all rescheduling the draw with `replace: true` |
+| Commands | `/giveaway pause · resume · extend · shorten · edit · info` |
+| Presentation | `src/embed.ts` — a state-aware builder with `buildScheduled/buildActive/buildPaused/buildDrawing/buildEnded/buildCancelled/buildNoWinners/buildRerolled`. `message.ts` is now primitives only |
+| Entry | Leave button (soft `left_at`, never a DELETE, so entry history stays honest); Requirements and Multipliers buttons answering per-presser with a tick or cross per rule |
+| Access | `managerRoleIds`, `bypassRoleIds`, `blacklistRoleIds` in module config. Bypass is decided once in the authorization layer, not threaded through every provider — and multipliers still apply, because skipping the rules is not forfeiting earned entries |
+| Identity | Short public codes (`G-7X29`) on a confusable-free alphabet, resolved by `store.resolve()` and shown in autocomplete. ULIDs stay the primary key — every custom id and idempotency key roots on them |
+| Indexes | Migration `0021` — `giveaways_guild_running_idx` was predicated on `ended_at` and unusable by any query that filters `status`, so nothing indexed `guild_id`. `priorEntryCounts` and `recentWinCounts` filter `user_id` and seq-scanned the whole cross-guild table on a button press |
+
+## 9. Deviations, part two
+
+13. **`max` stacking was left alone.** The brief calls the semantic ambiguous and asks for it to be
+    made explicit. `GIVEAWAYS.md` §4 already specifies it — "`max` mode takes the single highest
+    instead of stacking within its group" — and the code matches: the max group collapses to its
+    largest member, which then contributes once alongside the add sum. The defect was that this was
+    undocumented and untested, not that it was wrong. It is now stated as a formula at the site and
+    pinned by `packages/core/test/providers/multiplier-stacking.test.ts`, including a fast-check
+    property that reordering specs cannot change the total — otherwise a giveaway's odds would
+    depend on the order somebody clicked through a builder.
+
+14. **Invite requirements refused.** The brief asks for invite counts, and for a tracking service if
+    none exists. There is no invites table, no `inviter_id` anywhere, and `GuildInvites` is not in
+    `DEFAULT_INTENTS` — so `INVITE_CREATE` is not even delivered, and serverlog's invite catalogue
+    entries are already dead code. Discord provides no field linking a join to an invite;
+    attribution means snapshot-diffing `uses`, which is racy under concurrent joins and wrong for
+    vanity URLs and exhausted invites. It also needs `MANAGE_GUILD` + `MANAGE_CHANNELS`. That is its
+    own module, not a giveaway provider, and shipping a number hosts would read as fact is worse
+    than not shipping it.
+
+15. **`status` gained a CHECK constraint** (`0022`). It was plain text with no constraint and a
+    blind cast on read.
+
+## 10. Verification, part two
+
+Run on this host, 2026-08-25:
+
+```
+bunx turbo run typecheck --force    37/37 packages green (cache bypassed)
+bun test                            5179 pass · 29 fail
+biome check <every file touched>    clean
+```
+
+**All 29 failures are `*.integration.test.ts`** — every one reports "Could not find a working
+container runtime strategy", the documented Windows/Docker limitation. No named test fails. The
+pre-change baseline on this host was 5140 pass / 29 fail.
+
+`bun run lint` is red on one file: `apps/api/test/invite.test.ts`, an **untracked** file belonging
+to the in-progress tickets work. It is an import-ordering complaint, it is not mine, and it was
+left alone rather than editing somebody else's work in flight.
+
+**Migrations `0021` and `0022` have NOT been applied anywhere.** They are written and mirrored in
+`table.ts` by eye, and no test on this host has run them. **A skipped suite is not a passing
+suite** — they must be applied and the integration suites run in WSL, in CI, or against
+`DOCKER_HOST=tcp://localhost:2375` before any gate is claimed.
+
+## 11. Still not built
+
+Ordered by value. Nothing below is blocked by anything above.
+
+- **Bonus entries** (`/giveaway bonus`) — needs a `giveaway_bonus_entries` table, and `reweigh()`
+  must stop clobbering `total_entries` wholesale or a manual grant is erased at the draw. Note
+  `reweigh` also recomputes from `base = 1` rather than the stored `base_entries`.
+- **Nested requirement trees** (ALL/ANY/NONE with groups). Storage decision still open — jsonb on
+  `giveaways` matches how templates already store the identical structure; adjacency keeps per-node
+  ids for the builder's edit routes. Whichever wins, the evaluator must flatten to distinct leaves
+  and batch-evaluate once per leaf per chunk, or a 10k draw becomes 30k queries.
+- **The multi-step builder.** Today it is one screen at its 5-button/4-row ceiling.
+  `descriptorsToModal`'s `current` parameter already implements full prefill and is never passed,
+  so per-item edit is nearly free. `colour` fields are broken end-to-end and will bite the moment
+  an appearance step exists.
+- **Serverlog integration.** Zero giveaway entries in the catalogue; the manifest has no `emits`
+  key at all. A draw currently logs as a generic `proton.action_executed` with no winners or prize.
+- **`giveaway_events`** history table, entrant pagination, CSV export, `/giveaway stats`.
+- **Drop giveaways** — first eligible clicker wins, via a conditional insert as the race winner.
+  Must not go through `beginDraw`/`recordDraw`, which assume a deferred sample.
+- **Message/channel deletion handling.** `message_id` is never cleared, so a deleted message means
+  a PATCH that 404s and retries forever. `store.byMessage` exists with zero callers.
+- **Provider catalogue expansion.** `user.bot` and `communicationDisabledUntil` are already carried
+  on `MemberContext` and read by nobody; name matching and server tag need it widened.
+- **Multiple prizes, role rewards, recurrence.** `recurrence` is still a column nothing branches on.
+  A role reward needs `add_role` added to the manifest's `actionKinds` or the executor throws.

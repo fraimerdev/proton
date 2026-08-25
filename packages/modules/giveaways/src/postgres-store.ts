@@ -1,20 +1,39 @@
 import { newId } from '@proton/core';
 import type { DbHandle } from '@proton/db';
-import { and, asc, count, desc, eq, gt, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from 'drizzle-orm';
+import { newShortCode, parseShortCode } from './short-code.ts';
 import type {
   BlacklistEntry,
   BlacklistSubject,
+  BonusGrant,
   CreateGiveawayInput,
   Disqualification,
   DrawRecord,
   EnterOutcome,
   EntrantRow,
   Giveaway,
+  GiveawayPatch,
   GiveawayStatus,
   GiveawayStore,
   ListGiveawaysQuery,
   MemberSnapshot,
   MultiplierRow,
+  NewBonus,
   NewEntry,
   RecordDrawInput,
   RequirementRow,
@@ -23,8 +42,10 @@ import type {
   WinRecord,
 } from './store.ts';
 import {
+  type GiveawayBonusRow,
   type GiveawayRow,
   giveawayBlacklist,
+  giveawayBonusEntries,
   giveawayDraws,
   giveawayEntries,
   giveawayMultipliers,
@@ -56,6 +77,13 @@ function toGiveaway(row: GiveawayRow): Giveaway {
     endedAt: row.endedAt,
     status: row.status as GiveawayStatus,
     drawingStartedAt: row.drawingStartedAt,
+    shortCode: row.shortCode,
+    entryMethod:
+      row.entryMethod === 'reaction' ? 'reaction' : row.entryMethod === 'drop' ? 'drop' : 'button',
+    pausedAt: row.pausedAt,
+    pausedBy: row.pausedBy,
+    pauseReason: row.pauseReason,
+    pausedMs: Number(row.pausedMs ?? 0),
     claimWindowSeconds: row.claimWindowSeconds,
     dmWinners: row.dmWinners,
     winMessage: row.winMessage,
@@ -64,6 +92,20 @@ function toGiveaway(row: GiveawayRow): Giveaway {
     createdBy: row.createdBy,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+function toBonus(row: GiveawayBonusRow): BonusGrant {
+  return {
+    id: row.id,
+    giveawayId: row.giveawayId,
+    userId: row.userId,
+    amount: row.amount,
+    reason: row.reason,
+    grantedBy: row.grantedBy,
+    grantedAt: row.grantedAt,
+    revokedAt: row.revokedAt,
+    revokedBy: row.revokedBy,
   };
 }
 
@@ -111,6 +153,8 @@ export class DrizzleGiveawayStore implements GiveawayStore {
           startsAt: input.startsAt ?? null,
           endsAt: input.endsAt,
           status: input.status ?? 'running',
+          shortCode: input.shortCode ?? newShortCode(),
+          entryMethod: input.entryMethod ?? 'button',
           claimWindowSeconds: input.claimWindowSeconds ?? null,
           dmWinners: input.dmWinners ?? false,
           winMessage: input.winMessage ?? null,
@@ -174,10 +218,18 @@ export class DrizzleGiveawayStore implements GiveawayStore {
   async list(query: ListGiveawaysQuery): Promise<Giveaway[]> {
     const filters = [eq(giveaways.guildId, query.guildId)];
 
+    // 'running' stays strict for the entitlement count; 'live' is what a host means by "show me
+    // my giveaways", and a paused one vanishing from that list is how it gets forgotten.
     if (query.state === 'running') filters.push(eq(giveaways.status, 'running'));
+    if (query.state === 'live') {
+      filters.push(inArray(giveaways.status, ['scheduled', 'running', 'paused', 'drawing']));
+    }
     if (query.state === 'ended') filters.push(inArray(giveaways.status, ['ended', 'cancelled']));
     if (query.prefix) {
-      filters.push(sql`lower(${giveaways.title}) like ${`${query.prefix.toLowerCase()}%`}`);
+      // Escaped: an unescaped % typed into autocomplete matches every giveaway in the guild, and
+      // an _ matches any single character, so the suggestions stop reflecting what was typed.
+      const prefix = query.prefix.toLowerCase().replace(/[\\%_]/g, (char) => `\\${char}`);
+      filters.push(sql`lower(${giveaways.title}) like ${`${prefix}%`} escape '\\'`);
     }
 
     const rows = await this.#handle.db
@@ -204,6 +256,32 @@ export class DrizzleGiveawayStore implements GiveawayStore {
       .update(giveaways)
       .set({ messageId, updatedAt: new Date() })
       .where(eq(giveaways.id, giveawayId));
+  }
+
+  async clearMessage(guildId: string, giveawayId: string): Promise<boolean> {
+    const rows = await this.#handle.db
+      .update(giveaways)
+      .set({ messageId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.id, giveawayId),
+          isNotNull(giveaways.messageId),
+        ),
+      )
+      .returning({ id: giveaways.id });
+
+    return rows.length > 0;
+  }
+
+  async byChannel(guildId: string, channelId: string): Promise<Giveaway[]> {
+    const rows = await this.#handle.db
+      .select()
+      .from(giveaways)
+      .where(and(eq(giveaways.guildId, guildId), eq(giveaways.channelId, channelId)))
+      .orderBy(desc(giveaways.createdAt));
+
+    return rows.map(toGiveaway);
   }
 
   async requirements(giveawayId: string): Promise<RequirementRow[]> {
@@ -237,21 +315,31 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     }));
   }
 
+  // The status predicate is inside the insert, not only in the caller: a press that arrives in the
+  // window between the caller's read and this write must not enter a giveaway that has since been
+  // paused, cancelled or drawn.
   async enter(entry: NewEntry): Promise<EnterOutcome> {
-    const inserted = await this.#handle.db
-      .insert(giveawayEntries)
-      .values({
-        giveawayId: entry.giveawayId,
-        userId: entry.userId,
-        baseEntries: entry.baseEntries,
-        totalEntries: entry.totalEntries,
-        breakdown: entry.breakdown,
-        memberSnapshot: entry.memberSnapshot,
-      })
-      .onConflictDoNothing()
-      .returning({ userId: giveawayEntries.userId });
+    const inserted = await this.#handle.db.execute(sql`
+      insert into ${giveawayEntries} (
+        giveaway_id, user_id, base_entries, total_entries, breakdown, member_snapshot
+      )
+      select ${entry.giveawayId}, ${entry.userId}, ${entry.baseEntries}, ${entry.totalEntries},
+             ${JSON.stringify(entry.breakdown)}::jsonb,
+             ${entry.memberSnapshot === null ? null : JSON.stringify(entry.memberSnapshot)}::jsonb
+      where exists (
+        select 1 from ${giveaways}
+         where ${giveaways.id} = ${entry.giveawayId} and ${giveaways.status} = 'running'
+      )
+      on conflict do nothing
+      returning user_id
+    `);
 
-    return inserted.length > 0 ? 'entered' : 'already-entered';
+    if (inserted.length > 0) return 'entered';
+
+    // Zero rows is ambiguous — already entered, or no longer running. One extra read, only ever
+    // on the path that is about to refuse the member anyway.
+    const existing = await this.entry(entry.giveawayId, entry.userId);
+    return existing ? 'already-entered' : 'closed';
   }
 
   async entry(giveawayId: string, userId: string): Promise<EntrantRow | null> {
@@ -377,25 +465,124 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     return updated;
   }
 
+  /**
+   * One statement for the whole chunk, not one per entrant — a 500-row chunk was 500 sequential
+   * round trips inside an open transaction. The bonus sum is added here rather than by the caller
+   * so a grant made mid-giveaway survives the draw-time recompute.
+   */
   async reweigh(giveawayId: string, rows: readonly Reweigh[], at: Date): Promise<number> {
     if (rows.length === 0) return 0;
 
-    let updated = 0;
-    await this.#handle.db.transaction(async (tx) => {
-      for (const row of rows) {
-        const result = await tx
-          .update(giveawayEntries)
-          .set({ totalEntries: row.totalEntries, breakdown: row.breakdown, revalidatedAt: at })
-          .where(
-            and(eq(giveawayEntries.giveawayId, giveawayId), eq(giveawayEntries.userId, row.userId)),
-          )
-          .returning({ userId: giveawayEntries.userId });
+    const values = sql.join(
+      rows.map(
+        (row) =>
+          sql`(${row.userId}::text, ${row.totalEntries}::integer, ${JSON.stringify(row.breakdown)}::jsonb)`,
+      ),
+      sql`, `,
+    );
 
-        updated += result.length;
-      }
+    const updated = await this.#handle.db.execute(sql`
+      update ${giveawayEntries} e
+         set total_entries = greatest(1, v.total + coalesce((
+               select sum(b.amount) from ${giveawayBonusEntries} b
+                where b.giveaway_id = e.giveaway_id
+                  and b.user_id = e.user_id
+                  and b.revoked_at is null
+             ), 0)),
+             breakdown = v.breakdown,
+             revalidated_at = ${at}
+        from (values ${values}) as v(user_id, total, breakdown)
+       where e.giveaway_id = ${giveawayId} and e.user_id = v.user_id
+      returning e.user_id
+    `);
+
+    return updated.length;
+  }
+
+  async grantBonus(input: NewBonus): Promise<BonusGrant> {
+    return this.#handle.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(giveawayBonusEntries)
+        .values({
+          id: input.id,
+          giveawayId: input.giveawayId,
+          userId: input.userId,
+          amount: input.amount,
+          reason: input.reason,
+          grantedBy: input.grantedBy,
+        })
+        .returning();
+
+      if (!row) throw new Error('bonus insert returned no row');
+
+      // total_entries is the cache the draw reads, so it moves with the grant. A member who has
+      // not entered yet has no row to move; their bonus lands when they join.
+      await tx
+        .update(giveawayEntries)
+        .set({ totalEntries: sql`${giveawayEntries.totalEntries} + ${input.amount}` })
+        .where(
+          and(
+            eq(giveawayEntries.giveawayId, input.giveawayId),
+            eq(giveawayEntries.userId, input.userId),
+          ),
+        );
+
+      return toBonus(row);
     });
+  }
 
-    return updated;
+  async revokeBonus(giveawayId: string, userId: string, by: string, at: Date): Promise<number> {
+    return this.#handle.db.transaction(async (tx) => {
+      const revoked = await tx
+        .update(giveawayBonusEntries)
+        .set({ revokedAt: at, revokedBy: by })
+        .where(
+          and(
+            eq(giveawayBonusEntries.giveawayId, giveawayId),
+            eq(giveawayBonusEntries.userId, userId),
+            isNull(giveawayBonusEntries.revokedAt),
+          ),
+        )
+        .returning({ amount: giveawayBonusEntries.amount });
+
+      const total = revoked.reduce((sum, row) => sum + row.amount, 0);
+      if (total === 0) return 0;
+
+      await tx
+        .update(giveawayEntries)
+        .set({ totalEntries: sql`greatest(1, ${giveawayEntries.totalEntries} - ${total})` })
+        .where(and(eq(giveawayEntries.giveawayId, giveawayId), eq(giveawayEntries.userId, userId)));
+
+      return total;
+    });
+  }
+
+  async bonusFor(giveawayId: string, userId: string): Promise<number> {
+    const [row] = await this.#handle.db
+      .select({ total: sql<number>`coalesce(sum(${giveawayBonusEntries.amount}), 0)` })
+      .from(giveawayBonusEntries)
+      .where(
+        and(
+          eq(giveawayBonusEntries.giveawayId, giveawayId),
+          eq(giveawayBonusEntries.userId, userId),
+          isNull(giveawayBonusEntries.revokedAt),
+        ),
+      );
+
+    return Number(row?.total ?? 0);
+  }
+
+  async bonusGrants(giveawayId: string, userId?: string): Promise<BonusGrant[]> {
+    const filters = [eq(giveawayBonusEntries.giveawayId, giveawayId)];
+    if (userId !== undefined) filters.push(eq(giveawayBonusEntries.userId, userId));
+
+    const rows = await this.#handle.db
+      .select()
+      .from(giveawayBonusEntries)
+      .where(and(...filters))
+      .orderBy(desc(giveawayBonusEntries.grantedAt));
+
+    return rows.map(toBonus);
   }
 
   async beginDraw(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null> {
@@ -456,19 +643,190 @@ export class DrizzleGiveawayStore implements GiveawayStore {
   async finishDraw(
     guildId: string,
     giveawayId: string,
-    status: GiveawayStatus,
+    from: readonly GiveawayStatus[],
+    to: GiveawayStatus,
     endedAt: Date | null,
   ): Promise<boolean> {
+    if (from.length === 0) return false;
+
     const rows = await this.#handle.db
       .update(giveaways)
-      .set({ status, endedAt, drawingStartedAt: null, updatedAt: new Date() })
-      .where(and(eq(giveaways.guildId, guildId), eq(giveaways.id, giveawayId)))
+      .set({ status: to, endedAt, drawingStartedAt: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.id, giveawayId),
+          inArray(giveaways.status, from as string[]),
+        ),
+      )
       .returning({ id: giveaways.id });
 
     return rows.length > 0;
   }
 
+  async pause(
+    guildId: string,
+    giveawayId: string,
+    by: string,
+    reason: string | null,
+    at: Date,
+  ): Promise<Giveaway | null> {
+    const [row] = await this.#handle.db
+      .update(giveaways)
+      .set({ status: 'paused', pausedAt: at, pausedBy: by, pauseReason: reason, updatedAt: at })
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.id, giveawayId),
+          eq(giveaways.status, 'running'),
+        ),
+      )
+      .returning();
+
+    return row ? toGiveaway(row) : null;
+  }
+
+  // ends_at moves by now - paused_at, computed in SQL from the stored instant rather than from
+  // anything the caller measured: a resume issued by a worker with a skewed clock must not shorten
+  // or lengthen the giveaway.
+  async resume(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null> {
+    const [row] = await this.#handle.db
+      .update(giveaways)
+      .set({
+        status: 'running',
+        endsAt: sql`${giveaways.endsAt} + (${at} - ${giveaways.pausedAt})`,
+        pausedMs: sql`${giveaways.pausedMs} + (extract(epoch from (${at} - ${giveaways.pausedAt})) * 1000)::bigint`,
+        pausedAt: null,
+        pausedBy: null,
+        pauseReason: null,
+        updatedAt: at,
+      })
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.id, giveawayId),
+          eq(giveaways.status, 'paused'),
+          sql`${giveaways.pausedAt} is not null`,
+        ),
+      )
+      .returning();
+
+    return row ? toGiveaway(row) : null;
+  }
+
+  async activate(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null> {
+    const [row] = await this.#handle.db
+      .update(giveaways)
+      .set({ status: 'running', updatedAt: at })
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.id, giveawayId),
+          eq(giveaways.status, 'scheduled'),
+        ),
+      )
+      .returning();
+
+    return row ? toGiveaway(row) : null;
+  }
+
+  async dueToStart(guildId: string, before: Date, limit: number): Promise<Giveaway[]> {
+    const rows = await this.#handle.db
+      .select()
+      .from(giveaways)
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.status, 'scheduled'),
+          lte(giveaways.startsAt, before),
+        ),
+      )
+      .orderBy(asc(giveaways.startsAt))
+      .limit(limit);
+
+    return rows.map(toGiveaway);
+  }
+
+  async patch(
+    guildId: string,
+    giveawayId: string,
+    from: readonly GiveawayStatus[],
+    patch: GiveawayPatch,
+  ): Promise<Giveaway | null> {
+    const fields = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    );
+
+    if (Object.keys(fields).length === 0 || from.length === 0) return null;
+
+    const [row] = await this.#handle.db
+      .update(giveaways)
+      .set({ ...fields, updatedAt: new Date() })
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.id, giveawayId),
+          inArray(giveaways.status, from as string[]),
+        ),
+      )
+      .returning();
+
+    return row ? toGiveaway(row) : null;
+  }
+
+  async leave(giveawayId: string, userId: string, at: Date): Promise<boolean> {
+    const rows = await this.#handle.db
+      .update(giveawayEntries)
+      .set({ leftAt: at })
+      .where(
+        and(
+          eq(giveawayEntries.giveawayId, giveawayId),
+          eq(giveawayEntries.userId, userId),
+          isNull(giveawayEntries.leftAt),
+          isNull(giveawayEntries.disqualifiedAt),
+        ),
+      )
+      .returning({ userId: giveawayEntries.userId });
+
+    return rows.length > 0;
+  }
+
+  async resolve(guildId: string, reference: string): Promise<Giveaway | null> {
+    const code = parseShortCode(reference);
+
+    if (code !== null) {
+      const [row] = await this.#handle.db
+        .select()
+        .from(giveaways)
+        .where(and(eq(giveaways.guildId, guildId), eq(giveaways.shortCode, code)))
+        .limit(1);
+
+      if (row) return toGiveaway(row);
+    }
+
+    return this.get(guildId, reference);
+  }
+
+  async markRerolled(drawId: string, userIds: readonly string[], at: Date): Promise<number> {
+    if (userIds.length === 0) return 0;
+
+    const rows = await this.#handle.db
+      .update(giveawayWins)
+      .set({ rerolledAt: at })
+      .where(
+        and(
+          eq(giveawayWins.drawId, drawId),
+          inArray(giveawayWins.userId, userIds as string[]),
+          isNull(giveawayWins.rerolledAt),
+        ),
+      )
+      .returning({ userId: giveawayWins.userId });
+
+    return rows.length;
+  }
+
   async stalledDraws(
+    guildId: string,
     before: Date,
     limit: number,
   ): Promise<{ giveaway: Giveaway; drawn: boolean }[]> {
@@ -482,7 +840,14 @@ export class DrizzleGiveawayStore implements GiveawayStore {
         )`,
       })
       .from(giveaways)
-      .where(and(eq(giveaways.status, 'drawing'), lt(giveaways.drawingStartedAt, before)))
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.status, 'drawing'),
+          lt(giveaways.drawingStartedAt, before),
+        ),
+      )
+      .orderBy(asc(giveaways.drawingStartedAt))
       .limit(limit);
 
     return rows.map((entry) => ({ giveaway: toGiveaway(entry.row), drawn: entry.drawn === true }));
@@ -504,22 +869,28 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     return rows.length > 0;
   }
 
-  async overdue(before: Date, limit: number): Promise<Giveaway[]> {
+  async overdue(guildId: string, before: Date, limit: number): Promise<Giveaway[]> {
     const rows = await this.#handle.db
       .select()
       .from(giveaways)
-      .where(and(eq(giveaways.status, 'running'), lte(giveaways.endsAt, before)))
+      .where(
+        and(
+          eq(giveaways.guildId, guildId),
+          eq(giveaways.status, 'running'),
+          lte(giveaways.endsAt, before),
+        ),
+      )
       .orderBy(asc(giveaways.endsAt))
       .limit(limit);
 
     return rows.map(toGiveaway);
   }
 
-  async running(limit: number): Promise<Giveaway[]> {
+  async running(guildId: string, limit: number): Promise<Giveaway[]> {
     const rows = await this.#handle.db
       .select()
       .from(giveaways)
-      .where(eq(giveaways.status, 'running'))
+      .where(and(eq(giveaways.guildId, guildId), eq(giveaways.status, 'running')))
       .orderBy(asc(giveaways.endsAt))
       .limit(limit);
 
@@ -575,6 +946,8 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     }));
   }
 
+  // The deadline is enforced here, not only by the expiry sweep: the sweep runs on an interval, so
+  // without this a winner can still claim in the gap after their window closed.
   async claim(drawId: string, userId: string, at: Date): Promise<boolean> {
     const rows = await this.#handle.db
       .update(giveawayWins)
@@ -585,6 +958,7 @@ export class DrizzleGiveawayStore implements GiveawayStore {
           eq(giveawayWins.userId, userId),
           isNull(giveawayWins.claimedAt),
           isNull(giveawayWins.forfeitedAt),
+          or(isNull(giveawayWins.claimDeadline), gt(giveawayWins.claimDeadline, at)),
         ),
       )
       .returning({ userId: giveawayWins.userId });
@@ -611,20 +985,24 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     return rows.length;
   }
 
-  async expiredClaims(before: Date, limit: number): Promise<WinRecord[]> {
+  // giveaway_wins carries no guild_id, so the guild predicate has to come off the parent row.
+  async expiredClaims(guildId: string, before: Date, limit: number): Promise<WinRecord[]> {
     const rows = await this.#handle.db
-      .select()
+      .select({ win: giveawayWins })
       .from(giveawayWins)
+      .innerJoin(giveaways, eq(giveaways.id, giveawayWins.giveawayId))
       .where(
         and(
+          eq(giveaways.guildId, guildId),
           isNull(giveawayWins.claimedAt),
           isNull(giveawayWins.forfeitedAt),
           lt(giveawayWins.claimDeadline, before),
         ),
       )
+      .orderBy(asc(giveawayWins.claimDeadline))
       .limit(limit);
 
-    return rows.map((row) => ({
+    return rows.map(({ win: row }) => ({
       giveawayId: row.giveawayId,
       drawId: row.drawId,
       userId: row.userId,

@@ -2,7 +2,6 @@ import type { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
 import type { ReactElement } from 'react';
-import { Icon } from './components/shell/icon.tsx';
 import { makeQueryClient } from './lib/query-client.ts';
 import { routeTree } from './routeTree.gen';
 
@@ -11,18 +10,13 @@ export interface RouterContext {
 }
 
 // A module page waits on four fetches, and until one of them answered the previous page simply
-// stayed on screen. The empty-state shape is the one the product already uses for "nothing here
-// yet", which is what a page that has not arrived looks like.
+// stayed on screen. role=status with the word offscreen, because the ring itself says nothing to a
+// screen reader and a page that is still arriving has to announce that it is.
 function RoutePending(): ReactElement {
   return (
-    <div className="card">
-      <div className="empty-state">
-        <span className="tile">
-          <Icon name="hourglass-medium" />
-        </span>
-        <span className="empty-state-title">Loading.</span>
-        <p className="status">Proton is fetching this page from Discord and its own API.</p>
-      </div>
+    <div className="route-pending" role="status">
+      <span className="spinner" />
+      <span className="sr-only">Loading</span>
     </div>
   );
 }

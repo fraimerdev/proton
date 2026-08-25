@@ -57,6 +57,12 @@ export const EVENT_TYPES = [
 
   'moderation.warned',
 
+  'tickets.opened',
+  'tickets.claimed',
+  'tickets.closed',
+  'tickets.reopened',
+  'tickets.deleted',
+
   'automod.executed',
 
   'verification.web_passed',

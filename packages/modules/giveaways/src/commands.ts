@@ -22,8 +22,17 @@ import {
   WINNER_COUNT_MAX,
 } from './config.ts';
 import { bindBuilder, bindDraw, bindStore, describeUnbound, type GiveawaysDeps } from './deps.ts';
+import { renderCard } from './embed.ts';
 import { cancelGiveaway, drawGiveaway } from './end.ts';
-import { renderList, runningMessage, viewOf } from './message.ts';
+import {
+  bonusCommand,
+  editCommand,
+  infoCommand,
+  pauseCommand,
+  resumeCommand,
+  shiftCommand,
+} from './manage-commands.ts';
+import { renderList, viewOf } from './message.ts';
 import {
   NOT_WIRED,
   postGiveaway,
@@ -35,6 +44,7 @@ import {
 import { rerollGiveaway } from './reroll.ts';
 import { END_JOB_ID } from './schedule.ts';
 import type { GiveawayStore } from './store.ts';
+import { BONUS_MAX, BONUS_MIN } from './store.ts';
 import { templatePayloadSchema } from './templates.ts';
 
 type Ctx = CommandContext<GiveawaysConfig>;
@@ -134,6 +144,133 @@ function builder(): SlashCommandBuilder {
   );
 
   command.addSubcommand((sub) =>
+    sub
+      .setName('pause')
+      .setDescription('Close entries without ending it. The time left is held where it is.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway to pause.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('reason')
+          .setDescription('Shown on the giveaway while it is paused.')
+          .setMaxLength(200),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('resume')
+      .setDescription('Reopen a paused giveaway. The deadline moves by the time it was paused.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway to resume.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('extend')
+      .setDescription('Give a giveaway more time.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('duration')
+          .setDescription('How much longer. A number and a unit — 30m, 12h, 2d.')
+          .setRequired(true)
+          .setMaxLength(16),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('shorten')
+      .setDescription('Bring a giveaway’s deadline forward.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('duration')
+          .setDescription('How much sooner. A number and a unit — 30m, 12h, 2d.')
+          .setRequired(true)
+          .setMaxLength(16),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('edit')
+      .setDescription('Change a giveaway that is already posted.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      )
+      .addStringOption((option) =>
+        option.setName('prize').setDescription('What is being given away.').setMaxLength(TITLE_MAX),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('description')
+          .setDescription('Extra detail shown under the title.')
+          .setMaxLength(DESCRIPTION_MAX),
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName('winners')
+          .setDescription('How many members win.')
+          .setMinValue(1)
+          .setMaxValue(WINNER_COUNT_MAX),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('image')
+          .setDescription('Banner image URL. Say “none” to remove it.')
+          .setMaxLength(500),
+      )
+      .addIntegerOption((option) =>
+        option
+          .setName('colour')
+          .setDescription('Accent colour as a number, 0 to 16777215.')
+          .setMinValue(0)
+          .setMaxValue(0xffffff),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
+    sub
+      .setName('info')
+      .setDescription('Everything about one giveaway.')
+      .addStringOption((option) =>
+        option
+          .setName('giveaway')
+          .setDescription('Which giveaway.')
+          .setRequired(true)
+          .setAutocomplete(true),
+      ),
+  );
+
+  command.addSubcommand((sub) =>
     sub.setName('list').setDescription('Show the giveaways running in this server.'),
   );
 
@@ -201,6 +338,68 @@ function builder(): SlashCommandBuilder {
               .setDescription('Which template.')
               .setRequired(true)
               .setMaxLength(60),
+          ),
+      ),
+  );
+
+  command.addSubcommandGroup((group) =>
+    group
+      .setName('bonus')
+      .setDescription('Grant somebody extra entries in one giveaway.')
+      .addSubcommand((sub) =>
+        sub
+          .setName('add')
+          .setDescription('Give a member extra entries.')
+          .addStringOption((option) =>
+            option
+              .setName('giveaway')
+              .setDescription('Which giveaway.')
+              .setRequired(true)
+              .setAutocomplete(true),
+          )
+          .addUserOption((option) =>
+            option.setName('member').setDescription('Who to reward.').setRequired(true),
+          )
+          .addIntegerOption((option) =>
+            option
+              .setName('entries')
+              .setDescription('How many extra entries.')
+              .setRequired(true)
+              .setMinValue(BONUS_MIN)
+              .setMaxValue(BONUS_MAX),
+          )
+          .addStringOption((option) =>
+            option.setName('reason').setDescription('Why. Kept on the record.').setMaxLength(200),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('remove')
+          .setDescription('Take back every extra entry a member was granted.')
+          .addStringOption((option) =>
+            option
+              .setName('giveaway')
+              .setDescription('Which giveaway.')
+              .setRequired(true)
+              .setAutocomplete(true),
+          )
+          .addUserOption((option) =>
+            option
+              .setName('member')
+              .setDescription('Whose entries to take back.')
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((sub) =>
+        sub
+          .setName('list')
+          .setDescription('Show who has been granted extra entries.')
+          .addStringOption((option) =>
+            option
+              .setName('giveaway')
+              .setDescription('Which giveaway.')
+              .setRequired(true)
+              .setAutocomplete(true),
           ),
       ),
   );
@@ -297,7 +496,7 @@ async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promi
     createdBy: ctx.userId,
   });
 
-  const rendered = runningMessage({
+  const rendered = renderCard('active', {
     view: viewOf(giveaway),
     entrantCount: 0,
     requirements: [],
@@ -553,7 +752,7 @@ async function end(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
         giveaway: drawn.giveaway,
         summary: drawn.summary,
       });
-      await deps.dirty?.clear(giveawayId);
+      await deps.dirty?.clear(ctx.guildId, giveawayId);
 
       await reply(
         ctx,
@@ -780,6 +979,11 @@ export function giveawayCommands(deps: GiveawaysDeps): CommandDefinition<Giveawa
         const group = ctx.options.getSubcommandGroup();
         const sub = ctx.options.getSubcommand();
 
+        if (group === 'bonus') {
+          await bonusCommand(ctx, store, sub ?? 'list');
+          return;
+        }
+
         if (group === 'blacklist') {
           await blacklist(ctx, store, sub ?? 'list');
           return;
@@ -805,6 +1009,24 @@ export function giveawayCommands(deps: GiveawaysDeps): CommandDefinition<Giveawa
             return;
           case 'reroll':
             await reroll(ctx, deps);
+            return;
+          case 'pause':
+            await pauseCommand(ctx, deps, store);
+            return;
+          case 'resume':
+            await resumeCommand(ctx, deps, store);
+            return;
+          case 'extend':
+            await shiftCommand(ctx, deps, store, 1);
+            return;
+          case 'shorten':
+            await shiftCommand(ctx, deps, store, -1);
+            return;
+          case 'edit':
+            await editCommand(ctx, deps, store);
+            return;
+          case 'info':
+            await infoCommand(ctx, deps, store);
             return;
           case 'list':
             await list(ctx, store);

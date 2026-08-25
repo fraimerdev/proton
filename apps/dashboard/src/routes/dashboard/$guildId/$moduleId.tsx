@@ -307,30 +307,30 @@ function AreaHub({
   const settings = useSuspenseQuery(moduleConfigQuery(guildId, moduleId)).data;
 
   return (
-    <ul className="module-list">
+    <ul className="area-menu">
       {areas.map((area) => {
         const count = area.count?.(settings.config);
 
         return (
-          <li className="module-row" key={area.id}>
-            <i>
+          <li className="area-card" key={area.id}>
+            <span className="tile">
               <Icon name={area.icon} />
-            </i>
+            </span>
             <Link
               to="/dashboard/$guildId/$moduleId"
               params={{ guildId, moduleId }}
               search={{ area: area.id }}
-              className="module-open"
+              className="area-open"
             >
-              <span className="module-name">{area.title}</span>
-              <span className="module-desc module-desc-plain">{area.blurb}</span>
+              <span className="area-title">{area.title}</span>
+              <span className="area-blurb">{area.blurb}</span>
             </Link>
             {count === undefined ? null : (
               <span className={`area-count${count === null ? ' area-count-empty' : ''}`}>
                 {count ?? 'None yet'}
               </span>
             )}
-            <Icon name="arrow-right" className="area-chevron" />
+            <Icon name="caret-right" className="area-chevron" />
           </li>
         );
       })}
@@ -540,8 +540,7 @@ function ModuleSettings({
           </span>
           <span className="empty-state-title">{summary.name} has nothing to configure.</span>
           <p className="status">
-            It runs on the switch above. Everything else about it is decided by Proton’s own
-            deployment, not by this server.
+            It runs on the switch above. There is nothing else for this server to set.
           </p>
         </div>
       </div>

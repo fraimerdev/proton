@@ -11,6 +11,7 @@ import type {
   VerificationRequestResult,
 } from '@proton/core';
 import {
+  botInviteSchema,
   guildOverviewSchema,
   guildPresenceSchema,
   moduleConfigViewSchema,
@@ -20,6 +21,7 @@ import {
   verificationRequestResultSchema,
 } from '@proton/core';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
+import type { TicketQuery, TicketSearchResult } from '@proton/module-tickets/query';
 import type { z } from 'zod';
 import type { AuditStamp } from '../server/audit.ts';
 
@@ -90,6 +92,12 @@ export class ApiClient {
     return this.#parsed(`/guilds/${guildId}`, guildOverviewSchema);
   }
 
+  async invitePermissions(): Promise<string> {
+    const { permissions } = await this.#parsed('/invite', botInviteSchema);
+
+    return permissions;
+  }
+
   async guildPresence(guildIds: readonly string[]): Promise<string[]> {
     const { present } = await this.#parsed('/guilds/presence', guildPresenceSchema, {
       method: 'POST',
@@ -130,6 +138,10 @@ export class ApiClient {
 
   searchTags(guildId: string, query: TagQuery): Promise<TagSearchResult> {
     return this.#request(`/guilds/${guildId}/tags?${queryString(query)}`);
+  }
+
+  searchTickets(guildId: string, query: TicketQuery): Promise<TicketSearchResult> {
+    return this.#request(`/guilds/${guildId}/tickets?${queryString(query)}`);
   }
 
   searchLeaderboard(guildId: string, query: LeaderboardQuery): Promise<LeaderboardResult> {

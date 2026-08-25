@@ -520,97 +520,10 @@ h3 {
   color: var(--text-2);
 }
 
-.nav-module {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.nav-module .nav-item {
-  flex: 1;
-  min-width: 0;
-}
-
-.nav-module[data-open="true"] {
-  border-radius: var(--r-sm);
-  background: var(--surface-hi);
-}
-
-.nav-module[data-open="true"] .nav-item[aria-current="page"] {
-  background: none;
-}
-
-.nav-module[data-open="true"] .nav-item[aria-current="page"]::before {
-  content: none;
-}
-
-.nav-module[data-open="true"]::before {
-  content: "";
-  position: absolute;
-  left: calc(var(--s3) * -1 + 1px);
-  top: 50%;
-  width: 3px;
-  height: 18px;
-  border-radius: 0 var(--r-xs) var(--r-xs) 0;
-  background: var(--brand);
-  transform: translateY(-50%);
-}
-
-/* A module carrying areas grows a nested list, so the row has to wrap rather than stay a single
-   flex line. The open look comes from [data-open], not from aria-current, which the sub-nav owns. */
-.nav-module[data-nested="true"] {
-  flex-wrap: wrap;
-  padding-bottom: var(--s2);
-}
-
-.nav-module[data-nested="true"] .nav-item {
-  color: var(--text);
-  font-weight: 500;
-}
-
-/* Centred on the module row, not on the block: with the areas nested under it, 50% of the whole
-   box would float the sliver against the sub-nav instead of against the name it marks. */
-.nav-module[data-nested="true"]::before {
-  top: 17px;
-}
-
-.nav-areas {
-  flex: 0 0 100%;
-  display: flex;
-  flex-direction: column;
-  margin-top: var(--s1);
-  padding-left: var(--s5);
-}
-
-.nav-area {
-  display: flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 var(--s2);
-  border-radius: var(--r-sm);
-  color: var(--text-3);
-  font-size: var(--t-sm);
-  transition:
-    background 0.12s var(--ease),
-    color 0.12s var(--ease);
-}
-
-.nav-area:hover {
-  background: var(--surface);
-  color: var(--text-2);
-  text-decoration: none;
-}
-
-.nav-area[aria-current="page"] {
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 500;
-}
-
-/* On but not running. The dot is the only state mark the other rows carry, so it has to survive
-   the row not being open. */
-.nav-module[data-state="blocked"] .nav-item-label::after,
-.nav-module[data-state="degraded"] .nav-item-label::after {
+/* On but not running. The dot is the only state mark a module row carries, so it has to survive
+   the row not being the current page. */
+.nav-item[data-state="blocked"] .nav-item-label::after,
+.nav-item[data-state="degraded"] .nav-item-label::after {
   content: "";
   display: inline-block;
   width: 6px;
@@ -620,18 +533,18 @@ h3 {
   vertical-align: middle;
 }
 
-.nav-module[data-state="blocked"] .nav-item-label::after {
+.nav-item[data-state="blocked"] .nav-item-label::after {
   background: var(--danger);
 }
 
-.nav-module[data-state="degraded"] .nav-item-label::after {
+.nav-item[data-state="degraded"] .nav-item-label::after {
   background: var(--warn);
 }
 
 /* The same accent the module list gives a switched-on row's tile. Without it twenty-seven rows
    draw a running module and a switched-off one identically, and the sidebar answers "where is
    Automod" but never "is it on". */
-.nav-module[data-state="running"] .nav-item [data-icon] {
+.nav-item[data-state="running"] [data-icon] {
   color: var(--accent);
 }
 
@@ -1413,14 +1326,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-family: var(--font);
 }
 
-/* An area blurb is a sentence, not a module's one-line description, so it wraps instead of being
-   cut off mid-word by the ellipsis the module rows want. */
-.module-desc-plain {
-  font-family: var(--font);
-  white-space: normal;
-  overflow: visible;
-}
-
 .module-group {
   margin-bottom: var(--s8);
 }
@@ -1435,6 +1340,98 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text-2);
 }
 
+/* ---------- module overview ---------- */
+
+/* Gapped cards rather than the clipped container every other list in the product uses. This is the
+   one exception, recorded in DESIGN.md: the overview is a module's front door and each card is a
+   destination, not a row of a list. */
+.area-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Flex, not the grid the module list uses: only some areas carry a count, and a declared track for
+   one that is absent still pays for its gap — which floated the chevron 16px off the cards that
+   have no count and left the column ragged. */
+.area-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  transition:
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+
+.area-card:hover {
+  background: var(--surface-hi);
+  border-color: var(--line-hi);
+}
+
+.area-card:hover .tile {
+  background: var(--line);
+  color: var(--text-2);
+}
+
+.area-open {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+}
+
+.area-open:hover {
+  text-decoration: none;
+}
+
+/* Stretched under the whole card rather than wrapped around it, so the count and the chevron are
+   inside the target instead of dead space beside it. */
+.area-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* The link is the whole card's target, so the ring belongs on the card. Left on the link it drew
+   around the two lines of text and stopped short of the icon and the chevron inside the same hit.
+   Guarded, because the second rule takes the link's own ring away: without :has() that would leave
+   a keyboard with no ring at all rather than a slightly small one. */
+@supports selector(:has(*)) {
+  .area-card:has(.area-open:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .area-open:focus-visible {
+    outline: none;
+  }
+}
+
+.area-title {
+  display: block;
+  font-size: var(--t-md);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.area-blurb {
+  display: block;
+  max-width: 62ch;
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
 .area-count {
   font: 400 var(--t-sm) / 1 var(--mono);
   font-variant-numeric: tabular-nums;
@@ -1447,8 +1444,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .area-chevron {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--text-3);
+  transition: color 0.16s var(--ease);
+}
+
+.area-card:hover .area-chevron {
+  color: var(--text-2);
 }
 
 .module-warn {
@@ -3290,95 +3292,240 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   line-height: 1.65;
 }
 
-/* ---------- guild picker ---------- */
+/* ---------- spinner ---------- */
 
-.guild-list {
-  display: flex;
-  flex-direction: column;
+.route-pending {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+}
+
+/* Three sides transparent, so what turns is an arc rather than a ring with a bright quarter. The
+   track is left out on purpose: a visible one reads as a progress bar that never fills. */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  border-radius: var(--r-full);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The global reduce block collapses every animation to 0.01ms, which would freeze the arc at
+   whatever angle it stopped on and read as a broken glyph. A closed ring says "working" without
+   moving, and role=status has already said it in words. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    border-right-color: var(--line-hi);
+    border-bottom-color: var(--line-hi);
+    border-left-color: var(--line-hi);
+  }
+}
+
+/* ---------- server picker ---------- */
+
+.picker-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.picker-page .page {
+  max-width: 780px;
+  padding-top: var(--s7);
+}
+
+.picker-head {
+  margin: var(--s8) 0 var(--s7);
+  text-align: center;
+}
+
+.picker-title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.picker-sub {
+  margin: var(--s2) auto 0;
+  max-width: 52ch;
+  color: var(--text-2);
+  font-size: var(--t-md);
+}
+
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--s4);
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.server-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
   overflow: hidden;
+  transition: border-color 0.16s var(--ease);
 }
 
-.guild-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-  padding: var(--s3) var(--s4);
-  transition: background 0.12s var(--ease);
+.server-card:hover {
+  border-color: var(--line-hi);
 }
 
-/* The whole row opens the server, the way a module row does. The row already lights up on hover,
-   which promised a target the 64px button was not. */
-.guild-open::after {
-  content: "";
+/* The server's own icon is the card's colour: blown up under the whole card and blurred past
+   recognition. Scaled well past the frame so the blur has pixels to sample at the edges — a blur
+   that runs off its source fades to transparent and rings the card in a dark halo. */
+.server-wash {
   position: absolute;
+  z-index: -1;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(36px) saturate(1.6);
+  transform: scale(1.8);
+  opacity: 0.5;
 }
 
-.guild-list li + li .guild-row {
-  border-top: 1px solid var(--line);
+/* No icon, no colour to borrow. The mark's own gradient stands in, because a server on Discord's
+   default icon is otherwise a black rectangle in a row of coloured ones. */
+.server-wash-blank {
+  background: var(--brand);
+  filter: blur(44px);
+  opacity: 0.3;
 }
 
-.guild-row:hover {
-  background: var(--surface-hi);
-}
-
-.guild-avatar {
+.server-hero {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  overflow: hidden;
-  border-radius: var(--r-lg);
-  background: var(--surface-hi);
-  color: var(--text-3);
-  font: 600 var(--t-sm) / 1 var(--font);
+  height: 176px;
 }
 
-.guild-avatar img {
+.server-crest {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--surface-hi);
+  color: var(--text-2);
+  font: 600 var(--t-xl) / 1 var(--font);
+  letter-spacing: -0.02em;
+}
+
+.server-crest img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.guild-row-text {
-  flex: 1;
-  min-width: 0;
+/* Laid over the wash rather than beside it, so the tint carries the whole card and the strip the
+   name sits on is still dark enough to read against. */
+.server-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: rgba(11, 13, 18, 0.72);
 }
 
-.guild-row-name {
-  display: block;
-  font-weight: 500;
+.server-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-base);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.guild-row-role {
-  display: block;
-  margin-top: 1px;
-  color: var(--text-3);
+.server-button {
+  flex: none;
+  height: 30px;
+  padding: 0 var(--s3);
   font-size: var(--t-sm);
 }
 
-/* Only the identity dims. The role line carries the reason it is dimmed, so fading that out with
-   it would leave a greyed row with nothing readable saying why. */
-/* The avatar recedes, the name does not: fading the name too took it to 2.20:1, and the row
-   already says "Proton is not in this server" in words underneath it. */
-.guild-row[data-present="false"] .guild-avatar {
-  background: var(--sunken);
-  filter: grayscale(1);
+/* The button is the whole card's target — the 176px above it is the same decision drawn large.
+   Stretched rather than wrapped so the two never become one enormous focusable rectangle. */
+.server-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
 }
 
-.guild-row[data-present="false"] .guild-avatar img {
-  opacity: 0.5;
+.server-card:has(.server-button:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.server-button:focus-visible {
+  outline: none;
+}
+
+.server-unavailable {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+
+/* Proton is not in it. The colour is what makes a card look live, so the colour is what goes — and
+   the button beside it already reads "Invite" rather than "Manage". */
+.server-card[data-present="false"] .server-wash {
+  filter: blur(36px) saturate(0.15);
+  opacity: 0.2;
+}
+
+.server-card[data-present="false"] .server-crest img {
+  opacity: 0.6;
+}
+
+@media (max-width: 620px) {
+  .server-grid {
+    grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+    gap: var(--s3);
+  }
+
+  .server-hero {
+    height: 126px;
+  }
+
+  .server-crest {
+    width: 56px;
+    height: 56px;
+    font-size: var(--t-md);
+  }
+
+  .server-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s2);
+    text-align: center;
+  }
+
+  .server-button {
+    justify-content: center;
+  }
 }
 
 /* ---------- prose ---------- */
@@ -3619,6 +3766,37 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
   .module-desc {
     white-space: normal;
+  }
+
+  /* row-gap stays 0 and the count carries its own margin: the second track exists whether or not
+     an area has a count, so a gap would indent every countless card by 8px of nothing. */
+  .area-card {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "tile text  chevron"
+      ".    count chevron";
+    row-gap: 0;
+    column-gap: var(--s3);
+    padding: var(--s4);
+  }
+
+  .area-card > .tile {
+    grid-area: tile;
+    align-self: start;
+  }
+
+  .area-open {
+    grid-area: text;
+  }
+
+  .area-count {
+    grid-area: count;
+    margin-top: var(--s2);
+  }
+
+  .area-chevron {
+    grid-area: chevron;
   }
 
   .field {

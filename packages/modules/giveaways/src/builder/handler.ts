@@ -7,7 +7,8 @@ import {
   parseCustomId,
 } from '@proton/core';
 import { MODULE_ID, parseGiveawayDuration, plural, WINNER_COUNT_MAX } from '../config.ts';
-import { runningMessage, viewOf } from '../message.ts';
+import { renderCard } from '../embed.ts';
+import { viewOf } from '../message.ts';
 import { type Ctx, postGiveaway, sentMessageId, succeeded } from '../perform.ts';
 import { END_JOB_ID } from '../schedule.ts';
 import type { GiveawayStore } from '../store.ts';
@@ -221,7 +222,7 @@ function previewComponents(
 ): { ok: true; components: Record<string, unknown>[] } | { ok: false; humanReason: string } {
   const now = deps.now?.() ?? Date.now();
 
-  const rendered = runningMessage({
+  const rendered = renderCard('active', {
     view: viewOf({
       id: 'preview',
       guildId: draft.guildId,
@@ -238,6 +239,12 @@ function previewComponents(
       requirementLogic: draft.requirementLogic,
       maxEntriesPerUser: draft.maxEntriesPerUser,
       verifyOn: draft.verifyOn,
+      shortCode: null,
+      entryMethod: 'button',
+      pausedAt: null,
+      pausedBy: null,
+      pauseReason: null,
+      pausedMs: 0,
       startsAt: null,
       endsAt: new Date(now + draft.durationMs),
       endedAt: null,
@@ -432,7 +439,7 @@ export async function startFromDraft(
     })),
   });
 
-  const rendered = runningMessage({
+  const rendered = renderCard('active', {
     view: viewOf(giveaway),
     entrantCount: 0,
     requirements: describeDraftRequirements(deps, draft),

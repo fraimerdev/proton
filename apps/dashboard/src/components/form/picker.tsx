@@ -77,8 +77,7 @@ export interface PickerOption {
   kind?: 'channel' | undefined;
 }
 
-export const CHANNEL_NOTE =
-  'Channels Proton cannot see are not listed here, because Discord never returns them.';
+export const CHANNEL_NOTE = 'Channels Proton cannot see are not listed.';
 
 export function roleOptions(roles: readonly DiscordRole[]): PickerOption[] {
   return roles.map((role) => ({ id: role.id, label: role.name, colour: role.color }));

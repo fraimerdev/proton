@@ -45,7 +45,7 @@ describe('the Discord preview', () => {
       />,
     );
 
-    expect(html).toContain('Discord refuses a message');
+    expect(html).toContain('Nothing to show yet');
   });
 });
 
@@ -433,7 +433,7 @@ describe('components v2', () => {
   });
 
   test('a message that is only a v2 layout is not empty', () => {
-    expect(render({ v2: [TEXT] })).not.toContain('Discord refuses a message');
+    expect(render({ v2: [TEXT] })).not.toContain('Nothing to show yet');
   });
 });
 

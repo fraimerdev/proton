@@ -345,6 +345,8 @@ describe('the tables every action kind is read out of', () => {
       'unlock',
       'delete_channel',
       'edit_channel',
+      'set_channel_overwrite',
+      'delete_channel_overwrite',
       'create_thread',
       'move_member',
       'end_poll',
@@ -486,13 +488,27 @@ const PAYLOAD_AWARE_CASES: Array<[ActionKind, unknown]> = [
 ];
 
 describe('requirements the payload decides', () => {
-  test('exactly four kinds read their payload, and no mechanism leaks to the rest', () => {
+  test('exactly five kinds read their payload, and no mechanism leaks to the rest', () => {
     expect(Object.keys(PAYLOAD_PERMISSIONS).sort()).toEqual([
       'create_channel',
       'create_thread',
       'edit_channel',
       'send',
+      'set_channel_overwrite',
     ]);
+  });
+
+  test('granting a bit through a single overwrite asks the bot to hold that bit as well', () => {
+    const granted = requiredPermissionsFor('set_channel_overwrite', {
+      channelId: CHANNEL,
+      overwriteId: CHANNEL,
+      type: 1,
+      allow: Permissions.AttachFiles.toString(),
+      deny: '0',
+    });
+
+    expect(has(granted, Permissions.AttachFiles)).toBe(true);
+    expect(has(granted, Permissions.ManageRoles)).toBe(true);
   });
 
   test('a message carrying an embed asks for EmbedLinks', () => {

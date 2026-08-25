@@ -106,7 +106,7 @@ export function PaletteEditor({ components, onChange, roles }: PaletteEditorProp
                       value={entry.name}
                     />
                     <small className="field-description">
-                      What this row is called in the palette. It is never sent to Discord.
+                      What this row is called here. Members never see it.
                     </small>
                   </label>
 

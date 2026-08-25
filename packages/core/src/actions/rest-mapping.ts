@@ -16,6 +16,7 @@ import {
   createDmPayloadSchema,
   createRolePayloadSchema,
   createThreadPayloadSchema,
+  deleteChannelOverwritePayloadSchema,
   deleteChannelPayloadSchema,
   deleteMessagePayloadSchema,
   editChannelPayloadSchema,
@@ -37,6 +38,7 @@ import {
   purgePayloadSchema,
   roleChangePayloadSchema,
   sendPayloadSchema,
+  setChannelOverwritePayloadSchema,
   slowmodePayloadSchema,
   timeoutPayloadSchema,
   unbanPayloadSchema,
@@ -512,6 +514,31 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             rate_limit_per_user: p.data.rateLimitPerUser,
             permission_overwrites: p.data.permissionOverwrites,
           }),
+        }),
+      };
+    }
+
+    case 'set_channel_overwrite': {
+      const p = setChannelOverwritePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      return {
+        call: withAudit({
+          method: 'PUT',
+          path: `/channels/${p.data.channelId}/permissions/${p.data.overwriteId}`,
+          body: { type: p.data.type, allow: p.data.allow, deny: p.data.deny },
+        }),
+      };
+    }
+
+    case 'delete_channel_overwrite': {
+      const p = deleteChannelOverwritePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      return {
+        call: withAudit({
+          method: 'DELETE',
+          path: `/channels/${p.data.channelId}/permissions/${p.data.overwriteId}`,
         }),
       };
     }

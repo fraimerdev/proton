@@ -294,11 +294,11 @@ export async function drawGiveaway(deps: DrawDeps, input: DrawInput): Promise<Dr
   });
 
   if (recorded === 'already-drawn') {
-    await deps.store.finishDraw(input.guildId, giveaway.id, 'ended', now);
+    await deps.store.finishDraw(input.guildId, giveaway.id, ['drawing'], 'ended', now);
     return { outcome: 'already-ended', giveaway };
   }
 
-  await deps.store.finishDraw(input.guildId, giveaway.id, 'ended', now);
+  await deps.store.finishDraw(input.guildId, giveaway.id, ['drawing'], 'ended', now);
 
   return {
     outcome: 'drawn',
@@ -331,8 +331,21 @@ export async function cancelGiveaway(
 
   const giveaway = await deps.store.get(guildId, giveawayId);
   if (!giveaway) return { outcome: 'missing' };
-  if (giveaway.status !== 'running') return { outcome: 'already-ended', giveaway };
 
-  await deps.store.finishDraw(guildId, giveawayId, 'cancelled', now);
+  // The conditional update is the decision, not the read above it: a draw that began between the
+  // two would otherwise be told "nobody was drawn" while it announces winners.
+  const cancelled = await deps.store.finishDraw(
+    guildId,
+    giveawayId,
+    ['running', 'scheduled', 'paused'],
+    'cancelled',
+    now,
+  );
+
+  if (!cancelled) {
+    const current = await deps.store.get(guildId, giveawayId);
+    return current ? { outcome: 'already-ended', giveaway: current } : { outcome: 'missing' };
+  }
+
   return { outcome: 'cancelled', giveaway };
 }

@@ -7,7 +7,7 @@ import type { SavedComponent } from '@proton/module-messages/config';
 import type { RolemenuMenu } from '@proton/module-rolemenu/config';
 import type { LogEventOverride } from '@proton/module-serverlog/config';
 import type { TempVcHub } from '@proton/module-tempvc/config';
-import type { TicketPanel } from '@proton/module-tickets/config';
+import type { TicketPanel, TicketResponse, TicketType } from '@proton/module-tickets/config';
 import type { ReactElement } from 'react';
 import { EnforcementPanel } from '../automod/enforcement.tsx';
 import { CardPreview, GreetingCardPreview } from '../cards/card-preview.tsx';
@@ -22,6 +22,8 @@ import { RolemenuEditor } from '../rolemenu/menus.tsx';
 import { LogEventMatrix } from '../serverlog/event-matrix.tsx';
 import { HubsEditor } from '../tempvc/hubs.tsx';
 import { TicketPanelsEditor } from '../tickets/panels.tsx';
+import { TicketResponsesEditor } from '../tickets/responses.tsx';
+import { TicketTypesEditor } from '../tickets/types.tsx';
 import { GreetingEditor } from '../welcome/greeting.tsx';
 import type { PanelProps } from './registry.ts';
 
@@ -108,7 +110,11 @@ export function LogEventsPanel({
   );
 }
 
-export function TicketPanelsPanel({
+export function TicketResponsesPanel({ value, onChange }: PanelProps): ReactElement {
+  return <TicketResponsesEditor onChange={onChange} responses={asArray<TicketResponse>(value)} />;
+}
+
+export function TicketTypesPanel({
   value,
   onChange,
   channels,
@@ -116,12 +122,33 @@ export function TicketPanelsPanel({
   tier,
 }: PanelProps): ReactElement {
   return (
-    <TicketPanelsEditor
-      panels={asArray<TicketPanel>(value)}
+    <TicketTypesEditor
       channels={channels}
+      onChange={onChange}
       roles={roles}
       tier={tier}
+      types={asArray<TicketType>(value)}
+    />
+  );
+}
+
+export function TicketPanelsPanel({
+  value,
+  onChange,
+  channels,
+  liveConfig,
+  tier,
+}: PanelProps): ReactElement {
+  return (
+    <TicketPanelsEditor
+      channels={channels}
       onChange={onChange}
+      panels={asArray<TicketPanel>(value)}
+      tier={tier}
+      // The saved types, not the ones being edited beside this: nothing carries an unsaved panel
+      // value across to another panel, so the picker would otherwise offer a type that is not
+      // stored yet and drop one that is.
+      types={asArray<TicketType>(liveConfig.types)}
     />
   );
 }

@@ -1,13 +1,7 @@
 import { describeMultipliers, describeRequirements, type ProviderRegistry } from '@proton/core';
+import { cardFor, renderCard } from './embed.ts';
 import type { DrawSummary } from './end.ts';
-import {
-  announcement,
-  claimRow,
-  endedMessage,
-  rerollAnnouncement,
-  runningMessage,
-  viewOf,
-} from './message.ts';
+import { announcement, claimRow, rerollAnnouncement, viewOf } from './message.ts';
 import {
   announceWinners,
   type Ctx,
@@ -61,12 +55,14 @@ export async function refreshMessage(
     deps.store.entrantCount(giveaway.id),
   ]);
 
-  const rendered = runningMessage({
+  const rendered = renderCard(cardFor(giveaway.status), {
     view: viewOf(giveaway),
     entrantCount,
     requirements,
     multipliers,
     accentColor: ctx.config.embedColor,
+    pausedBy: giveaway.pausedBy,
+    pauseReason: giveaway.pauseReason,
   });
 
   if (!rendered.ok) {
@@ -106,8 +102,16 @@ export async function publishResult(
 
   const { requirements, multipliers } = await describeBoth(deps, giveaway);
 
-  if (giveaway.messageId !== null && !input.reroll) {
-    const rendered = endedMessage({
+  // A reroll repaints too: leaving the first winners standing on the message while a different
+  // set is announced below it is the single most confusing thing this module can do.
+  if (giveaway.messageId !== null) {
+    const card = input.reroll
+      ? summary.winnerIds.length === 0
+        ? 'no-winners'
+        : 'rerolled'
+      : cardFor('ended', summary.winnerIds);
+
+    const rendered = renderCard(card, {
       view,
       entrantCount: summary.entrantCount,
       requirements,
@@ -122,7 +126,7 @@ export async function publishResult(
         messageId: giveaway.messageId,
         actorId: giveaway.hostId,
         components: rendered.components,
-        idempotencyKey: `${root}:edit`,
+        idempotencyKey: `giveaways:${root}:edit`,
       });
     }
   }

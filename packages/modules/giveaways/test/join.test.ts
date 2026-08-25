@@ -386,10 +386,10 @@ describe('debounced live count', () => {
       clock = second * 1_000;
 
       for (let join = 0; join < 84; join += 1) {
-        await dirty.mark('g1');
+        await dirty.mark('g', 'g1');
       }
 
-      await flushCounts({ dirty, edit, intervalMs: COUNT_FLUSH_INTERVAL_MS });
+      await flushCounts({ dirty, guildId: 'g', edit, intervalMs: COUNT_FLUSH_INTERVAL_MS });
     }
 
     expect(edits).toBeLessThanOrEqual(12);
@@ -402,6 +402,7 @@ describe('debounced live count', () => {
     let edits = 0;
     const result = await flushCounts({
       dirty,
+      guildId: 'g',
       edit: async () => {
         edits += 1;
         return true;
@@ -415,7 +416,7 @@ describe('debounced live count', () => {
   test('two workers sharing one dirty set still make one edit per window', async () => {
     const clock = 0;
     const dirty = new MemoryDirtyCounts(() => clock);
-    await dirty.mark('g1');
+    await dirty.mark('g', 'g1');
 
     let edits = 0;
     const edit = async () => {
@@ -424,9 +425,9 @@ describe('debounced live count', () => {
     };
 
     // Both "workers" tick inside the same window; the lease is what decides.
-    await flushCounts({ dirty, edit });
-    await dirty.mark('g1');
-    await flushCounts({ dirty, edit });
+    await flushCounts({ dirty, guildId: 'g', edit });
+    await dirty.mark('g', 'g1');
+    await flushCounts({ dirty, guildId: 'g', edit });
 
     expect(edits).toBe(1);
   });
@@ -434,7 +435,7 @@ describe('debounced live count', () => {
   test('the flag survives a flush that finds no lease and is retried next window', async () => {
     let clock = 0;
     const dirty = new MemoryDirtyCounts(() => clock);
-    await dirty.mark('g1');
+    await dirty.mark('g', 'g1');
 
     let edits = 0;
     const edit = async () => {
@@ -442,12 +443,12 @@ describe('debounced live count', () => {
       return true;
     };
 
-    await flushCounts({ dirty, edit });
-    await dirty.mark('g1');
-    await flushCounts({ dirty, edit });
+    await flushCounts({ dirty, guildId: 'g', edit });
+    await dirty.mark('g', 'g1');
+    await flushCounts({ dirty, guildId: 'g', edit });
 
     clock += COUNT_FLUSH_INTERVAL_MS + 1;
-    await flushCounts({ dirty, edit });
+    await flushCounts({ dirty, guildId: 'g', edit });
 
     expect(edits).toBe(2);
   });
@@ -455,12 +456,13 @@ describe('debounced live count', () => {
   // The flag lives in the shared store, never in a process, so a restart loses nothing.
   test('a worker restart mid-giveaway leaves the dirty flag intact', async () => {
     const dirty = new MemoryDirtyCounts(() => 0);
-    await dirty.mark('g1');
+    await dirty.mark('g', 'g1');
 
     // "Restart": a brand new flusher over the same store.
     let edits = 0;
     await flushCounts({
       dirty,
+      guildId: 'g',
       edit: async () => {
         edits += 1;
         return true;
@@ -472,17 +474,18 @@ describe('debounced live count', () => {
 
   test('the flag is cleared before the edit so a join during it stays dirty', async () => {
     const dirty = new MemoryDirtyCounts(() => 0);
-    await dirty.mark('g1');
+    await dirty.mark('g', 'g1');
 
     await flushCounts({
       dirty,
+      guildId: 'g',
       async edit() {
-        await dirty.mark('g1');
+        await dirty.mark('g', 'g1');
         return true;
       },
     });
 
-    expect(await dirty.pending(10)).toEqual(['g1']);
+    expect(await dirty.pending('g', 10)).toEqual(['g1']);
   });
 });
 

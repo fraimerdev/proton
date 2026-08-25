@@ -390,14 +390,12 @@ export function MessagePreview({
     <figure className="dc-fence">
       <figcaption className="dc-fence-head">
         <span className="dc-fence-label">Discord preview</span>
-        <span className="dc-fence-note">Drawn from the same values Discord is sent</span>
+        <span className="dc-fence-note">How this looks once it is posted</span>
       </figcaption>
 
       <div className="dc-surface">
         {empty ? (
-          <p className="dc-empty">
-            Nothing to show yet. Discord refuses a message with no text, no embed and no component.
-          </p>
+          <p className="dc-empty">Nothing to show yet. Add some text, an embed or a component.</p>
         ) : (
           <div className="dc-message">
             <img className="dc-avatar" src="/proton-mark.png" alt="" decoding="async" />

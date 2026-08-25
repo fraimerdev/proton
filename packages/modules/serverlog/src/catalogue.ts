@@ -79,6 +79,13 @@ import {
   renderSecurityTripped,
 } from './render/proton.ts';
 import { renderRoleCreated, renderRoleDeleted, renderRoleUpdated } from './render/roles.ts';
+import {
+  renderTicketClaimed,
+  renderTicketClosed,
+  renderTicketDeleted,
+  renderTicketOpened,
+  renderTicketReopened,
+} from './render/tickets.ts';
 import type { RenderInput, RenderResult } from './render/types.ts';
 import {
   renderServerDeafened,
@@ -919,6 +926,51 @@ const SPECS: LogEventSpec[] = [
     triggers: ['proton.security_tripped'],
     primary: 'immediate',
     render: renderSecurityTripped,
+  },
+  {
+    key: 'proton.ticket_opened',
+    category: 'proton',
+    label: 'Ticket opened',
+    colour: ServerLogColors.Add,
+    triggers: ['tickets.opened'],
+    primary: 'immediate',
+    render: renderTicketOpened,
+  },
+  {
+    key: 'proton.ticket_claimed',
+    category: 'proton',
+    label: 'Ticket claimed',
+    colour: ServerLogColors.Modify,
+    triggers: ['tickets.claimed'],
+    primary: 'immediate',
+    render: renderTicketClaimed,
+  },
+  {
+    key: 'proton.ticket_closed',
+    category: 'proton',
+    label: 'Ticket closed',
+    colour: ServerLogColors.Remove,
+    triggers: ['tickets.closed'],
+    primary: 'immediate',
+    render: renderTicketClosed,
+  },
+  {
+    key: 'proton.ticket_reopened',
+    category: 'proton',
+    label: 'Ticket reopened',
+    colour: ServerLogColors.Add,
+    triggers: ['tickets.reopened'],
+    primary: 'immediate',
+    render: renderTicketReopened,
+  },
+  {
+    key: 'proton.ticket_deleted',
+    category: 'proton',
+    label: 'Ticket deleted',
+    colour: ServerLogColors.Remove,
+    triggers: ['tickets.deleted'],
+    primary: 'immediate',
+    render: renderTicketDeleted,
   },
 ];
 

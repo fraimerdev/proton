@@ -40,9 +40,8 @@ export function CountersEditor({
   return (
     <div className="ladder" data-path="counters">
       <p className="field-description">
-        Each counter renames one channel every ten minutes. That interval is Discord’s own limit on
-        channel renames, not a Proton setting — a faster one would stall every other change Proton
-        makes to that channel.
+        Each counter renames one channel every ten minutes. That interval is fixed and cannot be
+        shortened.
       </p>
 
       {counters.map((counter, index) => {

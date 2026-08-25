@@ -1,5 +1,6 @@
 import { type ModuleManifest, Permissions } from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
+import { createGiveawayCleanupListener } from './cleanup.ts';
 import { giveawayCommands } from './commands.ts';
 import {
   GIVEAWAYS_SCHEMA_VERSION,
@@ -11,6 +12,7 @@ import {
   createBuilderModalListener,
   createEnterListener,
   createGiveawayAutocompleteListener,
+  createGiveawayPatrolListener,
 } from './listeners.ts';
 import { createGiveawayProviders } from './providers.ts';
 import {
@@ -19,9 +21,11 @@ import {
   createEndHandler,
   createFlushHandler,
   createReconcileHandler,
+  createStartHandler,
   END_JOB_ID,
   FLUSH_JOB_ID,
   RECONCILE_JOB_ID,
+  START_JOB_ID,
 } from './schedule.ts';
 
 export { publishResult, refreshMessage } from './announce.ts';
@@ -81,6 +85,15 @@ export {
   MemoryDraftStore,
   RedisDraftStore,
 } from './builder/state.ts';
+export {
+  CLEANUP_EVENT_TYPES,
+  type CleanupOutcome,
+  createGiveawayCleanupListener,
+  handleChannelDeleted,
+  handleMessageDeleted,
+  readDeletedChannel,
+  readDeletedMessages,
+} from './cleanup.ts';
 export { giveawayCommand, giveawayCommands } from './commands.ts';
 export {
   COUNT_FLUSH_INTERVAL_MS,
@@ -101,12 +114,14 @@ export {
   parseGiveawayDuration,
   plural,
   REQUIREMENTS_MAX,
+  ROLE_LIST_MAX,
   TITLE_MAX,
   WINNER_COUNT_MAX,
 } from './config.ts';
 export {
-  DIRTY_SET_KEY,
+  DIRTY_SET_PREFIX,
   type DirtyCounts,
+  dirtySetKey,
   FLUSH_LEASE_PREFIX,
   type FlushDeps,
   type FlushOutcome,
@@ -134,6 +149,21 @@ export {
   sampleWeightedAsync,
   type WeightedEntrant,
 } from './draw.ts';
+export {
+  buildActive,
+  buildCancelled,
+  buildDrawing,
+  buildEnded,
+  buildNoWinners,
+  buildPaused,
+  buildRerolled,
+  buildScheduled,
+  type CardInput,
+  cardFor,
+  GIVEAWAY_CARDS,
+  type GiveawayCard,
+  renderCard,
+} from './embed.ts';
 export {
   type CancelOutcome,
   cancelGiveaway,
@@ -171,8 +201,10 @@ export {
   createBuilderModalListener,
   createEnterListener,
   createGiveawayAutocompleteListener,
+  createGiveawayPatrolListener,
   GIVEAWAYS_EVENT_TYPES,
   MODAL_EVENT_TYPES,
+  PATROL_EVENT_TYPES,
 } from './listeners.ts';
 export {
   announcement,
@@ -180,23 +212,22 @@ export {
   BUTTON_PRIMARY,
   BUTTON_SECONDARY,
   BUTTON_SUCCESS,
-  buildEntryRow,
   CLAIM_ACTION,
   COUNT_ACTION,
   type ComponentsResult,
   claimRow,
-  countedRow,
   ENTER_ACTION,
   ENTRY_BUTTON_STYLES,
-  endedMessage,
   type GiveawayView,
+  LEAVE_ACTION,
   type ListEntry,
   type MessageComponent,
+  MULTIPLIERS_ACTION,
   mentionAll,
   messageLink,
+  REQUIREMENTS_ACTION,
   renderList,
   rerollAnnouncement,
-  runningMessage,
   V2_FLAGS,
   viewOf,
 } from './message.ts';
@@ -222,17 +253,35 @@ export {
 } from './reconcile.ts';
 export { type RerollInput, type RerollOutcome, rerollGiveaway } from './reroll.ts';
 export {
+  armPatrols,
+  CLAIM_INTERVAL_MS,
   CLAIM_JOB_ID,
+  CLAIM_KEY,
   createClaimHandler,
   createEndHandler,
   createFlushHandler,
   createReconcileHandler,
+  createStartHandler,
   END_JOB_ID,
   endJobDataSchema,
+  FLUSH_INTERVAL_MS,
   FLUSH_JOB_ID,
+  FLUSH_KEY,
   GIVEAWAY_JOB_IDS,
+  RECONCILE_INTERVAL_MS,
   RECONCILE_JOB_ID,
+  RECONCILE_KEY,
+  START_JOB_ID,
+  startJobDataSchema,
 } from './schedule.ts';
+export {
+  formatShortCode,
+  newShortCode,
+  parseShortCode,
+  SHORT_CODE_ALPHABET,
+  SHORT_CODE_LENGTH,
+  SHORT_CODE_PREFIX,
+} from './short-code.ts';
 export {
   canonicalise,
   canonicalOrder,
@@ -324,14 +373,17 @@ export function createGiveawaysModule(
       createEnterListener(deps),
       createGiveawayAutocompleteListener(deps),
       createBuilderModalListener(deps),
+      createGiveawayPatrolListener(deps),
+      createGiveawayCleanupListener(deps),
     ],
 
     // Registered only when the store is bound: a requirement nobody can ever evaluate should not
     // show up in another module's picker.
     ...(deps.store ? { providers: createGiveawayProviders(deps.store) } : {}),
 
-    schedules: [END_JOB_ID, FLUSH_JOB_ID, RECONCILE_JOB_ID, CLAIM_JOB_ID],
+    schedules: [START_JOB_ID, END_JOB_ID, FLUSH_JOB_ID, RECONCILE_JOB_ID, CLAIM_JOB_ID],
     scheduledHandlers: {
+      [START_JOB_ID]: createStartHandler(deps),
       [END_JOB_ID]: createEndHandler(deps),
       [FLUSH_JOB_ID]: createFlushHandler(deps),
       [RECONCILE_JOB_ID]: createReconcileHandler(deps),
@@ -347,6 +399,11 @@ export function createGiveawaysModule(
           id: 'general',
           title: 'General',
           fields: ['enabled', 'defaultWinnerCount', 'embedColor'],
+        },
+        {
+          id: 'access',
+          title: 'Who can enter and who can manage',
+          fields: ['managerRoleIds', 'bypassRoleIds', 'blacklistRoleIds'],
         },
         {
           id: 'results',

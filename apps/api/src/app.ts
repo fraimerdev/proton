@@ -8,6 +8,7 @@ import {
   snowflakeSchema,
 } from '@proton/core';
 import { tagQuerySchema } from '@proton/module-tags/query';
+import { ticketQuerySchema, ticketStatsQuerySchema } from '@proton/module-tickets/query';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { type CardPreviewService, cardPreviewQuerySchema } from './cards/preview.ts';
@@ -16,6 +17,7 @@ import type { GuildService } from './guilds/service.ts';
 import type { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 import type { TagSearchService } from './tags/service.ts';
+import type { TicketSearchService } from './tickets/service.ts';
 import { VerificationError, type VerificationService } from './verification/service.ts';
 
 const updateBodySchema = z.object({
@@ -77,6 +79,7 @@ export interface ApiDeps {
   cases: CaseQueryService;
   leaderboard: LeaderboardService;
   tags: TagSearchService;
+  tickets: TicketSearchService;
   guilds: GuildService;
   verification: VerificationService;
   registry: ModuleRegistry;
@@ -118,6 +121,17 @@ export function createApiApp(deps: ApiDeps): Hono {
   const app = new Hono();
 
   app.get('/healthz', (c) => c.json({ ok: true }));
+
+  // The permission set an invite has to ask Discord for, unioned over every loaded module. It is
+  // deployment-wide rather than per-guild, which is why it sits outside the /guilds/* tree — and it
+  // is computed here because the registry is the only thing that knows which modules are loaded.
+  app.get('/invite', (c) => {
+    if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
+      return c.json({ error: 'unauthorised' }, 401);
+    }
+
+    return c.json({ permissions: deps.registry.invitePermissions().toString() });
+  });
 
   app.put('/guilds/:guildId', async (c) => {
     if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
@@ -208,6 +222,20 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
 
     return c.json(await deps.tags.search(c.req.param('guildId'), parsed.data));
+  });
+
+  app.get('/guilds/:guildId/tickets', async (c) => {
+    const parsed = ticketQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return c.json(await deps.tickets.search(c.req.param('guildId'), parsed.data));
+  });
+
+  app.get('/guilds/:guildId/tickets/stats', async (c) => {
+    const parsed = ticketStatsQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return c.json(await deps.tickets.stats(c.req.param('guildId'), parsed.data));
   });
 
   // Guild-independent — the descriptors come from the deployed registry, not from this guild's

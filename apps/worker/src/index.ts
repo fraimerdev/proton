@@ -323,7 +323,13 @@ const registry = createModuleRegistry(
       store: new DrizzleTicketStore(handle),
       applicationId: env.DISCORD_APPLICATION_ID,
 
+      guildState,
+
       botUserId: env.DISCORD_APPLICATION_ID,
+      displayName: async (userId) => {
+        const profile = await users.resolve(userId);
+        return profile ? (profile.globalName ?? profile.username) : null;
+      },
     },
     tempvc: {
       repository: new DrizzleTempVoiceRepository(handle),

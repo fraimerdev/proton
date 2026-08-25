@@ -7,6 +7,7 @@ export const STALE_DRAW_AFTER_MS = 10 * 60_000;
 
 export interface ReconcileDeps {
   store: GiveawayStore;
+  guildId: string;
   dirty?: DirtyCounts;
   now?: () => number;
   staleAfterMs?: number;
@@ -14,6 +15,7 @@ export interface ReconcileDeps {
 }
 
 export interface ReconcileResult {
+  dueToStart: Giveaway[];
   overdue: Giveaway[];
   released: string[];
   finished: string[];
@@ -35,11 +37,17 @@ export async function reconcile(deps: ReconcileDeps): Promise<ReconcileResult> {
   const released: string[] = [];
   const finished: string[] = [];
 
-  for (const stalled of await deps.store.stalledDraws(staleBefore, limit)) {
+  for (const stalled of await deps.store.stalledDraws(deps.guildId, staleBefore, limit)) {
     // The asymmetry that matters: a draw row means winners already exist, so the recovery
     // finishes forward. Re-drawing would hand the prize to somebody else.
     if (stalled.drawn) {
-      await deps.store.finishDraw(stalled.giveaway.guildId, stalled.giveaway.id, 'ended', now);
+      await deps.store.finishDraw(
+        stalled.giveaway.guildId,
+        stalled.giveaway.id,
+        ['drawing'],
+        'ended',
+        now,
+      );
       finished.push(stalled.giveaway.id);
       continue;
     }
@@ -49,18 +57,23 @@ export async function reconcile(deps: ReconcileDeps): Promise<ReconcileResult> {
     }
   }
 
-  const overdue = await deps.store.overdue(now, limit);
-  const expiredClaims = await deps.store.expiredClaims(now, limit);
+  // Before overdue, and deliberately separate: a scheduled giveaway whose start AND end both
+  // passed during an outage has to be started before it can be drawn, or it is drawn from an
+  // entrant list nobody was ever allowed to join.
+  const dueToStart = await deps.store.dueToStart(deps.guildId, now, limit);
+
+  const overdue = await deps.store.overdue(deps.guildId, now, limit);
+  const expiredClaims = await deps.store.expiredClaims(deps.guildId, now, limit);
 
   let remarked = 0;
   if (deps.dirty) {
     // A count that went stale during a total outage self-heals on the next flush rather than
     // sitting wrong until somebody else joins.
-    for (const giveaway of await deps.store.running(limit)) {
-      await deps.dirty.mark(giveaway.id);
+    for (const giveaway of await deps.store.running(deps.guildId, limit)) {
+      await deps.dirty.mark(deps.guildId, giveaway.id);
       remarked += 1;
     }
   }
 
-  return { overdue, released, finished, expiredClaims, remarked };
+  return { dueToStart, overdue, released, finished, expiredClaims, remarked };
 }

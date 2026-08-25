@@ -100,6 +100,18 @@ function appPermissionsOf(d: Record<string, unknown>): bigint | undefined {
   }
 }
 
+// member.permissions, not app_permissions: the first is the invoker's and authorises what they
+// asked for, the second is the bot's and scopes what Proton may do on their behalf.
+function memberPermissionsOf(d: Record<string, unknown>): bigint | undefined {
+  const raw = str(nested(d.member, 'permissions'));
+  if (!raw) return undefined;
+  try {
+    return BigInt(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 export class ModuleRuntime {
   readonly #deps: ModuleRuntimeDeps;
 
@@ -225,10 +237,14 @@ export class ModuleRuntime {
       return;
     }
 
+    const actorPermissions = memberPermissionsOf(d);
+
     await command.handler({
       guildId,
       channelId,
       userId,
+      actorRoleIds: memberRoleIds(d),
+      ...(actorPermissions === undefined ? {} : { actorPermissions }),
       options: createCommandOptions((nested(d.data, 'options') as RawOption[] | undefined) ?? []),
       config: parsed.data,
       tier: snapshot.tier ?? 'free',

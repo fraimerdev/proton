@@ -13,7 +13,7 @@ import {
   useState,
 } from 'react';
 import type { DiscordUserGuild, SessionGuild } from '../../lib/guild-access.ts';
-import { type AreaEntry, areaForField, areasFor } from '../panels/areas.ts';
+import { areaForField, areasFor } from '../panels/areas.ts';
 import { useDismiss, useFocusTrap } from './dismiss.ts';
 import { Icon } from './icon.tsx';
 import type { IconName } from './icon-set.gen.ts';
@@ -47,9 +47,11 @@ export function initialsOf(name: string): string {
   return (letters.join('') || name.slice(0, 2)).toUpperCase();
 }
 
-export function guildIconUrl(guild: DiscordUserGuild): string | null {
+// Discord only serves powers of two, and asks for the nearest one up rather than resampling: 64
+// is right for the rail's 40px avatar and blurs into mush behind the picker's 72px crest.
+export function guildIconUrl(guild: DiscordUserGuild, size: 64 | 256 = 64): string | null {
   return guild.icon
-    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=64`
+    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=${size}`
     : null;
 }
 
@@ -381,7 +383,6 @@ export function AppShell({
                   {owned.map((module) => (
                     <ModuleNavItem
                       key={module.id}
-                      area={area}
                       guildId={guildId}
                       module={module}
                       open={openModuleId === module.id}
@@ -429,91 +430,36 @@ export function ProtonMark({ size = 28 }: { size?: number }): ReactElement {
 }
 
 function ModuleNavItem({
-  area,
   guildId,
   module,
   open,
 }: {
-  area: string | undefined;
   guildId: string;
   module: ModuleSummary;
   open: boolean;
 }): ReactElement {
   const state = moduleState(module);
-  const areas = areasFor(module.id);
-  const nested = open && areas.length > 0;
 
   return (
-    <div
-      className="nav-module"
+    <Link
+      to="/dashboard/$guildId/$moduleId"
+      params={{ guildId, moduleId: module.id }}
+      search={{}}
+      className="nav-item"
       data-state={state}
-      data-open={open ? 'true' : undefined}
-      data-nested={nested ? 'true' : undefined}
+      aria-current={open ? 'page' : undefined}
     >
-      <Link
-        to="/dashboard/$guildId/$moduleId"
-        params={{ guildId, moduleId: module.id }}
-        search={{}}
-        className="nav-item"
-        // With areas open the sub-nav owns aria-current, down to the row you are actually on. Two
-        // elements claiming it in one nav is worse than none, and [data-nested] keeps the look.
-        aria-current={open && !nested ? 'page' : undefined}
-      >
-        <NavInner icon={moduleIcon(module.dashboard?.icon)} label={module.name} current={open} />
-        {state === 'off' ? null : (
-          <span className="sr-only">
-            {state === 'running'
-              ? ', on'
-              : state === 'blocked'
-                ? ', on but a permission is missing'
-                : ', on but not on this plan'}
-          </span>
-        )}
-      </Link>
-
-      {nested ? (
-        <AreaNav areas={areas} current={area} guildId={guildId} moduleId={module.id} />
-      ) : null}
-    </div>
-  );
-}
-
-function AreaNav({
-  areas,
-  current,
-  guildId,
-  moduleId,
-}: {
-  areas: readonly AreaEntry[];
-  current: string | undefined;
-  guildId: string;
-  moduleId: string;
-}): ReactElement {
-  return (
-    <div className="nav-areas">
-      <Link
-        to="/dashboard/$guildId/$moduleId"
-        params={{ guildId, moduleId }}
-        search={{}}
-        className="nav-area"
-        aria-current={current === undefined ? 'page' : undefined}
-      >
-        Overview
-      </Link>
-
-      {areas.map((entry) => (
-        <Link
-          key={entry.id}
-          to="/dashboard/$guildId/$moduleId"
-          params={{ guildId, moduleId }}
-          search={{ area: entry.id }}
-          className="nav-area"
-          aria-current={current === entry.id ? 'page' : undefined}
-        >
-          {entry.title}
-        </Link>
-      ))}
-    </div>
+      <NavInner icon={moduleIcon(module.dashboard?.icon)} label={module.name} current={open} />
+      {state === 'off' ? null : (
+        <span className="sr-only">
+          {state === 'running'
+            ? ', on'
+            : state === 'blocked'
+              ? ', on but a permission is missing'
+              : ', on but not on this plan'}
+        </span>
+      )}
+    </Link>
   );
 }
 

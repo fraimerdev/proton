@@ -1,4 +1,4 @@
-import type { EntitlementTier, FieldDescriptor } from '@proton/core';
+﻿import type { EntitlementTier, FieldDescriptor } from '@proton/core';
 import { EMPTY_MESSAGE, zodToDescriptors } from '@proton/core';
 import { escalationLadderSchema } from '@proton/module-cases';
 import { honeypotChannelsSchema } from '@proton/module-honeypot/config';
@@ -6,7 +6,11 @@ import { roleRewardsSchema } from '@proton/module-leveling/config';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
 import { rolemenuMenusSchema } from '@proton/module-rolemenu/config';
 import { tempVcHubsSchema } from '@proton/module-tempvc/config';
-import { ticketPanelsSchema } from '@proton/module-tickets/config';
+import {
+  ticketPanelsSchema,
+  ticketResponsesSchema,
+  ticketTypesSchema,
+} from '@proton/module-tickets/config';
 import { lazyRouteComponent } from '@tanstack/react-router';
 import type { ComponentType } from 'react';
 import { z } from 'zod';
@@ -34,6 +38,8 @@ type PanelExport =
   | 'TemplatesPanel'
   | 'TempVcHubsPanel'
   | 'TicketPanelsPanel'
+  | 'TicketResponsesPanel'
+  | 'TicketTypesPanel'
   | 'WelcomeMessagePanel';
 
 export interface PanelProps {
@@ -149,12 +155,27 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
   },
   tickets: {
     panels: [
+      // Before panels, because a panel has nothing to offer until a type exists.
+      {
+        key: 'types',
+        emptyValue: [],
+        title: 'Ticket types',
+        Panel: panel('TicketTypesPanel'),
+        schema: ticketTypesSchema,
+      },
       {
         key: 'panels',
         emptyValue: [],
         title: 'Ticket panels',
         Panel: panel('TicketPanelsPanel'),
         schema: ticketPanelsSchema,
+      },
+      {
+        key: 'responses',
+        emptyValue: [],
+        title: 'Saved replies',
+        Panel: panel('TicketResponsesPanel'),
+        schema: ticketResponsesSchema,
       },
     ],
   },

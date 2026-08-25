@@ -177,10 +177,9 @@ describe('the module panel registry', () => {
           id: 'support',
           name: 'Support',
           channelId: '500000000000000001',
-          buttonLabel: 'Open a ticket',
+          typeIds: ['support'],
+          style: 'buttons',
           panelText: 'Need a hand?',
-          openingMessage: '{user} opened a ticket.',
-          supportRoleIds: [],
         },
       ],
       tempvc: [{ channelId: '500000000000000002', nameTemplate: '{user}', userLimit: 0 }],
@@ -196,6 +195,25 @@ describe('the module panel registry', () => {
     // list under `templates` and a row palette under `components`, and handing either panel the
     // other's value only proves the component crashes on it.
     const perPanel: Record<string, unknown> = {
+      'tickets/types': [
+        {
+          id: 'support',
+          name: 'Support',
+          form: [
+            { id: 'subject', label: 'What do you need?', style: 'short', required: true },
+            {
+              id: 'area',
+              label: 'Which area?',
+              style: 'select',
+              required: true,
+              options: [{ label: 'Billing', value: 'billing' }],
+            },
+          ],
+          staffRoleIds: ['600000000000000001'],
+          captureMessages: true,
+          autoCloseAfter: '48h',
+        },
+      ],
       'messages/components': [
         {
           name: 'Ticket buttons',

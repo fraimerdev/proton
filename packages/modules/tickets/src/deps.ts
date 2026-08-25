@@ -9,11 +9,26 @@ export interface TicketsDeps {
   botUserId?: string;
 
   guildState?: GuildStateStore;
+
+  displayName?: (userId: string) => Promise<string | null>;
+
+  guildName?: (guildId: string) => Promise<string | null>;
+
+  // Injected so a cooldown measured against a stored timestamp and the stored timestamp itself
+  // come from the same clock. Production leaves it unbound and gets the wall clock.
+  now?: () => Date;
+}
+
+export function clockOf(deps: TicketsDeps): Date {
+  return deps.now?.() ?? new Date();
 }
 
 const PORT_HINTS: Record<string, string> = {
   store: 'store: new DrizzleTicketStore(db)',
   applicationId: 'applicationId: env.DISCORD_APPLICATION_ID',
+  botUserId: 'botUserId: env.DISCORD_APPLICATION_ID',
+  guildState: 'guildState: new RedisGuildStateStore(redis)',
+  displayName: 'displayName: async (id) => (await users.resolve(id))?.username ?? null',
 };
 
 export function describeUnbound(what: string, unbound: readonly string[]): string {
@@ -39,4 +54,36 @@ export function bindButton(deps: TicketsDeps): ButtonBinding {
 
   if (!deps.store || !deps.applicationId) return { unbound };
   return { store: deps.store, applicationId: deps.applicationId };
+}
+
+// The actor recorded when a timer, not a person, did something. The core resolver already treats a
+// 'proton:' prefix as a pseudo actor, so this stays readable everywhere a real user id would go.
+export const PROTON_ACTOR = 'proton:tickets';
+
+export function isProtonActor(actorId: string | null | undefined): boolean {
+  return typeof actorId === 'string' && actorId.startsWith('proton:');
+}
+
+// A pseudo actor is not a snowflake, so <@proton:tickets> renders as literal text in Discord.
+export function mentionOf(actorId: string | null | undefined): string {
+  if (!actorId) return 'somebody';
+  return isProtonActor(actorId) ? 'Proton' : `<@${actorId}>`;
+}
+
+export async function nameOf(deps: TicketsDeps, userId: string): Promise<string> {
+  if (isProtonActor(userId)) return 'Proton';
+
+  const resolved = await deps.displayName?.(userId).catch(() => null);
+  return resolved ?? userId;
+}
+
+export async function namesOf(
+  deps: TicketsDeps,
+  userIds: Iterable<string>,
+): Promise<Map<string, string>> {
+  const unique = [...new Set(userIds)];
+
+  const pairs = await Promise.all(unique.map(async (id) => [id, await nameOf(deps, id)] as const));
+
+  return new Map(pairs);
 }

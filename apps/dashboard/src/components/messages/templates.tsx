@@ -97,8 +97,7 @@ export function TemplatesEditor({
     <div className="templates panel-wide">
       <p className="field-description">
         A template is posted into a channel with <code>/message post</code>. It can carry text, up
-        to ten embeds and up to five rows of buttons or dropdowns. The preview is drawn from the
-        same values Discord is sent.
+        to ten embeds and up to five rows of buttons or dropdowns.
       </p>
 
       <div className="pane">

@@ -5,6 +5,7 @@ import {
   leaderboardQuerySchema,
 } from '@proton/core';
 import { type TagSearchResult, tagQuerySchema } from '@proton/module-tags/query';
+import { type TicketSearchResult, ticketQuerySchema } from '@proton/module-tickets/query';
 import type { QueryFunction, UseSuspenseQueryOptions } from '@tanstack/react-query';
 import { lazyRouteComponent } from '@tanstack/react-router';
 import type { ComponentType } from 'react';
@@ -42,6 +43,7 @@ export type AnyViewEntry = ViewEntry<any, any>;
 export type CaseBrowserProps = ViewProps<typeof caseQuerySchema, CaseSearchResult>;
 export type LeaderboardProps = ViewProps<typeof leaderboardQuerySchema, LeaderboardResult>;
 export type TagBrowserProps = ViewProps<typeof tagQuerySchema, TagSearchResult>;
+export type TicketBrowserProps = ViewProps<typeof ticketQuerySchema, TicketSearchResult>;
 
 export const MODULE_VIEWS: Readonly<Record<string, readonly AnyViewEntry[]>> = {
   cases: [
@@ -77,6 +79,22 @@ export const MODULE_VIEWS: Readonly<Record<string, readonly AnyViewEntry[]>> = {
       }),
       View: lazyRouteComponent(() => import('./views.tsx'), 'TagBrowserView'),
     } satisfies ViewEntry<typeof tagQuerySchema, TagSearchResult>,
+  ],
+  tickets: [
+    {
+      id: 'tickets',
+      title: 'Tickets',
+      searchSchema: ticketQuerySchema,
+
+      query: ({ guildId, search }) => ({
+        queryKey: queryKeys.view(guildId, 'tickets', search),
+        queryFn: async () =>
+          (await import('../../server/modules.ts')).searchTickets({ data: { guildId, ...search } }),
+        staleTime: STALE.browse,
+        ...LIVE,
+      }),
+      View: lazyRouteComponent(() => import('./views.tsx'), 'TicketBrowserView'),
+    } satisfies ViewEntry<typeof ticketQuerySchema, TicketSearchResult>,
   ],
   leveling: [
     {

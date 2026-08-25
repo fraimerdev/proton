@@ -182,6 +182,20 @@ export {
   streamKey,
 } from './events/redis-streams.ts';
 export {
+  TICKET_PRIORITIES,
+  type TicketClaimedEvent,
+  type TicketClosedEvent,
+  type TicketDeletedEvent,
+  type TicketOpenedEvent,
+  type TicketPriority,
+  type TicketReopenedEvent,
+  ticketClaimedEventSchema,
+  ticketClosedEventSchema,
+  ticketDeletedEventSchema,
+  ticketOpenedEventSchema,
+  ticketReopenedEventSchema,
+} from './events/tickets.ts';
+export {
   EVENT_TYPES,
   type EventType,
   isEventType,
@@ -225,6 +239,7 @@ export {
   type ModalInteraction,
   readAutocompleteInteraction,
   readComponentInteraction,
+  readMemberPermissions,
   readModalInteraction,
 } from './interactions/read.ts';
 export {
@@ -398,6 +413,8 @@ export {
   v2Rows,
 } from './messages/v2.ts';
 export {
+  type BotInvite,
+  botInviteSchema,
   type GuildOverview,
   type GuildPresence,
   guildOverviewSchema,

@@ -155,8 +155,7 @@ function GeneralSettings(): ReactElement {
           <span className="fact-row-label">
             Language
             <span className="field-description">
-              Discord reports this server as {overview.locale}. Proton replies in English only, so
-              this is not a setting yet.
+              Proton replies in English only, so this is not a setting yet.
             </span>
           </span>
           <span className="fact-row-value mono">{overview.locale}</span>

@@ -6,6 +6,7 @@ import {
 } from '@proton/module-messages/config';
 import { type ReactElement, useId } from 'react';
 import {
+  CHANNEL_NOTE,
   channelOptions,
   type DiscordChannel,
   type DiscordRole,
@@ -101,9 +102,7 @@ export function ScheduleEditor({
           clearable={false}
           invalid={schedule.channelId === ''}
         />
-        <small className="field-description">
-          Channels Proton cannot view are not listed here, because Discord never returns them.
-        </small>
+        <small className="field-description">{CHANNEL_NOTE}</small>
       </div>
 
       {/* A <label> around both the control and its sentence reads the sentence out as part of the
@@ -170,8 +169,7 @@ export function ScheduleEditor({
           clearable
         />
         <small className="field-description">
-          Written above the message, and the only mention it is allowed to make — Discord refuses a
-          message that both names a role and asks for every mention to be parsed.
+          Written above the message, and the only mention it is allowed to make.
         </small>
       </div>
 
