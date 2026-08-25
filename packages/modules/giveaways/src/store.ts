@@ -1,6 +1,13 @@
 import type { EntryBreakdown, MultiplierMode } from '@proton/core';
 
-export const GIVEAWAY_STATUSES = ['scheduled', 'running', 'drawing', 'ended', 'cancelled'] as const;
+export const GIVEAWAY_STATUSES = [
+  'scheduled',
+  'running',
+  'paused',
+  'drawing',
+  'ended',
+  'cancelled',
+] as const;
 
 export type GiveawayStatus = (typeof GIVEAWAY_STATUSES)[number];
 
@@ -12,6 +19,34 @@ export type VerifyOn = (typeof VERIFY_ON)[number];
 
 export const BLACKLIST_SUBJECTS = ['user', 'role'] as const;
 export type BlacklistSubject = (typeof BLACKLIST_SUBJECTS)[number];
+
+export const ENTRY_METHODS = ['button', 'reaction', 'drop'] as const;
+export type EntryMethod = (typeof ENTRY_METHODS)[number];
+
+/** The states a member may still join from. Everything else refuses the insert outright. */
+export const OPEN_STATUSES = ['running'] as const satisfies readonly GiveawayStatus[];
+
+/** The states a manager may still edit, pause, extend or cancel from. */
+export const LIVE_STATUSES = [
+  'scheduled',
+  'running',
+  'paused',
+] as const satisfies readonly GiveawayStatus[];
+
+export interface GiveawayPatch {
+  title?: string;
+  description?: string | null;
+  winnerCount?: number;
+  endsAt?: Date;
+  bannerUrl?: string | null;
+  color?: number | null;
+  emoji?: string | null;
+  buttonStyle?: number;
+  maxEntriesPerUser?: number | null;
+  winMessage?: string | null;
+  dmWinners?: boolean;
+  claimWindowSeconds?: number | null;
+}
 
 export interface RequirementRow {
   id: string;
@@ -40,6 +75,10 @@ export interface Giveaway {
 
   winnerCount: number;
   requirementLogic: RequirementLogic;
+
+  /** Null on giveaways written before nested rules existed — the flat rows are the fallback. */
+  requirementTree: unknown;
+
   maxEntriesPerUser: number | null;
   verifyOn: VerifyOn;
 
@@ -50,12 +89,25 @@ export interface Giveaway {
   status: GiveawayStatus;
   drawingStartedAt: Date | null;
 
+  shortCode: string | null;
+  entryMethod: EntryMethod;
+
+  pausedAt: Date | null;
+  pausedBy: string | null;
+  pauseReason: string | null;
+  pausedMs: number;
+
   claimWindowSeconds: number | null;
   dmWinners: boolean;
   winMessage: string | null;
 
+  prizes: unknown;
+  rewardRoleId: string | null;
+
   templateId: string | null;
   recurrence: string | null;
+  recurrenceConfig: unknown;
+  recurrenceLeft: number | null;
 
   createdBy: string;
   createdAt: Date;
@@ -78,19 +130,27 @@ export interface CreateGiveawayInput {
 
   winnerCount: number;
   requirementLogic?: RequirementLogic;
+  requirementTree?: unknown;
   maxEntriesPerUser?: number | null;
   verifyOn?: VerifyOn;
 
   startsAt?: Date | null;
   endsAt: Date;
   status?: GiveawayStatus;
+  shortCode?: string | null;
+  entryMethod?: EntryMethod;
 
   claimWindowSeconds?: number | null;
   dmWinners?: boolean;
   winMessage?: string | null;
 
+  prizes?: unknown;
+  rewardRoleId?: string | null;
+
   templateId?: string | null;
   recurrence?: string | null;
+  recurrenceConfig?: unknown;
+  recurrenceLeft?: number | null;
 
   createdBy: string;
 
@@ -98,7 +158,7 @@ export interface CreateGiveawayInput {
   multipliers?: readonly Omit<MultiplierRow, 'id'>[];
 }
 
-export type GiveawayState = 'running' | 'ended' | 'any';
+export type GiveawayState = 'running' | 'live' | 'ended' | 'any';
 
 export interface ListGiveawaysQuery {
   guildId: string;
@@ -123,7 +183,7 @@ export interface NewEntry {
   memberSnapshot: MemberSnapshot | null;
 }
 
-export type EnterOutcome = 'entered' | 'already-entered';
+export type EnterOutcome = 'entered' | 'already-entered' | 'closed';
 
 export interface EntrantRow {
   userId: string;
@@ -140,6 +200,77 @@ export interface Reweigh {
   userId: string;
   totalEntries: number;
   breakdown: EntryBreakdown[];
+}
+
+export const GIVEAWAY_EVENT_KINDS = [
+  'created',
+  'started',
+  'edited',
+  'extended',
+  'shortened',
+  'paused',
+  'resumed',
+  'cancelled',
+  'drawn',
+  'rerolled',
+  'bonus-granted',
+  'bonus-revoked',
+  'claimed',
+  'forfeited',
+  'orphaned',
+] as const;
+
+export type GiveawayEventKind = (typeof GIVEAWAY_EVENT_KINDS)[number];
+
+export interface NewGiveawayEvent {
+  id: string;
+  guildId: string;
+  giveawayId: string;
+  kind: GiveawayEventKind;
+  actorId: string;
+  detail?: unknown;
+
+  /** Set to make a redelivered transition a no-op rather than a duplicate history line. */
+  idempotencyKey?: string | null;
+}
+
+export interface GiveawayEvent extends NewGiveawayEvent {
+  at: Date;
+}
+
+export type DropOutcome =
+  | { outcome: 'won'; giveaway: Giveaway; drawId: string }
+  | { outcome: 'taken' }
+  | { outcome: 'closed' };
+
+export interface GiveawayStats {
+  byStatus: Record<GiveawayStatus, number>;
+  totalGiveaways: number;
+
+  /** Live entries only — leavers and disqualified entrants are excluded, as the draw excludes them. */
+  totalEntries: number;
+  uniqueEntrants: number;
+
+  totalWinners: number;
+  draws: number;
+}
+
+export const BONUS_MIN = 1;
+export const BONUS_MAX = 1000;
+
+export interface NewBonus {
+  id: string;
+  giveawayId: string;
+  userId: string;
+  amount: number;
+  reason: string | null;
+  grantedBy: string;
+}
+
+export interface BonusGrant extends NewBonus {
+  grantedAt: Date;
+  revokedAt: Date | null;
+  revokedBy: string | null;
 }
 
 export interface DrawRecord {
@@ -206,6 +337,15 @@ export interface GiveawayStore {
   countRunning(guildId: string): Promise<number>;
   setMessageId(giveawayId: string, messageId: string): Promise<void>;
 
+  /**
+   * Forgets the Discord message. Without this a deleted message leaves every later edit 404ing
+   * forever, because nothing else ever clears `message_id`.
+   */
+  clearMessage(guildId: string, giveawayId: string): Promise<boolean>;
+
+  /** Giveaways posted in one channel, for when that channel goes away. */
+  byChannel(guildId: string, channelId: string): Promise<Giveaway[]>;
+
   requirements(giveawayId: string): Promise<RequirementRow[]>;
   multipliers(giveawayId: string): Promise<MultiplierRow[]>;
 
@@ -222,8 +362,29 @@ export interface GiveawayStore {
   /** Heaviest entries first, for the host's view of who is most likely to win. */
   topEntrants(giveawayId: string, limit: number): Promise<EntrantRow[]>;
 
+  /** Guild-wide counts for `/giveaway stats`. */
+  stats(guildId: string): Promise<GiveawayStats>;
+
+  /** Appends one line to a giveaway's timeline. Returns false when the key was already recorded. */
+  appendEvent(event: NewGiveawayEvent): Promise<boolean>;
+  history(giveawayId: string, limit: number): Promise<GiveawayEvent[]>;
+
   disqualify(giveawayId: string, rows: readonly Disqualification[], at: Date): Promise<number>;
+
+  /**
+   * Writes the recomputed weight *plus* the member's live bonus grants. Overwriting with the
+   * computed figure alone would erase a manual grant at the moment of the draw — which is the one
+   * moment it has to count.
+   */
   reweigh(giveawayId: string, rows: readonly Reweigh[], at: Date): Promise<number>;
+
+  grantBonus(input: NewBonus): Promise<BonusGrant>;
+
+  /** Revokes every live grant for one member. Returns how many entries were taken back. */
+  revokeBonus(giveawayId: string, userId: string, by: string, at: Date): Promise<number>;
+
+  bonusFor(giveawayId: string, userId: string): Promise<number>;
+  bonusGrants(giveawayId: string, userId?: string): Promise<BonusGrant[]>;
 
   /**
    * `update ... where status = 'running' returning *` — the conditional update IS the lock.
@@ -231,12 +392,61 @@ export interface GiveawayStore {
    */
   beginDraw(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null>;
   recordDraw(input: RecordDrawInput): Promise<{ drawId: string } | 'already-drawn'>;
+
+  /**
+   * `from` is the guard, not decoration. Without it a reroll can drag a `cancelled` giveaway back
+   * to `running`, or yank one out of `drawing` mid-draw so two draws both write winners — which
+   * falsifies the exactly-once guarantee `beginDraw` exists to provide.
+   */
   finishDraw(
     guildId: string,
     giveawayId: string,
-    status: GiveawayStatus,
+    from: readonly GiveawayStatus[],
+    to: GiveawayStatus,
     endedAt: Date | null,
   ): Promise<boolean>;
+
+  /** Audit only — a superseded winner is still excluded from later draws. */
+  markRerolled(drawId: string, userIds: readonly string[], at: Date): Promise<number>;
+
+  /**
+   * A drop has no deferred sample: the first eligible presser wins outright. The conditional
+   * `running -> ended` update *is* the race — exactly one caller flips it, and that caller is the
+   * winner. Deliberately not routed through beginDraw/recordDraw, which assume a sampled draw.
+   */
+  claimDrop(guildId: string, giveawayId: string, userId: string, at: Date): Promise<DropOutcome>;
+
+  /** Conditional on `running`. Returns the row as it was before the pause, or null if it lost. */
+  pause(
+    guildId: string,
+    giveawayId: string,
+    by: string,
+    reason: string | null,
+    at: Date,
+  ): Promise<Giveaway | null>;
+
+  /**
+   * Pushes `ends_at` forward by exactly the time spent paused, so the remaining duration a member
+   * saw before the pause is the remaining duration after it.
+   */
+  resume(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null>;
+
+  /** Conditional on `scheduled`. The start job and a manual start must not both post. */
+  activate(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null>;
+  dueToStart(guildId: string, before: Date, limit: number): Promise<Giveaway[]>;
+
+  patch(
+    guildId: string,
+    giveawayId: string,
+    from: readonly GiveawayStatus[],
+    patch: GiveawayPatch,
+  ): Promise<Giveaway | null>;
+
+  /** Soft — the row stays so entry history and the loss-streak multiplier stay honest. */
+  leave(giveawayId: string, userId: string, at: Date): Promise<boolean>;
+
+  /** Resolves a short code (`G-7X29`) or a raw id to one giveaway. */
+  resolve(guildId: string, reference: string): Promise<Giveaway | null>;
 
   /**
    * Giveaways stuck in `drawing` past the threshold. `drawn` says whether the draw row actually
@@ -244,17 +454,21 @@ export interface GiveawayStore {
    * `running` to be drawn again. Re-drawing one that already produced winners is the bug this
    * distinction exists to prevent.
    */
-  stalledDraws(before: Date, limit: number): Promise<{ giveaway: Giveaway; drawn: boolean }[]>;
+  stalledDraws(
+    guildId: string,
+    before: Date,
+    limit: number,
+  ): Promise<{ giveaway: Giveaway; drawn: boolean }[]>;
   releaseDraw(guildId: string, giveawayId: string): Promise<boolean>;
-  overdue(before: Date, limit: number): Promise<Giveaway[]>;
-  running(limit: number): Promise<Giveaway[]>;
+  overdue(guildId: string, before: Date, limit: number): Promise<Giveaway[]>;
+  running(guildId: string, limit: number): Promise<Giveaway[]>;
 
   draws(giveawayId: string): Promise<DrawRecord[]>;
   lastDrawNumber(giveawayId: string): Promise<number>;
   winners(giveawayId: string): Promise<WinRecord[]>;
   claim(drawId: string, userId: string, at: Date): Promise<boolean>;
   forfeit(drawId: string, userIds: readonly string[], at: Date): Promise<number>;
-  expiredClaims(before: Date, limit: number): Promise<WinRecord[]>;
+  expiredClaims(guildId: string, before: Date, limit: number): Promise<WinRecord[]>;
 
   /** Powers giveaways.no_recent_wins — one statement for a whole batch of entrants. */
   recentWinCounts(

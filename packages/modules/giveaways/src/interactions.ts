@@ -1,5 +1,6 @@
 import {
   absentMemberContext,
+  evaluateRequirement,
   interactionRef,
   memberContextFromGuildMember,
   type ProtonEvent,
@@ -7,9 +8,17 @@ import {
   readComponentInteraction,
 } from '@proton/core';
 import { MODULE_ID } from './config.ts';
-import { bindEntry, type GiveawaysDeps } from './deps.ts';
-import { describeJoin, join } from './entry.ts';
-import { CLAIM_ACTION, COUNT_ACTION, ENTER_ACTION } from './message.ts';
+import { bindEntry, clockOf, type GiveawaysDeps } from './deps.ts';
+import { describeJoin, isBlacklisted, join } from './entry.ts';
+import { inspectRequirements, renderMultipliers, renderRequirements } from './inspect.ts';
+import {
+  CLAIM_ACTION,
+  COUNT_ACTION,
+  ENTER_ACTION,
+  LEAVE_ACTION,
+  MULTIPLIERS_ACTION,
+  REQUIREMENTS_ACTION,
+} from './message.ts';
 import { acknowledge, type Ctx, NOT_WIRED, refuseNow, tellEntrant } from './perform.ts';
 
 export interface EnterId {
@@ -51,7 +60,15 @@ export async function handleEnter(
 
   // The disabled count button cannot be pressed, but a stale message can still deliver one.
   if (id.action === COUNT_ACTION) return 'ignored';
-  if (id.action !== ENTER_ACTION && id.action !== CLAIM_ACTION) return 'not-ours';
+
+  const HANDLED = [
+    ENTER_ACTION,
+    LEAVE_ACTION,
+    CLAIM_ACTION,
+    REQUIREMENTS_ACTION,
+    MULTIPLIERS_ACTION,
+  ];
+  if (!HANDLED.includes(id.action)) return 'not-ours';
 
   const ref = interactionRef(interaction);
   const root = `${interaction.interactionId}:${id.action}`;
@@ -103,13 +120,30 @@ export async function handleEnter(
     return 'answered';
   }
 
+  if (id.action === LEAVE_ACTION) {
+    const left = await store.leave(giveaway.id, interaction.userId, new Date(clockOf(deps)()));
+    if (left) await deps.dirty?.mark(giveaway.guildId, giveaway.id);
+
+    await tellEntrant(
+      ctx,
+      { applicationId, interaction: ref },
+      interaction.userId,
+      root,
+      left
+        ? `You have left **${giveaway.title}**. You can enter again while it is still running.`
+        : `You are not in the draw for **${giveaway.title}**.`,
+    );
+
+    return 'answered';
+  }
+
   const [requirementRows, multiplierRows, blacklist] = await Promise.all([
     store.requirements(giveaway.id),
     store.multipliers(giveaway.id),
     store.blacklist(ctx.guildId),
   ]);
 
-  const now = new Date(deps.now?.() ?? Date.now());
+  const now = new Date(clockOf(deps)());
 
   // The dispatch already carries the whole member — roles, join date, boost date, avatar — so a
   // join needs no member fetch at all. Five thousand joins a minute cost zero REST calls.
@@ -130,27 +164,116 @@ export async function handleEnter(
     return 'answered';
   }
 
+  // A drop is decided at the press, not at a deadline: requirements are evaluated exactly as for a
+  // normal entry, and the first member who clears them takes it.
+  if (giveaway.entryMethod === 'drop' && id.action === ENTER_ACTION) {
+    const verdict = await evaluateRequirement(
+      providers,
+      memberCtx,
+      requirementRows.map((row) => ({ providerId: row.providerId, config: row.config })),
+      giveaway.requirementLogic,
+    );
+
+    if (isBlacklisted(blacklist, interaction.userId, memberCtx.member?.roleIds ?? null)) {
+      await tellEntrant(
+        ctx,
+        { applicationId, interaction: ref },
+        interaction.userId,
+        root,
+        'You are not eligible for giveaways in this server.',
+      );
+      return 'answered';
+    }
+
+    if (!verdict.passed) {
+      await tellEntrant(
+        ctx,
+        { applicationId, interaction: ref },
+        interaction.userId,
+        root,
+        [
+          `You cannot claim **${giveaway.title}**. Here is what is missing:`,
+          ...verdict.failures.map((failure) => `• ${failure.humanReason}`),
+        ].join('\n'),
+      );
+      return 'answered';
+    }
+
+    const dropped = await store.claimDrop(ctx.guildId, giveaway.id, interaction.userId, now);
+
+    await tellEntrant(
+      ctx,
+      { applicationId, interaction: ref },
+      interaction.userId,
+      root,
+      dropped.outcome === 'won'
+        ? `You claimed **${giveaway.title}**. It is yours.`
+        : dropped.outcome === 'taken'
+          ? `Somebody was faster — **${giveaway.title}** has already gone.`
+          : 'That giveaway no longer exists.',
+    );
+
+    return 'answered';
+  }
+
+  const requirementSpecs = requirementRows.map((row) => ({
+    providerId: row.providerId,
+    config: row.config,
+  }));
+  const multiplierSpecs = multiplierRows.map((row) => ({
+    providerId: row.providerId,
+    config: row.config,
+    mode: row.mode,
+  }));
+
+  if (id.action === REQUIREMENTS_ACTION) {
+    const lines = await inspectRequirements(providers, memberCtx, requirementSpecs);
+
+    await tellEntrant(
+      ctx,
+      { applicationId, interaction: ref },
+      interaction.userId,
+      root,
+      renderRequirements(lines, giveaway.requirementLogic, giveaway.title),
+    );
+
+    return 'answered';
+  }
+
+  if (id.action === MULTIPLIERS_ACTION) {
+    await tellEntrant(
+      ctx,
+      { applicationId, interaction: ref },
+      interaction.userId,
+      root,
+      await renderMultipliers(
+        providers,
+        memberCtx,
+        multiplierSpecs,
+        giveaway.title,
+        giveaway.maxEntriesPerUser,
+      ),
+    );
+
+    return 'answered';
+  }
+
   const outcome = await join(
     { store, providers, ...(deps.bucket ? { bucket: deps.bucket } : {}) },
     {
       giveaway,
       ctx: memberCtx,
-      requirements: requirementRows.map((row) => ({
-        providerId: row.providerId,
-        config: row.config,
-      })),
-      multipliers: multiplierRows.map((row) => ({
-        providerId: row.providerId,
-        config: row.config,
-        mode: row.mode,
-      })),
+      requirements: requirementSpecs,
+      multipliers: multiplierSpecs,
       blacklist,
+      blacklistRoleIds: ctx.config.blacklistRoleIds,
+      bypassRoleIds: ctx.config.bypassRoleIds,
     },
   );
 
   if (outcome.outcome === 'entered') {
     // Marked, not edited: the debounced updater turns thousands of joins into a handful of edits.
-    await deps.dirty?.mark(giveaway.id);
+    await deps.dirty?.mark(giveaway.guildId, giveaway.id);
   }
 
   await tellEntrant(

@@ -1,7 +1,6 @@
 import {
   absentMemberContext,
   evaluateMultipliers,
-  evaluateRequirements,
   type MemberContext,
   type MemberContextLoader,
   type MultiplierSpec,
@@ -11,6 +10,7 @@ import {
 import { MODULE_ID } from './config.ts';
 import { sampleWeightedAsync, type WeightedEntrant } from './draw.ts';
 import { newSeed, rngFromSeed } from './rng.ts';
+import { evaluateRules, requirementTreeOf } from './rules.ts';
 import { StreamingSnapshotHash } from './snapshot.ts';
 import type {
   Disqualification,
@@ -30,6 +30,7 @@ export function drawKey(guildId: string, giveawayId: string, drawNumber: number)
 export interface DrawSummary {
   drawId: string;
   drawNumber: number;
+  drawnBy: string;
   seed: string;
   snapshotHash: string;
   entrantCount: number;
@@ -135,12 +136,12 @@ async function revalidate(
 
     if (ctxs.length === 0) continue;
 
-    // One batchEvaluate per distinct requirement for the whole chunk, never one per entrant.
-    const verdicts = await evaluateRequirements(
+    // One batchEvaluate per distinct requirement for the whole chunk, never one per entrant —
+    // the tree is flattened to distinct leaves before anything is evaluated.
+    const verdicts = await evaluateRules(
       deps.providers,
       ctxs,
-      requirements,
-      giveaway.requirementLogic,
+      requirementTreeOf(giveaway, requirements),
       { chunkSize },
     );
 
@@ -294,11 +295,11 @@ export async function drawGiveaway(deps: DrawDeps, input: DrawInput): Promise<Dr
   });
 
   if (recorded === 'already-drawn') {
-    await deps.store.finishDraw(input.guildId, giveaway.id, 'ended', now);
+    await deps.store.finishDraw(input.guildId, giveaway.id, ['drawing'], 'ended', now);
     return { outcome: 'already-ended', giveaway };
   }
 
-  await deps.store.finishDraw(input.guildId, giveaway.id, 'ended', now);
+  await deps.store.finishDraw(input.guildId, giveaway.id, ['drawing'], 'ended', now);
 
   return {
     outcome: 'drawn',
@@ -306,6 +307,7 @@ export async function drawGiveaway(deps: DrawDeps, input: DrawInput): Promise<Dr
     summary: {
       drawId: recorded.drawId,
       drawNumber,
+      drawnBy: input.drawnBy,
       seed,
       snapshotHash,
       entrantCount: hash.count,
@@ -331,8 +333,21 @@ export async function cancelGiveaway(
 
   const giveaway = await deps.store.get(guildId, giveawayId);
   if (!giveaway) return { outcome: 'missing' };
-  if (giveaway.status !== 'running') return { outcome: 'already-ended', giveaway };
 
-  await deps.store.finishDraw(guildId, giveawayId, 'cancelled', now);
+  // The conditional update is the decision, not the read above it: a draw that began between the
+  // two would otherwise be told "nobody was drawn" while it announces winners.
+  const cancelled = await deps.store.finishDraw(
+    guildId,
+    giveawayId,
+    ['running', 'scheduled', 'paused'],
+    'cancelled',
+    now,
+  );
+
+  if (!cancelled) {
+    const current = await deps.store.get(guildId, giveawayId);
+    return current ? { outcome: 'already-ended', giveaway: current } : { outcome: 'missing' };
+  }
+
   return { outcome: 'cancelled', giveaway };
 }

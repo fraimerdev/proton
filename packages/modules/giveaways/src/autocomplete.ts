@@ -9,6 +9,7 @@ import {
 } from '@proton/core';
 import { type GiveawaysConfig, MODULE_ID, plural } from './config.ts';
 import { bindStore, describeUnbound, type GiveawaysDeps } from './deps.ts';
+import { formatShortCode } from './short-code.ts';
 import type { Giveaway, GiveawayState } from './store.ts';
 
 export const AUTOCOMPLETED_COMMAND = 'giveaway';
@@ -18,16 +19,22 @@ export type AutocompleteOutcome =
   | { action: 'ignored'; reason: string }
   | { action: 'answered'; count: number };
 
+const LIVE_SUBCOMMANDS = ['end', 'cancel', 'pause', 'resume', 'extend', 'shorten', 'edit'];
+
 export function stateFor(subcommand: string | null): GiveawayState {
-  if (subcommand === 'end') return 'running';
+  // 'live' rather than 'running': a paused or scheduled giveaway is exactly the one a host is
+  // reaching for when they type /giveaway resume, and filtering on 'running' hides it.
+  if (subcommand !== null && LIVE_SUBCOMMANDS.includes(subcommand)) return 'live';
   if (subcommand === 'reroll') return 'ended';
   return 'any';
 }
 
 export function choiceFor(giveaway: Giveaway): { name: string; value: string } {
-  const suffix = ` · ${plural(giveaway.winnerCount, 'winner')} · ${
-    giveaway.endedAt === null ? 'running' : 'ended'
-  }`;
+  const code = formatShortCode(giveaway.shortCode);
+  const suffix = `${code === null ? '' : ` · ${code}`} · ${plural(
+    giveaway.winnerCount,
+    'winner',
+  )} · ${giveaway.status}`;
 
   const room = MAX_AUTOCOMPLETE_CHOICE_LENGTH - suffix.length;
   const title =

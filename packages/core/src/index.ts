@@ -165,6 +165,26 @@ export {
   RedisCorrelationStore,
 } from './events/correlation.ts';
 export {
+  type GiveawayBonusGrantedEvent,
+  type GiveawayCancelledEvent,
+  type GiveawayCreatedEvent,
+  type GiveawayEditedEvent,
+  type GiveawayEndedEvent,
+  type GiveawayPausedEvent,
+  type GiveawayRerolledEvent,
+  type GiveawayResumedEvent,
+  type GiveawayStartedEvent,
+  giveawayBonusGrantedEventSchema,
+  giveawayCancelledEventSchema,
+  giveawayCreatedEventSchema,
+  giveawayEditedEventSchema,
+  giveawayEndedEventSchema,
+  giveawayPausedEventSchema,
+  giveawayRerolledEventSchema,
+  giveawayResumedEventSchema,
+  giveawayStartedEventSchema,
+} from './events/giveaways.ts';
+export {
   diffKeys,
   type ProtonActionExecuted,
   type ProtonConfigChanged,
@@ -181,6 +201,20 @@ export {
   STREAM_PREFIX,
   streamKey,
 } from './events/redis-streams.ts';
+export {
+  TICKET_PRIORITIES,
+  type TicketClaimedEvent,
+  type TicketClosedEvent,
+  type TicketDeletedEvent,
+  type TicketOpenedEvent,
+  type TicketPriority,
+  type TicketReopenedEvent,
+  ticketClaimedEventSchema,
+  ticketClosedEventSchema,
+  ticketDeletedEventSchema,
+  ticketOpenedEventSchema,
+  ticketReopenedEventSchema,
+} from './events/tickets.ts';
 export {
   EVENT_TYPES,
   type EventType,
@@ -225,6 +259,7 @@ export {
   type ModalInteraction,
   readAutocompleteInteraction,
   readComponentInteraction,
+  readMemberPermissions,
   readModalInteraction,
 } from './interactions/read.ts';
 export {
@@ -398,6 +433,8 @@ export {
   v2Rows,
 } from './messages/v2.ts';
 export {
+  type BotInvite,
+  botInviteSchema,
   type GuildOverview,
   type GuildPresence,
   guildOverviewSchema,
@@ -467,6 +504,27 @@ export {
   type PermissionContext,
 } from './permissions/compute.ts';
 export * from './providers/index.ts';
+export {
+  countLeaves,
+  depthOf,
+  describeTree,
+  distinctLeaves,
+  evaluateTree,
+  isGroup,
+  leafKey,
+  type RequirementGroup,
+  type RequirementLeaf,
+  type RequirementNode,
+  requirementTreeSchema,
+  TREE_LOGICS,
+  TREE_MAX_CHILDREN,
+  TREE_MAX_DEPTH,
+  TREE_MAX_LEAVES,
+  type TreeLogic,
+  type TreeOptions,
+  type TreeVerdict,
+  treeFromFlat,
+} from './providers/tree.ts';
 export {
   evaluateFactCondition,
   type FactCondition,

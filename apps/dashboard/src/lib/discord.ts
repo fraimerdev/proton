@@ -42,7 +42,7 @@ export async function fetchGuildRoles(
 ): Promise<Array<{ id: string; name: string; position: number; color: number }>> {
   const response = await fetch(`${restProxyUrl.replace(/\/$/, '')}/api/guilds/${guildId}/roles`);
 
-  if (!response.ok) throw unreadable('roles', guildId, response.status);
+  if (!response.ok) throw unreadable('roles', response.status);
 
   const roles = (await response.json()) as Array<{
     id: string;
@@ -78,7 +78,7 @@ export async function fetchGuildChannels(
 ): Promise<GuildChannel[]> {
   const response = await fetch(`${restProxyUrl.replace(/\/$/, '')}/api/guilds/${guildId}/channels`);
 
-  if (!response.ok) throw unreadable('channels', guildId, response.status);
+  if (!response.ok) throw unreadable('channels', response.status);
 
   const channels = (await response.json()) as Array<{
     id: string;
@@ -120,13 +120,19 @@ export async function fetchGuildChannels(
 
 // An empty array here reads as "this server has no channels", and a save then writes that blank
 // selection over a working config. Say which permission Discord refused instead.
-function unreadable(what: 'channels' | 'roles', guildId: string, status: number): Error {
-  if (status !== 403) return new Error(`Could not load the ${what} of ${guildId} (${status}).`);
+function unreadable(what: 'channels' | 'roles', status: number): Error {
+  // "this server", not the snowflake: the page already names the server everywhere else, and the
+  // destination is the same literal path every other failure in the product prints.
+  if (status !== 403)
+    return new Error(
+      `Proton could not read this server's ${what} — Discord answered ${status}. Reload the page; ` +
+        `if it keeps happening, Discord is the part that is refusing.`,
+    );
 
   const missing = what === 'roles' ? 'Manage Roles' : 'View Channels';
 
   return new Error(
-    `Proton cannot read the ${what} of ${guildId} — Discord refused with 403. ` +
-      `Give it ${missing} in that server's settings.`,
+    `Proton cannot read this server's ${what} — Discord refused with 403, because Proton's role ` +
+      `does not have ${missing}. Give it that permission in Server Settings → Roles → Proton.`,
   );
 }

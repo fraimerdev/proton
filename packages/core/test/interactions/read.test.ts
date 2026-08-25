@@ -52,7 +52,22 @@ describe('readComponentInteraction', () => {
       componentType: 2,
       values: [],
       messageId: null,
+      messageFlags: null,
     });
+  });
+
+  test('reports the message flags, so a handler can tell an ephemeral press from a real message', () => {
+    const ephemeral = event(
+      'interaction.component',
+      interaction(3, { custom_id: 'proton:tickets:opts', component_type: 2 }),
+    );
+
+    (ephemeral.payload as Record<string, unknown>).message = {
+      id: '700000000000000001',
+      flags: 64,
+    };
+
+    expect(readComponentInteraction(ephemeral)?.messageFlags).toBe(64);
   });
 
   test('reads the chosen values of a dropdown', () => {

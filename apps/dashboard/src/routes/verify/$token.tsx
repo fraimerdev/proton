@@ -1,13 +1,14 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { Icon } from '../../components/shell/icon.tsx';
+import { documentTitle } from '../../lib/document-title.ts';
 import { sessionQuery } from '../../lib/queries.ts';
 import { completeWebVerification, type VerificationOutcome } from '../../server/verification.ts';
 
 type VerifyState = VerificationOutcome | { ok: false; signIn: string };
 
 export const Route = createFileRoute('/verify/$token')({
-  head: () => ({ meta: [{ title: 'Proton — Verify' }] }),
+  head: () => ({ meta: [{ title: documentTitle('Verify') }] }),
 
   loader: async ({ params, context }): Promise<VerifyState> => {
     const session = await context.queryClient.fetchQuery(sessionQuery()).catch(() => null);

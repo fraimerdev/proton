@@ -11,14 +11,13 @@ import { descriptorsToModal, readDescriptorValues } from '../src/builder/modal.t
 import {
   BASICS_MODAL,
   BUILDER_ADD_REQUIREMENT,
-  BUILDER_BASICS,
   BUILDER_CANCEL,
   BUILDER_LOGIC,
   BUILDER_REMOVE,
-  builderScreen,
   ITEM_MODAL,
 } from '../src/builder/screens.ts';
 import { type DraftStore, draftKey, emptyDraft, MemoryDraftStore } from '../src/builder/state.ts';
+import { BUILDER_EDIT_STEP, stepScreen } from '../src/builder/steps.ts';
 import { createGiveawayProviders } from '../src/providers.ts';
 import { MemoryGiveawayStore } from './memory-store.ts';
 
@@ -212,14 +211,14 @@ describe('the builder screen', () => {
     const draft = emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW);
 
     const available = await deps.providers.listAvailable(GUILD, availability);
-    const screen = builderScreen(draft, deps.providers, available);
+    const screen = stepScreen(draft, deps.providers, available);
 
     if (!screen.ok) throw new Error(screen.humanReason);
 
     const buttons = flatten(screen.components).filter(
       (component) => component.type === ComponentType.Button,
     );
-    const start = buttons.find((button) => String(button.label).includes('Start'));
+    const start = buttons.find((button) => String(button.label).includes('Publish'));
 
     expect(start?.disabled).toBe(true);
     expect(screen.content).toContain('not set yet');
@@ -230,20 +229,24 @@ describe('the builder screen', () => {
     const draft = { ...emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW), title: 'Nitro' };
 
     const available = await deps.providers.listAvailable(GUILD, availability);
-    const screen = builderScreen(draft, deps.providers, available);
+    const screen = stepScreen(draft, deps.providers, available);
 
     if (!screen.ok) throw new Error(screen.humanReason);
 
     const start = flatten(screen.components)
       .filter((component) => component.type === ComponentType.Button)
-      .find((button) => String(button.label).includes('Start'));
+      .find((button) => String(button.label).includes('Publish'));
 
     expect(start?.disabled).toBe(false);
   });
 
   test('a guild with no provider modules on still gets a usable, explained picker', async () => {
     const providers = new ProviderRegistry();
-    const draft = emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW);
+    // The pickers live on their own steps now, so the disabled-but-explained case is on 'bonus'.
+    const draft = {
+      ...emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW),
+      step: 'bonus' as const,
+    };
 
     const available = await providers.listAvailable(GUILD, {
       async isEnabled() {
@@ -251,7 +254,7 @@ describe('the builder screen', () => {
       },
     });
 
-    const screen = builderScreen(draft, providers, available);
+    const screen = stepScreen(draft, providers, available);
     if (!screen.ok) throw new Error(screen.humanReason);
 
     const selects = flatten(screen.components).filter(
@@ -275,14 +278,19 @@ describe('builder routing', () => {
     if (!provider) throw new Error('missing');
 
     const draft = emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW);
-    const screen = builderScreen(draft, new ProviderRegistry(), []);
+    const screen = stepScreen(draft, new ProviderRegistry(), []);
     if (!screen.ok) throw new Error(screen.humanReason);
 
     const button = flatten(screen.components).find(
       (component) => component.type === ComponentType.Button,
     );
 
-    expect(builderRouteOf(String(button?.custom_id))?.action).toBe(BUILDER_BASICS);
+    const route = builderRouteOf(String(button?.custom_id));
+
+    // 'b:edit' carries the step it opens as an arg, which is the round trip that matters: the
+    // action segment has its own colon and has to survive escaping intact.
+    expect(route?.action).toBe(BUILDER_EDIT_STEP);
+    expect(route?.args).toEqual(['basics']);
   });
 
   test('a custom id from another module is not ours', () => {
@@ -297,6 +305,7 @@ describe('builder interactions', () => {
 
     const reply = await handleBuilderComponent(deps, {
       action: BUILDER_ADD_REQUIREMENT,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,
@@ -319,6 +328,7 @@ describe('builder interactions', () => {
 
     const reply = await handleBuilderComponent(deps, {
       action: BUILDER_ADD_REQUIREMENT,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,
@@ -410,6 +420,7 @@ describe('builder interactions', () => {
 
     await handleBuilderComponent(deps, {
       action: BUILDER_LOGIC,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,
@@ -424,6 +435,7 @@ describe('builder interactions', () => {
 
     await handleBuilderComponent(deps, {
       action: BUILDER_ADD_REQUIREMENT,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,
@@ -432,6 +444,7 @@ describe('builder interactions', () => {
 
     await handleBuilderComponent(deps, {
       action: BUILDER_REMOVE,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,
@@ -446,6 +459,7 @@ describe('builder interactions', () => {
 
     const reply = await handleBuilderComponent(deps, {
       action: BUILDER_CANCEL,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,
@@ -467,6 +481,7 @@ describe('builder interactions', () => {
 
     const reply = await handleBuilderComponent(deps, {
       action: BUILDER_LOGIC,
+      args: [],
       guildId: GUILD,
       channelId: CHANNEL,
       userId: HOST,

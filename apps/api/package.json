@@ -23,6 +23,7 @@
     "@proton/module-leveling": "workspace:*",
     "@proton/module-ping": "workspace:*",
     "@proton/module-tags": "workspace:*",
+    "@proton/module-tickets": "workspace:*",
     "@proton/modules": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.2",

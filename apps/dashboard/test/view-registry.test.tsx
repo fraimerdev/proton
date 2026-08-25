@@ -8,6 +8,7 @@ import {
   leaderboardQuerySchema,
 } from '@proton/core';
 import { tagQuerySchema } from '@proton/module-tags/query';
+import { ticketQuerySchema } from '@proton/module-tickets/query';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -80,6 +81,35 @@ const TAG_RESULT = {
   pageSize: 25,
 };
 
+const TICKET_RESULT = {
+  tickets: [
+    {
+      id: '018f6f4c-0000-7000-8000-000000000009',
+      number: 12,
+      typeId: 'billing',
+      panelId: 'support',
+      channelId: '300000000000000003',
+      status: 'closed' as const,
+      priority: 'urgent' as const,
+      subject: 'Card declined on renewal',
+      openerId: '700000000000000003',
+      ownerId: '700000000000000003',
+      claimedById: '700000000000000004',
+      assignedToId: null,
+      closedBy: '700000000000000004',
+      closeReason: 'resolved',
+      messageCount: 8,
+      transcriptUrl: null,
+      openedAt: '2026-08-01T09:15:00.000Z',
+      lastActivityAt: '2026-08-01T10:02:00.000Z',
+      closedAt: '2026-08-01T10:05:00.000Z',
+    },
+  ],
+  total: 1,
+  page: 1,
+  pageSize: 25,
+};
+
 const FIXTURES: Record<string, { search: unknown; data: unknown; shows: string }> = {
   'cases/cases': {
     search: caseQuerySchema.parse({}),
@@ -95,6 +125,11 @@ const FIXTURES: Record<string, { search: unknown; data: unknown; shows: string }
     search: tagQuerySchema.parse({}),
     data: TAG_RESULT,
     shows: 'Be kind to each other.',
+  },
+  'tickets/tickets': {
+    search: ticketQuerySchema.parse({}),
+    data: TICKET_RESULT,
+    shows: 'data-ticket-number="12"',
   },
 };
 
@@ -117,6 +152,7 @@ describe('the module view registry', () => {
       cases: [['cases', 'Cases']],
       leveling: [['leaderboard', 'Leaderboard']],
       tags: [['tags', 'Tags']],
+      tickets: [['tickets', 'Tickets']],
     });
   });
 
@@ -454,9 +490,9 @@ describe('a filter that navigates does not do it per keystroke', () => {
   // Every commit rewrites the query string and re-runs the loader. A controlled input wired
   // straight to onSearch also cannot show a character until its own round trip returns, so fast
   // typing drops and reorders them.
-  test('the two text-entry filters commit on a pause, not on change', () => {
+  test('the three text-entry filters commit on a pause, not on change', () => {
     expect(views).toContain('function DebouncedFilter(');
-    expect(views.split('<DebouncedFilter').length - 1).toBe(2);
+    expect(views.split('<DebouncedFilter').length - 1).toBe(3);
   });
 
   // A date picker commits once per selection and an id filter is already uncontrolled with an

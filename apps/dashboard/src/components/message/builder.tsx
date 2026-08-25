@@ -362,7 +362,7 @@ function CounterInput({
   const head = (
     <span>
       {label}
-      <span className="builder-count" data-over={over ? 'true' : undefined}>
+      <span className="builder-count" aria-hidden="true" data-over={over ? 'true' : undefined}>
         {value.length}/{max}
       </span>
     </span>
@@ -1660,8 +1660,8 @@ function NodeBody({
       return (
         <>
           <p className="field-description">
-            Up to {SECTION_TEXT_MAX} blocks of text with one thing beside them. Discord needs that
-            accessory — a section without one is refused.
+            Up to {SECTION_TEXT_MAX} blocks of text, each with one thing beside it. A section
+            without one will not save.
           </p>
 
           {node.text.map((entry, textIndex) => (
@@ -1799,7 +1799,7 @@ function NodeBody({
             kinds={CHILD_KINDS}
             path={`${path}.children`}
             frame="builder-row"
-            empty="This container is empty, and Discord refuses an empty container."
+            empty="This container is empty. Put something in it, or remove it."
             invalid={invalid}
             roles={roles}
             taken={taken}
@@ -1895,8 +1895,8 @@ function V2Nodes({
 function Superseded(): ReactElement {
   return (
     <p className="builder-superseded">
-      The layout is the whole message. Nothing in this section is sent, and Discord refuses the
-      message outright if anything is left here.
+      The layout is the whole message. Nothing left in this section is sent, and the message will
+      not save until it is empty.
     </p>
   );
 }
@@ -1950,14 +1950,14 @@ export function MessageBuilder({
       <fieldset className="builder-section">
         <legend>Layout</legend>
         <p className="field-description">
-          Discord accepts either a classic message — text, embeds and button rows — or a Components
-          V2 layout built from the blocks below. Never both.
+          A message is either a classic one — text, embeds and button rows — or a layout built from
+          the blocks below. Never both.
         </p>
 
         <p className="builder-v2-note">
-          <Icon name="warning" /> Discord never takes the Components V2 flag back off a message.
-          Once a message has been posted as a layout, editing it later can only change the layout —
-          it can never go back to text and embeds. Post a new message instead.
+          <Icon name="warning" /> Once a message has been posted as a layout it stays one. Editing
+          it later can only change the layout — it can never go back to text and embeds. Post a new
+          message instead.
         </p>
 
         <SwitchField
@@ -1996,7 +1996,7 @@ export function MessageBuilder({
           </>
         ) : embeds.length > 0 ? (
           <p className="field-description">
-            An embed cannot move into a layout — Discord has no embed inside one. Remove the{' '}
+            An embed cannot go inside a layout. Remove the{' '}
             {embeds.length === 1 ? 'embed' : 'embeds'} below first, or the message will not save.
           </p>
         ) : null}

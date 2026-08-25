@@ -1,38 +1,16 @@
-import { encodeCustomId } from '@proton/core';
-import { ButtonStyle, ComponentType } from 'discord-api-types/v10';
-import { MODULE_ID, type TicketPanel } from './config.ts';
+import type { TicketPanel, TicketType } from './config.ts';
+import { buildPanelComponents } from './interface.ts';
 
-export const OPEN_ACTION = 'open';
+export { OPEN_ACTION, OPEN_TYPE_ACTION, SELECT_TYPE_ACTION } from './interface.ts';
 
 export type PanelMessage =
-  | { ok: true; content: string; components: Record<string, unknown>[] }
+  | { ok: true; components: Record<string, unknown>[] }
   | { ok: false; humanReason: string };
 
-export function buildPanelMessage(panel: TicketPanel): PanelMessage {
-  const customId = encodeCustomId(MODULE_ID, OPEN_ACTION, panel.id);
+export function buildPanelMessage(panel: TicketPanel, types: readonly TicketType[]): PanelMessage {
+  const built = buildPanelComponents(panel, types);
 
-  if (!customId.ok) {
-    return {
-      ok: false,
-      humanReason: `The panel id '${panel.id}' is too long to fit in a Discord button: ${customId.humanReason}`,
-    };
-  }
-
-  return {
-    ok: true,
-    content: panel.panelText,
-    components: [
-      {
-        type: ComponentType.ActionRow,
-        components: [
-          {
-            type: ComponentType.Button,
-            style: ButtonStyle.Primary,
-            label: panel.buttonLabel,
-            custom_id: customId.customId,
-          },
-        ],
-      },
-    ],
-  };
+  return built.ok
+    ? { ok: true, components: built.value.components }
+    : { ok: false, humanReason: built.humanReason };
 }

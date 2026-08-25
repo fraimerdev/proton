@@ -20,6 +20,7 @@ import type { z } from 'zod';
 import {
   applyPanels,
   initialPanelValues,
+  invalidPanelOf,
   MODULE_PANELS,
   type PanelEntry,
   panelDescriptors,
@@ -97,6 +98,7 @@ function renderPanel(moduleId: string, entry: PanelEntry, value: unknown): strin
       onChange={() => undefined}
       channels={CHANNELS}
       roles={ROLES}
+      tier="free"
       liveConfig={LIVE_CONFIG[moduleId] ?? {}}
       guildId="900000000000000001"
     />,
@@ -175,10 +177,9 @@ describe('the module panel registry', () => {
           id: 'support',
           name: 'Support',
           channelId: '500000000000000001',
-          buttonLabel: 'Open a ticket',
+          typeIds: ['support'],
+          style: 'buttons',
           panelText: 'Need a hand?',
-          openingMessage: '{user} opened a ticket.',
-          supportRoleIds: [],
         },
       ],
       tempvc: [{ channelId: '500000000000000002', nameTemplate: '{user}', userLimit: 0 }],
@@ -194,6 +195,25 @@ describe('the module panel registry', () => {
     // list under `templates` and a row palette under `components`, and handing either panel the
     // other's value only proves the component crashes on it.
     const perPanel: Record<string, unknown> = {
+      'tickets/types': [
+        {
+          id: 'support',
+          name: 'Support',
+          form: [
+            { id: 'subject', label: 'What do you need?', style: 'short', required: true },
+            {
+              id: 'area',
+              label: 'Which area?',
+              style: 'select',
+              required: true,
+              options: [{ label: 'Billing', value: 'billing' }],
+            },
+          ],
+          staffRoleIds: ['600000000000000001'],
+          captureMessages: true,
+          autoCloseAfter: '48h',
+        },
+      ],
       'messages/components': [
         {
           name: 'Ticket buttons',
@@ -434,6 +454,7 @@ describe('what each panel does with the props the registry hands it', () => {
           onChange={() => undefined}
           channels={CHANNELS}
           roles={ROLES}
+          tier="free"
           liveConfig={liveConfig}
           guildId="900000000000000001"
         />,
@@ -456,6 +477,7 @@ describe('what each panel does with the props the registry hands it', () => {
           onChange={() => undefined}
           channels={CHANNELS}
           roles={ROLES}
+          tier="free"
           liveConfig={liveConfig}
           guildId="900000000000000001"
         />,
@@ -601,5 +623,39 @@ describe('how this test reaches the module config schemas it checks panel keys a
 
     expect(bareModuleImports(registry).filter((s) => tainted.has(s))).toEqual([]);
     expect(bareModuleImports(panels).filter((s) => tainted.has(s))).toEqual([]);
+  });
+});
+
+describe('Save is gated on every panel, not the one on screen', () => {
+  test('a module with no panels has nothing to refuse', () => {
+    expect(invalidPanelOf('ping', {})).toBeUndefined();
+  });
+
+  test('values that satisfy the panel schema pass', () => {
+    expect(invalidPanelOf('cases', { escalationLadder: [] })).toBeUndefined();
+  });
+
+  test('a panel whose values fail its own schema is named, with the title the card carries', () => {
+    const bad = invalidPanelOf('tickets', { panels: [{ id: '' }] });
+
+    expect(bad?.key).toBe('panels');
+    expect(bad?.title).toBe('Ticket panels');
+  });
+
+  // Not `{}` — some of these schemas treat an absent value as valid, which is their business. A
+  // number is not a list of anything, so every declared schema must reject it.
+  test('every keyed panel that ships a schema is reachable by the gate', () => {
+    const checked: string[] = [];
+
+    for (const [moduleId, spec] of Object.entries(MODULE_PANELS)) {
+      for (const entry of spec.panels) {
+        if (entry.key === null || entry.schema === undefined) continue;
+
+        checked.push(`${moduleId}.${entry.key}`);
+        expect(invalidPanelOf(moduleId, { [entry.key]: 0 })?.key).toBe(entry.key);
+      }
+    }
+
+    expect(checked.length).toBeGreaterThan(0);
   });
 });

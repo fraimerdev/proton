@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { optionLabel } from '../../lib/enum-labels.ts';
 import { useDismiss } from '../shell/dismiss.ts';
 import { Icon } from '../shell/icon.tsx';
 import type { IconName } from '../shell/icon-set.gen.ts';
@@ -76,8 +77,7 @@ export interface PickerOption {
   kind?: 'channel' | undefined;
 }
 
-export const CHANNEL_NOTE =
-  'Channels Proton cannot see are not listed here, because Discord never returns them.';
+export const CHANNEL_NOTE = 'Channels Proton cannot see are not listed.';
 
 export function roleOptions(roles: readonly DiscordRole[]): PickerOption[] {
   return roles.map((role) => ({ id: role.id, label: role.name, colour: role.color }));
@@ -98,8 +98,11 @@ export function channelOptions(
     }));
 }
 
-export function enumOptions(values: readonly string[]): PickerOption[] {
-  return values.map((value) => ({ id: value, label: value }));
+export function enumOptions(
+  values: readonly string[],
+  labels?: Record<string, string> | undefined,
+): PickerOption[] {
+  return values.map((value) => ({ id: value, label: optionLabel(value, labels) }));
 }
 
 function Mark({ option }: { option: PickerOption }): ReactElement {
@@ -147,6 +150,7 @@ function Popover({
 }: PopoverProps): ReactElement {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
 
@@ -164,6 +168,18 @@ function Popover({
   const current = matches[index];
 
   useEffect(() => inputRef.current?.focus(), []);
+
+  // Focus never leaves the search box, so nothing scrolls the list on its own: a guild with more
+  // channels than the 244px box shows would move aria-activedescendant onto a row the user cannot
+  // see, and arrowing down would look like it had stopped working.
+  const activeId = current ? `${listId}-${current.id}` : undefined;
+  useEffect(() => {
+    if (!activeId) return;
+
+    listRef.current
+      ?.querySelector(`[id="${CSS.escape(activeId)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeId]);
 
   function move(step: number): void {
     if (matches.length === 0) return;
@@ -228,7 +244,7 @@ function Popover({
           aria-controls={listId}
           aria-autocomplete="list"
           aria-label={`Search ${label}`}
-          aria-activedescendant={current ? `${listId}-${current.id}` : undefined}
+          aria-activedescendant={activeId}
           placeholder="Search…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -239,6 +255,7 @@ function Popover({
       <div
         className="picker-list"
         id={listId}
+        ref={listRef}
         role="listbox"
         aria-label={label}
         aria-multiselectable={multiple || undefined}
@@ -296,7 +313,13 @@ export function SinglePicker({
 
   useDismiss(open, close, wrap, trigger);
 
-  const chosen = options.find((option) => option.id === value);
+  const known = options.find((option) => option.id === value);
+
+  // A saved id the guild no longer has still governs what Proton does, and rendering it as "No
+  // channel" hid a live setting behind the word for its absence. The token list already keeps its
+  // unknown values under the raw id for the same reason.
+  const missing = known === undefined && value !== null && value !== '';
+  const chosen = known ?? (missing && value !== null ? { id: value, label: value } : undefined);
 
   const offered = useMemo(
     () => (clearable ? [{ id: '', label: emptyLabel }, ...options] : options),
@@ -314,9 +337,17 @@ export function SinglePicker({
         aria-expanded={open}
         aria-invalid={invalid}
         aria-describedby={describedBy}
+        // A <label for> does not name a button, so without this every picker in the product
+        // announced itself as whatever channel it happened to be set to.
+        aria-label={
+          missing
+            ? `${label}: ${value}, which no longer exists in this server`
+            : `${label}: ${chosen ? chosen.label : emptyLabel}`
+        }
+        data-unknown={missing || undefined}
         onClick={() => setOpen((was) => !was)}
       >
-        {chosen ? <Mark option={chosen} /> : null}
+        {known ? <Mark option={known} /> : null}
         <span className={chosen ? 'picker-value' : 'picker-value picker-value-unset'}>
           {chosen ? chosen.label : emptyLabel}
         </span>

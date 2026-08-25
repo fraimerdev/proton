@@ -1,5 +1,4 @@
 import { type PermissionOverwriteSpec, Permissions } from '@proton/core';
-import type { TicketPanel } from './config.ts';
 
 export const OVERWRITE_ROLE = 0;
 export const OVERWRITE_MEMBER = 1;
@@ -11,15 +10,41 @@ export const TICKET_MEMBER_ALLOW =
   Permissions.AttachFiles |
   Permissions.EmbedLinks;
 
+// What a member keeps while the ticket is locked: they can still read the conversation and the
+// staff answer, which is the difference between locking a ticket and closing it.
+export const TICKET_LOCKED_ALLOW =
+  Permissions.ViewChannel | Permissions.ReadMessageHistory | Permissions.EmbedLinks;
+
+export const TICKET_LOCKED_DENY = Permissions.SendMessages | Permissions.AttachFiles;
+
+// Identical to TICKET_MEMBER_ALLOW on purpose. Discord refuses to let a bot grant a permission it
+// does not itself hold, so every bit added here becomes a bit the bot must have before it may
+// create any ticket channel at all. Staff who need Manage Messages already have it from their roles.
+export const TICKET_STAFF_ALLOW = TICKET_MEMBER_ALLOW;
+
 export interface OverwriteInput {
   guildId: string;
 
-  openerId: string;
-  panel: TicketPanel;
+  ownerId: string;
+
+  staffRoleIds: readonly string[];
 
   botUserId?: string | undefined;
 
   participantIds?: readonly string[];
+
+  locked?: boolean;
+}
+
+export function memberOverwrite(userId: string, locked = false): PermissionOverwriteSpec {
+  return locked
+    ? {
+        id: userId,
+        type: OVERWRITE_MEMBER,
+        allow: TICKET_LOCKED_ALLOW.toString(),
+        deny: TICKET_LOCKED_DENY.toString(),
+      }
+    : { id: userId, type: OVERWRITE_MEMBER, allow: TICKET_MEMBER_ALLOW.toString(), deny: '0' };
 }
 
 // Built for the create call, not patched on afterwards: a ticket channel that exists for even one
@@ -29,18 +54,27 @@ export function ticketOverwrites(input: OverwriteInput): PermissionOverwriteSpec
     { id: input.guildId, type: OVERWRITE_ROLE, deny: Permissions.ViewChannel.toString() },
   ];
 
-  const allowed = new Set<string>([input.openerId, ...(input.participantIds ?? [])]);
+  const staff = new Set(input.staffRoleIds);
 
-  if (input.botUserId !== undefined) allowed.add(input.botUserId);
+  const members = new Set<string>([input.ownerId, ...(input.participantIds ?? [])]);
 
-  for (const id of allowed) {
-    overwrites.push({ id, type: OVERWRITE_MEMBER, allow: TICKET_MEMBER_ALLOW.toString() });
+  for (const id of members) {
+    // The bot is never silenced by a lock, even when somebody added it to the ticket as a member:
+    // it still has to post the closing message and answer the controls in a locked channel.
+    overwrites.push(memberOverwrite(id, input.locked === true && id !== input.botUserId));
   }
 
-  for (const roleId of input.panel.supportRoleIds) {
+  // Only ViewChannel and friends: Manage Channels and Manage Roles reach the channel from the
+  // bot's guild-level permissions already, and granting them here would make the bot need them
+  // before it could create the channel that grants them.
+  if (input.botUserId !== undefined && !members.has(input.botUserId)) {
+    overwrites.push(memberOverwrite(input.botUserId));
+  }
+
+  for (const roleId of staff) {
     if (roleId === input.guildId) continue;
 
-    overwrites.push({ id: roleId, type: OVERWRITE_ROLE, allow: TICKET_MEMBER_ALLOW.toString() });
+    overwrites.push({ id: roleId, type: OVERWRITE_ROLE, allow: TICKET_STAFF_ALLOW.toString() });
   }
 
   return overwrites;
@@ -54,10 +88,7 @@ export function withParticipant(
     return [...overwrites];
   }
 
-  return [
-    ...overwrites,
-    { id: userId, type: OVERWRITE_MEMBER, allow: TICKET_MEMBER_ALLOW.toString() },
-  ];
+  return [...overwrites, memberOverwrite(userId)];
 }
 
 export function withoutParticipant(
@@ -78,7 +109,7 @@ export function fromGuildState(
   }));
 }
 
-// Merged, never replaced: the live list carries whoever /ticket add let in, and the panel list
+// Merged, never replaced: the live list carries whoever was let in since, and the required list
 // carries the @everyone deny that makes the channel private. Taking only the first would make a
 // ticket public the moment the channel cache was empty or stale; taking only the second would
 // silently revoke every added participant.

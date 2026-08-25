@@ -6,8 +6,16 @@ import {
   type CaseRecord,
   type CaseSortField,
   type LeaderboardRow,
+  NEVER_RECORDED_KINDS,
+  TICKET_PRIORITIES,
 } from '@proton/core';
 import type { TagSummary } from '@proton/module-tags/query';
+import { PRIORITY_LABELS, TICKET_STATUSES } from '@proton/module-tickets/config';
+import type {
+  TicketQueryInput,
+  TicketSortField,
+  TicketSummary,
+} from '@proton/module-tickets/query';
 import {
   type InputHTMLAttributes,
   type ReactElement,
@@ -19,7 +27,12 @@ import {
 import { Icon } from '../shell/icon.tsx';
 import { actionLook, toneClass } from '../shell/module-meta.ts';
 import { DataTable, dataColumnHelper, lastPageOf, Pager } from '../table/data-table.tsx';
-import type { CaseBrowserProps, LeaderboardProps, TagBrowserProps } from './registry.ts';
+import type {
+  CaseBrowserProps,
+  LeaderboardProps,
+  TagBrowserProps,
+  TicketBrowserProps,
+} from './registry.ts';
 
 type DebouncedProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
   label: string;
@@ -67,6 +80,13 @@ function DebouncedFilter({ label, value, onCommit, ...rest }: DebouncedProps): R
   );
 }
 
+export function pageSizeOf(raw: string): number | undefined {
+  const parsed = Number(raw);
+  if (raw.trim() === '' || !Number.isFinite(parsed)) return undefined;
+
+  return Math.min(CASE_PAGE_SIZE_MAX, Math.max(1, Math.trunc(parsed)));
+}
+
 const caseColumn = dataColumnHelper<CaseRecord>();
 
 function formatInstant(iso: string): string {
@@ -89,7 +109,8 @@ function ActionCell({ kind }: { kind: string }): ReactElement {
 const caseColumns = caseColumn.columns([
   caseColumn.accessor('caseNumber', {
     id: 'caseNumber',
-    header: '#',
+    // "#" alone is a glyph, and this header is a sort button whose whole name it becomes.
+    header: 'Case',
     cell: (c) => `#${c.getValue()}`,
   }),
   caseColumn.accessor('id', {
@@ -127,8 +148,13 @@ const caseColumns = caseColumn.columns([
   }),
   caseColumn.accessor('reason', {
     id: 'reason',
+    // The column ellipsises, and a reason is the one field of a case a moderator wrote by hand —
+    // without the title there was nowhere in the product to read the rest of it.
+    cell: (c) => {
+      const reason = c.getValue();
+      return reason ? <span title={reason}>{reason}</span> : '—';
+    },
     header: 'Reason',
-    cell: (c) => c.getValue() ?? '—',
   }),
   caseColumn.accessor('createdAt', {
     id: 'createdAt',
@@ -159,6 +185,15 @@ const caseColumns = caseColumn.columns([
   }),
 ]);
 
+// The column prints actionLook(kind).verb; the filter that searches it offered add_role and
+// delete_message. Same source, sorted by what the admin reads, minus the three kinds the ledger
+// never records — offering a filter that can only ever return nothing is worse than omitting it.
+const ACTION_OPTIONS: readonly { kind: string; label: string }[] = ACTION_KINDS.filter(
+  (kind) => !NEVER_RECORDED_KINDS.has(kind),
+)
+  .map((kind) => ({ kind, label: actionLook(kind).verb }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
 const ROW_HEIGHT = 56;
 
 const SORTABLE: Record<string, CaseSortField> = {
@@ -180,6 +215,8 @@ export function CaseBrowserView({
 
   return (
     <div className="panel-wide">
+      <p className="page-lede">Targets and moderators are listed by ID, not by name.</p>
+
       <div className="filters">
         <label className="filter">
           <span>Action</span>
@@ -192,9 +229,9 @@ export function CaseBrowserView({
             }
           >
             <option value="">Any</option>
-            {ACTION_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {kind}
+            {ACTION_OPTIONS.map((option) => (
+              <option key={option.kind} value={option.kind}>
+                {option.label}
               </option>
             ))}
           </select>
@@ -242,7 +279,9 @@ export function CaseBrowserView({
           min={1}
           max={CASE_PAGE_SIZE_MAX}
           value={String(search.pageSize)}
-          onCommit={(next) => setFilters({ pageSize: next === '' ? undefined : Number(next) })}
+          // Clamped here, not left to the search schema: an out-of-range number fails validateSearch
+          // in the loader, and typing 500 in a filter box replaced the ledger with an error card.
+          onCommit={(next) => setFilters({ pageSize: pageSizeOf(next) })}
         />
       </div>
 
@@ -276,6 +315,7 @@ export function CaseBrowserView({
                   onClick={() =>
                     setFilters({
                       type: undefined,
+                      caseId: undefined,
                       moderatorId: undefined,
                       targetId: undefined,
                       from: undefined,
@@ -291,9 +331,10 @@ export function CaseBrowserView({
                 <span className="tile">
                   <Icon name="arrow-u-down-left" />
                 </span>
+                <span className="empty-state-title">There is no page {result.page}.</span>
                 <p className="status">
-                  Page {result.page} is past the end of {result.total} matching{' '}
-                  {result.total === 1 ? 'case' : 'cases'}.
+                  {result.total} {result.total === 1 ? 'case matches' : 'cases match'} these
+                  filters, which is fewer than this page would need.
                 </p>
                 <button
                   type="button"
@@ -333,15 +374,36 @@ function IdFilter({
   onCommit: (value: string | undefined) => void;
   inputMode?: 'numeric' | 'text';
 }): ReactElement {
+  // Same reason DebouncedFilter resyncs: the address bar is the source of truth, and Back and
+  // Clear filters both move it without going through this input. On defaultValue the box went on
+  // showing a moderator id that was no longer filtering anything.
+  const [seen, setSeen] = useState(value);
+  const [draft, setDraft] = useState(value ?? '');
+
+  if (seen !== value) {
+    setSeen(value);
+    setDraft(value ?? '');
+  }
+
+  function commit(): void {
+    onCommit(draft.trim() === '' ? undefined : draft.trim());
+  }
+
   return (
     <label className="filter">
       <span>{label}</span>
       <input
         type="text"
         inputMode={inputMode}
-        defaultValue={value ?? ''}
+        value={draft}
         placeholder="Any"
-        onBlur={(e) => onCommit(e.target.value.trim() === '' ? undefined : e.target.value.trim())}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          commit();
+        }}
       />
     </label>
   );
@@ -357,35 +419,44 @@ function leaderboardColumnsFor(entries: readonly LeaderboardRow[]) {
   return levelColumn.columns([
     levelColumn.accessor('rank', {
       id: 'rank',
-      header: '#',
+      header: 'Rank',
       cell: (c) => (
         <span className={`rank-chip${c.getValue() <= 3 ? ' rank-chip-top' : ''}`}>
           {c.getValue()}
         </span>
       ),
     }),
-    levelColumn.accessor('userId', { id: 'userId', header: 'Member' }),
+    // Snowflakes and counts take the same mono the case ledger gives them: a column of ids set in
+    // the prose face is a column nobody can scan down.
+    levelColumn.accessor('userId', {
+      id: 'userId',
+      header: 'Member',
+      cell: (c) => <span className="id">{c.getValue()}</span>,
+    }),
     levelColumn.accessor('xp', {
       id: 'share',
       header: 'Share of the top score',
-      cell: (c) => (
-        <span className="xp-bar">
-          <span
-            className="xp-bar-fill"
-            style={{ width: `${Math.max(2, Math.round((c.getValue() / top) * 100))}%` }}
-          />
-        </span>
-      ),
+      cell: (c) => {
+        const share = Math.round((c.getValue() / top) * 100);
+
+        // The bar is the whole cell, so without a text alternative the column reads as empty.
+        return (
+          <span className="xp-bar" title={`${share}% of the top score on this page`}>
+            <span className="xp-bar-fill" style={{ width: `${Math.max(2, share)}%` }} />
+            <span className="sr-only">{share}% of the top score on this page</span>
+          </span>
+        );
+      },
     }),
     levelColumn.accessor('level', {
       id: 'level',
       header: 'Level',
-      cell: (c) => `Level ${c.getValue()}`,
+      cell: (c) => <span className="num mono">{c.getValue()}</span>,
     }),
     levelColumn.accessor('xp', {
       id: 'xp',
       header: 'XP',
-      cell: (c) => c.getValue().toLocaleString(),
+      cell: (c) => <span className="num mono">{c.getValue().toLocaleString()}</span>,
     }),
   ]);
 }
@@ -400,10 +471,7 @@ export function LeaderboardView({
 
   return (
     <div className="panel-wide">
-      <p className="page-lede">
-        Members are listed by ID. Proton does not resolve names, because Discord’s rate limits do
-        not allow fetching a whole member list.
-      </p>
+      <p className="page-lede">Members are listed by ID, not by name.</p>
 
       <div className="table-card">
         <DataTable
@@ -411,15 +479,35 @@ export function LeaderboardView({
           columns={leaderboardColumns}
           data={result.entries}
           empty={
-            <div className="empty-state">
-              <span className="tile">
-                <Icon name="chart-bar" />
-              </span>
-              <span className="empty-state-title">Nobody has earned XP yet.</span>
-              <p className="status">
-                Members appear here once Leveling is switched on and somebody talks.
-              </p>
-            </div>
+            result.total > 0 ? (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="arrow-u-down-left" />
+                </span>
+                <span className="empty-state-title">There is no page {search.page}.</span>
+                <p className="status">
+                  {result.total} {result.total === 1 ? 'member has' : 'members have'} earned XP,
+                  which is fewer than this page would need.
+                </p>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() => onSearch({ page: lastPage })}
+                >
+                  Go to the last page
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="chart-bar" />
+                </span>
+                <span className="empty-state-title">Nobody has earned XP yet.</span>
+                <p className="status">
+                  Members appear here once Leveling is switched on and somebody talks.
+                </p>
+              </div>
+            )
           }
         />
       </div>
@@ -445,14 +533,25 @@ const tagColumns = tagColumn.columns([
   tagColumn.accessor('content', {
     id: 'content',
     header: 'Posts',
-    cell: (c) => c.getValue().slice(0, 80),
+    // Cut with an ellipsis and the whole thing on the title, rather than stopping mid-word with no
+    // sign there was more and no way to see it.
+    cell: (c) => {
+      const content = c.getValue();
+      return (
+        <span title={content}>{content.length > 80 ? `${content.slice(0, 80)}…` : content}</span>
+      );
+    },
   }),
   tagColumn.accessor('uses', {
     id: 'uses',
     header: 'Used',
-    cell: (c) => c.getValue().toLocaleString(),
+    cell: (c) => <span className="num mono">{c.getValue().toLocaleString()}</span>,
   }),
-  tagColumn.accessor('createdBy', { id: 'createdBy', header: 'Written by' }),
+  tagColumn.accessor('createdBy', {
+    id: 'createdBy',
+    header: 'Written by',
+    cell: (c) => <span className="id">{c.getValue()}</span>,
+  }),
 ]);
 
 export function TagBrowserView({ search, data: result, onSearch }: TagBrowserProps): ReactElement {
@@ -500,19 +599,39 @@ export function TagBrowserView({ search, data: result, onSearch }: TagBrowserPro
           columns={tagColumns}
           data={result.tags}
           empty={
-            <div className="empty-state">
-              <span className="tile">
-                <Icon name="tag" />
-              </span>
-              <span className="empty-state-title">
-                {search.search ? 'No tag matches that name.' : 'This server has no tags yet.'}
-              </span>
-              <p className="status">
-                {search.search
-                  ? 'Try a shorter fragment — the filter matches anywhere in the name.'
-                  : 'Anyone permitted can write one with /tags create.'}
-              </p>
-            </div>
+            result.total > 0 ? (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="arrow-u-down-left" />
+                </span>
+                <span className="empty-state-title">There is no page {search.page}.</span>
+                <p className="status">
+                  {result.total} {result.total === 1 ? 'tag matches' : 'tags match'} this filter,
+                  which is fewer than this page would need.
+                </p>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() => onSearch({ page: lastPage })}
+                >
+                  Go to the last page
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="tag" />
+                </span>
+                <span className="empty-state-title">
+                  {search.search ? 'No tag matches that name.' : 'This server has no tags yet.'}
+                </span>
+                <p className="status">
+                  {search.search
+                    ? 'Try a shorter fragment — the filter matches anywhere in the name.'
+                    : 'Anyone permitted can write one with /tags create.'}
+                </p>
+              </div>
+            )
           }
         />
       </div>
@@ -522,6 +641,262 @@ export function TagBrowserView({ search, data: result, onSearch }: TagBrowserPro
         page={search.page}
         lastPage={lastPage}
         onPage={(page) => onSearch({ page })}
+      >
+        <span className="status">
+          Page {search.page} of {lastPage}
+        </span>
+      </Pager>
+    </div>
+  );
+}
+
+const ticketColumn = dataColumnHelper<TicketSummary>();
+
+function sentenceCase(word: string): string {
+  return `${word.slice(0, 1).toUpperCase()}${word.slice(1)}`;
+}
+
+function statusChip(status: TicketSummary['status']): string {
+  if (status === 'closed') return 'chip chip-ok';
+  if (status === 'deleted') return 'chip chip-warn';
+
+  return 'chip';
+}
+
+const ticketColumns = ticketColumn.columns([
+  ticketColumn.accessor('number', {
+    id: 'number',
+    header: 'Ticket',
+    cell: (c) => `#${c.getValue()}`,
+  }),
+  ticketColumn.accessor('subject', {
+    id: 'subject',
+    header: 'Subject',
+    cell: (c) => {
+      const subject = c.getValue();
+      if (!subject) return '—';
+
+      return (
+        <span title={subject}>{subject.length > 60 ? `${subject.slice(0, 60)}…` : subject}</span>
+      );
+    },
+  }),
+  ticketColumn.accessor('typeId', {
+    id: 'typeId',
+    header: 'Type',
+    cell: (c) => <span className="mono">{c.getValue()}</span>,
+  }),
+  ticketColumn.accessor('status', {
+    id: 'status',
+    header: 'Status',
+    cell: (c) => <span className={statusChip(c.getValue())}>{c.getValue()}</span>,
+  }),
+  ticketColumn.accessor('priority', {
+    id: 'priority',
+    header: 'Priority',
+    cell: (c) => (
+      <span className={c.getValue() === 'urgent' ? 'chip chip-warn' : 'chip'}>
+        {PRIORITY_LABELS[c.getValue()]}
+      </span>
+    ),
+  }),
+  ticketColumn.accessor('ownerId', {
+    id: 'ownerId',
+    header: 'Owner',
+    cell: (c) => <span className="id">{c.getValue()}</span>,
+  }),
+  ticketColumn.accessor('claimedById', {
+    id: 'claimedById',
+    header: 'Claimed by',
+    cell: (c) => {
+      const id = c.getValue();
+      return id ? <span className="id">{id}</span> : '—';
+    },
+  }),
+  ticketColumn.accessor('openedAt', {
+    id: 'openedAt',
+    header: 'Opened (UTC)',
+    cell: (c) => <span className="stamp">{formatInstant(c.getValue())}</span>,
+  }),
+  ticketColumn.accessor('closedAt', {
+    id: 'closedAt',
+    header: 'Closed (UTC)',
+    cell: (c) => {
+      const at = c.getValue();
+      return at ? <span className="stamp">{formatInstant(at)}</span> : '—';
+    },
+  }),
+]);
+
+const TICKET_SORTABLE: Record<string, TicketSortField> = {
+  number: 'number',
+  openedAt: 'openedAt',
+  closedAt: 'closedAt',
+};
+
+export function TicketBrowserView({
+  search,
+  data: result,
+  onSearch,
+}: TicketBrowserProps): ReactElement {
+  function setFilters(patch: Partial<TicketQueryInput>): void {
+    onSearch({ ...patch, page: patch.page ?? 1 });
+  }
+
+  const lastPage = lastPageOf(result.total, result.pageSize);
+
+  const filtered =
+    search.search !== undefined ||
+    search.status !== undefined ||
+    search.priority !== undefined ||
+    search.typeId !== undefined ||
+    search.ownerId !== undefined;
+
+  return (
+    <div className="panel-wide">
+      <p className="page-lede">
+        Members are listed by ID, not by name. A ticket stays here after its channel is gone.
+      </p>
+
+      <div className="filters">
+        <label className="filter">
+          <span>Status</span>
+          <select
+            value={search.status ?? ''}
+            onChange={(e) =>
+              setFilters({
+                status:
+                  e.target.value === '' ? undefined : (e.target.value as typeof search.status),
+              })
+            }
+          >
+            <option value="">Any</option>
+            {TICKET_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {sentenceCase(status)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="filter">
+          <span>Priority</span>
+          <select
+            value={search.priority ?? ''}
+            onChange={(e) =>
+              setFilters({
+                priority:
+                  e.target.value === '' ? undefined : (e.target.value as typeof search.priority),
+              })
+            }
+          >
+            <option value="">Any</option>
+            {TICKET_PRIORITIES.map((priority) => (
+              <option key={priority} value={priority}>
+                {PRIORITY_LABELS[priority]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <IdFilter
+          label="Type"
+          inputMode="text"
+          value={search.typeId}
+          onCommit={(typeId) => setFilters({ typeId })}
+        />
+        <IdFilter
+          label="Owner ID"
+          value={search.ownerId}
+          onCommit={(ownerId) => setFilters({ ownerId })}
+        />
+
+        <DebouncedFilter
+          label="Subject contains"
+          type="search"
+          value={search.search ?? ''}
+          onCommit={(next) => setFilters({ search: next || undefined })}
+        />
+      </div>
+
+      <div className="table-card">
+        <DataTable
+          className="table"
+          columns={ticketColumns}
+          data={result.tickets}
+          rowAttributes={(row) => ({ 'data-ticket-number': row.number })}
+          sort={{
+            fields: TICKET_SORTABLE,
+            field: search.sort,
+            direction: search.direction,
+            onSort: setFilters,
+          }}
+          empty={
+            result.total > 0 ? (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="arrow-u-down-left" />
+                </span>
+                <span className="empty-state-title">There is no page {search.page}.</span>
+                <p className="status">
+                  {result.total} {result.total === 1 ? 'ticket matches' : 'tickets match'} these
+                  filters, which is fewer than this page would need.
+                </p>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() => setFilters({ page: lastPage })}
+                >
+                  Go to the last page
+                </button>
+              </div>
+            ) : filtered ? (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="funnel-x" />
+                </span>
+                <span className="empty-state-title">No ticket matches these filters.</span>
+                <p className="status">
+                  Every ticket this server has opened is kept, the closed and deleted ones included,
+                  so an empty list here means nothing matched.
+                </p>
+                <button
+                  type="button"
+                  className="button button-quiet"
+                  onClick={() =>
+                    setFilters({
+                      search: undefined,
+                      status: undefined,
+                      priority: undefined,
+                      typeId: undefined,
+                      ownerId: undefined,
+                    })
+                  }
+                >
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <span className="tile">
+                  <Icon name="ticket" />
+                </span>
+                <span className="empty-state-title">Nobody has opened a ticket yet.</span>
+                <p className="status">
+                  Tickets appear here once the module is switched on and a member opens one from a
+                  panel.
+                </p>
+              </div>
+            )
+          }
+        />
+      </div>
+
+      <Pager
+        className="pagination"
+        page={search.page}
+        lastPage={lastPage}
+        onPage={(page) => setFilters({ page })}
       >
         <span className="status">
           Page {search.page} of {lastPage}

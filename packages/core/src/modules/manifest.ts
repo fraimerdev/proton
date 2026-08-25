@@ -46,6 +46,12 @@ export interface CommandContext<C = unknown> extends ModuleContext<C> {
   channelId: string;
   userId: string;
 
+  // Who the invoker is, not what the bot may do — app_permissions is the bot's and scopes the
+  // executor. A handler that authorises anything per-invoker needs these, and a module that reads
+  // them must still work when they are absent, because a test context may not build them.
+  actorRoleIds?: string[];
+  actorPermissions?: bigint;
+
   options: CommandOptions;
   interaction: { id: string; token: string };
 

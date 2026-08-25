@@ -25,6 +25,12 @@ const NO_ROLES =
   'That did not carry your roles, so the role check could not run. If it keeps happening an ' +
   'admin should check the Server Members intent in the Discord developer portal.';
 
+const NO_TIMEOUT_STATE =
+  'That event did not carry whether you are timed out, so it could not be checked here.';
+
+const NO_NAMES =
+  'Your name could not be read from that event, so a name requirement could not be checked here.';
+
 const roleMode = z.enum(['any', 'all']).default('any').register(protonFields, { label: 'Match' });
 
 const roleIds = z
@@ -65,8 +71,86 @@ const isPremiumSchema = z.object({
   }),
 });
 
+const roleCountSchema = z.object({
+  min: z.number().int().min(0).max(250).default(1).register(protonFields, {
+    label: 'Fewest roles',
+  }),
+});
+
+const NAME_FIELDS = ['any', 'username', 'display-name', 'nickname'] as const;
+const NAME_MODES = ['contains', 'starts-with', 'ends-with', 'equals'] as const;
+
+const nameMatchesSchema = z.object({
+  // Deliberately not a regex: a host-authored pattern run against every entrant at draw time is a
+  // ReDoS vector inside the draw, and plain matching covers what hosts actually ask for.
+  mode: z.enum(NAME_MODES).default('contains').register(protonFields, { label: 'Match' }),
+  value: z.string().min(1).max(64).register(protonFields, { label: 'Text' }),
+  field: z
+    .enum(NAME_FIELDS)
+    .default('any')
+    .register(protonFields, {
+      label: 'Which name',
+      optionLabels: {
+        any: 'Any of them',
+        username: 'Username',
+        'display-name': 'Display name',
+        nickname: 'Server nickname',
+      },
+    }),
+});
+
 type RoleConfig = { roleIds: string[]; mode: 'any' | 'all' };
 type AgeConfig = { operator: 'older-than' | 'younger-than'; duration: string };
+
+// Discord retired discriminators, so identity is username (the handle), global_name (what most
+// clients show) and the per-guild nickname. Null is "not carried", never "empty".
+function namesOf(ctx: MemberContext, field: (typeof NAME_FIELDS)[number]): string[] | null {
+  const username = ctx.user.username ?? null;
+  const globalName = ctx.user.globalName ?? null;
+  const nickname = ctx.member?.nickname ?? null;
+
+  const picked =
+    field === 'username'
+      ? [username]
+      : field === 'display-name'
+        ? [globalName]
+        : field === 'nickname'
+          ? [nickname]
+          : [username, globalName, nickname];
+
+  const known = picked.filter((name): name is string => typeof name === 'string');
+  return known.length === 0 ? null : known;
+}
+
+function nameMatches(name: string, mode: (typeof NAME_MODES)[number], value: string): boolean {
+  const haystack = name.toLowerCase();
+  const needle = value.toLowerCase();
+
+  switch (mode) {
+    case 'starts-with':
+      return haystack.startsWith(needle);
+    case 'ends-with':
+      return haystack.endsWith(needle);
+    case 'equals':
+      return haystack === needle;
+    default:
+      return haystack.includes(needle);
+  }
+}
+
+const MODE_WORDS: Record<(typeof NAME_MODES)[number], string> = {
+  contains: 'contain',
+  'starts-with': 'start with',
+  'ends-with': 'end with',
+  equals: 'be exactly',
+};
+
+const FIELD_WORDS: Record<(typeof NAME_FIELDS)[number], string> = {
+  any: 'One of your names',
+  username: 'Your username',
+  'display-name': 'Your display name',
+  nickname: 'Your nickname here',
+};
 
 function heldRoles(ctx: MemberContext): { held: Set<string> } | { blocked: ConditionResult } {
   if (ctx.member === null) return { blocked: unknown(NO_MEMBER) };
@@ -317,6 +401,129 @@ export const isPremiumProvider: ConditionProvider<typeof isPremiumSchema> = {
   },
 };
 
+export const notBotProvider: ConditionProvider<typeof emptySchema> = {
+  kind: 'condition',
+  id: 'core.not_bot',
+  moduleId: CORE_MODULE_ID,
+  label: 'Not a bot',
+  description: 'Excludes bot and webhook accounts.',
+  emoji: '\u{1F916}',
+  configSchema: emptySchema,
+  builder: zodToDescriptors(emptySchema),
+  cost: 'facts',
+
+  async evaluate(ctx) {
+    return ctx.user.bot ? { passed: false } : PASSED;
+  },
+
+  describe() {
+    return 'Not be a bot account.';
+  },
+
+  describeFailure(_config, result) {
+    return result.indeterminate?.humanReason ?? 'Bot accounts cannot take part.';
+  },
+};
+
+export const notTimedOutProvider: ConditionProvider<typeof emptySchema> = {
+  kind: 'condition',
+  id: 'core.not_timed_out',
+  moduleId: CORE_MODULE_ID,
+  label: 'Not timed out',
+  description: 'Excludes members who are currently in a Discord timeout.',
+  emoji: '\u{1F507}',
+  configSchema: emptySchema,
+  builder: zodToDescriptors(emptySchema),
+  cost: 'facts',
+
+  async evaluate(ctx) {
+    if (ctx.member === null) return unknown(NO_MEMBER);
+
+    const until = ctx.member.communicationDisabledUntil;
+
+    // A null date on a partial context means "not carried", not "not timed out" — reading it as
+    // the latter lets a timed-out member through on any dispatch that omitted the field.
+    if (until === null) return ctx.partial ? unknown(NO_TIMEOUT_STATE) : PASSED;
+
+    return until.getTime() > ctx.now.getTime() ? { passed: false } : PASSED;
+  },
+
+  describe() {
+    return 'Not be timed out.';
+  },
+
+  describeFailure(_config, result) {
+    return (
+      result.indeterminate?.humanReason ??
+      'You are timed out at the moment, so you cannot take part until it expires.'
+    );
+  },
+};
+
+export const roleCountProvider: ConditionProvider<typeof roleCountSchema> = {
+  kind: 'condition',
+  id: 'core.role_count',
+  moduleId: CORE_MODULE_ID,
+  label: 'Number of roles',
+  description: 'Must hold at least a given number of roles.',
+  emoji: '\u{1F3F7}',
+  configSchema: roleCountSchema,
+  builder: zodToDescriptors(roleCountSchema),
+  cost: 'facts',
+
+  async evaluate(ctx, config) {
+    const roles = heldRoles(ctx);
+    if ('blocked' in roles) return roles.blocked;
+
+    const held = roles.held.size;
+    return {
+      passed: held >= config.min,
+      progress: { current: held, required: config.min, unit: 'roles' },
+    };
+  },
+
+  describe(config) {
+    return `Hold at least ${config.min} role${config.min === 1 ? '' : 's'}.`;
+  },
+
+  describeFailure(config, result) {
+    if (result.indeterminate) return result.indeterminate.humanReason;
+
+    const held = result.progress?.current ?? 0;
+    return `You hold ${held} role${held === 1 ? '' : 's'} and need at least ${config.min}.`;
+  },
+};
+
+export const nameMatchesProvider: ConditionProvider<typeof nameMatchesSchema> = {
+  kind: 'condition',
+  id: 'core.name_matches',
+  moduleId: CORE_MODULE_ID,
+  label: 'Name',
+  description: 'Username, display name or nickname must match some text.',
+  emoji: '\u{1F58A}',
+  configSchema: nameMatchesSchema,
+  builder: zodToDescriptors(nameMatchesSchema),
+  cost: 'facts',
+
+  async evaluate(ctx, config) {
+    const names = namesOf(ctx, config.field);
+    if (names === null) return unknown(NO_NAMES);
+
+    return { passed: names.some((name) => nameMatches(name, config.mode, config.value)) };
+  },
+
+  describe(config) {
+    return `${FIELD_WORDS[config.field]} must ${MODE_WORDS[config.mode]} “${config.value}”.`;
+  },
+
+  describeFailure(config, result) {
+    return (
+      result.indeterminate?.humanReason ??
+      `${FIELD_WORDS[config.field]} has to ${MODE_WORDS[config.mode]} “${config.value}”.`
+    );
+  },
+};
+
 export const CORE_PROVIDERS: readonly ConditionProvider[] = [
   hasRoleProvider,
   lacksRoleProvider,
@@ -325,6 +532,10 @@ export const CORE_PROVIDERS: readonly ConditionProvider[] = [
   isBoosterProvider,
   hasAvatarProvider,
   isPremiumProvider,
+  notBotProvider,
+  notTimedOutProvider,
+  roleCountProvider,
+  nameMatchesProvider,
 ] as unknown as readonly ConditionProvider[];
 
 export const CORE_PROVIDER_IDS: readonly string[] = CORE_PROVIDERS.map((provider) => provider.id);

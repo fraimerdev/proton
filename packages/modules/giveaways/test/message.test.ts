@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { MESSAGE_FLAG_IS_COMPONENTS_V2, sendPayloadSchema } from '@proton/core';
+import { type CardInput, renderCard } from '../src/embed.ts';
 import {
   BUTTON_PRIMARY,
   BUTTON_SECONDARY,
@@ -10,14 +11,14 @@ import {
   COMPONENT_SEPARATOR,
   COMPONENT_TEXT_DISPLAY,
   claimRow,
-  endedMessage,
   type GiveawayView,
-  runningMessage,
   V2_FLAGS,
 } from '../src/message.ts';
 
 const VIEW: GiveawayView = {
   id: 'g1',
+  shortCode: '7X29',
+  status: 'running',
   title: 'A very good prize',
   description: 'Open to everybody who has been here a while.',
   bannerUrl: null,
@@ -26,12 +27,13 @@ const VIEW: GiveawayView = {
   buttonStyle: BUTTON_PRIMARY,
   hostId: '400000000000000001',
   winnerCount: 2,
+  startsAt: null,
   endsAt: new Date('2026-08-20T12:00:00.000Z'),
   requirementLogic: 'all',
 };
 
-function render(overrides: Partial<Parameters<typeof runningMessage>[0]> = {}) {
-  const result = runningMessage({
+function render(overrides: Partial<CardInput> = {}) {
+  const result = renderCard('active', {
     view: VIEW,
     entrantCount: 7,
     requirements: [],
@@ -92,14 +94,19 @@ describe('the Components V2 giveaway message', () => {
     expect(flatten(components).length).toBeLessThanOrEqual(40);
   });
 
-  test('the entry button carries a proton custom id and the count button is disabled', () => {
+  test('an active card offers enter and leave, both live', () => {
     const buttons = flatten(render()).filter((component) => component.type === COMPONENT_BUTTON);
 
     expect(buttons).toHaveLength(2);
     expect(String(buttons[0]?.custom_id)).toContain('proton:giveaways:enter:g1');
-    expect(buttons[1]?.disabled).toBe(true);
+    expect(String(buttons[1]?.custom_id)).toContain('proton:giveaways:leave:g1');
+    expect(buttons.every((button) => button.disabled === undefined)).toBe(true);
     expect(buttons[1]?.style).toBe(BUTTON_SECONDARY);
-    expect(buttons[1]?.label).toBe('7 entrants');
+    expect(buttons[1]?.label).toBe('Leave');
+  });
+
+  test('the entry count is a field on the card, not a button label', () => {
+    expect(JSON.stringify(render({ entrantCount: 1284 }))).toContain('1,284');
   });
 
   test('an unsupported button style falls back to primary rather than a 400', () => {
@@ -128,7 +135,7 @@ describe('the Components V2 giveaway message', () => {
   });
 
   test('the ended message names the winners and drops the entry button', () => {
-    const result = endedMessage({
+    const result = renderCard('ended', {
       view: VIEW,
       entrantCount: 7,
       requirements: [],
@@ -145,7 +152,7 @@ describe('the Components V2 giveaway message', () => {
   });
 
   test('an undrawn giveaway says why rather than showing an empty winner list', () => {
-    const result = endedMessage({
+    const result = renderCard('no-winners', {
       view: VIEW,
       entrantCount: 0,
       requirements: [],

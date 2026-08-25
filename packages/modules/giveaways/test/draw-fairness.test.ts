@@ -60,6 +60,7 @@ describe('draw fairness', () => {
   // For k > 1 the marginal chance of appearing anywhere in the sample is NOT k*w/total — that is
   // the successive-sampling distribution, not a scaled proportion. What is exactly w/total is the
   // FIRST draw, and that is what this asserts.
+  // Explicit budget: 100k draws sits on Bun's 5s default, so it passes alone and flakes in a suite.
   test('with several winners, the first winner is still drawn at w / total', () => {
     const observed = frequencies(POOL, 3, (winners) => winners[0]);
 
@@ -68,7 +69,7 @@ describe('draw fairness', () => {
         TOLERANCE,
       );
     }
-  });
+  }, 30_000);
 
   test('the second winner is drawn proportionally to the weights that are left', () => {
     const counts = new Map<string, { seen: number; second: Map<string, number> }>();

@@ -16,3 +16,4 @@ export {
   type UpdateModuleConfigInput,
 } from './modules/service.ts';
 export { TagSearchService } from './tags/service.ts';
+export { TicketSearchService } from './tickets/service.ts';

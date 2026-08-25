@@ -476,7 +476,7 @@ describe('boot reconciliation', () => {
     const { store } = await seeded({ entrants: 5 });
 
     const later = new Date(NOW.getTime() + 120_000);
-    const result = await reconcile({ store, now: () => later.getTime() });
+    const result = await reconcile({ store, guildId: GUILD, now: () => later.getTime() });
 
     expect(result.overdue.map((giveaway) => giveaway.id)).toEqual(['g1']);
   });
@@ -488,7 +488,7 @@ describe('boot reconciliation', () => {
     await store.beginDraw(GUILD, 'g1', NOW);
 
     const later = new Date(NOW.getTime() + STALE_DRAW_AFTER_MS + 1_000);
-    const result = await reconcile({ store, now: () => later.getTime() });
+    const result = await reconcile({ store, guildId: GUILD, now: () => later.getTime() });
 
     expect(result.released).toEqual(['g1']);
     expect((await store.get(GUILD, 'g1'))?.status).toBe('running');
@@ -512,7 +512,7 @@ describe('boot reconciliation', () => {
     });
 
     const later = new Date(NOW.getTime() + STALE_DRAW_AFTER_MS + 1_000);
-    const result = await reconcile({ store, now: () => later.getTime() });
+    const result = await reconcile({ store, guildId: GUILD, now: () => later.getTime() });
 
     expect(result.released).toEqual([]);
     expect(result.finished).toEqual(['g1']);
@@ -524,7 +524,7 @@ describe('boot reconciliation', () => {
     const { store } = await seeded({ entrants: 5 });
     await store.beginDraw(GUILD, 'g1', NOW);
 
-    const result = await reconcile({ store, now: () => NOW.getTime() + 1_000 });
+    const result = await reconcile({ store, guildId: GUILD, now: () => NOW.getTime() + 1_000 });
 
     expect(result.released).toEqual([]);
     expect((await store.get(GUILD, 'g1'))?.status).toBe('drawing');
@@ -536,9 +536,10 @@ describe('boot reconciliation', () => {
     const marked: string[] = [];
     await reconcile({
       store,
+      guildId: GUILD,
       now: () => NOW.getTime(),
       dirty: {
-        async mark(id) {
+        async mark(_guildId, id) {
           marked.push(id);
         },
         async pending() {

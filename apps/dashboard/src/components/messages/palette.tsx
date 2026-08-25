@@ -39,7 +39,7 @@ export function PaletteEditor({ components, onChange, roles }: PaletteEditorProp
   }
 
   return (
-    <div className="palette panel-wide" data-path="components">
+    <div className="saved-palette panel-wide" data-path="components">
       <p className="field-description">
         Rows of buttons and dropdowns you build once and drop into any template. Inserting one
         copies it, so editing it here never changes a template that already has it, and deleting it
@@ -106,7 +106,7 @@ export function PaletteEditor({ components, onChange, roles }: PaletteEditorProp
                       value={entry.name}
                     />
                     <small className="field-description">
-                      What this row is called in the palette. It is never sent to Discord.
+                      What this row is called here. Members never see it.
                     </small>
                   </label>
 

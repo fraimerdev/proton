@@ -18,6 +18,7 @@ describe('the table', () => {
       activeGiveaways: 3,
       remindersPerUser: 10,
       ticketPanels: 2,
+      ticketTypes: 4,
       openTicketsPerUser: 3,
       counters: 5,
       tempVcHubs: 2,

@@ -52,6 +52,8 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   create_role: 0n,
   delete_channel: 0n,
   edit_channel: Permissions.ManageRoles,
+  set_channel_overwrite: 0n,
+  delete_channel_overwrite: 0n,
   create_thread: Permissions.CreatePublicThreads | Permissions.CreatePrivateThreads,
   move_member: 0n,
   end_poll: 0n,

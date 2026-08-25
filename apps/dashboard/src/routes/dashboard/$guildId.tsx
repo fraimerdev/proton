@@ -1,12 +1,12 @@
 import type { ModuleSummary } from '@proton/core';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router';
-import { type ReactElement, useCallback, useState } from 'react';
+import { createFileRoute, Link, Outlet, redirect, useRouterState } from '@tanstack/react-router';
+import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from '../../components/shell/app-shell.tsx';
 import { Icon } from '../../components/shell/icon.tsx';
 import { ModuleToggleProvider } from '../../components/shell/module-toggle.tsx';
 
-import { isAccessError } from '../../lib/errors.ts';
+import { isAccessError, saveFailure } from '../../lib/errors.ts';
 import { modulesQuery, sessionQuery } from '../../lib/queries.ts';
 import { queryKeys } from '../../lib/query-keys.ts';
 import { updateModuleConfig } from '../../server/modules.ts';
@@ -23,6 +23,16 @@ export const Route = createFileRoute('/dashboard/$guildId')({
       ]);
     } catch (error) {
       if (isAccessError(error)) throw redirect({ to: '/dashboard' });
+
+      // Proton having never joined is the ordinary way in here, and the API can only report that it
+      // holds no record — which reads as data loss. The session already knows which is which.
+      const session = context.queryClient.getQueryData(sessionQuery().queryKey);
+      const guild = session?.guilds.find((candidate) => candidate.id === params.guildId);
+
+      if (guild && !guild.present)
+        throw new Error(
+          `Proton is not in ${guild.name}, so there is nothing to configure yet. Invite it to that server and open this page again.`,
+        );
 
       throw error;
     }
@@ -73,7 +83,7 @@ function GuildShell(): ReactElement {
     // thrown while this one was in flight has already written its own optimistic value here.
     onError: (error, { module, enabled }) => {
       queryClient.setQueryData(modulesKey, (current) => flip(current, module.id, !enabled));
-      setFailure(`${module.name} was not switched ${enabled ? 'on' : 'off'}: ${error.message}`);
+      setFailure(saveFailure(error, `${module.name} was not switched ${enabled ? 'on' : 'off'}`));
     },
 
     onSettled: (_data, _error, { module }) => {
@@ -87,10 +97,27 @@ function GuildShell(): ReactElement {
     [toggle.mutate],
   );
 
+  const banner = useRef<HTMLDivElement>(null);
+
+  // The banner sits above the module list and the switch that failed may be twenty rows down it,
+  // so the explanation for a switch flipping back was routinely off the top of the viewport.
+  useEffect(() => {
+    if (failure) banner.current?.scrollIntoView({ block: 'nearest' });
+  }, [failure]);
+
+  // The banner names one module by name, so carrying it onto the next module's page reads as that
+  // module having failed. Moving on is the dismissal.
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: navigation is the trigger, not an input
+  useEffect(() => {
+    setFailure(null);
+  }, [pathname]);
+
   return (
     <ModuleToggleProvider value={onToggleModule}>
       <AppShell guildId={guildId} guilds={guilds} user={user} modules={modules}>
-        <div aria-live="assertive">
+        <div aria-live="assertive" ref={banner}>
           {failure ? (
             <div className="alert-banner">
               <Icon name="warning-circle" weight="fill" />

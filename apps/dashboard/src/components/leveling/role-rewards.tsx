@@ -82,7 +82,7 @@ export function RoleRewardsEditor({
 
             <button
               type="button"
-              className="button button-quiet"
+              className="button button-ghost"
               aria-label={`Remove the reward at level ${reward.level}`}
               onClick={() => onChange(rewards.filter((_, i) => i !== index))}
             >

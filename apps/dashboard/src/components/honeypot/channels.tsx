@@ -1,5 +1,5 @@
+import type { EntitlementTier } from '@proton/core';
 import {
-  CHANNELS_CEILING,
   DELETE_SECONDS_MAX,
   describeWindow,
   HONEYPOT_ACTIONS,
@@ -8,13 +8,15 @@ import {
   honeypotChannelsSchema,
   SECONDS_PER_DAY,
 } from '@proton/module-honeypot/config';
-import { type ReactElement, useId, useState } from 'react';
+import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
+import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import { channelOptions, type DiscordChannel, SinglePicker } from '../form/picker.tsx';
 import { Icon } from '../shell/icon.tsx';
 
 export interface HoneypotChannelsEditorProps {
   honeypots: readonly Partial<HoneypotChannel>[];
   channels: readonly DiscordChannel[];
+  tier: EntitlementTier;
   onChange: (honeypots: HoneypotChannel[]) => void;
 }
 
@@ -99,6 +101,23 @@ function ArmConfirm({
   onCancel: () => void;
   onArm: () => void;
 }): ReactElement {
+  const cancel = useRef<HTMLButtonElement>(null);
+
+  // This replaces the button that opened it, so without moving focus the keyboard was left on a
+  // node that no longer exists. Focus lands on the safe choice, and Escape takes it.
+  useEffect(() => {
+    cancel.current?.focus();
+
+    function onKey(event: KeyboardEvent): void {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onCancel();
+    }
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
   return (
     <div className="honeypot-arming">
       <p className="honeypot-arming-text" role="alert">
@@ -106,7 +125,7 @@ function ArmConfirm({
         <span>{sentence}</span>
       </p>
       <div className="confirm-actions">
-        <button type="button" className="button button-quiet" onClick={onCancel}>
+        <button ref={cancel} type="button" className="button button-quiet" onClick={onCancel}>
           Cancel
         </button>
         <button type="button" className="button button-danger" onClick={onArm}>
@@ -122,9 +141,11 @@ type Arming = { kind: 'add' } | { kind: 'enable'; index: number };
 export function HoneypotChannelsEditor({
   honeypots: stored,
   channels,
+  tier,
   onChange,
 }: HoneypotChannelsEditorProps): ReactElement {
   const fieldId = useId();
+  const ceiling = listCeiling(tier, 'honeypotChannels');
   const [arming, setArming] = useState<Arming | null>(null);
 
   const honeypots = stored.map(complete);
@@ -253,7 +274,7 @@ export function HoneypotChannelsEditor({
 
             <button
               type="button"
-              className="button button-quiet"
+              className="button button-ghost"
               aria-label={`Remove honeypot ${index + 1}`}
               onClick={() => remove(index)}
             >
@@ -291,10 +312,10 @@ export function HoneypotChannelsEditor({
           type="button"
           className="button button-quiet"
           onClick={() => setArming({ kind: 'add' })}
-          disabled={honeypots.length >= CHANNELS_CEILING}
+          disabled={honeypots.length >= ceiling}
         >
-          {honeypots.length >= CHANNELS_CEILING
-            ? `Limit of ${CHANNELS_CEILING} honeypot channels reached`
+          {honeypots.length >= ceiling
+            ? ceilingNote(tier, 'honeypotChannels')
             : 'Add honeypot channel'}
         </button>
       )}

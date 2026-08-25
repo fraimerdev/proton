@@ -13,7 +13,8 @@
       "!**/.output",
       "!**/drizzle",
       "!**/routeTree.gen.ts",
-      "!**/icon-set.gen.ts"
+      "!**/icon-set.gen.ts",
+      "!**/command-set.gen.ts"
     ]
   },
   "formatter": {

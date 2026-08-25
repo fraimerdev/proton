@@ -19,3 +19,8 @@ Thumbs.db
 
 # TanStack Start build scratch
 .tanstack/
+
+# Agent scratch. .claude/worktrees holds entire repo checkouts; .impeccable/live holds a running
+# preview server's pid, port and token.
+.claude/worktrees/
+**/.impeccable/live/

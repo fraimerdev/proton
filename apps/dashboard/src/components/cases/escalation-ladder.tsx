@@ -80,7 +80,7 @@ export function EscalationLadderEditor({
           </label>
 
           {rung.action === 'kick' ? (
-            <span className="field-description">A kick cannot be timed.</span>
+            <span className="field-description ladder-rung-note">A kick cannot be timed.</span>
           ) : (
             <label className="filter">
               <span>{rung.action === 'timeout' ? 'For' : 'For (blank = permanent)'}</span>

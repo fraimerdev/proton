@@ -192,8 +192,8 @@ describe('rendering each supported field type', () => {
     );
     const html = renderField(descriptors, 'mode', 'loud');
 
-    expect(html).toContain('>quiet<');
-    expect(html).toContain('>normal<');
+    expect(html).toContain('>Quiet<');
+    expect(html).toContain('>Normal<');
     expect(html).toContain('selected=""');
 
     expect(html).not.toContain('Not set');

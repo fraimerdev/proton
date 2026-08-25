@@ -145,9 +145,11 @@ export function LogEventMatrix({
 
         return (
           <details className="log-category" key={category}>
-            <summary>
+            {/* The class belongs on the summary — it hides the native marker, draws the caret and
+                pads the row. On the span inside, the caret sat in front of the count instead. */}
+            <summary className="log-category-summary">
               <span className="log-category-title">{CATEGORY_TITLES[category]}</span>
-              <span className="log-category-summary">
+              <span className="log-category-count">
                 {on} of {keys.length} on → {channelName(inherited)}
               </span>
             </summary>

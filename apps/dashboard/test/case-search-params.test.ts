@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { type CaseQueryInput, caseQuerySchema } from '@proton/core';
+import { CASE_PAGE_SIZE_MAX, type CaseQueryInput, caseQuerySchema } from '@proton/core';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 import {
@@ -8,6 +8,7 @@ import {
   moduleSearchSchema,
   parseViewSearch,
 } from '../src/components/views/registry.ts';
+import { pageSizeOf } from '../src/components/views/views.tsx';
 
 function roundTrip(input: CaseQueryInput) {
   return caseQuerySchema.parse(defaultParseSearch(defaultStringifySearch(input)));
@@ -136,5 +137,27 @@ describe('the cases tab rejects what the API would reject', () => {
     const url = '?view=cases&type=timeout&page=2';
 
     expect(fromUrl(url)).toEqual(caseQuerySchema.parse(defaultParseSearch('?type=timeout&page=2')));
+  });
+});
+
+describe('the per-page filter cannot push the ledger out of its own schema', () => {
+  test('a value above the ceiling clamps instead of failing validateSearch', () => {
+    expect(pageSizeOf('500')).toBe(CASE_PAGE_SIZE_MAX);
+    expect(() => caseQuerySchema.parse({ pageSize: pageSizeOf('500') })).not.toThrow();
+  });
+
+  test('zero and negatives clamp to the floor', () => {
+    expect(pageSizeOf('0')).toBe(1);
+    expect(pageSizeOf('-40')).toBe(1);
+  });
+
+  test('an empty box and unparseable text both mean "unset", not NaN', () => {
+    expect(pageSizeOf('')).toBeUndefined();
+    expect(pageSizeOf('   ')).toBeUndefined();
+    expect(pageSizeOf('abc')).toBeUndefined();
+  });
+
+  test('a fractional value truncates to a whole number of rows', () => {
+    expect(pageSizeOf('25.7')).toBe(25);
   });
 });

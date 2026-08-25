@@ -9,7 +9,7 @@ colors:
   well-black: "#0b0d12"
   hairline: "#242833"
   lifted-hairline: "#333949"
-  control-stroke: "#4b5468"
+  control-stroke: "#646e86"
   paper: "#e9ebf1"
   muted-paper: "#aab1c0"
   quiet-slate: "#868e9f"
@@ -204,6 +204,14 @@ components:
   module-row-hover:
     backgroundColor: "{colors.raised-slate}"
     textColor: "{colors.paper}"
+  area-card:
+    backgroundColor: "{colors.card-slate}"
+    textColor: "{colors.paper}"
+    typography: "{typography.body}"
+    rounded: "{rounded.lg}"
+    padding: "16px 20px"
+  area-card-hover:
+    backgroundColor: "{colors.raised-slate}"
   nav-item:
     backgroundColor: "transparent"
     textColor: "{colors.muted-paper}"
@@ -412,8 +420,11 @@ one blue for interaction, three semantic hues for state, and a gradient that is 
   section rules.
 - **Lifted Hairline** (`#333949`): The border of things that float (menus, dialogs, save bar,
   palette), the keycap border, the chip border, the scrollbar thumb.
-- **Control Stroke** (`#4b5468`): Input, select, textarea, switch and checkbox borders only. It is
-  lighter than every other line so a control reads as touchable before it is focused.
+- **Control Stroke** (`#646e86`): Input, select, textarea, switch and checkbox borders only. It is
+  lighter than every other line so a control reads as touchable before it is focused. It is also the
+  only line in the system held to WCAG 1.4.11: the boundary of an input is what says it is one, so it
+  clears 3:1 against every ground it lands on — 3.02:1 on Raised Slate, 3.30:1 on Card Slate. The
+  original `#4b5468` read 2.12:1 there and failed.
 - **Paper** (`#e9ebf1`): Primary text, headings, the name of a module that is on.
 - **Muted Paper** (`#aab1c0`): Secondary text — body copy in cards, table cells, the name of a
   module that is off, nav items at rest.
@@ -591,6 +602,10 @@ radius survives.
 `overflow: hidden` and hairlines between rows — not a stack of individually-bordered cards with gaps.
 A gap between rows is a different, louder statement than this system makes.
 
+There is exactly one exception, and it is the Module Overview. Its cards are destinations rather
+than rows of a list, and the louder statement is the one the page is for. Nothing else in the
+product may claim it: if a new surface wants gaps, it wants to be a clipped container.
+
 ## Components
 
 ### Buttons
@@ -656,6 +671,24 @@ what is this, and is it on.
   matching ink, because the recoloured track may never be the only carrier of that state.
 - **Position:** above the tabs, because it governs the whole module rather than one face of it. A
   gap card follows it directly with the sentence and the Discord path.
+
+### Module Overview
+
+The landing page of a module that is too big for one form. It is a menu of that module's areas, and
+the only place in the product where a list is drawn as separated cards rather than a clipped
+container — see the exception recorded under The Clipped Container Rule.
+
+- **Card:** Card Slate on a Hairline at 12px radius, 16px/20px padding, stacked 12px apart. Hover
+  takes it one tonal step to Raised Slate and the border to Lifted Hairline. No shadow, no lift.
+- **Contents:** the 40px icon tile left; Title (15px/600 Paper) over the area's blurb in Caption
+  (Quiet Slate, capped at 62ch); the area's count in mono at the right, then a `caret-right` in
+  Quiet Slate that goes Muted Paper on hover. An area with nothing to count shows no count at all;
+  one that counts nothing yet says "None yet" in the sans face, because that is a sentence.
+- **Target:** the link is stretched under the whole card with an inset `::after`, so the count and
+  the chevron are inside the hit rather than dead space beside it. The focus ring goes on the card
+  for the same reason.
+- **Below 620px** the card reflows to a two-row grid — icon, text and chevron on the first row, the
+  count under the text on the second.
 
 ### Section Card
 
@@ -816,7 +849,12 @@ The system's signature control and the one place the brand gradient touches a fu
   radius, Muted Paper, with a 17px leading icon in Quiet Slate and an optional mono badge (`5/8`)
   on the right.
 - **Nav states:** hover fills to Card Slate; `aria-current="page"` fills to Raised Slate, sets the
-  label to Paper/500, and draws a 3px×18px gradient sliver on the left edge.
+  label to Paper/500, and draws a 3px×18px gradient sliver on the left edge. A module row also
+  carries `[data-state]`: Signal Blue on its icon when the module is running, and a 6px dot after
+  the label in Coral or Amber when it is on but cannot.
+- **The sidebar is one level deep.** A module row never expands. Opening a module that has areas
+  lands on its Module Overview, and the areas are chosen there — an open module rendering a second
+  list of links inside the sidebar is a second navigation competing with the page it opened.
 - **Tabs:** a hairline-underlined row with 20px gaps, Quiet Slate at rest, Paper when current, with a
   2px gradient underline sitting on the hairline (`bottom: -1px`). Tabs scroll horizontally without a
   scrollbar on small screens.
@@ -871,6 +909,34 @@ The one element in the system that carries a heavy coloured left border: a 4px s
 well at 4px radius, defaulting to Committed Blue and overridden per-embed from the embed's real
 Discord colour. It is domain truth — a faithful reproduction of Discord's own embed accent bar,
 inside a preview of a Discord embed — and it is fenced there. See the Don'ts.
+
+### Server Picker
+
+The signed-in landing page, and the one screen in the product where a server is the subject rather
+than the context. Built to the owner's reference (2026-08-25), which overrides the resting-card and
+brand-gradient rules below — for this page only.
+
+- **Page:** centred, 780px, no breadcrumb-and-`h1` page head. A 28px/600 title over a 15px Muted
+  Paper subtitle, both centred, then the grid.
+- **Grid:** `repeat(auto-fill, minmax(210px, 1fr))` at 16px gaps — three across at full width, two
+  on a tablet, two on a phone at 146px.
+- **Card:** 12px radius on a Hairline, clipped. A 176px picture over a 54px bar. Hover lifts the
+  border to Lifted Hairline; nothing else moves.
+- **The wash.** The server's own icon, `object-fit: cover` at `scale(1.8)` under the whole card,
+  `blur(36px) saturate(1.6)` at 42–50% — so each card takes its colour from the server it stands
+  for. It is scaled well past the frame on purpose: a blur that runs off its source fades to
+  transparent and rings the card in a dark halo. A server with no icon gets the mark's gradient at
+  `blur(44px)`, 30%, which is the only place in the product the gradient is not a sliver.
+- **Crest:** the same icon again, crisp, 72px, `--r-full`, over the wash. Initials on Raised Slate
+  when there is none. Requested from Discord at `?size=256`, not the rail's 64.
+- **Bar:** `rgba(11, 13, 18, 0.72)` laid over the wash rather than beside it, so the tint carries
+  the whole card and the name still reads. Name left in Body/600, one line, ellipsised; a 30px
+  button right — **Manage** in Committed Blue when Proton is in the server, **Invite** in the quiet
+  fill when it is not.
+- **Absent:** the wash goes to `saturate(0.15)` at 20% and the crest to 60%. The bar never dims —
+  the button's own word is what carries the state, and it names the server in its `aria-label`.
+- **Target:** the button's `::after` is stretched over the whole card, so the 176px picture is part
+  of the same decision. The focus ring goes on the card.
 
 ### Empty State
 
@@ -943,7 +1009,8 @@ later has made the reader hold the pairing in their head, which is the table's j
 
 ### Don't:
 
-- **Don't** put the brand gradient on a surface, a button, a card, an icon or text. It is a
+- **Don't** put the brand gradient on a surface, a button, a card, an icon or text — outside the
+  Server Picker's iconless wash, which the owner's reference calls for. It is a
   2–6px sliver marking live state, and it already has its six jobs.
 - **Don't** disable a switch to say "cannot run" — recolour the track and name the reason in text.
 - **Don't** build a role or channel chooser out of a native `<select>`, and don't grow a list by
@@ -953,12 +1020,15 @@ later has made the reader hold the pairing in their head, which is the table's j
 - **Don't** use uppercase micro-caps on a form field label, a page heading, or a button. Micro-caps
   label a set of things, nothing else.
 - **Don't** set prose, headings or button labels in Spline Sans Mono.
-- **Don't** give a resting card a shadow, a hover lift, a transform, or a glow. Hover is one tonal
+- **Don't** give a resting card a shadow, a hover lift, a transform, or a glow. The Server Picker's
+  wash is the single exception and is not a precedent: it is a server's own icon carrying that
+  server's colour, not decoration, and it exists on one page. Hover is one tonal
   step.
 - **Don't** add a thick or coloured left border to anything other than `.embed-preview`. That stripe
   is Discord's own embed accent bar reproduced inside a preview of a Discord embed; used anywhere
   else it is a decorative side-tab.
-- **Don't** introduce a fifth surface step, a second hairline value, or a third shadow.
+- **Don't** introduce a fifth surface step, a second hairline value, or a third shadow. The Server
+  Picker's bar is a translucent Well Black over the wash, not a new step in the scale.
 - **Don't** use Discord blurple anywhere but the sign-in button, and don't reproduce Discord's,
   MEE6's, Sapphire's or Wick's layouts or assets.
 - **Don't** let colour be the only carrier of a state — every semantic colour in this system appears

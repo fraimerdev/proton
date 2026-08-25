@@ -66,7 +66,7 @@ const MODULE_BLURBS: Record<string, string> = {
   tags: 'Saved snippets anybody can post with /tag.',
   tempvc: 'Creator channels that give each member their own voice channel, with a panel to run it.',
   tickets:
-    'Private support channels members open from a panel, and the staff commands that close them.',
+    'Private support channels members open from a panel. Each kind of ticket carries its own staff, intake form, timers and transcript.',
   verification: 'A gate new members pass before the rest of the server opens up.',
   welcome:
     'What Proton posts when somebody joins or leaves, and the card it draws on the greeting.',
@@ -107,6 +107,7 @@ export const BROWSE_VIEWS: readonly BrowseView[] = [
   { moduleId: 'cases', viewId: 'cases', title: 'Cases', icon: 'scales' },
   { moduleId: 'leveling', viewId: 'leaderboard', title: 'Leaderboard', icon: 'ranking' },
   { moduleId: 'tags', viewId: 'tags', title: 'Tags', icon: 'tag' },
+  { moduleId: 'tickets', viewId: 'tickets', title: 'Tickets', icon: 'ticket' },
 ];
 
 // The manifests name their icons in Lucide's vocabulary; the design system draws Phosphor. Mapped
@@ -187,7 +188,9 @@ const WHERE_TO_FIX: Record<string, string> = {
   missing_intent: 'Discord Developer Portal → Proton → Bot → Privileged Gateway Intents',
   missing_permission: 'Server Settings → Roles → Proton',
   missing_dependency: 'Proton’s own deployment — no server setting changes this',
-  insufficient_entitlement: 'Billing → this server’s plan',
+  // Not "Billing →": there is no billing surface in the product, and PRODUCT.md forbids
+  // inventing one. The plan is shown on the server home, which is somewhere that exists.
+  insufficient_entitlement: 'Modules → This server → Plan, for the tier this server is on',
 };
 
 export function whereToFix(code: string | undefined): string | null {

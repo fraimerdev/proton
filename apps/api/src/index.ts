@@ -14,6 +14,7 @@ import { GuildService } from './guilds/service.ts';
 import { LeaderboardService } from './leveling/service.ts';
 import { ModuleConfigService } from './modules/service.ts';
 import { TagSearchService } from './tags/service.ts';
+import { TicketSearchService } from './tickets/service.ts';
 import { VerificationService } from './verification/service.ts';
 
 const env = loadEnv();
@@ -55,6 +56,7 @@ const app = createApiApp({
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),
   tags: new TagSearchService(handle),
+  tickets: new TicketSearchService(handle),
   registry,
   // Intents are reported truthfully; permissions are not. A module's Discord permissions are
   // per-guild and live in the worker's guild-state cache, which this process cannot reach, so
@@ -65,8 +67,8 @@ const app = createApiApp({
   sharedSecret: env.API_SHARED_SECRET,
 });
 
-const server = Bun.serve({ port: env.PORT, fetch: app.fetch });
-console.log(`api listening on :${server.port}`);
+const server = Bun.serve({ port: env.PORT, hostname: env.HOST, fetch: app.fetch });
+console.log(`api listening on ${server.hostname}:${server.port}`);
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {

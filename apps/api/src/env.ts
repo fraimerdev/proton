@@ -5,6 +5,9 @@ import { z } from 'zod';
 export const envSchema = z.object({
   DATABASE_URL: z.url(),
   PORT: z.coerce.number().int().min(1).max(65535).default(3002),
+  // Loopback by default: nothing outside this host may reach the api directly, since holding
+  // API_SHARED_SECRET is the only thing standing between a caller and every guild's config.
+  HOST: z.string().min(1).default('127.0.0.1'),
 
   API_SHARED_SECRET: z.string().min(16),
 

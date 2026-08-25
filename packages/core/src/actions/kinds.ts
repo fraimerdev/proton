@@ -4,6 +4,7 @@ import {
   createThreadPayloadSchema,
   editChannelPayloadSchema,
   sendPayloadSchema,
+  setChannelOverwritePayloadSchema,
   THREAD_TYPE_PUBLIC,
 } from './payloads.ts';
 
@@ -30,6 +31,8 @@ export const ACTION_KINDS = [
   'create_role',
   'delete_channel',
   'edit_channel',
+  'set_channel_overwrite',
+  'delete_channel_overwrite',
   'create_thread',
   'move_member',
   'end_poll',
@@ -82,6 +85,11 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
   delete_channel: Permissions.ManageChannels,
   edit_channel: Permissions.ManageChannels,
 
+  // Not ManageChannels: Discord gates the per-overwrite endpoints on Manage Roles alone, so
+  // demanding the heavier bit would refuse a support team that can only manage permissions.
+  set_channel_overwrite: Permissions.ManageRoles,
+  delete_channel_overwrite: Permissions.ManageRoles,
+
   create_thread: Permissions.ViewChannel,
 
   move_member: Permissions.MoveMembers | Permissions.Connect,
@@ -127,6 +135,8 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   create_role: false,
   delete_channel: false,
   edit_channel: false,
+  set_channel_overwrite: false,
+  delete_channel_overwrite: false,
   create_thread: false,
 
   move_member: true,
@@ -172,6 +182,8 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
   create_role: false,
   delete_channel: true,
   edit_channel: true,
+  set_channel_overwrite: true,
+  delete_channel_overwrite: true,
   create_thread: true,
 
   // The destination, not the channel the command was typed in — Discord refuses the move unless
@@ -236,6 +248,13 @@ export const PAYLOAD_PERMISSIONS: Partial<Record<ActionKind, (payload: unknown) 
     if (!parsed.success || parsed.data.permissionOverwrites === undefined) return 0n;
 
     return Permissions.ManageRoles | grantedBits(parsed.data.permissionOverwrites);
+  },
+
+  set_channel_overwrite: (payload) => {
+    const parsed = setChannelOverwritePayloadSchema.safeParse(payload);
+    if (!parsed.success) return 0n;
+
+    return grantedBits([parsed.data]);
   },
 
   create_thread: (payload) => {

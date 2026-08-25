@@ -1,4 +1,4 @@
-import type { EntitlementTier, ModuleSummary } from '@proton/core';
+import type { ModuleSummary } from '@proton/core';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
@@ -18,26 +18,19 @@ import {
   shortReason,
 } from '../../../components/shell/module-meta.ts';
 import { useToggleModule } from '../../../components/shell/module-toggle.tsx';
+import { documentTitle } from '../../../lib/document-title.ts';
+import { tierLabel } from '../../../lib/limits.ts';
 import { guildQuery, modulesQuery, sessionQuery } from '../../../lib/queries.ts';
 
 export const Route = createFileRoute('/dashboard/$guildId/')({
   loader: ({ context, params }) =>
-    context.queryClient.fetchQuery(guildQuery(params.guildId)).then(() => undefined),
+    context.queryClient
+      .fetchQuery(guildQuery(params.guildId))
+      .then((overview) => ({ title: documentTitle('Modules', overview.name) })),
+  head: ({ loaderData }) => ({ meta: [{ title: loaderData?.title ?? documentTitle('Modules') }] }),
   component: GeneralSettings,
   errorComponent: GeneralSettingsError,
 });
-
-// Keyed on EntitlementTier, so a tier added to the core list fails typecheck here rather than
-// leaking its raw id into the chip the degraded gap card sends people to read.
-const TIER_LABELS: Record<EntitlementTier, string> = {
-  free: 'Free',
-  plus: 'Plus',
-  pro: 'Pro',
-};
-
-function tierLabel(tier: EntitlementTier): string {
-  return TIER_LABELS[tier];
-}
 
 function formatDay(iso: string): string {
   return iso.slice(0, 10);
@@ -48,7 +41,7 @@ function ModuleRow({ guildId, module }: { guildId: string; module: ModuleSummary
   const state = moduleState(module);
 
   return (
-    <div className={`module-row${module.enabled ? ' module-row-on' : ''}`} data-state={state}>
+    <li className={`module-row${module.enabled ? ' module-row-on' : ''}`} data-state={state}>
       <i>
         <Icon
           name={moduleIcon(module.dashboard?.icon)}
@@ -62,7 +55,11 @@ function ModuleRow({ guildId, module }: { guildId: string; module: ModuleSummary
         className="module-open"
       >
         <span className="module-name">{module.name}</span>
-        <span className="module-desc module-desc-prose">
+        {/* The row holds one line and ellipsises, so a blurb written past it had no second home. */}
+        <span
+          className="module-desc module-desc-prose"
+          title={moduleBlurb(module.id, module.category)}
+        >
           {moduleBlurb(module.id, module.category)}
         </span>
       </Link>
@@ -78,10 +75,12 @@ function ModuleRow({ guildId, module }: { guildId: string; module: ModuleSummary
         role="switch"
         checked={module.enabled}
         aria-checked={module.enabled}
-        aria-label={`${module.enabled ? 'Switch off' : 'Switch on'} ${module.name}`}
+        // The module names the switch; role="switch" is what says on or off. Naming it "Switch off
+        // Automod" renamed the control every time it was used, and said the state twice.
+        aria-label={module.name}
         onChange={(event) => toggle(module, event.target.checked)}
       />
-    </div>
+    </li>
   );
 }
 
@@ -110,11 +109,11 @@ function GeneralSettings(): ReactElement {
         return (
           <section className="module-group" key={category}>
             <h2 className="module-group-title">{CATEGORY_LABELS[category]}</h2>
-            <div className="module-list">
+            <ul className="module-list">
               {owned.map((module) => (
                 <ModuleRow key={module.id} guildId={guildId} module={module} />
               ))}
-            </div>
+            </ul>
           </section>
         );
       })}
@@ -156,8 +155,7 @@ function GeneralSettings(): ReactElement {
           <span className="fact-row-label">
             Language
             <span className="field-description">
-              Discord reports this server as {overview.locale}. Proton replies in English only, so
-              this is not a setting yet.
+              Proton replies in English only, so this is not a setting yet.
             </span>
           </span>
           <span className="fact-row-value mono">{overview.locale}</span>
@@ -207,8 +205,8 @@ function GeneralSettingsError({ error }: { error: Error }): ReactElement {
           </p>
           <span className="where">
             <Icon name="arrow-elbow-down-right" />
-            Proton writes this record when it joins a server. If it is missing, the bot may have
-            been removed and re-added while its gateway was down.
+            Proton writes this record when it joins a server, and reads it on every page here. If it
+            cannot be read, the modules below cannot be configured until it can.
           </span>
         </div>
       </div>

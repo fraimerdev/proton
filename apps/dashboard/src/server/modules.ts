@@ -1,5 +1,6 @@
 import { caseQuerySchema, leaderboardQuerySchema } from '@proton/core';
 import { tagQuerySchema } from '@proton/module-tags/query';
+import { ticketQuerySchema } from '@proton/module-tickets/query';
 import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
@@ -8,6 +9,7 @@ import { fetchGuildChannels, fetchGuildRoles, fetchUserGuilds } from '../lib/dis
 import { getDiscordAccessToken } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { administrableGuilds, type DiscordUserGuild, withPresence } from '../lib/guild-access.ts';
+import type { BotInvite } from '../lib/invite.ts';
 import {
   requireGuildAccess,
   requireManageGuild,
@@ -35,6 +37,18 @@ async function presentIds(guilds: readonly DiscordUserGuild[]): Promise<Set<stri
   }
 }
 
+// null rather than a guess: the permission set is unioned over the modules the api has loaded, and
+// an invite built from a stale or invented one asks Discord for the wrong scopes. The picker drops
+// the Add button and says Proton is not there, which is true either way.
+async function botInvite(): Promise<BotInvite | null> {
+  try {
+    return { clientId: env.DISCORD_CLIENT_ID, permissions: await api.invitePermissions() };
+  } catch (error) {
+    console.warn('the api could not say what an invite needs, so none is offered:', error);
+    return null;
+  }
+}
+
 export const listGuilds = createServerFn({ method: 'GET' })
   .middleware([requireSession])
   .handler(async ({ context }) => {
@@ -42,8 +56,11 @@ export const listGuilds = createServerFn({ method: 'GET' })
     const user = context.session.user;
     const guilds = administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token));
 
+    const [present, invite] = await Promise.all([presentIds(guilds), botInvite()]);
+
     return {
-      guilds: withPresence(guilds, await presentIds(guilds)),
+      guilds: withPresence(guilds, present),
+      invite,
       user: { id: user.id, name: user.name, image: user.image ?? null },
     };
   });
@@ -100,6 +117,14 @@ export const searchTags = createServerFn({ method: 'GET' })
   .handler(({ data }) => {
     const { guildId, ...query } = data;
     return api.searchTags(guildId, query);
+  });
+
+export const searchTickets = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(ticketQuerySchema.extend({ guildId: z.string().min(1) }))
+  .handler(({ data }) => {
+    const { guildId, ...query } = data;
+    return api.searchTickets(guildId, query);
   });
 
 export const updateModuleConfig = createServerFn({ method: 'POST' })

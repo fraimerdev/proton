@@ -22,8 +22,11 @@ export const ENTRY_BUTTON_STYLES = [
 ] as const;
 
 export const ENTER_ACTION = 'enter';
+export const LEAVE_ACTION = 'leave';
 export const CLAIM_ACTION = 'claim';
 export const COUNT_ACTION = 'count';
+export const REQUIREMENTS_ACTION = 'requirements';
+export const MULTIPLIERS_ACTION = 'multipliers';
 
 export const V2_FLAGS = MESSAGE_FLAG_IS_COMPONENTS_V2;
 
@@ -35,6 +38,8 @@ export type ComponentsResult =
 
 export interface GiveawayView {
   id: string;
+  shortCode: string | null;
+  status: string;
   title: string;
   description: string | null;
   bannerUrl: string | null;
@@ -43,6 +48,7 @@ export interface GiveawayView {
   buttonStyle: number;
   hostId: string;
   winnerCount: number;
+  startsAt: Date | null;
   endsAt: Date;
   requirementLogic: 'any' | 'all';
 }
@@ -50,6 +56,8 @@ export interface GiveawayView {
 export function viewOf(giveaway: Giveaway): GiveawayView {
   return {
     id: giveaway.id,
+    shortCode: giveaway.shortCode,
+    status: giveaway.status,
     title: giveaway.title,
     description: giveaway.description,
     bannerUrl: giveaway.bannerUrl,
@@ -58,20 +66,21 @@ export function viewOf(giveaway: Giveaway): GiveawayView {
     buttonStyle: giveaway.buttonStyle,
     hostId: giveaway.hostId,
     winnerCount: giveaway.winnerCount,
+    startsAt: giveaway.startsAt,
     endsAt: giveaway.endsAt,
     requirementLogic: giveaway.requirementLogic,
   };
 }
 
-function text(content: string): MessageComponent {
+export function text(content: string): MessageComponent {
   return { type: COMPONENT_TEXT_DISPLAY, content };
 }
 
-function separator(): MessageComponent {
+export function separator(): MessageComponent {
   return { type: COMPONENT_SEPARATOR, divider: true, spacing: 1 };
 }
 
-function timestamp(at: Date): string {
+export function timestamp(at: Date): string {
   return `<t:${Math.floor(at.getTime() / 1000)}:R>`;
 }
 
@@ -83,93 +92,16 @@ export function messageLink(guildId: string, channelId: string, messageId: strin
   return `https://discord.com/channels/${guildId}/${channelId}/${messageId}`;
 }
 
-export interface RenderInput {
-  view: GiveawayView;
-  entrantCount: number;
-  requirements: readonly string[];
-  multipliers: readonly string[];
-  accentColor: number;
-}
-
-export interface EndedInput extends RenderInput {
-  winnerIds: readonly string[];
-  cancelled?: boolean;
-}
-
-function heading(view: GiveawayView): string {
-  return `# ${view.emoji ?? '\u{1F389}'} ${view.title}`;
-}
-
-function facts(view: GiveawayView, ended: boolean): string {
-  const winners = plural(view.winnerCount, 'winner');
-
-  return ended
-    ? `**${winners}** · hosted by <@${view.hostId}>`
-    : `Ends ${timestamp(view.endsAt)} · **${winners}** · hosted by <@${view.hostId}>`;
-}
-
-function requirementBlock(view: GiveawayView, lines: readonly string[]): MessageComponent | null {
-  if (lines.length === 0) return null;
-
-  const note =
-    lines.length > 1
-      ? view.requirementLogic === 'any'
-        ? ' — you need **any one** of these'
-        : ' — you need **all** of these'
-      : '';
-
-  return text(`**Requirements**${note}\n${lines.map((line) => `• ${line}`).join('\n')}`);
-}
-
-function multiplierBlock(lines: readonly string[]): MessageComponent | null {
-  if (lines.length === 0) return null;
-
-  return text(`**Bonus entries**\n${lines.map((line) => `• ${line}`).join('\n')}`);
-}
-
-function banner(view: GiveawayView): MessageComponent | null {
+export function banner(view: GiveawayView): MessageComponent | null {
   if (!view.bannerUrl) return null;
 
   return { type: COMPONENT_MEDIA_GALLERY, items: [{ media: { url: view.bannerUrl } }] };
 }
 
-function entryStyle(view: GiveawayView): number {
+export function entryStyle(view: GiveawayView): number {
   return (ENTRY_BUTTON_STYLES as readonly number[]).includes(view.buttonStyle)
     ? view.buttonStyle
     : BUTTON_PRIMARY;
-}
-
-export function buildEntryRow(view: GiveawayView, entrantCount: number): ComponentsResult {
-  const enterId = encodeCustomId(MODULE_ID, ENTER_ACTION, view.id);
-  if (!enterId.ok) return { ok: false, humanReason: enterId.humanReason };
-
-  const countId = encodeCustomId(MODULE_ID, COUNT_ACTION, view.id);
-  if (!countId.ok) return { ok: false, humanReason: countId.humanReason };
-
-  return {
-    ok: true,
-    components: [
-      {
-        type: COMPONENT_ACTION_ROW,
-        components: [
-          {
-            type: COMPONENT_BUTTON,
-            style: entryStyle(view),
-            label: 'Enter giveaway',
-            emoji: { name: '\u{1F389}' },
-            custom_id: enterId.customId,
-          },
-          {
-            type: COMPONENT_BUTTON,
-            style: BUTTON_SECONDARY,
-            label: `${entrantCount} ${entrantCount === 1 ? 'entrant' : 'entrants'}`,
-            custom_id: countId.customId,
-            disabled: true,
-          },
-        ],
-      },
-    ],
-  };
 }
 
 export function claimRow(giveawayId: string, drawNumber: number): ComponentsResult {
@@ -195,105 +127,32 @@ export function claimRow(giveawayId: string, drawNumber: number): ComponentsResu
   };
 }
 
-// The whole message is components: under IS_COMPONENTS_V2 Discord refuses content, embeds,
-// sticker_ids and poll outright, so there is no text half to fall back on.
-export function runningMessage(input: RenderInput): ComponentsResult {
-  const row = buildEntryRow(input.view, input.entrantCount);
-  if (!row.ok) return row;
-
-  const body: MessageComponent[] = [text(heading(input.view))];
-
-  if (input.view.description) body.push(text(input.view.description));
-
-  const media = banner(input.view);
-  if (media) body.push(media);
-
-  body.push(separator(), text(facts(input.view, false)));
-
-  const requirements = requirementBlock(input.view, input.requirements);
-  if (requirements) body.push(requirements);
-
-  const multipliers = multiplierBlock(input.multipliers);
-  if (multipliers) body.push(multipliers);
-
-  body.push(separator(), ...row.components);
-
-  return {
-    ok: true,
-    components: [
-      {
-        type: COMPONENT_CONTAINER,
-        accent_color: input.view.color ?? input.accentColor,
-        components: body,
-      },
-    ],
-  };
-}
-
-export function endedMessage(input: EndedInput): ComponentsResult {
-  const body: MessageComponent[] = [text(heading(input.view))];
-
-  if (input.view.description) body.push(text(input.view.description));
-
-  const media = banner(input.view);
-  if (media) body.push(media);
-
-  body.push(separator());
-
-  if (input.cancelled) {
-    body.push(text('**This giveaway was cancelled.** Nobody was drawn.'));
-  } else if (input.winnerIds.length === 0) {
-    body.push(
-      text(
-        '**Nobody won.** Either nobody entered, or everybody who did stopped meeting the ' +
-          'requirements before it was drawn.',
-      ),
-    );
-  } else {
-    const label = input.winnerIds.length === 1 ? 'Winner' : 'Winners';
-    body.push(text(`**${label}:** ${mentionAll(input.winnerIds)}`));
-  }
-
-  body.push(text(`${plural(input.entrantCount, 'entrant')} · hosted by <@${input.view.hostId}>`));
-
-  return {
-    ok: true,
-    components: [
-      {
-        type: COMPONENT_CONTAINER,
-        accent_color: input.view.color ?? input.accentColor,
-        components: body,
-      },
-    ],
-  };
-}
-
-export function countedRow(view: GiveawayView, entrantCount: number): ComponentsResult {
-  return buildEntryRow(view, entrantCount);
-}
-
+// `prize` is the prize list where one is configured, so a multi-prize giveaway announces what was
+// actually on offer rather than only the title.
 export function announcement(
   view: GiveawayView,
   winnerIds: readonly string[],
   link: string,
+  prize: string = view.title,
 ): string {
   if (winnerIds.length === 0) {
-    return `Nobody qualified for **${view.title}**, so it went undrawn. ${link}`;
+    return `Nobody qualified for **${prize}**, so it went undrawn. ${link}`;
   }
 
-  return `${mentionAll(winnerIds)} — you won **${view.title}**! ` + `Congratulations. ${link}`;
+  return `${mentionAll(winnerIds)} — you won **${prize}**! Congratulations. ${link}`;
 }
 
 export function rerollAnnouncement(
   view: GiveawayView,
   winnerIds: readonly string[],
   link: string,
+  prize: string = view.title,
 ): string {
   if (winnerIds.length === 0) {
-    return `There was nobody left to reroll for **${view.title}**. ${link}`;
+    return `There was nobody left to reroll for **${prize}**. ${link}`;
   }
 
-  return `${mentionAll(winnerIds)} — you won the reroll for **${view.title}**! ${link}`;
+  return `${mentionAll(winnerIds)} — you won the reroll for **${prize}**! ${link}`;
 }
 
 export interface ListEntry {

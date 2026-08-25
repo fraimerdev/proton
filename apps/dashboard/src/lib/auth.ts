@@ -19,6 +19,12 @@ export const auth = betterAuth({
   account: {
     accountLinking: { enabled: false },
   },
+
+  // Better Auth's default is `${baseURL}/error`, which is not a route here — so declining the
+  // Discord consent screen landed on a not-found instead of back at the door that sent you.
+  onAPIError: {
+    errorURL: '/',
+  },
 });
 
 export type Auth = typeof auth;

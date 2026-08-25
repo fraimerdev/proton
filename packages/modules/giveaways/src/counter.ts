@@ -1,15 +1,22 @@
 import type { Redis } from 'ioredis';
 import { COUNT_FLUSH_INTERVAL_MS } from './config.ts';
 
-export const DIRTY_SET_KEY = 'proton:giveaways:dirty';
+export const DIRTY_SET_PREFIX = 'proton:giveaways:dirty';
 export const FLUSH_LEASE_PREFIX = 'proton:giveaways:flush';
+
+// Per guild, not one global set: the flush job runs from a per-guild ModuleContext, so a shared
+// set hands guild A's tick a giveaway belonging to guild B — and it would then be edited with the
+// wrong guild's channel and accent colour.
+export function dirtySetKey(guildId: string, prefix: string = DIRTY_SET_PREFIX): string {
+  return `${prefix}:${guildId}`;
+}
 
 export interface DirtyCounts {
   /** Marks a giveaway's live count as stale. Called once per join, never per edit. */
-  mark(giveawayId: string): Promise<void>;
+  mark(guildId: string, giveawayId: string): Promise<void>;
 
-  /** Every giveaway currently stale, without clearing them. */
-  pending(limit: number): Promise<string[]>;
+  /** Every giveaway currently stale in this guild, without clearing them. */
+  pending(guildId: string, limit: number): Promise<string[]>;
 
   /**
    * Wins the right to edit this message for one window. Returns false when another worker
@@ -18,26 +25,26 @@ export interface DirtyCounts {
    */
   lease(giveawayId: string, ttlMs: number): Promise<boolean>;
 
-  clear(giveawayId: string): Promise<void>;
+  clear(guildId: string, giveawayId: string): Promise<void>;
 }
 
 export class RedisDirtyCounts implements DirtyCounts {
   readonly #redis: Redis;
-  readonly #setKey: string;
+  readonly #prefix: string;
   readonly #leasePrefix: string;
 
-  constructor(redis: Redis, options: { setKey?: string; leasePrefix?: string } = {}) {
+  constructor(redis: Redis, options: { prefix?: string; leasePrefix?: string } = {}) {
     this.#redis = redis;
-    this.#setKey = options.setKey ?? DIRTY_SET_KEY;
+    this.#prefix = options.prefix ?? DIRTY_SET_PREFIX;
     this.#leasePrefix = options.leasePrefix ?? FLUSH_LEASE_PREFIX;
   }
 
-  async mark(giveawayId: string): Promise<void> {
-    await this.#redis.sadd(this.#setKey, giveawayId);
+  async mark(guildId: string, giveawayId: string): Promise<void> {
+    await this.#redis.sadd(dirtySetKey(guildId, this.#prefix), giveawayId);
   }
 
-  async pending(limit: number): Promise<string[]> {
-    const members = await this.#redis.srandmember(this.#setKey, limit);
+  async pending(guildId: string, limit: number): Promise<string[]> {
+    const members = await this.#redis.srandmember(dirtySetKey(guildId, this.#prefix), limit);
     return Array.isArray(members) ? members : members === null ? [] : [members];
   }
 
@@ -53,13 +60,13 @@ export class RedisDirtyCounts implements DirtyCounts {
     return won === 'OK';
   }
 
-  async clear(giveawayId: string): Promise<void> {
-    await this.#redis.srem(this.#setKey, giveawayId);
+  async clear(guildId: string, giveawayId: string): Promise<void> {
+    await this.#redis.srem(dirtySetKey(guildId, this.#prefix), giveawayId);
   }
 }
 
 export class MemoryDirtyCounts implements DirtyCounts {
-  readonly #dirty = new Set<string>();
+  readonly #dirty = new Map<string, Set<string>>();
   readonly #leases = new Map<string, number>();
   readonly #now: () => number;
 
@@ -67,12 +74,14 @@ export class MemoryDirtyCounts implements DirtyCounts {
     this.#now = now;
   }
 
-  async mark(giveawayId: string): Promise<void> {
-    this.#dirty.add(giveawayId);
+  async mark(guildId: string, giveawayId: string): Promise<void> {
+    const set = this.#dirty.get(guildId) ?? new Set<string>();
+    set.add(giveawayId);
+    this.#dirty.set(guildId, set);
   }
 
-  async pending(limit: number): Promise<string[]> {
-    return [...this.#dirty].slice(0, limit);
+  async pending(guildId: string, limit: number): Promise<string[]> {
+    return [...(this.#dirty.get(guildId) ?? [])].slice(0, limit);
   }
 
   async lease(giveawayId: string, ttlMs: number): Promise<boolean> {
@@ -85,8 +94,8 @@ export class MemoryDirtyCounts implements DirtyCounts {
     return true;
   }
 
-  async clear(giveawayId: string): Promise<void> {
-    this.#dirty.delete(giveawayId);
+  async clear(guildId: string, giveawayId: string): Promise<void> {
+    this.#dirty.get(guildId)?.delete(giveawayId);
   }
 }
 
@@ -98,6 +107,7 @@ export interface FlushOutcome {
 
 export interface FlushDeps {
   dirty: DirtyCounts;
+  guildId: string;
 
   /** Returns true when the message was actually edited. */
   edit(giveawayId: string): Promise<boolean>;
@@ -116,7 +126,7 @@ export interface FlushDeps {
  */
 export async function flushCounts(deps: FlushDeps): Promise<FlushOutcome> {
   const interval = deps.intervalMs ?? COUNT_FLUSH_INTERVAL_MS;
-  const ids = await deps.dirty.pending(deps.batchSize ?? 100);
+  const ids = await deps.dirty.pending(deps.guildId, deps.batchSize ?? 100);
 
   let edited = 0;
   let skipped = 0;
@@ -129,7 +139,7 @@ export async function flushCounts(deps: FlushDeps): Promise<FlushOutcome> {
 
     // Cleared before the edit, not after: a join that lands during the edit has to leave the
     // giveaway dirty again, or its entrant would never show up in the count.
-    await deps.dirty.clear(giveawayId);
+    await deps.dirty.clear(deps.guildId, giveawayId);
 
     if (await deps.edit(giveawayId)) edited += 1;
   }

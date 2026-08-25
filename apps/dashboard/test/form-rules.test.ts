@@ -3,6 +3,7 @@ import type { FieldDescriptor } from '@proton/core';
 import { zodToDescriptors } from '@proton/core';
 import { antinukeConfigSchema } from '@proton/module-antinuke/config';
 import { automodFormSchema } from '@proton/module-automod/config';
+import { z } from 'zod';
 import { paramLabel, ruleIsOff, singular, toRows, words } from '../src/components/form/rules.ts';
 
 function descriptorsOf(schema: Parameters<typeof zodToDescriptors>[0]): FieldDescriptor[] {
@@ -244,5 +245,39 @@ describe('a rule switched off hides the settings it is not reading', () => {
     if (antinuke?.kind !== 'rule') return;
 
     expect(ruleIsOff(antinuke, {})).toBe(false);
+  });
+});
+
+describe('a family whose derived name says nothing stays plain rows', () => {
+  test('members differing only by a severity word do not group', () => {
+    const rows = toRows(
+      descriptorsOf(
+        z.object({
+          mediumAction: z.enum(['off', 'delete']).default('off'),
+          mediumWindow: z.string().default('10s'),
+          highAction: z.enum(['off', 'delete']).default('off'),
+          highWindow: z.string().default('10s'),
+        }),
+      ),
+    );
+
+    expect(rows.every((row) => row.kind === 'field')).toBe(true);
+  });
+
+  test('a family with a real two-word name still groups', () => {
+    const rows = toRows(
+      descriptorsOf(
+        z.object({
+          floodSeverity: z.enum(['off', 'low']).default('off'),
+          floodCount: z.number().default(5),
+          floodWindow: z.string().default('10s'),
+          repeatSeverity: z.enum(['off', 'low']).default('off'),
+          repeatCount: z.number().default(3),
+          repeatWindow: z.string().default('30s'),
+        }),
+      ),
+    );
+
+    expect(rows.filter((row) => row.kind === 'rule').length).toBe(2);
   });
 });

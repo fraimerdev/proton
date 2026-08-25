@@ -1,23 +1,32 @@
+import { newShortCode, parseShortCode } from '../src/short-code.ts';
 import type {
   BlacklistEntry,
   BlacklistSubject,
+  BonusGrant,
   CreateGiveawayInput,
   Disqualification,
   DrawRecord,
+  DropOutcome,
   EnterOutcome,
   EntrantRow,
   Giveaway,
+  GiveawayEvent,
+  GiveawayPatch,
+  GiveawayStats,
   GiveawayStatus,
   GiveawayStore,
   ListGiveawaysQuery,
   MultiplierRow,
+  NewBonus,
   NewEntry,
+  NewGiveawayEvent,
   RecordDrawInput,
   RequirementRow,
   Reweigh,
   TemplateRecord,
   WinRecord,
 } from '../src/store.ts';
+import { GIVEAWAY_STATUSES } from '../src/store.ts';
 
 interface EntryRow extends EntrantRow {
   giveawayId: string;
@@ -27,6 +36,7 @@ interface EntryRow extends EntrantRow {
   revalidatedAt: Date | null;
   disqualifiedAt: Date | null;
   disqualifyReason: string | null;
+  leftAt: Date | null;
 }
 
 /**
@@ -42,6 +52,16 @@ export class MemoryGiveawayStore implements GiveawayStore {
   readonly entries: EntryRow[] = [];
   readonly drawRows: DrawRecord[] = [];
   readonly winRows: WinRecord[] = [];
+  readonly bonusRows: BonusGrant[] = [];
+  readonly eventRows: GiveawayEvent[] = [];
+
+  // Monotonic rather than Date.now(): several history lines written inside one millisecond must
+  // still sort in the order they happened.
+  #tick = 0;
+  #clock(): number {
+    this.#tick += 1;
+    return Date.UTC(2026, 0, 1) + this.#tick;
+  }
   readonly blacklistRows = new Map<string, BlacklistEntry[]>();
   readonly templateRows = new Map<string, TemplateRecord>();
 
@@ -68,6 +88,7 @@ export class MemoryGiveawayStore implements GiveawayStore {
       buttonStyle: input.buttonStyle ?? 1,
       winnerCount: input.winnerCount,
       requirementLogic: input.requirementLogic ?? 'all',
+      requirementTree: input.requirementTree ?? null,
       maxEntriesPerUser: input.maxEntriesPerUser ?? null,
       verifyOn: input.verifyOn ?? 'both',
       startsAt: input.startsAt ?? null,
@@ -75,11 +96,21 @@ export class MemoryGiveawayStore implements GiveawayStore {
       endedAt: null,
       status: input.status ?? 'running',
       drawingStartedAt: null,
+      shortCode: input.shortCode ?? newShortCode(),
+      entryMethod: input.entryMethod ?? 'button',
+      pausedAt: null,
+      pausedBy: null,
+      pauseReason: null,
+      pausedMs: 0,
       claimWindowSeconds: input.claimWindowSeconds ?? null,
       dmWinners: input.dmWinners ?? false,
       winMessage: input.winMessage ?? null,
+      prizes: input.prizes ?? null,
+      rewardRoleId: input.rewardRoleId ?? null,
       templateId: input.templateId ?? null,
       recurrence: input.recurrence ?? null,
+      recurrenceConfig: input.recurrenceConfig ?? null,
+      recurrenceLeft: input.recurrenceLeft ?? null,
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
@@ -116,16 +147,28 @@ export class MemoryGiveawayStore implements GiveawayStore {
   }
 
   async list(query: ListGiveawaysQuery): Promise<Giveaway[]> {
-    return [...this.giveaways.values()]
-      .filter((giveaway) => giveaway.guildId === query.guildId)
-      .filter((giveaway) =>
-        query.state === 'running'
-          ? giveaway.status === 'running'
-          : query.state === 'ended'
-            ? giveaway.status === 'ended' || giveaway.status === 'cancelled'
-            : true,
-      )
-      .slice(0, query.limit);
+    return (
+      [...this.giveaways.values()]
+        .filter((giveaway) => giveaway.guildId === query.guildId)
+        .filter((giveaway) =>
+          query.state === 'running'
+            ? giveaway.status === 'running'
+            : query.state === 'live'
+              ? ['scheduled', 'running', 'paused', 'drawing'].includes(giveaway.status)
+              : query.state === 'ended'
+                ? giveaway.status === 'ended' || giveaway.status === 'cancelled'
+                : true,
+        )
+        // The Drizzle store filters by title prefix; ignoring it here let an autocomplete test pass
+        // against a fake that returns everything regardless of what was typed.
+        .filter(
+          (giveaway) =>
+            query.prefix === undefined ||
+            giveaway.title.toLowerCase().startsWith(query.prefix.toLowerCase()),
+        )
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, query.limit)
+    );
   }
 
   async countRunning(guildId: string): Promise<number> {
@@ -137,6 +180,21 @@ export class MemoryGiveawayStore implements GiveawayStore {
   async setMessageId(giveawayId: string, messageId: string): Promise<void> {
     const giveaway = this.giveaways.get(giveawayId);
     if (giveaway) this.giveaways.set(giveawayId, { ...giveaway, messageId });
+  }
+
+  async clearMessage(guildId: string, giveawayId: string): Promise<boolean> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId || giveaway.messageId === null) return false;
+
+    this.giveaways.set(giveawayId, { ...giveaway, messageId: null, updatedAt: new Date() });
+    return true;
+  }
+
+  async byChannel(guildId: string, channelId: string): Promise<Giveaway[]> {
+    return [...this.giveaways.values()]
+      .filter((giveaway) => giveaway.guildId === guildId && giveaway.channelId === channelId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((giveaway) => ({ ...giveaway }));
   }
 
   async requirements(giveawayId: string): Promise<RequirementRow[]> {
@@ -155,6 +213,10 @@ export class MemoryGiveawayStore implements GiveawayStore {
     );
     if (existing) return 'already-entered';
 
+    // Mirrors the Drizzle store's insert-time status predicate, so a test cannot pass here and
+    // fail in Postgres.
+    if (this.giveaways.get(entry.giveawayId)?.status !== 'running') return 'closed';
+
     this.entries.push({
       giveawayId: entry.giveawayId,
       userId: entry.userId,
@@ -166,6 +228,7 @@ export class MemoryGiveawayStore implements GiveawayStore {
       revalidatedAt: null,
       disqualifiedAt: null,
       disqualifyReason: null,
+      leftAt: null,
     });
 
     return 'entered';
@@ -185,7 +248,7 @@ export class MemoryGiveawayStore implements GiveawayStore {
   async entrantCount(giveawayId: string): Promise<number> {
     this.#record('entrantCount');
     return this.entries.filter(
-      (row) => row.giveawayId === giveawayId && row.disqualifiedAt === null,
+      (row) => row.giveawayId === giveawayId && row.disqualifiedAt === null && row.leftAt === null,
     ).length;
   }
 
@@ -197,7 +260,10 @@ export class MemoryGiveawayStore implements GiveawayStore {
 
   async *entrants(giveawayId: string, chunkSize: number): AsyncIterable<EntrantRow[]> {
     const live = this.entries
-      .filter((row) => row.giveawayId === giveawayId && row.disqualifiedAt === null)
+      .filter(
+        (row) =>
+          row.giveawayId === giveawayId && row.disqualifiedAt === null && row.leftAt === null,
+      )
       .sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0));
 
     for (let index = 0; index < live.length; index += chunkSize) {
@@ -214,7 +280,10 @@ export class MemoryGiveawayStore implements GiveawayStore {
     this.#record('topEntrants');
 
     return this.entries
-      .filter((row) => row.giveawayId === giveawayId && row.disqualifiedAt === null)
+      .filter(
+        (row) =>
+          row.giveawayId === giveawayId && row.disqualifiedAt === null && row.leftAt === null,
+      )
       .sort((a, b) => b.totalEntries - a.totalEntries || (a.userId < b.userId ? -1 : 1))
       .slice(0, limit)
       .map((row) => ({
@@ -222,6 +291,50 @@ export class MemoryGiveawayStore implements GiveawayStore {
         totalEntries: row.totalEntries,
         memberSnapshot: row.memberSnapshot,
       }));
+  }
+
+  async stats(guildId: string): Promise<GiveawayStats> {
+    const mine = [...this.giveaways.values()].filter((row) => row.guildId === guildId);
+    const ids = new Set(mine.map((row) => row.id));
+
+    const byStatus = Object.fromEntries(GIVEAWAY_STATUSES.map((status) => [status, 0])) as Record<
+      GiveawayStatus,
+      number
+    >;
+    for (const row of mine) byStatus[row.status] += 1;
+
+    const live = this.entries.filter(
+      (row) => ids.has(row.giveawayId) && row.disqualifiedAt === null && row.leftAt === null,
+    );
+
+    return {
+      byStatus,
+      totalGiveaways: mine.length,
+      totalEntries: live.reduce((sum, row) => sum + row.totalEntries, 0),
+      uniqueEntrants: new Set(live.map((row) => row.userId)).size,
+      totalWinners: this.winRows.filter((row) => ids.has(row.giveawayId)).length,
+      draws: this.drawRows.filter((row) => ids.has(row.giveawayId)).length,
+    };
+  }
+
+  async appendEvent(event: NewGiveawayEvent): Promise<boolean> {
+    if (
+      event.idempotencyKey != null &&
+      this.eventRows.some((row) => row.idempotencyKey === event.idempotencyKey)
+    ) {
+      return false;
+    }
+
+    this.eventRows.push({ ...event, at: new Date(this.#clock()) });
+    return true;
+  }
+
+  async history(giveawayId: string, limit: number): Promise<GiveawayEvent[]> {
+    return this.eventRows
+      .filter((row) => row.giveawayId === giveawayId)
+      .sort((a, b) => a.at.getTime() - b.at.getTime())
+      .slice(0, limit)
+      .map((row) => ({ ...row }));
   }
 
   async disqualify(
@@ -260,13 +373,82 @@ export class MemoryGiveawayStore implements GiveawayStore {
       );
       if (!row) continue;
 
-      row.totalEntries = change.totalEntries;
+      // Mirrors the Drizzle store: the recomputed weight plus live bonus grants, never the
+      // computed figure alone, or a manual grant is erased at the draw.
+      const bonus = this.bonusRows
+        .filter(
+          (grant) =>
+            grant.giveawayId === giveawayId &&
+            grant.userId === change.userId &&
+            grant.revokedAt === null,
+        )
+        .reduce((sum, grant) => sum + grant.amount, 0);
+
+      row.totalEntries = Math.max(1, change.totalEntries + bonus);
       row.breakdown = change.breakdown;
       row.revalidatedAt = at;
       updated += 1;
     }
 
     return updated;
+  }
+
+  async grantBonus(input: NewBonus): Promise<BonusGrant> {
+    const grant: BonusGrant = {
+      ...input,
+      grantedAt: new Date(),
+      revokedAt: null,
+      revokedBy: null,
+    };
+    this.bonusRows.push(grant);
+
+    const row = this.entries.find(
+      (entry) => entry.giveawayId === input.giveawayId && entry.userId === input.userId,
+    );
+    if (row) row.totalEntries += input.amount;
+
+    return { ...grant };
+  }
+
+  async revokeBonus(giveawayId: string, userId: string, by: string, at: Date): Promise<number> {
+    let total = 0;
+
+    for (const grant of this.bonusRows) {
+      if (grant.giveawayId !== giveawayId || grant.userId !== userId) continue;
+      if (grant.revokedAt !== null) continue;
+
+      grant.revokedAt = at;
+      grant.revokedBy = by;
+      total += grant.amount;
+    }
+
+    if (total === 0) return 0;
+
+    const row = this.entries.find(
+      (entry) => entry.giveawayId === giveawayId && entry.userId === userId,
+    );
+    if (row) row.totalEntries = Math.max(1, row.totalEntries - total);
+
+    return total;
+  }
+
+  async bonusFor(giveawayId: string, userId: string): Promise<number> {
+    return this.bonusRows
+      .filter(
+        (grant) =>
+          grant.giveawayId === giveawayId && grant.userId === userId && grant.revokedAt === null,
+      )
+      .reduce((sum, grant) => sum + grant.amount, 0);
+  }
+
+  async bonusGrants(giveawayId: string, userId?: string): Promise<BonusGrant[]> {
+    return this.bonusRows
+      .filter(
+        (grant) =>
+          grant.giveawayId === giveawayId && (userId === undefined || grant.userId === userId),
+      )
+      .sort((a, b) => b.grantedAt.getTime() - a.grantedAt.getTime())
+      .map((grant) => ({ ...grant }));
   }
 
   // The conditional update, modelled exactly: only a `running` giveaway moves, and only once.
@@ -324,15 +506,17 @@ export class MemoryGiveawayStore implements GiveawayStore {
   async finishDraw(
     guildId: string,
     giveawayId: string,
-    status: GiveawayStatus,
+    from: readonly GiveawayStatus[],
+    to: GiveawayStatus,
     endedAt: Date | null,
   ): Promise<boolean> {
     const giveaway = this.giveaways.get(giveawayId);
     if (!giveaway || giveaway.guildId !== guildId) return false;
+    if (!from.includes(giveaway.status)) return false;
 
     this.giveaways.set(giveawayId, {
       ...giveaway,
-      status,
+      status: to,
       endedAt,
       drawingStartedAt: null,
       updatedAt: new Date(),
@@ -342,16 +526,19 @@ export class MemoryGiveawayStore implements GiveawayStore {
   }
 
   async stalledDraws(
+    guildId: string,
     before: Date,
     limit: number,
   ): Promise<{ giveaway: Giveaway; drawn: boolean }[]> {
     return [...this.giveaways.values()]
       .filter(
         (giveaway) =>
+          giveaway.guildId === guildId &&
           giveaway.status === 'drawing' &&
           giveaway.drawingStartedAt !== null &&
           giveaway.drawingStartedAt < before,
       )
+      .sort((a, b) => (a.drawingStartedAt?.getTime() ?? 0) - (b.drawingStartedAt?.getTime() ?? 0))
       .slice(0, limit)
       .map((giveaway) => ({
         giveaway: { ...giveaway },
@@ -377,16 +564,23 @@ export class MemoryGiveawayStore implements GiveawayStore {
     return true;
   }
 
-  async overdue(before: Date, limit: number): Promise<Giveaway[]> {
+  async overdue(guildId: string, before: Date, limit: number): Promise<Giveaway[]> {
     return [...this.giveaways.values()]
-      .filter((giveaway) => giveaway.status === 'running' && giveaway.endsAt <= before)
+      .filter(
+        (giveaway) =>
+          giveaway.guildId === guildId &&
+          giveaway.status === 'running' &&
+          giveaway.endsAt <= before,
+      )
+      .sort((a, b) => a.endsAt.getTime() - b.endsAt.getTime())
       .slice(0, limit)
       .map((giveaway) => ({ ...giveaway }));
   }
 
-  async running(limit: number): Promise<Giveaway[]> {
+  async running(guildId: string, limit: number): Promise<Giveaway[]> {
     return [...this.giveaways.values()]
-      .filter((giveaway) => giveaway.status === 'running')
+      .filter((giveaway) => giveaway.guildId === guildId && giveaway.status === 'running')
+      .sort((a, b) => a.endsAt.getTime() - b.endsAt.getTime())
       .slice(0, limit)
       .map((giveaway) => ({ ...giveaway }));
   }
@@ -413,12 +607,190 @@ export class MemoryGiveawayStore implements GiveawayStore {
         win.drawId === drawId &&
         win.userId === userId &&
         win.claimedAt === null &&
-        win.forfeitedAt === null,
+        win.forfeitedAt === null &&
+        (win.claimDeadline === null || win.claimDeadline > at),
     );
     if (!row) return false;
 
     row.claimedAt = at;
     return true;
+  }
+
+  async pause(
+    guildId: string,
+    giveawayId: string,
+    by: string,
+    reason: string | null,
+    at: Date,
+  ): Promise<Giveaway | null> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId || giveaway.status !== 'running') return null;
+
+    const paused: Giveaway = {
+      ...giveaway,
+      status: 'paused',
+      pausedAt: at,
+      pausedBy: by,
+      pauseReason: reason,
+      updatedAt: at,
+    };
+    this.giveaways.set(giveawayId, paused);
+
+    return { ...paused };
+  }
+
+  async resume(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId) return null;
+    if (giveaway.status !== 'paused' || giveaway.pausedAt === null) return null;
+
+    const held = at.getTime() - giveaway.pausedAt.getTime();
+    const resumed: Giveaway = {
+      ...giveaway,
+      status: 'running',
+      endsAt: new Date(giveaway.endsAt.getTime() + held),
+      pausedMs: giveaway.pausedMs + held,
+      pausedAt: null,
+      pausedBy: null,
+      pauseReason: null,
+      updatedAt: at,
+    };
+    this.giveaways.set(giveawayId, resumed);
+
+    return { ...resumed };
+  }
+
+  async activate(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId || giveaway.status !== 'scheduled') return null;
+
+    const live: Giveaway = { ...giveaway, status: 'running', updatedAt: at };
+    this.giveaways.set(giveawayId, live);
+
+    return { ...live };
+  }
+
+  async dueToStart(guildId: string, before: Date, limit: number): Promise<Giveaway[]> {
+    return [...this.giveaways.values()]
+      .filter(
+        (giveaway) =>
+          giveaway.guildId === guildId &&
+          giveaway.status === 'scheduled' &&
+          giveaway.startsAt !== null &&
+          giveaway.startsAt <= before,
+      )
+      .sort((a, b) => (a.startsAt?.getTime() ?? 0) - (b.startsAt?.getTime() ?? 0))
+      .slice(0, limit)
+      .map((giveaway) => ({ ...giveaway }));
+  }
+
+  async patch(
+    guildId: string,
+    giveawayId: string,
+    from: readonly GiveawayStatus[],
+    patch: GiveawayPatch,
+  ): Promise<Giveaway | null> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId) return null;
+    if (!from.includes(giveaway.status)) return null;
+
+    const fields = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined),
+    );
+    if (Object.keys(fields).length === 0) return null;
+
+    const patched: Giveaway = { ...giveaway, ...fields, updatedAt: new Date() };
+    this.giveaways.set(giveawayId, patched);
+
+    return { ...patched };
+  }
+
+  async leave(giveawayId: string, userId: string, at: Date): Promise<boolean> {
+    const row = this.entries.find(
+      (entry) =>
+        entry.giveawayId === giveawayId &&
+        entry.userId === userId &&
+        entry.leftAt === null &&
+        entry.disqualifiedAt === null,
+    );
+    if (!row) return false;
+
+    row.leftAt = at;
+    return true;
+  }
+
+  async resolve(guildId: string, reference: string): Promise<Giveaway | null> {
+    const code = parseShortCode(reference);
+
+    if (code !== null) {
+      for (const giveaway of this.giveaways.values()) {
+        if (giveaway.guildId === guildId && giveaway.shortCode === code) return { ...giveaway };
+      }
+    }
+
+    return this.get(guildId, reference);
+  }
+
+  async claimDrop(
+    guildId: string,
+    giveawayId: string,
+    userId: string,
+    at: Date,
+  ): Promise<DropOutcome> {
+    const giveaway = this.giveaways.get(giveawayId);
+    if (!giveaway || giveaway.guildId !== guildId) return { outcome: 'closed' };
+
+    // Mirrors the Drizzle conditional update: the status flip is the race, so a second presser
+    // finds it already ended.
+    if (giveaway.status !== 'running' || giveaway.entryMethod !== 'drop') {
+      return { outcome: 'taken' };
+    }
+
+    const ended: Giveaway = { ...giveaway, status: 'ended', endedAt: at, updatedAt: at };
+    this.giveaways.set(giveawayId, ended);
+
+    const drawId = `${giveawayId}:drop`;
+
+    this.drawRows.push({
+      id: drawId,
+      giveawayId,
+      drawNumber: 1,
+      seed: 'drop',
+      snapshotHash: 'drop',
+      entrantCount: 1,
+      totalEntries: 1,
+      winnerIds: [userId],
+      degradedProviders: [],
+      drawnAt: at,
+      drawnBy: userId,
+      reason: 'first eligible presser',
+    });
+
+    this.winRows.push({
+      giveawayId,
+      drawId,
+      userId,
+      claimedAt: null,
+      forfeitedAt: null,
+      rerolledAt: null,
+      claimDeadline: null,
+    });
+
+    return { outcome: 'won', giveaway: { ...ended }, drawId };
+  }
+
+  async markRerolled(drawId: string, userIds: readonly string[], at: Date): Promise<number> {
+    let marked = 0;
+
+    for (const win of this.winRows) {
+      if (win.drawId !== drawId || win.rerolledAt !== null) continue;
+      if (!userIds.includes(win.userId)) continue;
+
+      win.rerolledAt = at;
+      marked += 1;
+    }
+
+    return marked;
   }
 
   async forfeit(drawId: string, userIds: readonly string[], at: Date): Promise<number> {
@@ -439,15 +811,17 @@ export class MemoryGiveawayStore implements GiveawayStore {
     return count;
   }
 
-  async expiredClaims(before: Date, limit: number): Promise<WinRecord[]> {
+  async expiredClaims(guildId: string, before: Date, limit: number): Promise<WinRecord[]> {
     return this.winRows
       .filter(
         (row) =>
+          this.giveaways.get(row.giveawayId)?.guildId === guildId &&
           row.claimedAt === null &&
           row.forfeitedAt === null &&
           row.claimDeadline !== null &&
           row.claimDeadline < before,
       )
+      .sort((a, b) => (a.claimDeadline?.getTime() ?? 0) - (b.claimDeadline?.getTime() ?? 0))
       .slice(0, limit)
       .map((row) => ({ ...row }));
   }

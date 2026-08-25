@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./query": "./src/query.ts",
+    "./table": "./src/table.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -20,6 +22,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@proton/fixtures": "workspace:*"
+    "@proton/fixtures": "workspace:*",
+    "fast-check": "^4.9.0"
   }
 }

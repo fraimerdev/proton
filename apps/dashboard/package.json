@@ -8,7 +8,8 @@
     "dev": "vite dev --port 3000",
     "build": "vite build",
     "build:icons": "bun run scripts/build-icons.ts",
-    "start": "bun --env-file=../../.env .output/server/index.mjs",
+    "build:commands": "bun run scripts/build-commands.ts",
+    "start": "bun --env-file=../../.env serve.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@phosphor-icons/core": "2.1.1",
+    "@proton/modules": "workspace:*",
     "@tanstack/router-plugin": "1.168.31",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

@@ -1,6 +1,5 @@
 import {
   type DegradedProvider,
-  evaluateRequirement,
   evaluateWeight,
   type MemberContext,
   type MultiplierSpec,
@@ -8,6 +7,7 @@ import {
   type RequirementSpec,
 } from '@proton/core';
 import type { Redis } from 'ioredis';
+import { evaluateRulesFor, requirementTreeOf } from './rules.ts';
 import type { Giveaway, GiveawayStore, MemberSnapshot } from './store.ts';
 
 export interface EntryBucket {
@@ -59,6 +59,14 @@ export function snapshotOf(ctx: MemberContext): MemberSnapshot | null {
   };
 }
 
+export function hasAny(
+  roleIds: readonly string[] | null,
+  wanted: readonly string[] | undefined,
+): boolean {
+  if (!wanted || wanted.length === 0 || roleIds === null) return false;
+  return wanted.some((roleId) => roleIds.includes(roleId));
+}
+
 export function isBlacklisted(
   blacklist: readonly { subjectType: 'user' | 'role'; subjectId: string }[],
   userId: string,
@@ -73,7 +81,13 @@ export function isBlacklisted(
 }
 
 export type JoinOutcome =
-  | { outcome: 'entered'; totalEntries: number; breakdown: string[]; degraded: DegradedProvider[] }
+  | {
+      outcome: 'entered';
+      totalEntries: number;
+      breakdown: string[];
+      degraded: DegradedProvider[];
+      bypassed?: boolean;
+    }
   | { outcome: 'already-entered'; totalEntries: number }
   | { outcome: 'rejected'; failures: string[] }
   | { outcome: 'blacklisted' }
@@ -86,6 +100,12 @@ export interface JoinInput {
   requirements: readonly RequirementSpec[];
   multipliers: readonly MultiplierSpec[];
   blacklist: readonly { subjectType: 'user' | 'role'; subjectId: string }[];
+
+  /** Guild-wide roles from module config, on top of the per-guild blacklist table. */
+  blacklistRoleIds?: readonly string[];
+
+  /** Guild-wide roles that skip every requirement. Multipliers still apply. */
+  bypassRoleIds?: readonly string[];
 }
 
 export interface JoinDeps {
@@ -97,6 +117,7 @@ export interface JoinDeps {
 function describeBreakdown(
   base: number,
   breakdown: readonly { label: string; amount: number; mode: string }[],
+  bonus = 0,
 ): string[] {
   const lines = [`${base} base`];
 
@@ -104,6 +125,8 @@ function describeBreakdown(
     const sign = entry.mode === 'multiply' ? '×' : '+';
     lines.push(`${sign}${entry.amount} ${entry.label}`);
   }
+
+  if (bonus > 0) lines.push(`+${bonus} granted by staff`);
 
   return lines;
 }
@@ -119,19 +142,29 @@ export async function join(deps: JoinDeps, input: JoinInput): Promise<JoinOutcom
     return { outcome: 'rate-limited' };
   }
 
-  if (isBlacklisted(input.blacklist, ctx.userId, ctx.member?.roleIds ?? null)) {
-    return { outcome: 'blacklisted' };
-  }
+  const roleIds = ctx.member?.roleIds ?? null;
+
+  const blacklist = [
+    ...input.blacklist,
+    ...(input.blacklistRoleIds ?? []).map((subjectId) => ({
+      subjectType: 'role' as const,
+      subjectId,
+    })),
+  ];
+
+  if (isBlacklisted(blacklist, ctx.userId, roleIds)) return { outcome: 'blacklisted' };
 
   const existing = await deps.store.entry(giveaway.id, ctx.userId);
   if (existing) return { outcome: 'already-entered', totalEntries: existing.totalEntries };
 
-  const verdict = await evaluateRequirement(
-    deps.providers,
-    ctx,
-    input.requirements,
-    giveaway.requirementLogic,
-  );
+  // One decision in the authorization layer rather than a flag threaded through every provider:
+  // a bypass role skips requirement evaluation entirely. Multipliers still run — bypassing the
+  // rules is not the same as forfeiting the bonus entries a member has earned.
+  const bypassed = hasAny(roleIds, input.bypassRoleIds);
+
+  const verdict = bypassed
+    ? { passed: true, failures: [], degraded: [] }
+    : await evaluateRulesFor(deps.providers, ctx, requirementTreeOf(giveaway, input.requirements));
 
   if (!verdict.passed) {
     return {
@@ -144,24 +177,35 @@ export async function join(deps: JoinDeps, input: JoinInput): Promise<JoinOutcom
     maxEntriesPerUser: giveaway.maxEntriesPerUser,
   });
 
+  // A bonus can be granted before its recipient has entered — rewarding event participation up
+  // front is the normal case — so it is folded in here rather than only at the draw-time recompute.
+  const bonus = await deps.store.bonusFor(giveaway.id, ctx.userId);
+  const totalEntries = weight.total + bonus;
+
   const entered = await deps.store.enter({
     giveawayId: giveaway.id,
     userId: ctx.userId,
     baseEntries: weight.base,
-    totalEntries: weight.total,
+    totalEntries,
     breakdown: weight.breakdown,
     memberSnapshot: snapshotOf(ctx),
   });
 
   if (entered === 'already-entered') {
-    return { outcome: 'already-entered', totalEntries: weight.total };
+    return { outcome: 'already-entered', totalEntries };
   }
+
+  // The insert carries its own status predicate, so it can refuse a giveaway that stopped running
+  // between the check at the top of this function and the write. Reporting that as an entry would
+  // tell a member they are in a draw they are not in.
+  if (entered === 'closed') return { outcome: 'closed' };
 
   return {
     outcome: 'entered',
-    totalEntries: weight.total,
-    breakdown: describeBreakdown(weight.base, weight.breakdown),
+    totalEntries,
+    breakdown: describeBreakdown(weight.base, weight.breakdown, bonus),
     degraded: [...verdict.degraded, ...weight.degraded],
+    ...(bypassed ? { bypassed: true } : {}),
   };
 }
 
@@ -169,9 +213,12 @@ export function describeJoin(outcome: JoinOutcome, title: string): string {
   switch (outcome.outcome) {
     case 'entered': {
       const sum = outcome.breakdown.join(' ');
+      const bypass = outcome.bypassed ? ' Your role skipped the requirements.' : '';
+
       return outcome.totalEntries === 1
-        ? `You are in the draw for **${title}**. Good luck.`
-        : `You are in the draw for **${title}** with **${outcome.totalEntries} entries** — ${sum}.`;
+        ? `You are in the draw for **${title}**. Good luck.${bypass}`
+        : `You are in the draw for **${title}** with **${outcome.totalEntries} entries** — ` +
+            `${sum}.${bypass}`;
     }
 
     case 'already-entered':

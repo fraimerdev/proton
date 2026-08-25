@@ -72,10 +72,10 @@ function MarkdownFragment({ node, ctx }: { node: MarkdownNode; ctx: RenderContex
     case 'paragraph':
       return <p className="dc-p">{renderNodes(node.children, ctx)}</p>;
 
-    case 'heading': {
-      const Tag = `h${node.level}` as 'h1' | 'h2' | 'h3';
-      return <Tag className={`dc-h dc-h${node.level}`}>{renderNodes(node.children, ctx)}</Tag>;
-    }
+    // Not a real h1/h2/h3: this is a picture of a message, and its headings are not headings of
+    // the settings page they are previewed on. The classes carry the whole appearance.
+    case 'heading':
+      return <p className={`dc-h dc-h${node.level}`}>{renderNodes(node.children, ctx)}</p>;
 
     case 'subtext':
       return <p className="dc-subtext">{renderNodes(node.children, ctx)}</p>;

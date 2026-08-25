@@ -1,9 +1,13 @@
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { accessLabel, guildIconUrl, initialsOf } from '../../components/shell/app-shell.tsx';
+import { guildIconUrl, initialsOf } from '../../components/shell/app-shell.tsx';
 import { Icon } from '../../components/shell/icon.tsx';
+import { DEFAULT_CALLBACK } from '../../lib/callback-url.ts';
+import { documentTitle } from '../../lib/document-title.ts';
 import { isAccessError } from '../../lib/errors.ts';
+import type { SessionGuild } from '../../lib/guild-access.ts';
+import { type BotInvite, botInviteUrl } from '../../lib/invite.ts';
 import { sessionQuery } from '../../lib/queries.ts';
 
 export const Route = createFileRoute('/dashboard/')({
@@ -11,16 +15,23 @@ export const Route = createFileRoute('/dashboard/')({
     try {
       await context.queryClient.fetchQuery(sessionQuery());
     } catch (error) {
-      if (isAccessError(error)) throw redirect({ to: '/' });
+      if (isAccessError(error))
+        throw redirect({
+          href: `/api/auth/signin/discord?redirect=${encodeURIComponent(DEFAULT_CALLBACK)}`,
+          reloadDocument: true,
+        });
+
       throw error;
     }
   },
+  head: () => ({ meta: [{ title: documentTitle('Your servers') }] }),
   component: GuildPicker,
+  errorComponent: GuildPickerError,
 });
 
-function GuildPicker(): ReactElement {
-  const { guilds } = useSuspenseQuery(sessionQuery()).data;
-
+// Access errors redirect to the door, so anything reaching here is Discord or Proton failing to
+// answer. Without this the router's own default renders, which names neither.
+function GuildPickerError({ error }: { error: Error }): ReactElement {
   return (
     <div className="plain-page">
       <div className="page">
@@ -31,14 +42,116 @@ function GuildPicker(): ReactElement {
 
         <div className="page-head">
           <div className="page-heading">
-            <h1 className="page-title">Your servers</h1>
+            <h1 className="page-title">Your servers did not load</h1>
           </div>
         </div>
 
-        <p className="page-lede">
-          These are the servers you own or hold Manage Server in, the ones Proton has been invited
-          to first. It only ever acts on those.
-        </p>
+        <div className="gap-card">
+          <div className="gap-body">
+            <span className="gap-head">
+              <Icon name="warning-circle" weight="fill" className="state-blocked" />
+              <span className="gap-name">Proton could not read your server list</span>
+            </span>
+            <p className="gap-text" role="alert">
+              {error.message}
+            </p>
+            <span className="where">
+              <Icon name="arrow-elbow-down-right" />
+              This list comes from Discord. Signing out and back in usually clears it.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GuildCard({
+  guild,
+  invite,
+}: {
+  guild: SessionGuild;
+  invite: BotInvite | null;
+}): ReactElement {
+  const icon = guildIconUrl(guild, 256);
+
+  return (
+    <li className="server-card" data-present={guild.present ? undefined : 'false'}>
+      {/* The card's colour is the server's own icon, blown up and blurred under the whole of it.
+          Two <img> for one src: the browser decodes it once and the second costs only a paint, and
+          the alternative — one element blurred through ::before — cannot blur a background-image. */}
+      {icon ? (
+        <img className="server-wash" src={icon} alt="" aria-hidden="true" decoding="async" />
+      ) : (
+        <span className="server-wash server-wash-blank" aria-hidden="true" />
+      )}
+
+      <span className="server-hero">
+        <span className="server-crest">
+          {icon ? (
+            <img src={icon} alt="" width={72} height={72} decoding="async" />
+          ) : (
+            initialsOf(guild.name)
+          )}
+        </span>
+      </span>
+
+      <span className="server-bar">
+        <span className="server-name" title={guild.name}>
+          {guild.name}
+        </span>
+
+        {guild.present ? (
+          <Link
+            to="/dashboard/$guildId"
+            params={{ guildId: guild.id }}
+            search={{}}
+            className="button server-button"
+            // Five links reading "Manage" is what a screen reader's link list shows without this,
+            // and the name beside it is a sibling the link never announces.
+            aria-label={`Manage ${guild.name}`}
+          >
+            Manage
+          </Link>
+        ) : invite ? (
+          // A new tab: Discord takes the whole authorisation flow over, and running it in this one
+          // loses an admin their place in the list they were reading.
+          <a
+            className="button button-quiet server-button"
+            href={botInviteUrl(invite, guild.id)}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label={`Proton is not in this server — invite it to ${guild.name}`}
+          >
+            Invite
+          </a>
+        ) : (
+          // The api could not say which permissions to ask Discord for. A button that builds the
+          // wrong invite is worse than a card that says why there is no button.
+          <span className="server-unavailable">Proton is not in this server</span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function GuildPicker(): ReactElement {
+  const { guilds, invite } = useSuspenseQuery(sessionQuery()).data;
+
+  return (
+    <div className="picker-page">
+      <div className="page">
+        <Link to="/" className="back-link">
+          <Icon name="arrow-left" />
+          Proton
+        </Link>
+
+        <div className="picker-head">
+          <h1 className="picker-title">Select a server</h1>
+          <p className="picker-sub">
+            Pick a server to configure, or invite Proton to one it is not in yet.
+          </p>
+        </div>
 
         {guilds.length === 0 ? (
           <div className="card">
@@ -54,40 +167,10 @@ function GuildPicker(): ReactElement {
             </div>
           </div>
         ) : (
-          <ul className="guild-list">
-            {guilds.map((guild) => {
-              const icon = guildIconUrl(guild);
-
-              return (
-                <li key={guild.id}>
-                  <div className="guild-row" data-present={guild.present ? undefined : 'false'}>
-                    <span className="guild-avatar">
-                      {icon ? (
-                        <img src={icon} alt="" width={38} height={38} />
-                      ) : (
-                        initialsOf(guild.name)
-                      )}
-                    </span>
-                    <span className="guild-row-text">
-                      <span className="guild-row-name">{guild.name}</span>
-                      <span className="guild-row-role">
-                        {accessLabel(guild)}
-                        {guild.present ? null : ' · Proton is not in this server'}
-                      </span>
-                    </span>
-                    <Link
-                      to="/dashboard/$guildId"
-                      params={{ guildId: guild.id }}
-                      search={{}}
-                      className="button button-quiet"
-                    >
-                      Open
-                      <Icon name="arrow-right" />
-                    </Link>
-                  </div>
-                </li>
-              );
-            })}
+          <ul className="server-grid">
+            {guilds.map((guild) => (
+              <GuildCard key={guild.id} guild={guild} invite={invite} />
+            ))}
           </ul>
         )}
       </div>

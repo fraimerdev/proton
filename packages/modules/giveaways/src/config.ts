@@ -11,6 +11,12 @@ export const MULTIPLIERS_MAX = 10;
 export const GIVEAWAY_LIST_MAX = 25;
 export const TOP_ENTRANTS = 10;
 export const MAX_ENTRIES_PER_USER_MAX = 1000;
+export const ROLE_LIST_MAX = 25;
+export const BONUS_LIST_MAX = 20;
+export const HISTORY_MAX = 40;
+
+// Discord's own ceiling for a message body; a long history is trimmed rather than refused.
+export const MESSAGE_CONTENT_MAX = 2000;
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -91,6 +97,30 @@ export const giveawaysConfigSchema = z.object({
       label: 'Default number of winners',
     }),
 
+  managerRoleIds: z
+    .array(snowflakeSchema)
+    .max(ROLE_LIST_MAX)
+    .default([])
+    .register(protonFields, {
+      field: 'role-id',
+      label: 'Giveaway manager roles',
+      description:
+        'May pause, edit, end, cancel and reroll any giveaway, not only their own. ' +
+        'Who may run each command at all is still set in the Permissions module.',
+    }),
+
+  bypassRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
+    field: 'role-id',
+    label: 'Bypass roles',
+    description: 'Skip every requirement on every giveaway. Multipliers still apply.',
+  }),
+
+  blacklistRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
+    field: 'role-id',
+    label: 'Blacklisted roles',
+    description: 'Cannot enter any giveaway here. Checked before any requirement is evaluated.',
+  }),
+
   announceInChannel: z.boolean().default(true).register(protonFields, {
     label: 'Announce the winners in the channel',
   }),
@@ -127,9 +157,12 @@ export type GiveawaysConfig = z.infer<typeof giveawaysConfigSchema>;
 export const giveawaysDefaultConfig: GiveawaysConfig = {
   enabled: false,
   defaultWinnerCount: 1,
+  managerRoleIds: [],
+  bypassRoleIds: [],
+  blacklistRoleIds: [],
   announceInChannel: true,
   dmWinners: false,
   embedColor: 0x5865f2,
 };
 
-export const GIVEAWAYS_SCHEMA_VERSION = 2;
+export const GIVEAWAYS_SCHEMA_VERSION = 3;

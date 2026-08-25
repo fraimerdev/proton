@@ -24,11 +24,13 @@ describe('the not-in-this-server treatment', () => {
   });
 
   test('the stylesheet greys out exactly what those components mark', () => {
-    expect(STYLES).toContain('.guild-row[data-present="false"]');
+    expect(STYLES).toContain('.server-card[data-present="false"]');
     expect(STYLES).toContain('.rail-guild[data-present="false"]');
   });
 
-  test('the picker says why a row is grey, rather than only dimming it', () => {
+  // The card is a picture with a button under it, so "Invite" instead of "Manage" is the only thing
+  // on screen carrying this — and on its own it is a label, not a reason.
+  test('the picker says why a card is grey, rather than only draining its colour', () => {
     expect(PICKER).toContain('Proton is not in this server');
   });
 
@@ -36,8 +38,19 @@ describe('the not-in-this-server treatment', () => {
     expect(SHELL).toMatch(/aria-label=\{[\s\S]*?Proton is not in this server/);
   });
 
-  // Dimming the line that explains the dimming leaves a grey row saying nothing.
-  test('the reason line is not dimmed with the rest of the row', () => {
-    expect(STYLES).not.toContain('.guild-row[data-present="false"] .guild-row-role');
+  // Draining the words along with the picture leaves a grey card saying nothing. Only the wash and
+  // the crest may go quiet; the bar under them keeps full contrast.
+  test('the bar under the picture is not dimmed with it', () => {
+    expect(STYLES).not.toContain('.server-card[data-present="false"] .server-bar');
+    expect(STYLES).not.toContain('.server-card[data-present="false"] .server-name');
+  });
+
+  // Every card's button reads "Manage" or "Invite". Without the server's name on the control, a
+  // screen reader's link list is five identical entries and the choice cannot be made from it.
+  test('each card names its own server on the control, not only beside it', () => {
+    expect(PICKER).toMatch(/aria-label=\{`Manage \$\{guild\.name\}`\}/);
+    expect(PICKER).toMatch(
+      /aria-label=\{`Proton is not in this server[\s\S]*?\$\{guild\.name\}`\}/,
+    );
   });
 });

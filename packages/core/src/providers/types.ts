@@ -14,12 +14,21 @@ export interface MemberContext {
     roleIds: string[] | null;
     premiumSince: Date | null;
     communicationDisabledUntil: Date | null;
+
+    /** The per-guild nickname, not the account name. Null means "not carried", not "not set". */
+    nickname?: string | null;
   } | null;
 
   user: {
     createdAt: Date;
     hasAvatar: boolean | null;
     bot: boolean;
+
+    // Discord retired discriminators: `username` is the unique handle and `globalName` is the
+    // display name, which is what a member actually sees. Null means the payload did not carry it,
+    // so a name check reports indeterminate rather than matching against an empty string.
+    username?: string | null;
+    globalName?: string | null;
   };
 
   // A guild fact, not a member one, but it is constant across a batch and both is_premium and

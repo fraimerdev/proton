@@ -1,7 +1,7 @@
+import type { EntitlementTier } from '@proton/core';
 import {
   blankHub,
   CATEGORY_CHANNEL_TYPE,
-  HUBS_CEILING,
   OWNER_CONTROL_LABELS,
   OWNER_CONTROLS,
   OWNERLESS_LABELS,
@@ -18,6 +18,7 @@ import {
 } from '@proton/module-tempvc/config';
 import type { ReactElement } from 'react';
 import { useId } from 'react';
+import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import {
   channelOptions,
   type DiscordChannel,
@@ -30,6 +31,7 @@ export interface HubsEditorProps {
   hubs: readonly Partial<TempVcHub>[];
   channels: readonly DiscordChannel[];
   roles: readonly DiscordRole[];
+  tier: EntitlementTier;
   onChange: (hubs: TempVcHub[]) => void;
 }
 
@@ -53,9 +55,11 @@ export function HubsEditor({
   hubs: stored,
   channels,
   roles,
+  tier,
   onChange,
 }: HubsEditorProps): ReactElement {
   const fieldId = useId();
+  const ceiling = listCeiling(tier, 'tempVcHubs');
   const hubs = stored.map(complete);
   const parsed = tempVcHubsSchema.safeParse(hubs);
 
@@ -191,10 +195,16 @@ export function HubsEditor({
               <span>Delete when empty after</span>
               <input
                 type="text"
+                aria-describedby={hub.autoDeleteEmpty ? undefined : id('empty-hint')}
                 value={hub.emptyDeleteDelay}
                 disabled={!hub.autoDeleteEmpty}
                 onChange={(e) => update(index, { emptyDeleteDelay: e.target.value })}
               />
+              {hub.autoDeleteEmpty ? null : (
+                <small className="tempvc-hint" id={id('empty-hint')}>
+                  Off until “Delete when empty” below is switched on.
+                </small>
+              )}
             </label>
 
             <label className="filter">
@@ -332,7 +342,7 @@ export function HubsEditor({
 
             <button
               type="button"
-              className="button button-quiet"
+              className="button button-ghost"
               aria-label={`Remove creator channel ${index + 1}`}
               onClick={() => onChange(hubs.filter((_, i) => i !== index))}
             >
@@ -353,11 +363,9 @@ export function HubsEditor({
         type="button"
         className="button button-quiet"
         onClick={() => onChange([...hubs, blankHub()])}
-        disabled={hubs.length >= HUBS_CEILING}
+        disabled={hubs.length >= ceiling}
       >
-        {hubs.length >= HUBS_CEILING
-          ? `Limit of ${HUBS_CEILING} creator channels reached`
-          : 'Add creator channel'}
+        {hubs.length >= ceiling ? ceilingNote(tier, 'tempVcHubs') : 'Add creator channel'}
       </button>
 
       {parsed.success ? null : (

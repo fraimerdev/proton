@@ -117,6 +117,8 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'add_reaction':
     case 'delete_channel':
     case 'edit_channel':
+    case 'set_channel_overwrite':
+    case 'delete_channel_overwrite':
     case 'create_thread':
     case 'end_poll':
     case 'pin_message':

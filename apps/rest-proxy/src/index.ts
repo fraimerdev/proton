@@ -6,9 +6,9 @@ const env = loadEnv();
 const rest = createRest({ token: env.DISCORD_BOT_TOKEN, api: env.DISCORD_API_URL });
 const app = createProxyApp(rest);
 
-const server = Bun.serve({ port: env.PORT, fetch: app.fetch });
+const server = Bun.serve({ port: env.PORT, hostname: env.HOST, fetch: app.fetch });
 
-console.log(`rest-proxy listening on :${server.port}`);
+console.log(`rest-proxy listening on ${server.hostname}:${server.port}`);
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {

@@ -1,13 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { type ActionResult, limitFor, Permissions } from '@proton/core';
-import { handleActivity } from '../src/activity.ts';
-import { handleOpenPress } from '../src/interactions.ts';
-import { AUTO_CLOSE_JOB, openTicket } from '../src/lifecycle.ts';
-import { OVERWRITE_MEMBER, OVERWRITE_ROLE } from '../src/overwrites.ts';
-import { buildPanelMessage } from '../src/panel.ts';
-import type { TicketStore } from '../src/store.ts';
+import { encodeCustomId, newId, Permissions } from '@proton/core';
+import { ticketTypeSchema } from '../src/config.ts';
+import { handleChannelDeleted } from '../src/reconcile.ts';
 import {
-  BOT,
+  ADMIN,
   BOT_PERMISSIONS,
   CATEGORY,
   CREATED,
@@ -16,587 +12,678 @@ import {
   harness,
   integerOption,
   MEMBER,
-  messageEvent,
+  MOD,
+  OTHER_STAFF,
   PANEL,
   PANEL_CHANNEL,
   pressEvent,
+  STAFF,
+  SUPPORT_ROLE,
   stringOption,
   subcommand,
-  TICKET_CHANNEL,
   TRANSCRIPTS,
+  TYPE,
   userOption,
 } from './harness.ts';
 
-function openButton(): string {
-  const message = buildPanelMessage(PANEL);
-  if (!message.ok) throw new Error('expected a panel message');
+const OPEN_PRESS = encodeCustomId('tickets', 'ot', PANEL.id, TYPE.id);
+const LEGACY_PRESS = encodeCustomId('tickets', 'open', PANEL.id);
 
-  return (message.components[0] as { components: Array<{ custom_id: string }> }).components[0]
-    ?.custom_id as string;
+function customId(action: string, ...args: string[]): string {
+  const encoded = encodeCustomId('tickets', action, ...args);
+  if (!encoded.ok) throw new Error(encoded.humanReason);
+  return encoded.customId;
 }
 
-describe('opening a ticket', () => {
-  test('creates the channel private in the same call that creates it', async () => {
+const OPEN = OPEN_PRESS.ok ? OPEN_PRESS.customId : '';
+const LEGACY = LEGACY_PRESS.ok ? LEGACY_PRESS.customId : '';
+
+function createCall(h: ReturnType<typeof harness>): Record<string, unknown> | undefined {
+  const call = h
+    .calls()
+    .find((entry) => entry.method === 'POST' && entry.path === `/guilds/${GUILD}/channels`);
+
+  return call?.body as Record<string, unknown> | undefined;
+}
+
+async function openOne(h: ReturnType<typeof harness>) {
+  await h.press(pressEvent(OPEN));
+  return h.store.rows.values().next().value;
+}
+
+describe('opening a ticket from a panel', () => {
+  test('a press opens a private channel and records the ticket against its opener', async () => {
+    const h = harness();
+    await h.press(pressEvent(OPEN));
+
+    const ticket = h.ticket();
+    expect(ticket.number).toBe(1);
+    expect(ticket.typeId).toBe(TYPE.id);
+    expect(ticket.ownerId).toBe(MEMBER);
+    expect(ticket.openerId).toBe(MEMBER);
+    expect(ticket.status).toBe('open');
+    expect(ticket.channelId).toBe(CREATED);
+  });
+
+  test('the overwrites travel in the create body, so the channel is never briefly public', () => {
     const h = harness();
 
-    await h.press(pressEvent(openButton()));
+    return h.press(pressEvent(OPEN)).then(() => {
+      const body = createCall(h);
+      const overwrites = body?.permission_overwrites as Array<Record<string, unknown>>;
 
-    const create = h.discordCalls().find((call) => call.path === `/guilds/${GUILD}/channels`);
-    const body = create?.body as {
-      type: number;
-      parent_id?: string;
-      permission_overwrites?: Array<{ id: string; type: number; deny?: string; allow?: string }>;
-    };
-
-    expect(create?.method).toBe('POST');
-    expect(body.type).toBe(0);
-    expect(body.parent_id).toBe(CATEGORY);
-
-    expect(body.permission_overwrites).toContainEqual({
-      id: GUILD,
-      type: OVERWRITE_ROLE,
-      deny: Permissions.ViewChannel.toString(),
+      expect(overwrites).toBeDefined();
+      const everyone = overwrites.find((entry) => entry.id === GUILD);
+      expect(BigInt(String(everyone?.deny ?? '0')) & Permissions.ViewChannel).toBe(
+        Permissions.ViewChannel,
+      );
+      expect(overwrites.some((entry) => entry.id === MEMBER)).toBe(true);
+      expect(overwrites.some((entry) => entry.id === SUPPORT_ROLE)).toBe(true);
     });
+  });
+
+  test('the ticket lands in the category its type names, which is how routing is visible', async () => {
+    const h = harness();
+    await h.press(pressEvent(OPEN));
+
+    expect(createCall(h)?.parent_id).toBe(CATEGORY);
+  });
+
+  test('the opener is recorded as a participant, so the transcript knows who was in it', async () => {
+    const h = harness();
+    await h.press(pressEvent(OPEN));
+
+    const participants = await h.store.listParticipants(h.ticket().id);
+    expect(participants).toHaveLength(1);
+    expect(participants[0]).toMatchObject({ userId: MEMBER, kind: 'opener' });
+  });
+
+  test('a legacy one-argument panel button still opens, or every posted panel would break', async () => {
+    const h = harness();
+    await h.press(pressEvent(LEGACY));
+
+    expect(h.store.rows.size).toBe(1);
+  });
+
+  test('the module announces the ticket, so serverlog and statistics can see it', async () => {
+    const h = harness();
+    await h.press(pressEvent(OPEN));
+
+    const opened = h.published.find((entry) => entry.type === 'tickets.opened');
+    expect(opened).toBeDefined();
+    expect(opened?.payload).toMatchObject({ guildId: GUILD, number: 1, openerId: MEMBER });
+  });
+
+  test('a button for a type that has since been deleted refuses and opens nothing', async () => {
+    const h = harness({ config: { types: [] } });
+    await h.press(pressEvent(OPEN));
+
+    expect(h.store.rows.size).toBe(0);
+    expect(h.lastTold()).toContain('nothing to open');
+  });
+
+  test('a button for a panel that has since been deleted refuses and opens nothing', async () => {
+    const h = harness({ config: { panels: [] } });
+    await h.press(pressEvent(OPEN));
+
+    expect(h.store.rows.size).toBe(0);
+    expect(h.lastTold()).toContain('no longer exists');
+  });
+
+  test('a press while the module is off is answered, not dropped into "interaction failed"', async () => {
+    const h = harness({ config: { enabled: false } });
+    await h.press(pressEvent(OPEN));
+
+    expect(h.told().join(' ')).toContain('switched off');
+  });
+});
+
+describe('intake forms', () => {
+  const withForm = {
+    types: [
+      ticketTypeSchema.parse({
+        ...TYPE,
+        form: [
+          { id: 'what', label: 'What happened?', style: 'short', required: true, options: [] },
+        ],
+      }),
+    ],
+  };
+
+  test('a type with a form answers with a modal first, because a modal cannot follow a defer', async () => {
+    const h = harness({ config: withForm });
+    await h.press(pressEvent(OPEN));
+
+    expect(h.callbackTypes()).toEqual([9]);
+    expect(h.store.rows.size).toBe(0);
+  });
+
+  test('submitting the form opens the ticket and stores the answers against it', async () => {
+    const h = harness({ config: withForm });
+    await h.press(pressEvent(OPEN));
+    await h.submit(customId('form', PANEL.id, TYPE.id), { what: 'cannot log in' });
+
+    const ticket = h.ticket();
+    expect(ticket.subject).toBe('cannot log in');
+
+    const answers = await h.store.listAnswers(ticket.id);
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toMatchObject({ fieldId: 'what', value: 'cannot log in' });
+  });
+
+  test('a form submitted for a type deleted in the meantime records nothing', async () => {
+    const h = harness({ config: { types: [] } });
+    await h.submit(customId('form', PANEL.id, TYPE.id), { what: 'hello' });
+
+    expect(h.store.rows.size).toBe(0);
+    expect(h.told().join(' ')).toContain('removed');
+  });
+});
+
+describe('the limits that stop a member flooding the queue', () => {
+  test('a member at the per-server cap is refused and told to close one first', async () => {
+    const h = harness({ config: { maxOpenPerUser: 1, creationCooldown: '0s' } });
+    await h.press(pressEvent(OPEN));
+    await h.press(pressEvent(OPEN, { eventId: newId() }));
+
+    expect(h.store.rows.size).toBe(1);
+    expect(h.lastTold()).toContain('already have');
+  });
+
+  test('a per-type cap refuses that type while another type still opens', async () => {
+    const other = ticketTypeSchema.parse({ id: 'billing', name: 'Billing' });
+    const h = harness({
+      config: {
+        creationCooldown: '0s',
+        types: [ticketTypeSchema.parse({ ...TYPE, maxOpenPerUser: 1 }), other],
+        panels: [{ ...PANEL, typeIds: [TYPE.id, other.id] }],
+      },
+    });
+
+    await h.press(pressEvent(OPEN));
+    await h.press(pressEvent(OPEN, { eventId: newId() }));
+    expect(h.store.rows.size).toBe(1);
+
+    await h.press(pressEvent(customId('ot', PANEL.id, other.id), { eventId: newId() }));
+    expect(h.store.rows.size).toBe(2);
+  });
+
+  test('the cooldown names the wait rather than failing silently', async () => {
+    const h = harness({ config: { creationCooldown: '30s' } });
+    await h.press(pressEvent(OPEN));
+    await h.press(pressEvent(OPEN, { eventId: newId() }));
+
+    expect(h.store.rows.size).toBe(1);
+    expect(h.lastTold()).toContain('wait');
+  });
+
+  test('the cooldown lapses, so the same member can open another once it has passed', async () => {
+    const h = harness({ config: { creationCooldown: '30s' } });
+    await h.press(pressEvent(OPEN));
+    h.advance(31_000);
+    await h.press(pressEvent(OPEN, { eventId: newId() }));
+
+    expect(h.store.rows.size).toBe(2);
+  });
+
+  test('a blacklisted member is refused with the server’s own wording and a reason', async () => {
+    const h = harness({ config: { blacklistMessage: 'You are blocked.', creationCooldown: '0s' } });
+    await h.store.blacklist({
+      guildId: GUILD,
+      userId: MEMBER,
+      reason: 'spam',
+      createdBy: HELPER,
+      expiresAt: null,
+    });
+
+    await h.press(pressEvent(OPEN));
+
+    expect(h.store.rows.size).toBe(0);
+    expect(h.lastTold()).toContain('You are blocked.');
+    expect(h.lastTold()).toContain('spam');
+  });
+
+  test('an expired blacklist entry does not block, or a temporary ban would be permanent', async () => {
+    const h = harness({ config: { creationCooldown: '0s' } });
+    await h.store.blacklist({
+      guildId: GUILD,
+      userId: MEMBER,
+      reason: null,
+      createdBy: HELPER,
+      expiresAt: new Date(h.now().getTime() - 1000),
+    });
+
+    await h.press(pressEvent(OPEN));
+    expect(h.store.rows.size).toBe(1);
+  });
+});
+
+describe('two things happening at once', () => {
+  test('a redelivered press opens exactly one ticket and leaves no reserved row behind', async () => {
+    const h = harness({ config: { creationCooldown: '0s' } });
+    const event = pressEvent(OPEN);
+
+    await h.press(event);
+    await h.press(event);
+
+    expect(h.store.rows.size).toBe(1);
+  });
+
+  test('a double-click is two separate interactions and still yields only one ticket', async () => {
+    const h = harness({ config: { maxOpenPerUser: 1, creationCooldown: '0s' } });
+
+    // Two distinct event ids, so the executor's dedupe never sees them as the same press. Only the
+    // re-check after the row is written can stop the second one.
+    await Promise.all([
+      h.press(pressEvent(OPEN, { eventId: newId() })),
+      h.press(pressEvent(OPEN, { eventId: newId() })),
+    ]);
+
+    expect(await h.store.countOpenFor(GUILD, MEMBER)).toBe(1);
+  });
+
+  test('a per-type cap survives a double-click on that type', async () => {
+    const h = harness({
+      config: {
+        creationCooldown: '0s',
+        types: [{ ...TYPE, maxOpenPerUser: 1 }],
+      },
+    });
+
+    await Promise.all([
+      h.press(pressEvent(OPEN, { eventId: newId() })),
+      h.press(pressEvent(OPEN, { eventId: newId() })),
+    ]);
+
+    expect(await h.store.countOpenForType(GUILD, MEMBER, TYPE.id)).toBe(1);
+  });
+
+  test('two staff claiming at once produce one claimant, and the loser is told who won', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.press(pressEvent(customId('claim'), { ...STAFF, channelId: ticket.channelId }));
+    await h.press(
+      pressEvent(customId('claim'), {
+        ...OTHER_STAFF,
+        channelId: ticket.channelId,
+        eventId: newId(),
+      }),
+    );
+
+    expect((await h.store.get(GUILD, ticket.id))?.claimedById).toBe(HELPER);
+    expect(h.lastTold()).toContain('claimed this ticket first');
+  });
+
+  test('closing twice is idempotent: one transcript, one closing message', async () => {
+    const h = harness({ config: { transcriptChannelId: TRANSCRIPTS } });
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+    await h.run(subcommand('close', [integerOption('number', ticket.number)]), {
+      ...MOD,
+      idempotencyKey: newId(),
+    });
+
+    expect(h.sentIn(TRANSCRIPTS)).toHaveLength(1);
+
+    const closing = h
+      .sentIn(ticket.channelId)
+      .filter((body) => body.content === h.context().config.closeConfirmation);
+
+    expect(closing).toHaveLength(1);
+  });
+});
+
+describe('the lifecycle after a ticket is answered', () => {
+  test('closing does not delete the channel, which is what makes reopening possible', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('closed');
     expect(
-      body.permission_overwrites?.some(
-        (entry) => entry.id === MEMBER && entry.type === OVERWRITE_MEMBER,
-      ),
+      h.calls().some((call) => call.method === 'DELETE' && call.path === `/channels/${CREATED}`),
+    ).toBe(false);
+  });
+
+  test('closing takes the member’s ability to post while leaving them able to read', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+
+    const lock = h
+      .calls()
+      .find((call) => call.method === 'PUT' && call.path.endsWith(`/permissions/${MEMBER}`));
+    const body = lock?.body as Record<string, unknown>;
+
+    expect(BigInt(String(body?.deny ?? '0')) & Permissions.SendMessages).toBe(
+      Permissions.SendMessages,
+    );
+    expect(BigInt(String(body?.allow ?? '0')) & Permissions.ViewChannel).toBe(
+      Permissions.ViewChannel,
+    );
+  });
+
+  test('reopening restores the member’s access and puts the ticket back in the queue', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+    await h.run(subcommand('reopen'), {
+      ...MOD,
+      channelId: ticket.channelId,
+      idempotencyKey: newId(),
+    });
+
+    const reopened = await h.store.get(GUILD, ticket.id);
+    expect(reopened?.status).toBe('open');
+    expect(reopened?.closedAt).toBeNull();
+    expect(h.published.some((entry) => entry.type === 'tickets.reopened')).toBe(true);
+  });
+
+  test('closing a reopened ticket runs the whole close again, not a swallowed replay', async () => {
+    const h = harness({ config: { transcriptChannelId: TRANSCRIPTS } });
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+    h.advance(1000);
+    await h.run(subcommand('reopen'), {
+      ...MOD,
+      channelId: ticket.channelId,
+      idempotencyKey: newId(),
+    });
+    h.advance(1000);
+    await h.run(subcommand('close'), {
+      ...MOD,
+      channelId: ticket.channelId,
+      idempotencyKey: newId(),
+    });
+
+    // Two closes means two of everything the close does. An idempotency key naming only the ticket
+    // made the second close post nothing and leave the member able to post in a closed ticket.
+    expect(h.sentIn(TRANSCRIPTS)).toHaveLength(2);
+
+    const locks = h
+      .calls()
+      .filter((call) => call.method === 'PUT' && call.path.endsWith(`/permissions/${MEMBER}`));
+
+    expect(locks.length).toBeGreaterThanOrEqual(3);
+  });
+
+  test('a reopen after a reopen restores posting again, rather than being read as a replay', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    for (let round = 0; round < 2; round += 1) {
+      h.advance(1000);
+      await h.run(subcommand('close'), {
+        ...MOD,
+        channelId: ticket.channelId,
+        idempotencyKey: newId(),
+      });
+      h.advance(1000);
+      await h.run(subcommand('reopen'), {
+        ...MOD,
+        channelId: ticket.channelId,
+        idempotencyKey: newId(),
+      });
+    }
+
+    const unlocks = h
+      .calls()
+      .filter(
+        (call) =>
+          call.method === 'PUT' &&
+          call.path.endsWith(`/permissions/${MEMBER}`) &&
+          BigInt(String((call.body as Record<string, unknown>)?.deny ?? '0')) === 0n,
+      );
+
+    expect(unlocks).toHaveLength(2);
+  });
+
+  test('deleting is a separate act that removes the channel and marks the row deleted', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('delete'), { ...ADMIN, channelId: ticket.channelId });
+
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('deleted');
+    expect(
+      h.calls().some((call) => call.method === 'DELETE' && call.path === `/channels/${CREATED}`),
     ).toBe(true);
   });
 
-  test('never patches the channel afterwards, which would leave it readable in between', async () => {
+  test('a support member may close but may not delete, because deleting destroys the record', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()));
+    await h.run(subcommand('delete'), { ...STAFF, channelId: ticket.channelId });
 
-    expect(h.discordCalls().some((call) => call.method === 'PATCH')).toBe(false);
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('open');
+    expect(h.replyContent()).toContain('cannot do that');
   });
 
-  test('acknowledges the press before doing any of the slow work', async () => {
+  test('locking stops the member posting without closing the ticket', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()));
+    await h.run(subcommand('lock'), { ...STAFF, channelId: ticket.channelId });
 
-    const first = h.calls()[0];
-    expect(first?.path).toContain('/callback');
-    expect((first?.body as { type: number } | undefined)?.type).toBe(5);
+    const locked = await h.store.get(GUILD, ticket.id);
+    expect(locked?.status).toBe('open');
+    expect(locked?.lockedAt).not.toBeNull();
   });
+});
 
-  test('records the ticket against the channel Discord made', async () => {
+describe('who may do what', () => {
+  test('a passer-by cannot close a ticket by number from outside it', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()));
-
-    const ticket = await h.store.byChannel(GUILD, CREATED);
-    expect(ticket).toMatchObject({
-      openerId: MEMBER,
-      panelId: PANEL.id,
-      number: 1,
-      status: 'open',
+    await h.run(subcommand('close', [integerOption('number', ticket.number)]), {
+      userId: '100000000000000099',
+      channelId: PANEL_CHANNEL,
     });
+
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('open');
+    expect(h.replyContent()).toContain('cannot do that');
   });
 
-  test('greets the opener in the new channel without pinging the world', async () => {
+  test('the member who raised the ticket may close their own', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()));
+    await h.run(subcommand('close'), { userId: MEMBER, channelId: ticket.channelId });
 
-    const greeting = h.discordCalls().find((call) => call.path === `/channels/${CREATED}/messages`);
-    const sent = greeting?.body as { content: string; allowed_mentions: unknown } | undefined;
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('closed');
+  });
 
-    expect(sent?.content).toContain(`<@${MEMBER}>`);
-    expect(sent?.allowed_mentions).toEqual({
-      parse: [],
-      users: [MEMBER],
-      roles: PANEL.supportRoleIds,
+  test('a member listing tickets sees only their own, not a directory of who asked for help', async () => {
+    const h = harness({ config: { creationCooldown: '0s' } });
+    await h.press(pressEvent(OPEN, { userId: MEMBER }));
+    await h.press(pressEvent(OPEN, { userId: HELPER, eventId: newId() }));
+
+    await h.run(subcommand('list'), { userId: MEMBER, channelId: PANEL_CHANNEL });
+
+    const shown = h.replyContent() ?? '';
+    expect(shown).toContain('1 open ticket');
+    expect(shown).toContain('of yours');
+    expect(shown).not.toContain(`<@${HELPER}>`);
+  });
+
+  test('staff listing tickets see the whole queue, which is the point of the command for them', async () => {
+    const h = harness({ config: { creationCooldown: '0s' } });
+    await h.press(pressEvent(OPEN, { userId: MEMBER }));
+    await h.press(pressEvent(OPEN, { userId: HELPER, eventId: newId() }));
+
+    await h.run(subcommand('list'), { ...STAFF, channelId: PANEL_CHANNEL });
+
+    expect(h.replyContent()).toContain('2 open ticket');
+  });
+
+  test('a passer-by cannot post a ticket panel into the server', async () => {
+    const h = harness();
+    await h.run(subcommand('panel', [stringOption('panel', PANEL.id)]), { userId: MEMBER });
+
+    expect(h.sentIn(PANEL_CHANNEL)).toHaveLength(0);
+    expect(h.replyContent()).toContain('permission');
+  });
+});
+
+describe('participants', () => {
+  test('adding a member grants exactly one overwrite and records them', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('add', [userOption('user', HELPER)]), {
+      ...STAFF,
+      channelId: ticket.channelId,
     });
+
+    expect(
+      h
+        .calls()
+        .some((call) => call.method === 'PUT' && call.path.endsWith(`/permissions/${HELPER}`)),
+    ).toBe(true);
+    expect((await h.store.listParticipants(ticket.id)).some((p) => p.userId === HELPER)).toBe(true);
   });
 
-  test('tells the member where their ticket is', async () => {
+  test('the ticket owner cannot be removed, because that would orphan their own ticket', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()));
+    await h.run(subcommand('remove', [userOption('user', MEMBER)]), {
+      ...STAFF,
+      channelId: ticket.channelId,
+    });
 
-    expect(h.followUpContent()).toContain(`<#${CREATED}>`);
+    expect(h.replyContent()).toContain('owns this ticket');
+    expect((await h.store.listParticipants(ticket.id)).some((p) => p.userId === MEMBER)).toBe(true);
   });
 
-  test('refuses a second ticket at the free tier limit, naming the tier and the way out', async () => {
+  test('transferring ownership moves the owner without rewriting who raised it', async () => {
     const h = harness();
-    const cap = limitFor('free', 'openTicketsPerUser');
+    await openOne(h);
+    const ticket = h.ticket();
 
-    for (let index = 0; index < cap; index++) {
-      const reserved = await h.store.reserve({
-        guildId: GUILD,
-        panelId: PANEL.id,
-        openerId: MEMBER,
-      });
-      await h.store.attach(GUILD, reserved.id, `5000000000000001${index}`);
-    }
+    await h.run(subcommand('transfer', [userOption('user', HELPER)]), {
+      ...STAFF,
+      channelId: ticket.channelId,
+    });
 
-    await h.press(pressEvent(openButton()));
-
-    expect(h.discordCalls().some((call) => call.path === `/guilds/${GUILD}/channels`)).toBe(false);
-
-    const said = h.followUpContent() ?? '';
-    expect(said).toContain('free');
-    expect(said).toContain(String(cap));
-
-    // A channel deleted by hand leaves the row open and the slot taken, so the refusal has to name
-    // the command that clears it — otherwise the member is stuck with nothing to try.
-    expect(said).toContain('/ticket close number:');
-    expect(said).toContain('/ticket list');
+    const moved = await h.store.get(GUILD, ticket.id);
+    expect(moved?.ownerId).toBe(HELPER);
+    expect(moved?.openerId).toBe(MEMBER);
   });
+});
 
-  test('a ticket whose channel was deleted by hand can be cleared by number, freeing the slot', async () => {
+describe('when Discord says no', () => {
+  test('a refused channel creation leaves no ticket row holding one of the member’s slots', async () => {
     const h = harness();
-    const cap = limitFor('free', 'openTicketsPerUser');
+    h.rest.fail(`/guilds/${GUILD}/channels`, { status: 403, body: { message: 'Missing Access' } });
 
-    for (let index = 0; index < cap; index++) {
-      const reserved = await h.store.reserve({
-        guildId: GUILD,
-        panelId: PANEL.id,
-        openerId: MEMBER,
-      });
-      await h.store.attach(GUILD, reserved.id, `5000000000000001${index}`);
-    }
-
-    await h.run(subcommand('close', [integerOption('number', 1)]), { channelId: PANEL_CHANNEL });
-
-    expect(await h.store.countOpenFor(GUILD, MEMBER)).toBe(cap - 1);
-    expect(h.replyContent()).toContain('#1');
-
-    await h.press(pressEvent(openButton()));
-
-    expect(h.discordCalls().some((call) => call.path === `/guilds/${GUILD}/channels`)).toBe(true);
-  });
-
-  test('leaves no reserved row behind when Discord refuses the channel', async () => {
-    const h = harness();
-    h.rest.failCreate = true;
-
-    await h.press(pressEvent(openButton()));
+    await h.press(pressEvent(OPEN));
 
     expect(h.store.rows.size).toBe(0);
-    expect(h.followUpContent()).toContain("couldn't open a ticket channel");
+    expect(h.lastTold()).toContain("couldn't open");
   });
 
-  test('names ManageChannels when the bot cannot create channels', async () => {
-    const h = harness();
+  test('a bot without Manage Channels is told which permission is missing, not just that it failed', async () => {
+    const h = harness({ botPermissions: BOT_PERMISSIONS & ~Permissions.ManageChannels });
 
-    await h.press(pressEvent(openButton()), {
-      botPermissions: BOT_PERMISSIONS & ~Permissions.ManageChannels,
-    });
+    await h.press(pressEvent(OPEN));
 
-    expect(h.discordCalls().some((call) => call.path === `/guilds/${GUILD}/channels`)).toBe(false);
-    expect(h.followUpContent()).toContain('ManageChannels');
     expect(h.store.rows.size).toBe(0);
+    expect(h.lastTold()?.toLowerCase()).toContain('managechannels');
   });
 
-  test('names ManageRoles when the bot cannot set the overwrites that make it private', async () => {
+  test('a failed transcript still leaves the ticket closed, and says so in the log', async () => {
+    const h = harness({ config: { transcriptChannelId: TRANSCRIPTS } });
+    await openOne(h);
+    const ticket = h.ticket();
+
+    h.rest.fail(`/channels/${TRANSCRIPTS}/messages`, { status: 403, body: { message: 'no' } });
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('closed');
+    expect(
+      h.logs.some((entry) => entry.level === 'error' && entry.message.includes('transcript')),
+    ).toBe(true);
+  });
+});
+
+describe('reconciling with Discord', () => {
+  test('a channel deleted by hand frees the member’s slot instead of holding it forever', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()), {
-      botPermissions: BOT_PERMISSIONS & ~Permissions.ManageRoles,
-    });
+    const outcome = await handleChannelDeleted(
+      {
+        id: newId(),
+        type: 'channel.deleted',
+        guildId: GUILD,
+        occurredAt: Date.now(),
+        payload: { id: ticket.channelId },
+      },
+      h.context(),
+      h.deps,
+    );
 
-    expect(h.discordCalls().some((call) => call.path === `/guilds/${GUILD}/channels`)).toBe(false);
-    expect(h.followUpContent()).toContain('ManageRoles');
+    expect(outcome).toBe('reconciled');
+    expect((await h.store.get(GUILD, ticket.id))?.status).toBe('deleted');
+    expect(await h.store.countOpenFor(GUILD, MEMBER)).toBe(0);
   });
 
-  test('says so when the panel has been deleted from the settings', async () => {
+  test('a redelivered channel deletion changes nothing the second time', async () => {
     const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
 
-    await h.press(pressEvent(openButton()), { config: { panels: [] } });
-
-    expect(h.followUpContent()).toContain('no longer exists');
-  });
-
-  test('ignores a button that belongs to another module', async () => {
-    const h = harness();
-
-    await h.press(pressEvent('proton:rolemenu:menu:key'));
-
-    expect(h.calls()).toHaveLength(0);
-  });
-
-  test('a ticket whose row vanishes mid-open is reported, not silently untracked', async () => {
-    const h = harness();
-
-    // Delegated by hand rather than spread or Object.create: the memory store keeps its state in
-    // a private field, which neither of those carries.
-    const store: TicketStore = {
-      reserve: (input) => h.store.reserve(input),
-      attach: async () => null,
-      abandon: (guildId, id) => h.store.abandon(guildId, id),
-      get: (guildId, id) => h.store.get(guildId, id),
-      byChannel: (guildId, channelId) => h.store.byChannel(guildId, channelId),
-      byNumber: (guildId, number) => h.store.byNumber(guildId, number),
-      countOpenFor: (guildId, openerId) => h.store.countOpenFor(guildId, openerId),
-      listOpen: (guildId) => h.store.listOpen(guildId),
-      close: (input) => h.store.close(input),
-      touch: (guildId, channelId, notBefore) => h.store.touch(guildId, channelId, notBefore),
+    const event = {
+      id: newId(),
+      type: 'channel.deleted' as const,
+      guildId: GUILD,
+      occurredAt: Date.now(),
+      payload: { id: ticket.channelId },
     };
 
-    await h.press(pressEvent(openButton()), {
-      deps: { store, applicationId: BOT, botUserId: BOT },
-    });
-
-    expect(h.followUpContent()).toContain('lost track of it');
-    expect(h.followUpContent()).toContain('moderator');
-    expect(h.logs.some((line) => line.level === 'error' && line.message.includes(CREATED))).toBe(
-      true,
-    );
+    await handleChannelDeleted(event, h.context(), h.deps);
+    expect(await handleChannelDeleted(event, h.context(), h.deps)).toBe('ignored');
   });
 
-  test('leaves no reserved row behind when the create throws instead of failing', async () => {
+  test('a deletion in a channel Proton does not track is ignored', async () => {
     const h = harness();
-    const ctx = h.context();
 
-    const outcome = await openTicket({
-      ctx: {
-        ...ctx,
-        executor: {
-          execute: async (): Promise<ActionResult> => {
-            throw new Error('the dedupe store went away');
-          },
+    expect(
+      await handleChannelDeleted(
+        {
+          id: newId(),
+          type: 'channel.deleted',
+          guildId: GUILD,
+          occurredAt: Date.now(),
+          payload: { id: PANEL_CHANNEL },
         },
-      },
-      store: h.store,
-      deps: { store: h.store, applicationId: BOT, botUserId: BOT },
-      panel: PANEL,
-      openerId: MEMBER,
-      openerName: MEMBER,
-      idempotencyKey: 'tickets:throwing-open',
-    });
-
-    expect(h.store.rows.size).toBe(0);
-    expect(outcome.status).toBe('refused');
-    expect(outcome.status === 'refused' && outcome.humanReason).toContain('Try again');
-  });
-
-  test('a redelivered press says nothing more and leaves the first delivery’s ticket alone', async () => {
-    const h = harness();
-    const deps = { store: h.store, applicationId: BOT, botUserId: BOT };
-    const event = pressEvent(openButton());
-
-    const first = await handleOpenPress(event, h.context(), deps);
-    const second = await handleOpenPress(event, h.context(), deps);
-
-    expect(first).toEqual({ action: 'opened', channelId: CREATED });
-    expect(second.action).not.toBe('refused');
-
-    expect(
-      h.discordCalls().filter((call) => call.path === `/guilds/${GUILD}/channels`),
-    ).toHaveLength(1);
-
-    expect(h.store.rows.size).toBe(1);
-    expect(await h.store.byChannel(GUILD, CREATED)).toMatchObject({ status: 'open', number: 1 });
-  });
-
-  test('books the auto-close timer only when the panel asks for one', async () => {
-    const without = harness();
-    await without.press(pressEvent(openButton()));
-    expect(without.scheduled).toHaveLength(0);
-
-    const withTimer = harness();
-    await withTimer.press(pressEvent(openButton()), {
-      config: { panels: [{ ...PANEL, autoCloseAfter: '48h' }] },
-    });
-
-    expect(withTimer.scheduled).toHaveLength(1);
-    expect(withTimer.scheduled[0]?.jobId).toBe(AUTO_CLOSE_JOB);
-  });
-});
-
-describe('closing a ticket', () => {
-  async function opened() {
-    const h = harness();
-    await h.press(pressEvent(openButton()));
-    h.rest.calls.length = 0;
-    return h;
-  }
-
-  test('posts the closing message and removes the channel', async () => {
-    const h = await opened();
-
-    await h.run(subcommand('close', [stringOption('reason', 'solved')]), { channelId: CREATED });
-
-    const closing = h.discordCalls().find((call) => call.method === 'POST');
-    expect((closing?.body as { content: string } | undefined)?.content).toContain('closed');
-
-    expect(h.discordCalls().find((call) => call.method === 'DELETE')?.path).toBe(
-      `/channels/${CREATED}`,
-    );
-  });
-
-  test('records who closed it and why', async () => {
-    const h = await opened();
-
-    await h.run(subcommand('close', [stringOption('reason', 'solved')]), { channelId: CREATED });
-
-    const ticket = [...h.store.rows.values()][0];
-    expect(ticket).toMatchObject({ status: 'closed', closedBy: MEMBER, closeReason: 'solved' });
-  });
-
-  test('cancels the auto-close timer it booked', async () => {
-    const h = harness();
-    await h.press(pressEvent(openButton()), {
-      config: { panels: [{ ...PANEL, autoCloseAfter: '48h' }] },
-    });
-
-    await h.run(subcommand('close'), {
-      channelId: CREATED,
-      config: { panels: [{ ...PANEL, autoCloseAfter: '48h' }] },
-    });
-
-    expect(h.cancelled).toHaveLength(1);
-    expect(h.cancelled[0]?.jobId).toBe(AUTO_CLOSE_JOB);
-  });
-
-  test('posts a record to the transcript channel when one is configured', async () => {
-    const h = harness();
-    const panels = [{ ...PANEL, transcriptChannelId: TRANSCRIPTS }];
-
-    await h.press(pressEvent(openButton()), { config: { panels } });
-    h.rest.calls.length = 0;
-
-    await h.run(subcommand('close'), { channelId: CREATED, config: { panels } });
-
-    const transcript = h
-      .discordCalls()
-      .find((call) => call.path === `/channels/${TRANSCRIPTS}/messages`);
-
-    expect((transcript?.body as { content: string } | undefined)?.content).toContain('Ticket #1');
-  });
-
-  test('closing twice deletes the channel once', async () => {
-    const h = await opened();
-
-    await h.run(subcommand('close'), { channelId: CREATED });
-    const after = h.discordCalls().filter((call) => call.method === 'DELETE').length;
-
-    await h.run(subcommand('close'), { channelId: CREATED });
-
-    expect(h.discordCalls().filter((call) => call.method === 'DELETE')).toHaveLength(after);
-  });
-
-  test('refuses outside a ticket channel and says where to run it', async () => {
-    const h = harness();
-
-    await h.run(subcommand('close'), { channelId: PANEL_CHANNEL });
-
-    expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('inside a ticket channel');
-  });
-
-  test('says which numbers exist when there is no ticket with that number', async () => {
-    const h = harness();
-
-    await h.run(subcommand('close', [integerOption('number', 7)]), { channelId: PANEL_CHANNEL });
-
-    expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('/ticket list');
-  });
-});
-
-describe('a close that died between the row and the channel', () => {
-  const panels = [{ ...PANEL, transcriptChannelId: TRANSCRIPTS }];
-
-  async function stranded() {
-    const h = harness();
-    await h.press(pressEvent(openButton()), { config: { panels } });
-
-    const ticket = await h.store.byChannel(GUILD, CREATED);
-    if (!ticket) throw new Error('expected an open ticket');
-
-    // The crash: the status transition commits and the process dies before the transcript, the
-    // closing message and the delete ever run.
-    await h.store.close({ guildId: GUILD, ticketId: ticket.id, closedBy: MEMBER, reason: null });
-    h.rest.calls.length = 0;
-
-    return { h, number: ticket.number };
-  }
-
-  test('closing by number finishes the transcript, the closing message and the delete', async () => {
-    const { h, number } = await stranded();
-
-    await h.run(subcommand('close', [integerOption('number', number)]), {
-      channelId: PANEL_CHANNEL,
-      config: { panels },
-    });
-
-    expect(
-      h.discordCalls().filter((call) => call.path === `/channels/${TRANSCRIPTS}/messages`),
-    ).toHaveLength(1);
-    expect(
-      h.discordCalls().filter((call) => call.path === `/channels/${CREATED}/messages`),
-    ).toHaveLength(1);
-    expect(
-      h.discordCalls().filter((call) => call.method === 'DELETE' && call.path.endsWith(CREATED)),
-    ).toHaveLength(1);
-  });
-
-  test('a second attempt posts nothing twice, however it was invoked', async () => {
-    const { h, number } = await stranded();
-
-    await h.run(subcommand('close', [integerOption('number', number)]), {
-      channelId: PANEL_CHANNEL,
-      config: { panels },
-    });
-    await h.run(subcommand('close', [integerOption('number', number)]), {
-      channelId: PANEL_CHANNEL,
-      config: { panels },
-    });
-
-    expect(
-      h.discordCalls().filter((call) => call.path === `/channels/${CREATED}/messages`),
-    ).toHaveLength(1);
-    expect(
-      h.discordCalls().filter((call) => call.path === `/channels/${TRANSCRIPTS}/messages`),
-    ).toHaveLength(1);
-    expect(h.discordCalls().filter((call) => call.method === 'DELETE')).toHaveLength(1);
-  });
-
-  test('tells the moderator it finished an unfinished close rather than claiming a fresh one', async () => {
-    const { h, number } = await stranded();
-
-    await h.run(subcommand('close', [integerOption('number', number)]), {
-      channelId: PANEL_CHANNEL,
-      config: { panels },
-    });
-
-    expect(h.replyContent()).toContain('already');
-  });
-});
-
-describe('/ticket add and remove', () => {
-  async function opened() {
-    const h = harness();
-    await h.press(pressEvent(openButton()));
-    h.rest.calls.length = 0;
-    return h;
-  }
-
-  test('adding somebody rewrites the overwrites with them in it', async () => {
-    const h = await opened();
-
-    await h.run(subcommand('add', [userOption('user', HELPER)]), { channelId: CREATED });
-
-    const patch = h.discordCalls().find((call) => call.method === 'PATCH');
-    const overwrites =
-      (patch?.body as { permission_overwrites: Array<{ id: string }> } | undefined)
-        ?.permission_overwrites ?? [];
-
-    expect(overwrites.some((entry) => entry.id === HELPER)).toBe(true);
-    expect(overwrites.some((entry) => entry.id === GUILD)).toBe(true);
-  });
-
-  test('removing somebody takes them out again', async () => {
-    const h = await opened();
-
-    await h.run(subcommand('remove', [userOption('user', HELPER)]), { channelId: CREATED });
-
-    const patch = h.discordCalls().find((call) => call.method === 'PATCH');
-    const overwrites =
-      (patch?.body as { permission_overwrites: Array<{ id: string }> } | undefined)
-        ?.permission_overwrites ?? [];
-
-    expect(overwrites.some((entry) => entry.id === HELPER)).toBe(false);
-  });
-
-  test('refuses to remove the member who opened it, and says what to do instead', async () => {
-    const h = await opened();
-
-    await h.run(subcommand('remove', [userOption('user', MEMBER)]), { channelId: CREATED });
-
-    expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('/ticket close');
-  });
-});
-
-describe('/ticket panel', () => {
-  test('posts the panel with its button into the configured channel', async () => {
-    const h = harness();
-
-    await h.run(subcommand('panel', [stringOption('panel', PANEL.id)]));
-
-    const post = h
-      .discordCalls()
-      .find((call) => call.path === `/channels/${PANEL_CHANNEL}/messages`);
-    expect((post?.body as { components: unknown[] } | undefined)?.components).toHaveLength(1);
-  });
-
-  test('names the panels that do exist when the id is wrong', async () => {
-    const h = harness();
-
-    await h.run(subcommand('panel', [stringOption('panel', 'nope')]));
-
-    expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain(PANEL.id);
-  });
-
-  test('points an admin at the dashboard when nothing is configured yet', async () => {
-    const h = harness();
-
-    await h.run(subcommand('panel', [stringOption('panel', 'x')]), { config: { panels: [] } });
-
-    expect(h.replyContent()).toContain('dashboard');
-  });
-});
-
-describe('activity tracking', () => {
-  test('does not touch the database at all when no panel closes automatically', async () => {
-    const h = harness();
-    const store = h.store;
-    let touched = 0;
-    const spy = {
-      ...store,
-      touch: async () => {
-        touched += 1;
-      },
-    };
-
-    await handleActivity(messageEvent(TICKET_CHANNEL), h.context(), { store: spy as never });
-
-    expect(touched).toBe(0);
-  });
-
-  test('bumps the ticket when a panel does close automatically', async () => {
-    const h = harness();
-    const panels = [{ ...PANEL, autoCloseAfter: '48h' }];
-
-    await h.press(pressEvent(openButton()), { config: { panels } });
-
-    const before = (await h.store.byChannel(GUILD, CREATED))?.lastActivityAt;
-    await handleActivity(
-      messageEvent(CREATED),
-      h.context({ config: { panels } }),
-      { store: h.store, applicationId: BOT },
-      new Date(Date.now() + 10 * 60_000),
-    );
-
-    expect((await h.store.byChannel(GUILD, CREATED))?.lastActivityAt.getTime()).toBeGreaterThan(
-      (before ?? new Date()).getTime() - 1,
-    );
-  });
-
-  test('ignores the bot’s own messages', async () => {
-    const h = harness();
-    const panels = [{ ...PANEL, autoCloseAfter: '48h' }];
-    await h.press(pressEvent(openButton()), { config: { panels } });
-
-    let touched = 0;
-    const spy = {
-      ...h.store,
-      touch: async () => {
-        touched += 1;
-      },
-    };
-
-    await handleActivity(messageEvent(CREATED, true), h.context({ config: { panels } }), {
-      store: spy as never,
-    });
-
-    expect(touched).toBe(0);
+        h.context(),
+        h.deps,
+      ),
+    ).toBe('ignored');
   });
 });

@@ -141,6 +141,55 @@
       "when": 1787001900000,
       "tag": "0019_temp_voice",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1787002000000,
+      "tag": "0020_tickets_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1787002100000,
+      "tag": "0021_giveaway_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1787002200000,
+      "tag": "0022_giveaway_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1787002300000,
+      "tag": "0023_giveaway_bonus_entries",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1787002400000,
+      "tag": "0024_giveaway_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1787002500000,
+      "tag": "0025_giveaway_requirement_tree",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787002600000,
+      "tag": "0026_giveaway_prizes_rewards",
+      "breakpoints": true
     }
   ]
 }

@@ -136,6 +136,7 @@ export async function handleBuilderPress(
 
   const reply = await handleBuilderComponent(deps, {
     action: route.action,
+    args: route.args,
     guildId: interaction.guildId,
     channelId: interaction.channelId ?? '',
     userId: interaction.userId,

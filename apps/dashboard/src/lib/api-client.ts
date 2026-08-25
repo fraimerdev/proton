@@ -11,6 +11,7 @@ import type {
   VerificationRequestResult,
 } from '@proton/core';
 import {
+  botInviteSchema,
   guildOverviewSchema,
   guildPresenceSchema,
   moduleConfigViewSchema,
@@ -20,6 +21,7 @@ import {
   verificationRequestResultSchema,
 } from '@proton/core';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
+import type { TicketQuery, TicketSearchResult } from '@proton/module-tickets/query';
 import type { z } from 'zod';
 import type { AuditStamp } from '../server/audit.ts';
 
@@ -53,7 +55,14 @@ export class ApiClient {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { message?: string };
-      throw new Error(body.message ?? `api returned ${response.status}`);
+
+      // Neutral about reads and writes, because the callers supply that half ("Could not save: …").
+      // A gateway error or an HTML error page used to reach the admin as "api returned 502".
+      throw new Error(
+        body.message ??
+          `Proton's API did not answer (HTTP ${response.status}). Nothing was changed — try again, ` +
+            `and if it keeps happening the API is the part that is down, not Discord.`,
+      );
     }
 
     return (await response.json()) as T;
@@ -81,6 +90,12 @@ export class ApiClient {
 
   getGuild(guildId: string): Promise<GuildOverview> {
     return this.#parsed(`/guilds/${guildId}`, guildOverviewSchema);
+  }
+
+  async invitePermissions(): Promise<string> {
+    const { permissions } = await this.#parsed('/invite', botInviteSchema);
+
+    return permissions;
   }
 
   async guildPresence(guildIds: readonly string[]): Promise<string[]> {
@@ -123,6 +138,10 @@ export class ApiClient {
 
   searchTags(guildId: string, query: TagQuery): Promise<TagSearchResult> {
     return this.#request(`/guilds/${guildId}/tags?${queryString(query)}`);
+  }
+
+  searchTickets(guildId: string, query: TicketQuery): Promise<TicketSearchResult> {
+    return this.#request(`/guilds/${guildId}/tickets?${queryString(query)}`);
   }
 
   searchLeaderboard(guildId: string, query: LeaderboardQuery): Promise<LeaderboardResult> {

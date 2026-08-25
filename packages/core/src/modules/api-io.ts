@@ -71,6 +71,12 @@ export const verificationRequestResultSchema = z.object({
   requestId: z.string().min(1),
 });
 
+// A decimal string, not a number: the permission set is a 64-bit mask and JSON numbers lose the
+// high bits. Discord's own guild object sends it the same way for the same reason.
+export const botInviteSchema = z.object({
+  permissions: z.string().regex(/^\d+$/),
+});
+
 export type ModuleField = z.infer<typeof moduleFieldSchema>;
 export type ModuleSection = z.infer<typeof moduleSectionSchema>;
 export type ModuleStatusView = z.infer<typeof moduleStatusSchema>;
@@ -82,3 +88,4 @@ export type ModuleUpdateResult = z.infer<typeof moduleUpdateResultSchema>;
 export type GuildOverview = z.infer<typeof guildOverviewSchema>;
 export type GuildPresence = z.infer<typeof guildPresenceSchema>;
 export type VerificationRequestResult = z.infer<typeof verificationRequestResultSchema>;
+export type BotInvite = z.infer<typeof botInviteSchema>;

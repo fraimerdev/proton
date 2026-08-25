@@ -7,7 +7,9 @@
 
   --line: #242833;
   --line-hi: #333949;
-  --control-line: #4b5468;
+  /* 3.02:1 against the lightest ground it lands on (--surface-hi) — the boundary of an input is
+     what says it is one, so WCAG 1.4.11 applies to it. #4b5468 read 2.12:1 there. */
+  --control-line: #646e86;
 
   --text: #e9ebf1;
   --text-2: #aab1c0;
@@ -153,11 +155,6 @@ h3 {
   letter-spacing: -0.02em;
 }
 
-i[class^="ph"] {
-  display: inline-block;
-  line-height: 0;
-}
-
 .mono {
   font-family: var(--mono);
   font-variant-ligatures: none;
@@ -284,15 +281,26 @@ i[class^="ph"] {
   text-decoration: none;
 }
 
+/* The tile recedes into the rail rather than the whole button fading: opacity on the button took
+   the initials of an icon-less server to 1.9:1, and they are the only thing naming it. */
 .rail-guild[data-present="false"] {
-  opacity: 0.4;
+  background: var(--rail);
   filter: grayscale(1);
+}
+
+.rail-guild[data-present="false"] img {
+  opacity: 0.45;
 }
 
 .rail-guild[data-present="false"]:hover,
 .rail-guild[data-present="false"][aria-current="page"] {
-  opacity: 1;
+  background: var(--surface-hi);
   filter: none;
+}
+
+.rail-guild[data-present="false"]:hover img,
+.rail-guild[data-present="false"][aria-current="page"] img {
+  opacity: 1;
 }
 
 .rail-guild[aria-current="page"] {
@@ -305,7 +313,9 @@ i[class^="ph"] {
 .rail-guild::before {
   content: "";
   position: absolute;
-  left: -14px;
+  /* Measured from the avatar's centre to the rail wall, not hard-coded to a 72px rail: below 900px
+     --rail-w is 60px and a fixed -14px put the sliver outside the column, where it was clipped. */
+  left: calc((44px - var(--rail-w)) / 2);
   top: 50%;
   width: 4px;
   height: 0;
@@ -328,7 +338,11 @@ i[class^="ph"] {
   opacity: 1;
 }
 
+/* Pinned to the foot of the rail, which scrolls: past about a dozen servers the spacer collapses
+   and the only way to sign out or reach the privacy page scrolled off a column with no scrollbar. */
 .rail-user {
+  position: sticky;
+  bottom: 0;
   display: grid;
   place-items: center;
   width: 38px;
@@ -339,6 +353,7 @@ i[class^="ph"] {
   border: 1px solid var(--line-hi);
   border-radius: var(--r-full);
   background: var(--surface);
+  box-shadow: 0 0 0 var(--s2) var(--rail);
   color: var(--text-2);
   cursor: pointer;
   font: 600 var(--t-sm) / 1 var(--font);
@@ -415,7 +430,7 @@ i[class^="ph"] {
   color: var(--text-2);
 }
 
-.search-trigger i {
+.search-trigger [data-icon] {
   font-size: 15px;
 }
 
@@ -494,108 +509,21 @@ i[class^="ph"] {
   transform: translateY(-50%);
 }
 
-.nav-item i {
+.nav-item [data-icon] {
   font-size: 17px;
   color: var(--text-3);
   transition: color 0.12s var(--ease);
 }
 
-.nav-item:hover i,
-.nav-item[aria-current="page"] i {
+.nav-item:hover [data-icon],
+.nav-item[aria-current="page"] [data-icon] {
   color: var(--text-2);
 }
 
-.nav-module {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.nav-module .nav-item {
-  flex: 1;
-  min-width: 0;
-}
-
-.nav-module[data-open="true"] {
-  border-radius: var(--r-sm);
-  background: var(--surface-hi);
-}
-
-.nav-module[data-open="true"] .nav-item[aria-current="page"] {
-  background: none;
-}
-
-.nav-module[data-open="true"] .nav-item[aria-current="page"]::before {
-  content: none;
-}
-
-.nav-module[data-open="true"]::before {
-  content: "";
-  position: absolute;
-  left: calc(var(--s3) * -1 + 1px);
-  top: 50%;
-  width: 3px;
-  height: 18px;
-  border-radius: 0 var(--r-xs) var(--r-xs) 0;
-  background: var(--brand);
-  transform: translateY(-50%);
-}
-
-/* A module carrying areas grows a nested list, so the row has to wrap rather than stay a single
-   flex line. The open look comes from [data-open], not from aria-current, which the sub-nav owns. */
-.nav-module[data-nested="true"] {
-  flex-wrap: wrap;
-  padding-bottom: var(--s2);
-}
-
-.nav-module[data-nested="true"] .nav-item {
-  color: var(--text);
-  font-weight: 500;
-}
-
-/* Centred on the module row, not on the block: with the areas nested under it, 50% of the whole
-   box would float the sliver against the sub-nav instead of against the name it marks. */
-.nav-module[data-nested="true"]::before {
-  top: 17px;
-}
-
-.nav-areas {
-  flex: 0 0 100%;
-  display: flex;
-  flex-direction: column;
-  margin-top: var(--s1);
-  padding-left: var(--s5);
-}
-
-.nav-area {
-  display: flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 var(--s2);
-  border-radius: var(--r-sm);
-  color: var(--text-3);
-  font-size: var(--t-sm);
-  transition:
-    background 0.12s var(--ease),
-    color 0.12s var(--ease);
-}
-
-.nav-area:hover {
-  background: var(--surface);
-  color: var(--text-2);
-  text-decoration: none;
-}
-
-.nav-area[aria-current="page"] {
-  background: var(--surface);
-  color: var(--text);
-  font-weight: 500;
-}
-
-/* On but not running. The dot is the only state mark the other rows carry, so it has to survive
-   the row not being open. */
-.nav-module[data-state="blocked"] .nav-item-label::after,
-.nav-module[data-state="degraded"] .nav-item-label::after {
+/* On but not running. The dot is the only state mark a module row carries, so it has to survive
+   the row not being the current page. */
+.nav-item[data-state="blocked"] .nav-item-label::after,
+.nav-item[data-state="degraded"] .nav-item-label::after {
   content: "";
   display: inline-block;
   width: 6px;
@@ -605,18 +533,18 @@ i[class^="ph"] {
   vertical-align: middle;
 }
 
-.nav-module[data-state="blocked"] .nav-item-label::after {
+.nav-item[data-state="blocked"] .nav-item-label::after {
   background: var(--danger);
 }
 
-.nav-module[data-state="degraded"] .nav-item-label::after {
+.nav-item[data-state="degraded"] .nav-item-label::after {
   background: var(--warn);
 }
 
 /* The same accent the module list gives a switched-on row's tile. Without it twenty-seven rows
    draw a running module and a switched-off one identically, and the sidebar answers "where is
    Automod" but never "is it on". */
-.nav-module[data-state="running"] .nav-item i {
+.nav-item[data-state="running"] [data-icon] {
   color: var(--accent);
 }
 
@@ -793,7 +721,15 @@ i[class^="ph"] {
   text-decoration: none;
 }
 
-.menu-item i {
+.user-menu-failure {
+  margin: 0;
+  padding: var(--s2) var(--s3) var(--s3);
+  color: var(--danger);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.menu-item [data-icon] {
   font-size: 16px;
   color: var(--text-3);
 }
@@ -895,7 +831,7 @@ i[class^="ph"] {
   line-height: 1.5;
 }
 
-.where i {
+.where [data-icon] {
   margin-top: 2px;
   font-size: 14px;
 }
@@ -921,11 +857,6 @@ i[class^="ph"] {
   font-weight: 500;
 }
 
-.pill i {
-  font-size: 13px;
-  color: var(--text-3);
-}
-
 .pill-role {
   background: var(--role-wash, var(--surface-hi));
   color: var(--role-text, var(--text-2));
@@ -945,7 +876,7 @@ i[class^="ph"] {
   white-space: nowrap;
 }
 
-.chip i {
+.chip [data-icon] {
   font-size: 12px;
 }
 
@@ -1004,7 +935,7 @@ i[class^="ph"] {
   cursor: not-allowed;
 }
 
-.button i {
+.button [data-icon] {
   font-size: 16px;
 }
 
@@ -1073,6 +1004,7 @@ input[type="text"],
 input[type="search"],
 input[type="number"],
 input[type="date"],
+input[type="datetime-local"],
 select,
 textarea {
   width: 100%;
@@ -1143,10 +1075,13 @@ input::placeholder {
   color: var(--text-3);
 }
 
-input[aria-invalid="true"] {
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
   border-color: var(--danger);
 }
 
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
   cursor: pointer;
@@ -1279,7 +1214,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-size: var(--t-base);
 }
 
-.alert-banner i {
+.alert-banner [data-icon] {
   margin-top: 2px;
   font-size: 17px;
 }
@@ -1292,10 +1227,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 /* ---------- module list ---------- */
 
 .module-list {
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
   overflow: hidden;
+  list-style: none;
 }
 
 .module-row {
@@ -1388,14 +1326,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-family: var(--font);
 }
 
-/* An area blurb is a sentence, not a module's one-line description, so it wraps instead of being
-   cut off mid-word by the ellipsis the module rows want. */
-.module-desc-plain {
-  font-family: var(--font);
-  white-space: normal;
-  overflow: visible;
-}
-
 .module-group {
   margin-bottom: var(--s8);
 }
@@ -1410,6 +1340,98 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text-2);
 }
 
+/* ---------- module overview ---------- */
+
+/* Gapped cards rather than the clipped container every other list in the product uses. This is the
+   one exception, recorded in DESIGN.md: the overview is a module's front door and each card is a
+   destination, not a row of a list. */
+.area-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Flex, not the grid the module list uses: only some areas carry a count, and a declared track for
+   one that is absent still pays for its gap — which floated the chevron 16px off the cards that
+   have no count and left the column ragged. */
+.area-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  transition:
+    background 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+
+.area-card:hover {
+  background: var(--surface-hi);
+  border-color: var(--line-hi);
+}
+
+.area-card:hover .tile {
+  background: var(--line);
+  color: var(--text-2);
+}
+
+.area-open {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+}
+
+.area-open:hover {
+  text-decoration: none;
+}
+
+/* Stretched under the whole card rather than wrapped around it, so the count and the chevron are
+   inside the target instead of dead space beside it. */
+.area-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* The link is the whole card's target, so the ring belongs on the card. Left on the link it drew
+   around the two lines of text and stopped short of the icon and the chevron inside the same hit.
+   Guarded, because the second rule takes the link's own ring away: without :has() that would leave
+   a keyboard with no ring at all rather than a slightly small one. */
+@supports selector(:has(*)) {
+  .area-card:has(.area-open:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .area-open:focus-visible {
+    outline: none;
+  }
+}
+
+.area-title {
+  display: block;
+  font-size: var(--t-md);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.area-blurb {
+  display: block;
+  max-width: 62ch;
+  margin-top: 2px;
+  font-size: var(--t-sm);
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
 .area-count {
   font: 400 var(--t-sm) / 1 var(--mono);
   font-variant-numeric: tabular-nums;
@@ -1422,8 +1444,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .area-chevron {
-  font-size: 15px;
+  font-size: 16px;
   color: var(--text-3);
+  transition: color 0.16s var(--ease);
+}
+
+.area-card:hover .area-chevron {
+  color: var(--text-2);
 }
 
 .module-warn {
@@ -1603,6 +1630,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .field-info-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1617,6 +1645,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   line-height: 0;
   cursor: help;
   transition: color 0.12s var(--ease);
+}
+
+/* The glyph stays 18px; the pointer target grows to the 24px WCAG 2.5.8 asks for. */
+.field-info-button::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
 }
 
 .field-info-button:hover {
@@ -1646,9 +1681,17 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   transition: opacity 0.12s var(--ease);
 }
 
-.field-info-button:hover + .field-tooltip,
-.field-info-button:focus + .field-tooltip {
+/* Hoverable as well as revealed, so the pointer can travel into the tooltip to read a sentence
+   that runs to 280px without it vanishing on the way (WCAG 1.4.13). */
+.field-info:hover .field-tooltip,
+.field-info:focus-within .field-tooltip {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.field-info[data-dismissed] .field-tooltip {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .field-description {
@@ -1734,6 +1777,17 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .picker-value-unset {
   color: var(--text-3);
 }
+/* Same treatment the token list gives a role Discord no longer has: the raw id, dashed and in
+   mono, because a value nobody can see is one nobody can correct. */
+.picker-trigger[data-unknown] {
+  border-style: dashed;
+}
+
+.picker-trigger[data-unknown] .picker-value {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--text-3);
+}
 
 .picker-caret {
   flex-shrink: 0;
@@ -1745,7 +1799,9 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 30;
+  /* Above the save bar's 60. A picker opened on the last field of a dirty form dropped its list
+     underneath the bar, which is the one moment the bar is guaranteed to be there. */
+  z-index: 70;
   width: 100%;
   min-width: 240px;
   max-width: 340px;
@@ -1777,8 +1833,15 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font: 400 var(--t-base) / 1 var(--font);
 }
 
+/* The ring is suppressed because a 2px outline at 2px offset clips against the popover edge; the
+   row carries the focus instead, inset so it costs no layout. Without either, the box the popover
+   opens focus into has no indicator at all. */
 .picker-search input:focus {
   outline: none;
+}
+
+.picker-search:focus-within {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .picker-list {
@@ -1874,6 +1937,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .token-remove {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1890,6 +1954,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   transition:
     color 0.12s var(--ease),
     background 0.12s var(--ease);
+}
+
+/* Same as the field info button: 20px of fill, 24px of target. */
+.token-remove::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
 }
 
 .token-remove:hover {
@@ -2064,6 +2135,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .rule-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--s3);
   min-width: 0;
@@ -2158,6 +2230,15 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .field-flash {
   animation: field-flash 1.6s var(--ease);
+}
+
+/* The global reduce block collapses every animation to 0.01ms, which would take the wash with it —
+   and the wash is the only thing saying which of forty rows the search just jumped to. The class is
+   removed by the same 1.6s timer either way, so holding it flat says the same thing without moving. */
+@media (prefers-reduced-motion: reduce) {
+  .field-flash {
+    background: var(--accent-wash);
+  }
 }
 
 @keyframes field-flash {
@@ -2289,7 +2370,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   gap: var(--s2);
 }
 
-.gap-head i {
+.gap-head [data-icon] {
   font-size: 17px;
 }
 
@@ -2344,7 +2425,16 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
-  overflow: hidden auto;
+  /* Both axes: `hidden auto` clipped a 940px table with no way to reach the rest of it between the
+     phone breakpoint and about 700px, where the page is already full width. */
+  overflow: auto;
+}
+
+/* The card is already the scroll container for its sticky header, but with no height it never
+   scrolled, so the leaderboard's and the tag browser's headers were sticky against nothing. The
+   virtualised ledger brings its own .table-scroll and keeps it. */
+.table-card:not(:has(.table-scroll)) {
+  max-height: 544px;
 }
 
 .table-scroll {
@@ -2454,17 +2544,22 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text);
 }
 
+.cases-table td[data-column="id"],
 .cases-table td[data-column="reason"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Grown to the full height of its cell and pulled back by the same amount: an 11px label is a 15px
+   target. Vertical only — a 66px column given horizontal bleed too would put its target on top of
+   the next column's. */
 .sort-button {
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
-  padding: 0;
+  margin: calc(var(--s3) * -1) 0;
+  padding: var(--s3) 0;
   border: 0;
   background: none;
   color: inherit;
@@ -2542,6 +2637,16 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   margin-top: var(--s4);
 }
 
+/* A filter change re-runs the loader and the router keeps the old rows on screen while it does.
+   The results dim rather than disappearing, so the page does not jump under the filter bar — and
+   the filters themselves stay live, because they are what the admin is still using. */
+.view-pending[data-pending] .table-card,
+.view-pending[data-pending] .pager,
+.view-pending[data-pending] .pagination {
+  opacity: 0.55;
+  transition: opacity 0.12s var(--ease);
+}
+
 /* ---------- tabs ---------- */
 
 .tabs {
@@ -2610,6 +2715,19 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .ladder-rung-stacked {
   flex-direction: column;
   align-items: stretch;
+}
+
+/* Takes the column the duration field would have held, so a kick rung keeps the ladder's
+   alignment line instead of pulling everything after it to the left. */
+.ladder-rung-note {
+  flex: 1;
+  min-width: 150px;
+}
+
+.tempvc-hint {
+  color: var(--text-3);
+  font-size: var(--t-xs);
+  line-height: 1.5;
 }
 
 .ladder-rung .filter {
@@ -2688,6 +2806,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text);
 }
 
+.log-category-count {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  text-align: right;
+}
+
 .log-event-label {
   display: flex;
   align-items: center;
@@ -2695,15 +2820,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   padding: var(--s2) var(--s4) var(--s2) var(--s7);
   color: var(--text-2);
   font-size: var(--t-base);
-  cursor: pointer;
-}
-
-.log-event-label:hover {
-  background: var(--surface-hi);
-}
-
-.log-category > .log-event-label:last-child {
-  padding-bottom: var(--s3);
 }
 
 /* ---------- enforcement readout ---------- */
@@ -2853,7 +2969,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border-bottom: 1px solid var(--line);
 }
 
-.palette-head > i {
+.palette-head > [data-icon] {
   font-size: 18px;
   color: var(--text-3);
 }
@@ -2873,6 +2989,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .palette-esc {
+  position: relative;
   padding: var(--s1) var(--s2);
   border: 1px solid var(--line-hi);
   border-radius: var(--r-xs);
@@ -2880,6 +2997,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text-3);
   cursor: pointer;
   font: 500 10px / 1 var(--mono);
+}
+
+/* The cap stays a cap; the target reaches 24px (WCAG 2.5.8). */
+.palette-esc::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
 
 .palette-esc:hover {
@@ -2904,12 +3028,12 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   background: var(--surface-hi);
 }
 
-.palette-item > i {
+.palette-item > [data-icon] {
   font-size: 17px;
   color: var(--text-3);
 }
 
-.palette-item[data-selected="true"] > i {
+.palette-item[data-selected="true"] > [data-icon] {
   color: var(--accent);
 }
 
@@ -3168,84 +3292,240 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   line-height: 1.65;
 }
 
-/* ---------- guild picker ---------- */
+/* ---------- spinner ---------- */
 
-.guild-list {
-  display: flex;
-  flex-direction: column;
+.route-pending {
+  display: grid;
+  place-items: center;
+  min-height: 320px;
+}
+
+/* Three sides transparent, so what turns is an arc rather than a ring with a bright quarter. The
+   track is left out on purpose: a visible one reads as a progress bar that never fills. */
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: var(--accent);
+  border-radius: var(--r-full);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* The global reduce block collapses every animation to 0.01ms, which would freeze the arc at
+   whatever angle it stopped on and read as a broken glyph. A closed ring says "working" without
+   moving, and role=status has already said it in words. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    border-right-color: var(--line-hi);
+    border-bottom-color: var(--line-hi);
+    border-left-color: var(--line-hi);
+  }
+}
+
+/* ---------- server picker ---------- */
+
+.picker-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.picker-page .page {
+  max-width: 780px;
+  padding-top: var(--s7);
+}
+
+.picker-head {
+  margin: var(--s8) 0 var(--s7);
+  text-align: center;
+}
+
+.picker-title {
+  margin: 0;
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.picker-sub {
+  margin: var(--s2) auto 0;
+  max-width: 52ch;
+  color: var(--text-2);
+  font-size: var(--t-md);
+}
+
+.server-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: var(--s4);
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.server-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
   overflow: hidden;
+  transition: border-color 0.16s var(--ease);
 }
 
-.guild-row {
-  display: flex;
-  align-items: center;
-  gap: var(--s4);
-  padding: var(--s3) var(--s4);
-  transition: background 0.12s var(--ease);
+.server-card:hover {
+  border-color: var(--line-hi);
 }
 
-.guild-list li + li .guild-row {
-  border-top: 1px solid var(--line);
+/* The server's own icon is the card's colour: blown up under the whole card and blurred past
+   recognition. Scaled well past the frame so the blur has pixels to sample at the edges — a blur
+   that runs off its source fades to transparent and rings the card in a dark halo. */
+.server-wash {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(36px) saturate(1.6);
+  transform: scale(1.8);
+  opacity: 0.5;
 }
 
-.guild-row:hover {
-  background: var(--surface-hi);
+/* No icon, no colour to borrow. The mark's own gradient stands in, because a server on Discord's
+   default icon is otherwise a black rectangle in a row of coloured ones. */
+.server-wash-blank {
+  background: var(--brand);
+  filter: blur(44px);
+  opacity: 0.3;
 }
 
-.guild-avatar {
+.server-hero {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  flex: none;
-  overflow: hidden;
-  border-radius: var(--r-lg);
-  background: var(--surface-hi);
-  color: var(--text-3);
-  font: 600 var(--t-sm) / 1 var(--font);
+  height: 176px;
 }
 
-.guild-avatar img {
+.server-crest {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--surface-hi);
+  color: var(--text-2);
+  font: 600 var(--t-xl) / 1 var(--font);
+  letter-spacing: -0.02em;
+}
+
+.server-crest img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.guild-row-text {
-  flex: 1;
-  min-width: 0;
+/* Laid over the wash rather than beside it, so the tint carries the whole card and the strip the
+   name sits on is still dark enough to read against. */
+.server-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: rgba(11, 13, 18, 0.72);
 }
 
-.guild-row-name {
-  display: block;
-  font-weight: 500;
+.server-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--t-base);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.guild-row-role {
-  display: block;
-  margin-top: 1px;
-  color: var(--text-3);
+.server-button {
+  flex: none;
+  height: 30px;
+  padding: 0 var(--s3);
   font-size: var(--t-sm);
 }
 
-/* Only the identity dims. The role line carries the reason it is dimmed, so fading that out with
-   it would leave a greyed row with nothing readable saying why. */
-.guild-row[data-present="false"] .guild-avatar,
-.guild-row[data-present="false"] .guild-row-name {
-  opacity: 0.5;
+/* The button is the whole card's target — the 176px above it is the same decision drawn large.
+   Stretched rather than wrapped so the two never become one enormous focusable rectangle. */
+.server-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-lg);
 }
 
-.guild-row[data-present="false"] .guild-avatar {
-  filter: grayscale(1);
+.server-card:has(.server-button:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.server-button:focus-visible {
+  outline: none;
+}
+
+.server-unavailable {
+  flex: none;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  white-space: nowrap;
+}
+
+/* Proton is not in it. The colour is what makes a card look live, so the colour is what goes — and
+   the button beside it already reads "Invite" rather than "Manage". */
+.server-card[data-present="false"] .server-wash {
+  filter: blur(36px) saturate(0.15);
+  opacity: 0.2;
+}
+
+.server-card[data-present="false"] .server-crest img {
+  opacity: 0.6;
+}
+
+@media (max-width: 620px) {
+  .server-grid {
+    grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+    gap: var(--s3);
+  }
+
+  .server-hero {
+    height: 126px;
+  }
+
+  .server-crest {
+    width: 56px;
+    height: 56px;
+    font-size: var(--t-md);
+  }
+
+  .server-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s2);
+    text-align: center;
+  }
+
+  .server-button {
+    justify-content: center;
+  }
 }
 
 /* ---------- prose ---------- */
@@ -3387,12 +3667,18 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     display: block;
   }
 
+  html {
+    scroll-padding-bottom: 116px;
+  }
+
   .main {
     overflow: visible;
     padding-left: var(--rail-w);
   }
 
-  .rail-home {
+  /* The topbar carries Account below 900px. Two buttons opening one menu meant the menu appeared
+     beside one of them and returned focus to the other. */
+  .rail-user {
     display: none;
   }
 
@@ -3480,6 +3766,37 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
   .module-desc {
     white-space: normal;
+  }
+
+  /* row-gap stays 0 and the count carries its own margin: the second track exists whether or not
+     an area has a count, so a gap would indent every countless card by 8px of nothing. */
+  .area-card {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "tile text  chevron"
+      ".    count chevron";
+    row-gap: 0;
+    column-gap: var(--s3);
+    padding: var(--s4);
+  }
+
+  .area-card > .tile {
+    grid-area: tile;
+    align-self: start;
+  }
+
+  .area-open {
+    grid-area: text;
+  }
+
+  .area-count {
+    grid-area: count;
+    margin-top: var(--s2);
+  }
+
+  .area-chevron {
+    grid-area: chevron;
   }
 
   .field {
@@ -3597,6 +3914,20 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     min-width: 0;
   }
 
+  /* A headless rule keeps its params in .rule-controls, which the block above does not match. */
+  .rule-controls > .rule-param {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .rule-controls > .rule-param input[type="number"],
+  .rule-controls > .rule-param input[type="text"],
+  .rule-controls > .rule-param select,
+  .rule-controls > .rule-param .picker {
+    width: 100%;
+    min-width: 0;
+  }
+
   .form-section-toggle {
     padding-left: var(--s4);
     padding-right: var(--s4);
@@ -3632,10 +3963,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     grid-column: 1 / -1;
   }
 
-  .table-card {
-    overflow-x: auto;
-  }
-
   .tabs {
     gap: var(--s4);
     overflow-x: auto;
@@ -3659,7 +3986,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     flex: 1;
   }
 
-  .main {
+  html {
     scroll-padding-bottom: 176px;
   }
 
@@ -4269,8 +4596,10 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 /* ---------- saved messages ---------- */
 
+/* Not `.palette` — that is the command palette, 1400 lines up, and this rule was quietly adding
+   16px of gap and 20px of padding to it. */
 .templates,
-.palette {
+.saved-palette {
   display: flex;
   flex-direction: column;
   gap: var(--s4);
@@ -4588,10 +4917,9 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .builder-head-title {
   color: var(--text-2);
-  font-size: var(--t-xs);
+  font-size: var(--t-base);
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: -0.02em;
 }
 
 .builder-actions {
@@ -4700,6 +5028,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .builder-v2-add {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s3);
   padding-top: var(--s3);
@@ -4715,6 +5044,16 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   width: auto;
   min-width: 200px;
   max-width: 260px;
+}
+
+/* Beside its own base rule, not up in the shared phone block: that sits 1100 lines earlier and
+   loses the tie on source order, so a 200px floor kept pushing the page sideways. */
+@media (max-width: 620px) {
+  .builder-v2-add select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
 }
 
 .field-colour .colour-input {
@@ -4760,6 +5099,11 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border: 1px dashed var(--line);
   color: var(--text-3);
   font-size: var(--t-sm);
+}
+
+.card-preview-failed {
+  border-color: var(--danger-line);
+  color: var(--danger);
 }
 
 .card-preview-note {
@@ -4928,4 +5272,1186 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .honeypot-notice .publish-panel-result {
   flex-basis: 100%;
   margin: 0;
+}
+
+/* ---------- public site: shell ---------- */
+
+.site {
+  --site-w: 1140px;
+  --site-pad: var(--s8);
+  --site-gap: 96px;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.site-main {
+  flex: 1;
+}
+
+.site :where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.site [id] {
+  scroll-margin-top: 88px;
+}
+
+/* The pill nav wraps to two rows below 940px, so the desktop offset drops every anchor
+   underneath it. Measured 113.7px at 375. */
+@media (max-width: 940px) {
+  .site [id] {
+    scroll-margin-top: 128px;
+  }
+}
+
+.site-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.site-label::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  flex: none;
+  background: currentColor;
+}
+
+/* ---------- public site: header ---------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  padding: var(--s4) var(--s5) var(--s3);
+}
+
+.site-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--s5);
+  width: 100%;
+  max-width: var(--site-w);
+  padding: var(--s2) var(--s2) var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--rail);
+}
+
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.site-brand:hover {
+  text-decoration: none;
+}
+
+.site-nav-links {
+  display: flex;
+  gap: var(--s5);
+  justify-self: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-nav-links a {
+  color: var(--text-2);
+  font-size: var(--t-base);
+  transition: color 0.13s var(--ease);
+}
+
+.site-nav-links a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-nav-links a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.site-nav-cta {
+  justify-self: end;
+  height: 34px;
+  border-radius: var(--r-full);
+}
+
+/* ---------- public site: landing ---------- */
+
+.site {
+  --r-xl: 16px;
+}
+
+.button-xl {
+  height: 52px;
+  padding: 0 var(--s7);
+  border-radius: var(--r-full);
+  font-size: var(--t-md);
+}
+
+.button-xl [data-icon] {
+  font-size: 20px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: var(--s8) var(--site-pad) var(--site-gap);
+  text-align: center;
+}
+
+.hero-mark {
+  width: 88px;
+  height: 88px;
+  margin-bottom: var(--s6);
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(34px, 5.4vw, 60px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+}
+
+/* The second clause is the claim; it gets its own line and drops to muted. Weight and value carry
+   the emphasis — this is where a gradient would have gone. */
+.hero-title span {
+  display: block;
+  color: var(--text-2);
+}
+
+.hero-sub {
+  max-width: 62ch;
+  margin: var(--s6) 0 0;
+  color: var(--text-2);
+  font-size: clamp(15px, 1.4vw, 17px);
+  line-height: 1.68;
+  text-wrap: pretty;
+}
+
+.hero-alert {
+  margin: var(--s6) 0 0;
+  max-width: 64ch;
+  text-align: left;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s3);
+  margin-top: var(--s7);
+}
+
+/* Promoted off 12.5px/quiet: the required permission is the most trust-building sentence on the
+   page and was set in its smallest, lowest-contrast type. */
+.hero-fine {
+  margin: var(--s5) 0 0;
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.6;
+}
+
+/* ---------- public site: screenshots ---------- */
+
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line-hi);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+}
+
+/* What stands in for a screenshot nobody has taken yet. It names the file it is waiting for, so
+   the gap is a instruction rather than a broken image. */
+.shot-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  aspect-ratio: 16 / 10;
+  padding: var(--s7);
+  border-style: dashed;
+  text-align: center;
+}
+
+.shot-pending [data-icon] {
+  font-size: 30px;
+  color: var(--text-3);
+}
+
+.shot-file {
+  color: var(--text-2);
+  font-size: var(--t-sm);
+}
+
+.shot-note {
+  max-width: 40ch;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+/* ---------- public site: sections ---------- */
+
+.lp {
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: var(--site-gap) var(--site-pad);
+}
+
+.lp-head {
+  max-width: 46rem;
+  margin-bottom: var(--s9);
+}
+
+.lp-title {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.lp-lede {
+  max-width: 58ch;
+  margin: var(--s4) 0 0;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.7;
+}
+
+.lp-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--s7);
+}
+
+/* ---------- public site: capability index ---------- */
+
+/* A ruled index, not a grid of cards. Each capability is one row of the record: mark, name,
+   what it does — the shape the product's own module list has. */
+.index-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.index-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 15rem) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s5);
+  padding: var(--s5) var(--s2);
+  border-bottom: 1px solid var(--line);
+  transition: background 0.13s var(--ease);
+}
+
+.index-row:hover {
+  background: var(--surface);
+}
+
+.index-row [data-icon] {
+  font-size: 19px;
+  color: var(--text-3);
+}
+
+.index-name {
+  color: var(--text);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.index-body {
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.6;
+}
+
+/* ---------- public site: showcases ---------- */
+
+/* The three proofs are one argument, so they sit on one darker ground with the gaps between them
+   tightened. Without this the page is eight sections of identical 96px padding. */
+.show-band {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--rail);
+}
+
+.show-band .show {
+  padding-block: var(--s9);
+}
+
+.show-band .show:first-child {
+  padding-top: var(--site-gap);
+}
+
+.show-band .show:last-child {
+  padding-bottom: var(--site-gap);
+}
+
+.show-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: var(--s10);
+}
+
+.show-flip .show-figure {
+  order: -1;
+}
+
+.show-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: var(--s6) 0 var(--s7);
+  padding: 0;
+  list-style: none;
+}
+
+.show-list li {
+  position: relative;
+  padding-left: 28px;
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.55;
+}
+
+.show-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--ok-line);
+  border-radius: var(--r-full);
+  background: var(--ok-wash);
+}
+
+.show-list li::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 7px;
+  width: 4px;
+  height: 8px;
+  border-right: 2px solid var(--ok);
+  border-bottom: 2px solid var(--ok);
+  transform: rotate(45deg);
+}
+
+/* ---------- public site: command strip ---------- */
+
+.strip {
+  padding: var(--site-gap) 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  max-width: var(--site-w);
+  margin: 0 auto var(--s8);
+  padding: 0 var(--site-pad);
+}
+
+.strip-head .lp-title {
+  margin: 0;
+}
+
+.marquee {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.marquee-row {
+  overflow: hidden;
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 52s linear infinite;
+}
+
+.marquee-row[data-reverse] .marquee-track {
+  animation-direction: reverse;
+}
+
+.strip:hover .marquee-track,
+.strip:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+
+.marquee-run {
+  display: flex;
+  gap: var(--s5);
+  padding-right: var(--s5);
+}
+
+.marquee-item {
+  padding: var(--s2) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--t-md);
+  white-space: nowrap;
+}
+
+/* The track holds two identical runs, so half a track is one whole loop. */
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ---------- public site: questions ---------- */
+
+.faq-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.faq-item + .faq-item {
+  border-top: 1px solid var(--line);
+}
+
+.faq-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  padding: var(--s4) var(--s5);
+  cursor: pointer;
+  list-style: none;
+  transition: background 0.13s var(--ease);
+}
+
+.faq-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item > summary:hover {
+  background: var(--surface-hi);
+}
+
+.faq-q {
+  color: var(--text);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.faq-mark {
+  flex: none;
+  color: var(--text-3);
+  font-size: 16px;
+}
+
+/* Drawn, not rotated: a transform transition would be the only one in the system. */
+.faq-item[open] .faq-mark-shut,
+.faq-item:not([open]) .faq-mark-open {
+  display: none;
+}
+
+.faq-a {
+  max-width: 74ch;
+  padding: 0 var(--s5) var(--s5);
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.68;
+}
+
+.faq-a p {
+  margin: 0 0 var(--s3);
+}
+
+.faq-a p:last-child {
+  margin-bottom: 0;
+}
+
+.faq-a strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.faq-a code {
+  padding: 2px var(--s1);
+  border-radius: var(--r-xs);
+  background: var(--surface-hi);
+  font: 400 0.88em var(--mono);
+}
+
+/* ---------- public site: closing call ---------- */
+
+.closer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--site-gap) var(--site-pad);
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  text-align: center;
+}
+
+.closer-title {
+  margin: 0;
+  font-size: clamp(30px, 4.4vw, 48px);
+  font-weight: 600;
+  letter-spacing: -0.032em;
+  line-height: 1.1;
+}
+
+.closer-sub {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.65;
+}
+
+/* ---------- public site: footer ---------- */
+
+.site-footer {
+  position: relative;
+  padding-top: 120px;
+  background: var(--rail);
+}
+
+/* The page ground shows through above the curve, so the footer reads as the floor the page sits
+   on rather than one more section of it. It is the only non-rectangular edge in the product. */
+.site-wave {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 120px;
+  display: block;
+  fill: var(--rail);
+}
+
+.site-footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr);
+  align-items: start;
+  gap: var(--s8);
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: 0 var(--site-pad) var(--s9);
+}
+
+.site-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--text);
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.site-footer-heading {
+  display: block;
+  color: var(--text);
+  font-size: var(--t-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.site-footer-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: var(--s4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-footer-group a {
+  color: var(--text-2);
+  font-size: var(--t-base);
+  transition: color 0.13s var(--ease);
+}
+
+.site-footer-group a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-footer-call {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.site-footer-base {
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: var(--s5) var(--site-pad);
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
+/* ---------- public site: commands ---------- */
+
+.cmd-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+
+.cmd-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+}
+
+.cmd-search [data-icon] {
+  position: absolute;
+  left: var(--s3);
+  color: var(--text-3);
+  font-size: 17px;
+  pointer-events: none;
+}
+
+.cmd-search input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--s4) 0 38px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--text);
+  font: 400 var(--t-base) / 1 var(--font);
+}
+
+.cmd-search input::placeholder {
+  color: var(--text-3);
+}
+
+.cmd-search input:hover {
+  border-color: var(--text-3);
+}
+
+.cmd-search input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  outline: none;
+}
+
+.cmd-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.cmd-filter {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font: 500 var(--t-sm) / 1 var(--font);
+  transition:
+    background 0.13s var(--ease),
+    border-color 0.13s var(--ease),
+    color 0.13s var(--ease);
+}
+
+.cmd-filter:hover {
+  border-color: var(--line-hi);
+  background: var(--surface-hi);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.cmd-filter[aria-current] {
+  border-color: var(--accent-line);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.cmd-count {
+  margin: 0 0 var(--s6);
+  color: var(--text-3);
+  font-size: var(--t-sm);
+}
+
+.cmd-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s8);
+}
+
+.cmd-group-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s4);
+  margin-bottom: var(--s3);
+}
+
+.cmd-group-head > i {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-lg);
+  background: var(--surface-hi);
+  color: var(--text-3);
+  font-size: 20px;
+}
+
+.cmd-group-title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.cmd-group-blurb {
+  max-width: 74ch;
+  margin: 2px 0 0;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.cmd-group-count {
+  color: var(--text-3);
+  font-size: var(--t-sm);
+}
+
+.cmd-list {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.cmd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s3) var(--s5);
+  padding: var(--s4) var(--s5);
+  transition: background 0.13s var(--ease);
+}
+
+.cmd-row + .cmd-row {
+  border-top: 1px solid var(--line);
+}
+
+.cmd-row:hover {
+  background: var(--surface-hi);
+}
+
+.cmd-usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s2);
+  min-width: 0;
+  font: 400 var(--t-base) / 1.5 var(--mono);
+  font-variant-ligatures: none;
+}
+
+.cmd-usage b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.cmd-arg {
+  color: var(--text-3);
+}
+
+.cmd-arg-req {
+  color: var(--text-2);
+}
+
+.cmd-desc {
+  grid-column: 1;
+  max-width: 76ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+
+.cmd-perm {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+}
+
+.cmd-foot {
+  max-width: 68ch;
+  margin: var(--s8) 0 0;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+}
+
+.doc-page .empty-state code,
+.cmd-foot code {
+  padding: 2px var(--s1);
+  border-radius: var(--r-xs);
+  background: var(--surface-hi);
+  font: 400 0.88em var(--mono);
+}
+
+/* ---------- public site: prose pages ---------- */
+
+.doc-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: var(--s9) var(--site-pad) var(--site-gap);
+}
+
+.doc-page-wide {
+  max-width: var(--site-w);
+}
+
+.doc-head {
+  max-width: 46rem;
+  margin-bottom: var(--s9);
+}
+
+.doc-title {
+  margin: var(--s3) 0 0;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.doc-lede {
+  max-width: 62ch;
+  margin: var(--s4) 0 0;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.68;
+}
+
+.doc-split {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s10);
+}
+
+.doc-nav {
+  position: sticky;
+  top: 100px;
+}
+
+.doc-nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: var(--s4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-nav a {
+  color: var(--text-2);
+  font-size: var(--t-base);
+}
+
+.doc-nav a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.doc-nav-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s6);
+  padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.doc-nav-foot a {
+  color: var(--text-3);
+  font-size: var(--t-sm);
+}
+
+.doc-body {
+  min-width: 0;
+}
+
+.faq-group + .faq-group {
+  margin-top: var(--s8);
+}
+
+.faq-group-title {
+  margin: 0 0 var(--s4);
+  color: var(--text);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.doc-tail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  margin-top: var(--s8);
+  padding: var(--s5) var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.doc-tail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.doc-tail p {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.6;
+}
+
+/* ---------- public site: responsive ---------- */
+
+@media (max-width: 1080px) {
+  .site {
+    --site-pad: var(--s6);
+    --site-gap: 76px;
+  }
+
+  .show-inner,
+  .doc-split {
+    gap: var(--s8);
+  }
+}
+
+/* Every text link in the chrome is an 18px line box, which is a 18px hit target on a phone.
+   The padding is negative-margined back out so the visual rhythm does not change. */
+@media (pointer: coarse), (max-width: 940px) {
+  .site-nav-links a,
+  .site-footer-group a,
+  .doc-nav a,
+  .doc-nav-foot a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -13px;
+  }
+
+  .site-brand {
+    min-height: 44px;
+  }
+
+  .site-nav-cta,
+  .site .button {
+    height: 44px;
+  }
+
+  .site .button-xl {
+    height: 52px;
+  }
+
+  .skip-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 940px) {
+  .site-nav {
+    grid-template-columns: 1fr auto;
+    row-gap: var(--s3);
+    padding: var(--s3) var(--s3) var(--s3) var(--s4);
+    border-radius: var(--r-lg);
+  }
+
+  .site-nav-links {
+    order: 3;
+    grid-column: 1 / -1;
+    justify-self: start;
+    flex-wrap: wrap;
+    gap: var(--s4);
+  }
+
+  .show-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The figure goes back under the copy on one column: reversing it there would put a picture
+     above the sentence that says what it is a picture of. */
+  .show-flip .show-figure {
+    order: 0;
+  }
+
+  .strip-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .site-footer {
+    padding-top: 84px;
+  }
+
+  .site-wave {
+    height: 84px;
+  }
+
+  .site-footer-inner {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s7);
+  }
+
+  .site-footer-brand,
+  .site-footer-call {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .cmd-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cmd-perm {
+    grid-row: auto;
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .doc-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .doc-nav {
+    position: static;
+  }
+
+  .doc-nav ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--s4);
+  }
+
+  .doc-nav-foot {
+    flex-direction: row;
+    gap: var(--s4);
+  }
+}
+
+@media (max-width: 620px) {
+  .site {
+    --site-pad: var(--s4);
+    --site-gap: 60px;
+  }
+
+  .site-header {
+    padding: var(--s3) var(--s3) var(--s2);
+  }
+
+  .hero-mark {
+    width: 72px;
+    height: 72px;
+  }
+
+  .hero-actions .button-xl {
+    width: 100%;
+  }
+
+  .index-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: var(--s2) var(--s4);
+    padding-block: var(--s4);
+  }
+
+  .index-body {
+    grid-column: 2;
+    font-size: var(--t-base);
+  }
+
+  .site-footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s6);
+  }
+
+  .cmd-group-head {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .cmd-group-head > i {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--r-md);
+    font-size: 17px;
+  }
+
+  .faq-item > summary,
+  .faq-a {
+    padding-inline: var(--s4);
+  }
+
+  .doc-tail {
+    padding: var(--s4);
+  }
 }
