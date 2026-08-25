@@ -67,8 +67,8 @@ const app = createApiApp({
   sharedSecret: env.API_SHARED_SECRET,
 });
 
-const server = Bun.serve({ port: env.PORT, fetch: app.fetch });
-console.log(`api listening on :${server.port}`);
+const server = Bun.serve({ port: env.PORT, hostname: env.HOST, fetch: app.fetch });
+console.log(`api listening on ${server.hostname}:${server.port}`);
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {

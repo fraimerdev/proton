@@ -36,6 +36,12 @@ bun run db:migrate     # drizzle-kit
 bun run build
 ```
 
+## Deployment
+
+Proton runs on a single Ubuntu VPS behind nginx, supervised by pm2. The runbook is
+[`docs/DEPLOY.md`](docs/DEPLOY.md); the pm2, nginx and environment artefacts are in
+[`deploy/`](deploy/).
+
 ## Layout
 
 ```

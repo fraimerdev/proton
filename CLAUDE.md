@@ -14,7 +14,10 @@ decisions below, which the project owner has taken since PLAN.md was written.
   Docker daemon over a unix socket; a Windows-side process cannot. Verified: `bun test`
   runs fast-check and Testcontainers (Postgres 17 + Redis 7) in WSL.
 - **Monetization**: Discord App Subscriptions **and** Stripe in v1 (§2 said Stripe later).
-- **Deploy target**: deferred to Gate 5. No Dockerfiles or Fly/K8s config before then.
+- **Deploy target**: one Ubuntu VPS serving `prtn.xyz` — nginx in front of the dashboard, pm2
+  supervising the five Bun processes, Postgres and Redis native on the same host. This replaces
+  §2's Docker images / Fly.io / K8s: there are no Dockerfiles and `docker-compose.yml` is a
+  development file only. The runbook is `docs/DEPLOY.md`; the artefacts are in `deploy/`.
 - **Privileged intents**: Server Members + Message Content. Presence is not used.
 - **Message-log retention**: opt-in, 30 days.
 - **`@tanstack/react-table` is v9**, not §2's v8 — not a dependency until Gate 1.
