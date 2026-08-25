@@ -54,6 +54,9 @@ export function ScheduleEditor({
   const id = useId();
   const channelControlId = `${id}-channel`;
   const pingControlId = `${id}-ping`;
+  const atControlId = `${id}-at`;
+  const everyControlId = `${id}-every`;
+  const enabledControlId = `${id}-enabled`;
   const parsed = schedule === undefined ? null : templateScheduleSchema.safeParse(schedule);
   const issues = parsed && !parsed.success ? parsed.error.issues : [];
 
@@ -103,9 +106,14 @@ export function ScheduleEditor({
         </small>
       </div>
 
-      <label className="filter">
-        <span>First posts at</span>
+      {/* A <label> around both the control and its sentence reads the sentence out as part of the
+          control's name. The Channel and Ping rows below already name theirs with htmlFor. */}
+      <div className="filter">
+        <span>
+          <label htmlFor={atControlId}>First posts at</label>
+        </span>
         <input
+          id={atControlId}
           onChange={(e) => set({ at: fromLocalInput(e.target.value) })}
           type="datetime-local"
           value={toLocalInput(schedule.at)}
@@ -114,7 +122,7 @@ export function ScheduleEditor({
           Read in this browser’s timezone and stored with its offset, so it means the same moment
           wherever it is read back.
         </small>
-      </label>
+      </div>
 
       <label className="filter">
         <span>Then</span>
@@ -131,9 +139,12 @@ export function ScheduleEditor({
       </label>
 
       {schedule.mode === 'repeat' ? (
-        <label className="filter">
-          <span>Every</span>
+        <div className="filter">
+          <span>
+            <label htmlFor={everyControlId}>Every</label>
+          </span>
           <input
+            id={everyControlId}
             onChange={(e) => set({ every: e.target.value || undefined })}
             placeholder="24h"
             type="text"
@@ -142,7 +153,7 @@ export function ScheduleEditor({
           <small className="field-description">
             A number and a unit, such as <code>24h</code> or <code>7d</code>.
           </small>
-        </label>
+        </div>
       ) : null}
 
       <div className="filter">
@@ -164,20 +175,27 @@ export function ScheduleEditor({
         </small>
       </div>
 
-      <label className="field field-boolean">
+      {/* Head first, then the control: `.field` is a two-column grid, so an input written first
+          took column one and put the switch left of its own label, alone in the whole product. */}
+      <div className="field field-boolean">
+        <span className="field-head">
+          <label className="field-label" htmlFor={enabledControlId}>
+            Schedule is on
+          </label>
+        </span>
         <input
+          id={enabledControlId}
           aria-checked={schedule.enabled}
           checked={schedule.enabled}
           onChange={(e) => set({ enabled: e.target.checked })}
           role="switch"
           type="checkbox"
         />
-        <span className="field-label">Schedule is on</span>
         <small className="field-description">
           Switching it off takes the booking down straight away. The template stays, and{' '}
           <code>/message post</code> still posts it on request.
         </small>
-      </label>
+      </div>
 
       <button className="button button-ghost" onClick={() => onChange(undefined)} type="button">
         <Icon name="trash" />

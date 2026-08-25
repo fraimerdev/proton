@@ -23,10 +23,12 @@ import {
 import {
   applyPanels,
   initialPanelValues,
+  invalidPanelOf,
   panelDescriptors,
   panelsFor,
 } from '../../../components/panels/registry.ts';
 import { PageHead } from '../../../components/shell/app-shell.tsx';
+import { useFocusTrap } from '../../../components/shell/dismiss.ts';
 import { Icon } from '../../../components/shell/icon.tsx';
 import { ModuleHeader } from '../../../components/shell/module-header.tsx';
 import {
@@ -49,6 +51,8 @@ import {
 } from '../../../components/views/registry.ts';
 
 import { toConfig, toFormValues } from '../../../lib/config-paths.ts';
+import { documentTitle } from '../../../lib/document-title.ts';
+import { saveFailure } from '../../../lib/errors.ts';
 import {
   channelsQuery,
   moduleConfigQuery,
@@ -70,13 +74,17 @@ export const Route = createFileRoute('/dashboard/$guildId/$moduleId')({
 
     // Thrown from the loader like an unknown view, so a bad ?area= reaches the error component with
     // its sentence rather than rendering an empty settings page that looks like a broken module.
-    resolveArea(params.moduleId, deps.area);
+    const area = resolveArea(params.moduleId, deps.area);
 
     // Split by tab, not fetched together: a view renders none of the settings form, so asking for
     // the config, the channel list and the role list costs an api call and two Discord calls whose
     // answers are thrown away. What is left is a cache hit once the shell has loaded.
-    const [{ modules }] = await Promise.all([
+    const [{ modules }, { guilds }] = await Promise.all([
       queryClient.fetchQuery(modulesQuery(params.guildId)),
+
+      // A cache hit — the parent route awaited this before the shell rendered. It is here for the
+      // document title, which is the only thing telling two server tabs apart.
+      queryClient.fetchQuery(sessionQuery()),
 
       entry
         ? Promise.all([
@@ -98,11 +106,22 @@ export const Route = createFileRoute('/dashboard/$guildId/$moduleId')({
           ]),
     ]);
 
-    if (!modules.some((candidate) => candidate.id === params.moduleId))
-      throw new Error(`unknown module '${params.moduleId}'`);
+    const summary = modules.find((candidate) => candidate.id === params.moduleId);
+    if (!summary)
+      throw new Error(
+        `This server has no '${params.moduleId}' module — the link may be stale, or from another ` +
+          `Proton deployment. Pick a module from the list on the left.`,
+      );
 
-    return { viewSearch };
+    return {
+      viewSearch,
+      title: documentTitle(
+        entry?.title ?? area?.title ?? summary.name,
+        guilds.find((guild) => guild.id === params.guildId)?.name,
+      ),
+    };
   },
+  head: ({ loaderData }) => ({ meta: [{ title: loaderData?.title ?? documentTitle() }] }),
   component: ModulePage,
   errorComponent: ModuleError,
 });
@@ -110,6 +129,22 @@ export const Route = createFileRoute('/dashboard/$guildId/$moduleId')({
 interface Baseline {
   values: Record<string, unknown>;
   panelValues: Record<string, unknown>;
+}
+
+/**
+ * The one line a screen reader hears about the state of the form. Errors carry their own role=alert
+ * inside the bar, so this stays out of their way and only reports what the bar's arrival means.
+ */
+export function saveAnnouncement(state: {
+  dirty: boolean;
+  error: unknown;
+  settled: boolean;
+  unreadable: boolean;
+}): string {
+  if (state.error || state.unreadable) return '';
+  if (state.dirty) return 'You have unsaved changes.';
+
+  return state.settled ? 'Saved.' : '';
 }
 
 /**
@@ -149,7 +184,11 @@ export function unreadableLine(
 
 function moduleOf(modules: readonly ModuleSummary[], moduleId: string): ModuleSummary {
   const found = modules.find((candidate) => candidate.id === moduleId);
-  if (!found) throw new Error(`unknown module '${moduleId}'`);
+  if (!found)
+    throw new Error(
+      `This server has no '${moduleId}' module — the link may be stale, or from another Proton ` +
+        `deployment. Pick a module from the list on the left.`,
+    );
 
   return found;
 }
@@ -268,12 +307,12 @@ function AreaHub({
   const settings = useSuspenseQuery(moduleConfigQuery(guildId, moduleId)).data;
 
   return (
-    <div className="module-list">
+    <ul className="module-list">
       {areas.map((area) => {
         const count = area.count?.(settings.config);
 
         return (
-          <div className="module-row" key={area.id}>
+          <li className="module-row" key={area.id}>
             <i>
               <Icon name={area.icon} />
             </i>
@@ -292,10 +331,10 @@ function AreaHub({
               </span>
             )}
             <Icon name="arrow-right" className="area-chevron" />
-          </div>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 
@@ -435,6 +474,12 @@ function ModuleSettings({
     const frame = requestAnimationFrame(() => {
       target.scrollIntoView({ block: 'center' });
       target.classList.add('field-flash');
+
+      // The field's own control, not the first focusable thing in the row: Head renders the info
+      // trigger before the input, and landing on it means the next keystroke opens a tooltip.
+      target
+        .querySelector<HTMLElement>('input, select, textarea, .picker-trigger, .token-add')
+        ?.focus({ preventScroll: true });
     });
 
     const timer = setTimeout(() => target.classList.remove('field-flash'), 1600);
@@ -474,6 +519,10 @@ function ModuleSettings({
   // Checked over every descriptor, not just this area's: the save writes the whole config, so a
   // duration left unreadable on another area would be rejected by the API with the field named and
   // nothing on screen to fix. Naming it here is the difference between the two.
+  // Checked over every panel, not the one on screen: Save writes them all, so a hub left half-filled
+  // on another area was being written by a Save pressed here.
+  const invalidPanel = invalidPanelOf(moduleId, panelValues);
+
   const unreadable = descriptors.find(
     (descriptor) =>
       descriptor.kind === 'duration' &&
@@ -532,11 +581,24 @@ function ModuleSettings({
               channels={channels}
               roles={roles}
               liveConfig={liveConfig}
+              tier={settings.tier}
               guildId={guildId}
             />
           </SectionCard>
         );
       })}
+
+      {/* Mounted whether or not the bar is. A live region that arrives already holding its message
+          is a region the reader was not watching, so the bar's own aria-live announced nothing the
+          first time it appeared — which is the only time it matters. */}
+      <span aria-live="polite" className="sr-only">
+        {saveAnnouncement({
+          dirty,
+          error: save.error,
+          settled,
+          unreadable: unreadable !== undefined || invalidPanel !== undefined,
+        })}
+      </span>
 
       {/* Both outcomes belong in the bar that triggered them. Rendered in flow they landed after
           seven cards and a panel, so a save that failed from a sticky button at the bottom of the
@@ -544,24 +606,32 @@ function ModuleSettings({
       {dirty || save.error || settled ? (
         <div className="save-bar">
           <div className="save-bar-inner">
-            <span className="save-bar-status" aria-live="polite">
-              {save.error ? (
-                <span className="save-bar-text save-bar-failed" role="alert">
-                  <Icon name="warning-circle" weight="fill" />
-                  Could not save: {save.error.message}
-                </span>
-              ) : settled ? (
-                <span className="save-bar-text save-bar-saved">
-                  <Icon name="check-circle" weight="fill" />
-                  {savedLine(moduleState(summary), summary, guildName)}
-                </span>
-              ) : unreadable ? (
+            <span className="save-bar-status">
+              {/* Unreadable first: it is the reason Save is disabled right now, and testing it last
+                  let a four-second-old "Saved." — or the previous attempt's failure — sit where the
+                  explanation belonged. */}
+              {unreadable ? (
                 <span className="save-bar-text save-bar-failed" role="alert">
                   <Icon name="warning-circle" weight="fill" />
                   {unreadableLine(unreadable, descriptors, values)}
                 </span>
-              ) : (
+              ) : invalidPanel ? (
+                <span className="save-bar-text save-bar-failed" role="alert">
+                  <Icon name="warning-circle" weight="fill" />“{invalidPanel.title}” is not filled
+                  in yet.
+                </span>
+              ) : save.error ? (
+                <span className="save-bar-text save-bar-failed" role="alert">
+                  <Icon name="warning-circle" weight="fill" />
+                  {saveFailure(save.error, 'Could not save')}
+                </span>
+              ) : dirty ? (
                 <span className="save-bar-text">You have unsaved changes.</span>
+              ) : (
+                <span className="save-bar-text save-bar-saved">
+                  <Icon name="check-circle" weight="fill" />
+                  {savedLine(moduleState(summary), summary, guildName)}
+                </span>
               )}
             </span>
 
@@ -573,7 +643,9 @@ function ModuleSettings({
                 <button
                   type="button"
                   className="button"
-                  disabled={save.isPending || unreadable !== undefined}
+                  disabled={
+                    save.isPending || unreadable !== undefined || invalidPanel !== undefined
+                  }
                   onClick={() => save.mutate({ values, panelValues })}
                 >
                   {save.isPending ? 'Saving…' : 'Save changes'}
@@ -603,8 +675,13 @@ function ActiveView({
   onSearch: (patch: ModuleSearch) => void;
 }): ReactElement {
   const { data } = useSuspenseQuery(entry.query({ guildId, search }));
+  const pending = useRouterState({ select: (state) => state.isLoading });
 
-  return <entry.View search={search} data={data} onSearch={onSearch} />;
+  return (
+    <div className="view-pending" data-pending={pending || undefined} aria-busy={pending}>
+      <entry.View search={search} data={data} onSearch={onSearch} />
+    </div>
+  );
 }
 
 function LeaveConfirm({
@@ -617,10 +694,17 @@ function LeaveConfirm({
   onLeave: () => void;
 }): ReactElement {
   const stay = useRef<HTMLButtonElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+
+  // aria-modal="true" is a promise to a screen reader that the rest of the page is out of reach.
+  // Without this the second Tab landed on the form behind the scrim, still editable.
+  useFocusTrap(dialog, true);
 
   // Focus lands on the safe choice, not on the page behind the dialog — a confirm nobody's keyboard
   // is inside is a confirm the next Enter or Tab goes around.
   useEffect(() => {
+    const cameFrom = document.activeElement;
+
     stay.current?.focus();
 
     function onKey(event: KeyboardEvent): void {
@@ -631,7 +715,10 @@ function LeaveConfirm({
     }
 
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      if (cameFrom instanceof HTMLElement && cameFrom.isConnected) cameFrom.focus();
+    };
   }, [onStay]);
 
   return (
@@ -644,11 +731,18 @@ function LeaveConfirm({
         onClick={onStay}
       />
 
-      <div className="confirm" role="alertdialog" aria-modal="true" aria-labelledby="leave-title">
+      <div
+        className="confirm"
+        ref={dialog}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="leave-title"
+        aria-describedby="leave-text"
+      >
         <h2 className="confirm-title" id="leave-title">
           Leave {moduleName} without saving?
         </h2>
-        <p className="confirm-text">
+        <p className="confirm-text" id="leave-text">
           The changes on this page have not been sent to Proton yet. Leaving discards them.
         </p>
         <div className="confirm-actions">

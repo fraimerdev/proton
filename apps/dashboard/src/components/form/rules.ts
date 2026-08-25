@@ -93,7 +93,7 @@ export function paramLabel(label: string, ruleLabel: string): string | undefined
 function ruleLabelOf(
   head: FieldDescriptor | undefined,
   members: readonly FieldDescriptor[],
-): string {
+): string | undefined {
   if (head) return head.label;
 
   const labels = members.map((member) => words(member.label));
@@ -103,9 +103,11 @@ function ruleLabelOf(
     candidate.length < best.length ? candidate : best,
   );
 
-  return shared === 0
-    ? sentence(shortest.join(' '))
-    : sentence(shortest.slice(0, shared).join(' '));
+  const derived = shared === 0 ? shortest.join(' ') : shortest.slice(0, shared).join(' ');
+
+  // A single word is a severity or a threshold, not the name of a family: automod's Response
+  // section derived "Medium" and "High", which head two rows that say nothing about the check.
+  return words(derived).length < 2 ? undefined : sentence(derived);
 }
 
 // Nested paths are left alone: two leaves under one parent are one setting's parts, already
@@ -114,9 +116,11 @@ function groupable(descriptor: FieldDescriptor): boolean {
   return !descriptor.path.includes('.');
 }
 
-function buildRule(id: string, members: readonly FieldDescriptor[]): RuleRow {
+function buildRule(id: string, members: readonly FieldDescriptor[]): RuleRow | undefined {
   const head = members.find((member) => /severity$/i.test(member.path));
   const label = ruleLabelOf(head, members);
+  if (label === undefined) return undefined;
+
   const rest = members.filter((member) => member !== head);
 
   return {
@@ -162,6 +166,8 @@ export function toRows(descriptors: readonly FieldDescriptor[]): FormRow[] {
     if (inner.length < 2) continue;
 
     const rule = buildRule(first, inner);
+    if (!rule) continue;
+
     for (const member of inner) claimed.set(member.path, rule);
   }
 

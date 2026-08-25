@@ -108,23 +108,37 @@ export function LogEventsPanel({
   );
 }
 
-export function TicketPanelsPanel({ value, onChange, channels, roles }: PanelProps): ReactElement {
+export function TicketPanelsPanel({
+  value,
+  onChange,
+  channels,
+  roles,
+  tier,
+}: PanelProps): ReactElement {
   return (
     <TicketPanelsEditor
       panels={asArray<TicketPanel>(value)}
       channels={channels}
       roles={roles}
+      tier={tier}
       onChange={onChange}
     />
   );
 }
 
-export function TempVcHubsPanel({ value, onChange, channels, roles }: PanelProps): ReactElement {
+export function TempVcHubsPanel({
+  value,
+  onChange,
+  channels,
+  roles,
+  tier,
+}: PanelProps): ReactElement {
   return (
     <HubsEditor
       hubs={asArray<TempVcHub>(value)}
       channels={channels}
       roles={roles}
+      tier={tier}
       onChange={onChange}
     />
   );
@@ -136,6 +150,7 @@ export function TemplatesPanel({
   channels,
   roles,
   liveConfig,
+  tier,
 }: PanelProps): ReactElement {
   return (
     <TemplatesEditor
@@ -146,6 +161,7 @@ export function TemplatesPanel({
       palette={asArray<SavedComponent>(liveConfig.components)}
       roles={roles}
       templates={asArray<SavedMessageEntry>(value)}
+      tier={tier}
     />
   );
 }
@@ -156,17 +172,28 @@ export function PalettePanel({ value, onChange, roles }: PanelProps): ReactEleme
   );
 }
 
-export function CountersPanel({ value, onChange, channels }: PanelProps): ReactElement {
+export function CountersPanel({ value, onChange, channels, tier }: PanelProps): ReactElement {
   return (
-    <CountersEditor counters={asArray<Counter>(value)} channels={channels} onChange={onChange} />
+    <CountersEditor
+      counters={asArray<Counter>(value)}
+      channels={channels}
+      tier={tier}
+      onChange={onChange}
+    />
   );
 }
 
-export function HoneypotChannelsPanel({ value, onChange, channels }: PanelProps): ReactElement {
+export function HoneypotChannelsPanel({
+  value,
+  onChange,
+  channels,
+  tier,
+}: PanelProps): ReactElement {
   return (
     <HoneypotChannelsEditor
       channels={channels}
       honeypots={asArray<Partial<HoneypotChannel>>(value)}
+      tier={tier}
       onChange={onChange}
     />
   );

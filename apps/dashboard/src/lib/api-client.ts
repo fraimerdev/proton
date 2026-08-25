@@ -53,7 +53,14 @@ export class ApiClient {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { message?: string };
-      throw new Error(body.message ?? `api returned ${response.status}`);
+
+      // Neutral about reads and writes, because the callers supply that half ("Could not save: …").
+      // A gateway error or an HTML error page used to reach the admin as "api returned 502".
+      throw new Error(
+        body.message ??
+          `Proton's API did not answer (HTTP ${response.status}). Nothing was changed — try again, ` +
+            `and if it keeps happening the API is the part that is down, not Discord.`,
+      );
     }
 
     return (await response.json()) as T;

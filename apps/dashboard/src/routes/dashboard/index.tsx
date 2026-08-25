@@ -3,6 +3,8 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { accessLabel, guildIconUrl, initialsOf } from '../../components/shell/app-shell.tsx';
 import { Icon } from '../../components/shell/icon.tsx';
+import { DEFAULT_CALLBACK } from '../../lib/callback-url.ts';
+import { documentTitle } from '../../lib/document-title.ts';
 import { isAccessError } from '../../lib/errors.ts';
 import { sessionQuery } from '../../lib/queries.ts';
 
@@ -11,12 +13,57 @@ export const Route = createFileRoute('/dashboard/')({
     try {
       await context.queryClient.fetchQuery(sessionQuery());
     } catch (error) {
-      if (isAccessError(error)) throw redirect({ to: '/' });
+      if (isAccessError(error))
+        throw redirect({
+          href: `/api/auth/signin/discord?redirect=${encodeURIComponent(DEFAULT_CALLBACK)}`,
+          reloadDocument: true,
+        });
+
       throw error;
     }
   },
+  head: () => ({ meta: [{ title: documentTitle('Your servers') }] }),
   component: GuildPicker,
+  errorComponent: GuildPickerError,
 });
+
+// Access errors redirect to the door, so anything reaching here is Discord or Proton failing to
+// answer. Without this the router's own default renders, which names neither.
+function GuildPickerError({ error }: { error: Error }): ReactElement {
+  return (
+    <div className="plain-page">
+      <div className="page">
+        <Link to="/" className="back-link">
+          <Icon name="arrow-left" />
+          Proton
+        </Link>
+
+        <div className="page-head">
+          <div className="page-heading">
+            <h1 className="page-title">Your servers did not load</h1>
+          </div>
+        </div>
+
+        <div className="gap-card">
+          <div className="gap-body">
+            <span className="gap-head">
+              <Icon name="warning-circle" weight="fill" className="state-blocked" />
+              <span className="gap-name">Proton could not read your server list</span>
+            </span>
+            <p className="gap-text" role="alert">
+              {error.message}
+            </p>
+            <span className="where">
+              <Icon name="arrow-elbow-down-right" />
+              This list comes from Discord. If Discord is refusing the read, signing out and back in
+              renews the token Proton asks with.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function GuildPicker(): ReactElement {
   const { guilds } = useSuspenseQuery(sessionQuery()).data;
@@ -79,7 +126,7 @@ function GuildPicker(): ReactElement {
                       to="/dashboard/$guildId"
                       params={{ guildId: guild.id }}
                       search={{}}
-                      className="button button-quiet"
+                      className="button button-quiet guild-open"
                     >
                       Open
                       <Icon name="arrow-right" />

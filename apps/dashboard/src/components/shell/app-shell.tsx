@@ -14,7 +14,7 @@ import {
 } from 'react';
 import type { DiscordUserGuild, SessionGuild } from '../../lib/guild-access.ts';
 import { type AreaEntry, areaForField, areasFor } from '../panels/areas.ts';
-import { useDismiss } from './dismiss.ts';
+import { useDismiss, useFocusTrap } from './dismiss.ts';
 import { Icon } from './icon.tsx';
 import type { IconName } from './icon-set.gen.ts';
 import {
@@ -70,35 +70,6 @@ export interface PaletteEntry {
   field?: string;
   area?: string;
   view?: string;
-}
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function useFocusTrap(ref: RefObject<HTMLElement | null>, active: boolean): void {
-  useEffect(() => {
-    if (!active) return;
-
-    function onKey(event: KeyboardEvent): void {
-      if (event.key !== 'Tab' || !ref.current) return;
-
-      const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (!first || !last) return;
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [ref, active]);
 }
 
 export interface PageHeadProps {
@@ -161,6 +132,20 @@ export function AppShell({
     }),
   });
 
+  const navId = useId();
+
+  // Read after mount, never seeded: the server cannot know the platform, and a keycap that
+  // disagreed with the first client render is a hydration mismatch. The handler takes either key,
+  // so a Windows admin was being shown a shortcut with a modifier their keyboard does not have.
+  const [onApple, setOnApple] = useState(true);
+  useEffect(() => {
+    setOnApple(/Mac|iPhone|iPad/.test(navigator.userAgent));
+  }, []);
+
+  // Apple writes the chord without a separator; everywhere else needs one, and a space inside a
+  // single keycap reads as two keys crammed into one box.
+  const shortcutCap = onApple ? '⌘K' : 'Ctrl+K';
+
   const guild = guilds.find((candidate) => candidate.id === guildId);
   const base = `/dashboard/${guildId}`;
 
@@ -181,8 +166,16 @@ export function AppShell({
   useDismiss(userOpen, closeUser, userMenu, userButton);
   useDismiss(drawerOpen, closeDrawer, sidebar, drawerButton);
 
+  // Navigating from the drawer closes it, which takes the focused link out of the document. Without
+  // this the next Tab started from <body>, at the top of the page.
+  const drawerWasOpen = useRef(false);
+  useEffect(() => {
+    drawerWasOpen.current = drawerOpen;
+  }, [drawerOpen]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: navigation is the trigger, not an input
   useEffect(() => {
+    if (drawerWasOpen.current) drawerButton.current?.focus();
     setDrawerOpen(false);
   }, [pathname, section, view, area]);
 
@@ -197,6 +190,21 @@ export function AppShell({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, []);
+
+  // The drawer and its scrim only exist below 900px. Widening past it with the drawer open would
+  // otherwise leave the page behind an inert flag it can no longer see a scrim for.
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const wide = window.matchMedia('(min-width: 901px)');
+    function onWide(): void {
+      if (wide.matches) setDrawerOpen(false);
+    }
+
+    onWide();
+    wide.addEventListener('change', onWide);
+    return () => wide.removeEventListener('change', onWide);
+  }, [drawerOpen]);
 
   return (
     <>
@@ -304,10 +312,15 @@ export function AppShell({
             <div className="sidebar-meta">{guild ? accessLabel(guild) : 'Server settings'}</div>
           </div>
 
-          <button type="button" className="search-trigger" onClick={() => setPaletteOpen(true)}>
+          <button
+            type="button"
+            className="search-trigger"
+            aria-keyshortcuts={onApple ? 'Meta+K' : 'Control+K'}
+            onClick={() => setPaletteOpen(true)}
+          >
             <Icon name="magnifying-glass" />
             Search settings
-            <span className="kbd">⌘K</span>
+            <span className="kbd">{shortcutCap}</span>
           </button>
 
           <nav className="sidebar-nav" aria-label="Proton">
@@ -324,8 +337,13 @@ export function AppShell({
             </div>
 
             {browsable.length > 0 ? (
-              <div className="nav-group">
-                <span className="nav-group-label">Browse</span>
+              // Labelled group, not a loose span: the five category names organise the sidebar on
+              // screen and were absent from the tree, so a reader met twenty-seven ungrouped links.
+              // biome-ignore lint/a11y/useSemanticElements: a fieldset groups form controls; this groups links
+              <div className="nav-group" role="group" aria-labelledby={`${navId}-browse`}>
+                <span className="nav-group-label" id={`${navId}-browse`}>
+                  Browse
+                </span>
                 {browsable.map((entry) => {
                   const current = pathname === `${base}/${entry.moduleId}` && view === entry.viewId;
 
@@ -350,8 +368,16 @@ export function AppShell({
               if (owned.length === 0) return null;
 
               return (
-                <div className="nav-group" key={category}>
-                  <span className="nav-group-label">{CATEGORY_LABELS[category]}</span>
+                // biome-ignore lint/a11y/useSemanticElements: a fieldset groups form controls; this groups links
+                <div
+                  className="nav-group"
+                  key={category}
+                  role="group"
+                  aria-labelledby={`${navId}-${category}`}
+                >
+                  <span className="nav-group-label" id={`${navId}-${category}`}>
+                    {CATEGORY_LABELS[category]}
+                  </span>
                   {owned.map((module) => (
                     <ModuleNavItem
                       key={module.id}
@@ -367,7 +393,9 @@ export function AppShell({
           </nav>
         </aside>
 
-        <main className="main" id="main">
+        {/* Inert behind the drawer's scrim: without it Tab walked out of the drawer and went on
+            focusing rows the scrim had already covered. */}
+        <main className="main" id="main" inert={drawerOpen}>
           <div className="page">{children}</div>
         </main>
 
@@ -432,6 +460,15 @@ function ModuleNavItem({
         aria-current={open && !nested ? 'page' : undefined}
       >
         <NavInner icon={moduleIcon(module.dashboard?.icon)} label={module.name} current={open} />
+        {state === 'off' ? null : (
+          <span className="sr-only">
+            {state === 'running'
+              ? ', on'
+              : state === 'blocked'
+                ? ', on but a permission is missing'
+                : ', on but not on this plan'}
+          </span>
+        )}
       </Link>
 
       {nested ? (
@@ -506,12 +543,35 @@ function UserMenu({
   user: ShellUser;
   onClose: () => void;
 }): ReactElement {
+  const first = useRef<HTMLAnchorElement>(null);
+
+  // The menu renders at the end of the shell, so Tab from the account button used to walk the
+  // sidebar and the whole page before reaching it. Focus goes in, and useDismiss brings it back.
+  useFocusTrap(ref, true);
+  useEffect(() => first.current?.focus(), []);
+
+  const [signOutFailed, setSignOutFailed] = useState(false);
+
+  // Neither the response nor a rejection was checked, so a sign-out the server refused looked
+  // exactly like one that worked: the menu closed and the session stayed live.
   async function signOut(): Promise<void> {
-    await fetch('/api/auth/sign-out', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-    });
+    setSignOutFailed(false);
+
+    try {
+      const response = await fetch('/api/auth/sign-out', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+
+      if (!response.ok) {
+        setSignOutFailed(true);
+        return;
+      }
+    } catch {
+      setSignOutFailed(true);
+      return;
+    }
 
     window.location.href = '/';
   }
@@ -522,7 +582,7 @@ function UserMenu({
         <div className="user-menu-name">{user.name}</div>
         <div className="user-menu-role">Signed in with Discord</div>
       </div>
-      <Link to="/privacy" className="menu-item" role="menuitem" onClick={onClose}>
+      <Link to="/privacy" className="menu-item" role="menuitem" ref={first} onClick={onClose}>
         <Icon name="shield-check" />
         What Proton stores
       </Link>
@@ -530,6 +590,12 @@ function UserMenu({
         <Icon name="sign-out" />
         Sign out
       </button>
+      {signOutFailed ? (
+        <p className="user-menu-failure" role="alert">
+          Proton could not end the session. You are still signed in — try again, or close the
+          browser to drop the cookie.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -621,6 +687,7 @@ function CommandPalette({
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const restoreTo = useRef<Element | null>(null);
   const listId = useId();
 
@@ -640,6 +707,14 @@ function CommandPalette({
       if (restoreTo.current instanceof HTMLElement) restoreTo.current.focus();
     };
   }, []);
+
+  // Focus stays in the input, so the results list never scrolls itself: on a short viewport the
+  // arrow keys walk the highlight off the bottom of a 60vh box that does not move.
+  useEffect(() => {
+    resultsRef.current
+      ?.querySelector(`[id="${CSS.escape(`${listId}-${selected}`)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [listId, selected]);
 
   function activate(entry: PaletteEntry): void {
     onClose();
@@ -686,12 +761,19 @@ function CommandPalette({
         onClick={onClose}
       />
 
+      {/* Escape listens on the dialog, not the input: one Tab moves focus to the ESC button, and
+          from there the key the button is named after stopped working. */}
       <div
         className="palette"
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Search Proton"
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          event.preventDefault();
+          onClose();
+        }}
       >
         <div className="palette-head">
           <Icon name="magnifying-glass" />
@@ -717,16 +799,24 @@ function CommandPalette({
           </button>
         </div>
 
-        <div className="palette-results" id={listId} role="listbox" aria-label="Results">
-          {results.length === 0 ? (
-            <div className="palette-empty">
-              <span className="empty-state-title">Nothing matches that.</span>
-              <span className="status">
-                Search covers module names and every setting inside them.
-              </span>
-            </div>
-          ) : null}
+        {/* Outside the listbox, not inside it: a listbox may only hold options, and a reader that
+            honours that never reads a sentence parked among them. */}
+        {results.length === 0 ? (
+          <div className="palette-empty">
+            <span className="empty-state-title">Nothing matches that.</span>
+            <span className="status">
+              Search covers module names and every setting inside them.
+            </span>
+          </div>
+        ) : null}
 
+        <div
+          className="palette-results"
+          id={listId}
+          ref={resultsRef}
+          role="listbox"
+          aria-label="Results"
+        >
           {results.map((entry, position) => (
             // biome-ignore lint/a11y/useFocusableInteractive: aria-activedescendant keeps focus on the input
             <div

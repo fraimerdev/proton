@@ -8,6 +8,15 @@ export function isAccessError(error: unknown): boolean {
   );
 }
 
+// Both mutation surfaces print `${attempt}: ${message}`, which turns a revoked session into
+// "Could not save: not signed in" — a fragment with nothing to do about it.
+export function saveFailure(error: Error, attempt: string): string {
+  return isAccessError(error)
+    ? `${attempt} — your Discord sign-in has expired, or your access to this server was revoked. ` +
+        `Sign in again in another tab and try once more. Nothing you typed has been lost.`
+    : `${attempt}: ${error.message}`;
+}
+
 // Discord refusing a read is not a blip: fetchGuildChannels and fetchGuildRoles say which
 // permission is missing, and asking again a second later gets the same 403.
 const REFUSED = /discord refused with 4\d\d/i;

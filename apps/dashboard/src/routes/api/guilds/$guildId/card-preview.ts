@@ -34,15 +34,21 @@ export const Route = createFileRoute('/api/guilds/$guildId/card-preview')({
     handlers: {
       GET: async ({ request, params }) => {
         const session = await auth.api.getSession({ headers: request.headers });
-        if (!session?.user) return forbidden('not signed in');
+        if (!session?.user)
+          return forbidden('Your session has ended. Reload this page to sign in again.');
 
         const token = await getDiscordAccessToken(request.headers, session.user.id);
         const guilds = await fetchUserGuilds(env.REST_PROXY_URL, token);
         const access = resolveGuildAccess(guilds, params.guildId);
 
-        if (!access) return forbidden('you do not administer that server');
+        if (!access)
+          return forbidden(
+            'You no longer administer this server, so Proton will not render its cards.',
+          );
         if (!accessGrants(access, Permissions.ManageGuild)) {
-          return forbidden('you lack Manage Server in that server');
+          return forbidden(
+            'Rendering a preview needs Manage Server in this server, and your roles do not have it.',
+          );
         }
 
         const asked = new URL(request.url).searchParams;
@@ -63,10 +69,11 @@ export const Route = createFileRoute('/api/guilds/$guildId/card-preview')({
         const upstream = await api.cardPreview(params.guildId, query);
 
         if (!upstream.ok) {
-          return new Response(await upstream.text(), {
-            status: upstream.status,
-            headers: { 'content-type': 'text/plain' },
-          });
+          return new Response(
+            `Proton could not render this card (HTTP ${upstream.status}). The settings above are ` +
+              `saved either way — only the picture is missing.`,
+            { status: upstream.status, headers: { 'content-type': 'text/plain' } },
+          );
         }
 
         return new Response(upstream.body, {

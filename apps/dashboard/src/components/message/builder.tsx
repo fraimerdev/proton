@@ -362,7 +362,7 @@ function CounterInput({
   const head = (
     <span>
       {label}
-      <span className="builder-count" data-over={over ? 'true' : undefined}>
+      <span className="builder-count" aria-hidden="true" data-over={over ? 'true' : undefined}>
         {value.length}/{max}
       </span>
     </span>

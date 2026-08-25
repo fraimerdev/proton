@@ -7,7 +7,9 @@
 
   --line: #242833;
   --line-hi: #333949;
-  --control-line: #4b5468;
+  /* 3.02:1 against the lightest ground it lands on (--surface-hi) — the boundary of an input is
+     what says it is one, so WCAG 1.4.11 applies to it. #4b5468 read 2.12:1 there. */
+  --control-line: #646e86;
 
   --text: #e9ebf1;
   --text-2: #aab1c0;
@@ -153,11 +155,6 @@ h3 {
   letter-spacing: -0.02em;
 }
 
-i[class^="ph"] {
-  display: inline-block;
-  line-height: 0;
-}
-
 .mono {
   font-family: var(--mono);
   font-variant-ligatures: none;
@@ -284,15 +281,26 @@ i[class^="ph"] {
   text-decoration: none;
 }
 
+/* The tile recedes into the rail rather than the whole button fading: opacity on the button took
+   the initials of an icon-less server to 1.9:1, and they are the only thing naming it. */
 .rail-guild[data-present="false"] {
-  opacity: 0.4;
+  background: var(--rail);
   filter: grayscale(1);
+}
+
+.rail-guild[data-present="false"] img {
+  opacity: 0.45;
 }
 
 .rail-guild[data-present="false"]:hover,
 .rail-guild[data-present="false"][aria-current="page"] {
-  opacity: 1;
+  background: var(--surface-hi);
   filter: none;
+}
+
+.rail-guild[data-present="false"]:hover img,
+.rail-guild[data-present="false"][aria-current="page"] img {
+  opacity: 1;
 }
 
 .rail-guild[aria-current="page"] {
@@ -305,7 +313,9 @@ i[class^="ph"] {
 .rail-guild::before {
   content: "";
   position: absolute;
-  left: -14px;
+  /* Measured from the avatar's centre to the rail wall, not hard-coded to a 72px rail: below 900px
+     --rail-w is 60px and a fixed -14px put the sliver outside the column, where it was clipped. */
+  left: calc((44px - var(--rail-w)) / 2);
   top: 50%;
   width: 4px;
   height: 0;
@@ -328,7 +338,11 @@ i[class^="ph"] {
   opacity: 1;
 }
 
+/* Pinned to the foot of the rail, which scrolls: past about a dozen servers the spacer collapses
+   and the only way to sign out or reach the privacy page scrolled off a column with no scrollbar. */
 .rail-user {
+  position: sticky;
+  bottom: 0;
   display: grid;
   place-items: center;
   width: 38px;
@@ -339,6 +353,7 @@ i[class^="ph"] {
   border: 1px solid var(--line-hi);
   border-radius: var(--r-full);
   background: var(--surface);
+  box-shadow: 0 0 0 var(--s2) var(--rail);
   color: var(--text-2);
   cursor: pointer;
   font: 600 var(--t-sm) / 1 var(--font);
@@ -415,7 +430,7 @@ i[class^="ph"] {
   color: var(--text-2);
 }
 
-.search-trigger i {
+.search-trigger [data-icon] {
   font-size: 15px;
 }
 
@@ -494,14 +509,14 @@ i[class^="ph"] {
   transform: translateY(-50%);
 }
 
-.nav-item i {
+.nav-item [data-icon] {
   font-size: 17px;
   color: var(--text-3);
   transition: color 0.12s var(--ease);
 }
 
-.nav-item:hover i,
-.nav-item[aria-current="page"] i {
+.nav-item:hover [data-icon],
+.nav-item[aria-current="page"] [data-icon] {
   color: var(--text-2);
 }
 
@@ -616,7 +631,7 @@ i[class^="ph"] {
 /* The same accent the module list gives a switched-on row's tile. Without it twenty-seven rows
    draw a running module and a switched-off one identically, and the sidebar answers "where is
    Automod" but never "is it on". */
-.nav-module[data-state="running"] .nav-item i {
+.nav-module[data-state="running"] .nav-item [data-icon] {
   color: var(--accent);
 }
 
@@ -793,7 +808,15 @@ i[class^="ph"] {
   text-decoration: none;
 }
 
-.menu-item i {
+.user-menu-failure {
+  margin: 0;
+  padding: var(--s2) var(--s3) var(--s3);
+  color: var(--danger);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.menu-item [data-icon] {
   font-size: 16px;
   color: var(--text-3);
 }
@@ -895,7 +918,7 @@ i[class^="ph"] {
   line-height: 1.5;
 }
 
-.where i {
+.where [data-icon] {
   margin-top: 2px;
   font-size: 14px;
 }
@@ -921,11 +944,6 @@ i[class^="ph"] {
   font-weight: 500;
 }
 
-.pill i {
-  font-size: 13px;
-  color: var(--text-3);
-}
-
 .pill-role {
   background: var(--role-wash, var(--surface-hi));
   color: var(--role-text, var(--text-2));
@@ -945,7 +963,7 @@ i[class^="ph"] {
   white-space: nowrap;
 }
 
-.chip i {
+.chip [data-icon] {
   font-size: 12px;
 }
 
@@ -1004,7 +1022,7 @@ i[class^="ph"] {
   cursor: not-allowed;
 }
 
-.button i {
+.button [data-icon] {
   font-size: 16px;
 }
 
@@ -1073,6 +1091,7 @@ input[type="text"],
 input[type="search"],
 input[type="number"],
 input[type="date"],
+input[type="datetime-local"],
 select,
 textarea {
   width: 100%;
@@ -1143,10 +1162,13 @@ input::placeholder {
   color: var(--text-3);
 }
 
-input[aria-invalid="true"] {
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
   border-color: var(--danger);
 }
 
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
   cursor: pointer;
@@ -1279,7 +1301,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-size: var(--t-base);
 }
 
-.alert-banner i {
+.alert-banner [data-icon] {
   margin-top: 2px;
   font-size: 17px;
 }
@@ -1292,10 +1314,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 /* ---------- module list ---------- */
 
 .module-list {
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
   overflow: hidden;
+  list-style: none;
 }
 
 .module-row {
@@ -1603,6 +1628,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .field-info-button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1617,6 +1643,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   line-height: 0;
   cursor: help;
   transition: color 0.12s var(--ease);
+}
+
+/* The glyph stays 18px; the pointer target grows to the 24px WCAG 2.5.8 asks for. */
+.field-info-button::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
 }
 
 .field-info-button:hover {
@@ -1646,9 +1679,17 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   transition: opacity 0.12s var(--ease);
 }
 
-.field-info-button:hover + .field-tooltip,
-.field-info-button:focus + .field-tooltip {
+/* Hoverable as well as revealed, so the pointer can travel into the tooltip to read a sentence
+   that runs to 280px without it vanishing on the way (WCAG 1.4.13). */
+.field-info:hover .field-tooltip,
+.field-info:focus-within .field-tooltip {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.field-info[data-dismissed] .field-tooltip {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .field-description {
@@ -1734,6 +1775,17 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .picker-value-unset {
   color: var(--text-3);
 }
+/* Same treatment the token list gives a role Discord no longer has: the raw id, dashed and in
+   mono, because a value nobody can see is one nobody can correct. */
+.picker-trigger[data-unknown] {
+  border-style: dashed;
+}
+
+.picker-trigger[data-unknown] .picker-value {
+  font-family: var(--mono);
+  font-size: var(--t-sm);
+  color: var(--text-3);
+}
 
 .picker-caret {
   flex-shrink: 0;
@@ -1745,7 +1797,9 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 30;
+  /* Above the save bar's 60. A picker opened on the last field of a dirty form dropped its list
+     underneath the bar, which is the one moment the bar is guaranteed to be there. */
+  z-index: 70;
   width: 100%;
   min-width: 240px;
   max-width: 340px;
@@ -1777,8 +1831,15 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font: 400 var(--t-base) / 1 var(--font);
 }
 
+/* The ring is suppressed because a 2px outline at 2px offset clips against the popover edge; the
+   row carries the focus instead, inset so it costs no layout. Without either, the box the popover
+   opens focus into has no indicator at all. */
 .picker-search input:focus {
   outline: none;
+}
+
+.picker-search:focus-within {
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .picker-list {
@@ -1874,6 +1935,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .token-remove {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1890,6 +1952,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   transition:
     color 0.12s var(--ease),
     background 0.12s var(--ease);
+}
+
+/* Same as the field info button: 20px of fill, 24px of target. */
+.token-remove::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
 }
 
 .token-remove:hover {
@@ -2064,6 +2133,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .rule-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--s3);
   min-width: 0;
@@ -2158,6 +2228,15 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .field-flash {
   animation: field-flash 1.6s var(--ease);
+}
+
+/* The global reduce block collapses every animation to 0.01ms, which would take the wash with it —
+   and the wash is the only thing saying which of forty rows the search just jumped to. The class is
+   removed by the same 1.6s timer either way, so holding it flat says the same thing without moving. */
+@media (prefers-reduced-motion: reduce) {
+  .field-flash {
+    background: var(--accent-wash);
+  }
 }
 
 @keyframes field-flash {
@@ -2289,7 +2368,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   gap: var(--s2);
 }
 
-.gap-head i {
+.gap-head [data-icon] {
   font-size: 17px;
 }
 
@@ -2344,7 +2423,16 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--surface);
-  overflow: hidden auto;
+  /* Both axes: `hidden auto` clipped a 940px table with no way to reach the rest of it between the
+     phone breakpoint and about 700px, where the page is already full width. */
+  overflow: auto;
+}
+
+/* The card is already the scroll container for its sticky header, but with no height it never
+   scrolled, so the leaderboard's and the tag browser's headers were sticky against nothing. The
+   virtualised ledger brings its own .table-scroll and keeps it. */
+.table-card:not(:has(.table-scroll)) {
+  max-height: 544px;
 }
 
 .table-scroll {
@@ -2454,17 +2542,22 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text);
 }
 
+.cases-table td[data-column="id"],
 .cases-table td[data-column="reason"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Grown to the full height of its cell and pulled back by the same amount: an 11px label is a 15px
+   target. Vertical only — a 66px column given horizontal bleed too would put its target on top of
+   the next column's. */
 .sort-button {
   display: inline-flex;
   align-items: center;
   gap: var(--s1);
-  padding: 0;
+  margin: calc(var(--s3) * -1) 0;
+  padding: var(--s3) 0;
   border: 0;
   background: none;
   color: inherit;
@@ -2542,6 +2635,16 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   margin-top: var(--s4);
 }
 
+/* A filter change re-runs the loader and the router keeps the old rows on screen while it does.
+   The results dim rather than disappearing, so the page does not jump under the filter bar — and
+   the filters themselves stay live, because they are what the admin is still using. */
+.view-pending[data-pending] .table-card,
+.view-pending[data-pending] .pager,
+.view-pending[data-pending] .pagination {
+  opacity: 0.55;
+  transition: opacity 0.12s var(--ease);
+}
+
 /* ---------- tabs ---------- */
 
 .tabs {
@@ -2610,6 +2713,19 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 .ladder-rung-stacked {
   flex-direction: column;
   align-items: stretch;
+}
+
+/* Takes the column the duration field would have held, so a kick rung keeps the ladder's
+   alignment line instead of pulling everything after it to the left. */
+.ladder-rung-note {
+  flex: 1;
+  min-width: 150px;
+}
+
+.tempvc-hint {
+  color: var(--text-3);
+  font-size: var(--t-xs);
+  line-height: 1.5;
 }
 
 .ladder-rung .filter {
@@ -2688,6 +2804,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text);
 }
 
+.log-category-count {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  text-align: right;
+}
+
 .log-event-label {
   display: flex;
   align-items: center;
@@ -2695,15 +2818,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   padding: var(--s2) var(--s4) var(--s2) var(--s7);
   color: var(--text-2);
   font-size: var(--t-base);
-  cursor: pointer;
-}
-
-.log-event-label:hover {
-  background: var(--surface-hi);
-}
-
-.log-category > .log-event-label:last-child {
-  padding-bottom: var(--s3);
 }
 
 /* ---------- enforcement readout ---------- */
@@ -2853,7 +2967,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border-bottom: 1px solid var(--line);
 }
 
-.palette-head > i {
+.palette-head > [data-icon] {
   font-size: 18px;
   color: var(--text-3);
 }
@@ -2873,6 +2987,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .palette-esc {
+  position: relative;
   padding: var(--s1) var(--s2);
   border: 1px solid var(--line-hi);
   border-radius: var(--r-xs);
@@ -2880,6 +2995,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text-3);
   cursor: pointer;
   font: 500 10px / 1 var(--mono);
+}
+
+/* The cap stays a cap; the target reaches 24px (WCAG 2.5.8). */
+.palette-esc::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
 }
 
 .palette-esc:hover {
@@ -2904,12 +3026,12 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   background: var(--surface-hi);
 }
 
-.palette-item > i {
+.palette-item > [data-icon] {
   font-size: 17px;
   color: var(--text-3);
 }
 
-.palette-item[data-selected="true"] > i {
+.palette-item[data-selected="true"] > [data-icon] {
   color: var(--accent);
 }
 
@@ -3183,11 +3305,20 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 }
 
 .guild-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s4);
   padding: var(--s3) var(--s4);
   transition: background 0.12s var(--ease);
+}
+
+/* The whole row opens the server, the way a module row does. The row already lights up on hover,
+   which promised a target the 64px button was not. */
+.guild-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
 }
 
 .guild-list li + li .guild-row {
@@ -3239,13 +3370,15 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 /* Only the identity dims. The role line carries the reason it is dimmed, so fading that out with
    it would leave a greyed row with nothing readable saying why. */
-.guild-row[data-present="false"] .guild-avatar,
-.guild-row[data-present="false"] .guild-row-name {
-  opacity: 0.5;
+/* The avatar recedes, the name does not: fading the name too took it to 2.20:1, and the row
+   already says "Proton is not in this server" in words underneath it. */
+.guild-row[data-present="false"] .guild-avatar {
+  background: var(--sunken);
+  filter: grayscale(1);
 }
 
-.guild-row[data-present="false"] .guild-avatar {
-  filter: grayscale(1);
+.guild-row[data-present="false"] .guild-avatar img {
+  opacity: 0.5;
 }
 
 /* ---------- prose ---------- */
@@ -3387,12 +3520,18 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     display: block;
   }
 
+  html {
+    scroll-padding-bottom: 116px;
+  }
+
   .main {
     overflow: visible;
     padding-left: var(--rail-w);
   }
 
-  .rail-home {
+  /* The topbar carries Account below 900px. Two buttons opening one menu meant the menu appeared
+     beside one of them and returned focus to the other. */
+  .rail-user {
     display: none;
   }
 
@@ -3597,6 +3736,20 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     min-width: 0;
   }
 
+  /* A headless rule keeps its params in .rule-controls, which the block above does not match. */
+  .rule-controls > .rule-param {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .rule-controls > .rule-param input[type="number"],
+  .rule-controls > .rule-param input[type="text"],
+  .rule-controls > .rule-param select,
+  .rule-controls > .rule-param .picker {
+    width: 100%;
+    min-width: 0;
+  }
+
   .form-section-toggle {
     padding-left: var(--s4);
     padding-right: var(--s4);
@@ -3632,10 +3785,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     grid-column: 1 / -1;
   }
 
-  .table-card {
-    overflow-x: auto;
-  }
-
   .tabs {
     gap: var(--s4);
     overflow-x: auto;
@@ -3659,7 +3808,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
     flex: 1;
   }
 
-  .main {
+  html {
     scroll-padding-bottom: 176px;
   }
 
@@ -4269,8 +4418,10 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 /* ---------- saved messages ---------- */
 
+/* Not `.palette` — that is the command palette, 1400 lines up, and this rule was quietly adding
+   16px of gap and 20px of padding to it. */
 .templates,
-.palette {
+.saved-palette {
   display: flex;
   flex-direction: column;
   gap: var(--s4);
@@ -4588,10 +4739,9 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .builder-head-title {
   color: var(--text-2);
-  font-size: var(--t-xs);
+  font-size: var(--t-base);
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: -0.02em;
 }
 
 .builder-actions {
@@ -4700,6 +4850,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
 .builder-v2-add {
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s3);
   padding-top: var(--s3);
@@ -4715,6 +4866,16 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   width: auto;
   min-width: 200px;
   max-width: 260px;
+}
+
+/* Beside its own base rule, not up in the shared phone block: that sits 1100 lines earlier and
+   loses the tie on source order, so a 200px floor kept pushing the page sideways. */
+@media (max-width: 620px) {
+  .builder-v2-add select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
 }
 
 .field-colour .colour-input {
@@ -4760,6 +4921,11 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border: 1px dashed var(--line);
   color: var(--text-3);
   font-size: var(--t-sm);
+}
+
+.card-preview-failed {
+  border-color: var(--danger-line);
+  color: var(--danger);
 }
 
 .card-preview-note {

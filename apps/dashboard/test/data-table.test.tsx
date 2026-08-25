@@ -382,8 +382,10 @@ function noMatches(): ReactElement {
 function pastTheEnd(page: number, total: number): ReactElement {
   return (
     <div className="empty-state">
+      <span className="empty-state-title">There is no page {page}.</span>
       <p className="status">
-        Page {page} is past the end of {total} matching {total === 1 ? 'case' : 'cases'}.
+        {total} {total === 1 ? 'case matches' : 'cases match'} these filters, which is fewer than
+        this page would need.
       </p>
       <button type="button" className="button button-quiet" onClick={() => undefined}>
         Go to the last page
@@ -419,7 +421,8 @@ describe('the two empty states of the cases table', () => {
       />,
     );
 
-    expect(html).toContain('Page 9 is past the end of 12 matching cases.');
+    expect(html).toContain('There is no page 9.');
+    expect(html).toContain('12 cases match these filters');
     expect(html).toContain('Go to the last page');
     expect(html).not.toContain('No cases match these filters.');
   });
@@ -435,7 +438,7 @@ describe('the two empty states of the cases table', () => {
       />,
     );
 
-    expect(html).toContain('past the end of 1 matching case.');
+    expect(html).toContain('1 case matches these filters');
   });
 
   test('neither empty state appears while the page has cases on it', () => {
@@ -502,16 +505,21 @@ describe('the empty states this file reproduces are the ones the cases view ship
   });
 
   test('the past-the-end state keeps the view’s wording and its way back', () => {
-    expect(view).toContain('is past the end of');
+    expect(view).toContain('There is no page');
     expect(view).toContain('Go to the last page');
-    expect(renderedText(pastTheEnd(9, 12))).toContain(
-      'Page 9 is past the end of 12 matching cases',
-    );
+    expect(renderedText(pastTheEnd(9, 12))).toContain('There is no page 9.');
+    expect(renderedText(pastTheEnd(9, 12))).toContain('12 cases match these filters');
+  });
+
+  // The other empty state on this table opens with one, and a lone .status line renders as 12.5px
+  // tertiary text with nothing above it.
+  test('the past-the-end state opens with a title, like its sibling', () => {
+    expect(renderedRuns(pastTheEnd(9, 12))[0]).toContain('There is no page 9.');
   });
 
   test('the view picks between them on the total, so both are reachable', () => {
     expect(view).toContain('result.total === 0 ?');
-    expect(view).toContain("result.total === 1 ? 'case' : 'cases'");
+    expect(view).toContain("result.total === 1 ? 'case matches' : 'cases match'");
   });
 });
 

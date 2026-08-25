@@ -1,13 +1,37 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { zodValidator } from '@tanstack/zod-adapter';
 import type { ReactElement } from 'react';
+import { z } from 'zod';
 import { ProtonMark } from '../components/shell/app-shell.tsx';
 import { Icon } from '../components/shell/icon.tsx';
 
+// Better Auth redirects a failed OAuth callback back here with these two, and until it had a route
+// to land on the whole failure was a not-found page.
+const doorSearchSchema = z.object({
+  error: z.string().optional(),
+  error_description: z.string().optional(),
+});
+
+const SIGN_IN_FAILURES: Record<string, string> = {
+  access_denied: 'Discord did not grant Proton access, so nothing was shared.',
+  no_code: 'Discord did not complete the sign-in.',
+  invalid_code: 'Discord did not complete the sign-in.',
+  unable_to_get_user_info: 'Discord accepted the sign-in but would not return your account.',
+  no_callback_url: 'Proton could not work out where to send you back to.',
+};
+
+export function signInFailure(code: string, description?: string): string {
+  return SIGN_IN_FAILURES[code] ?? description ?? `Discord returned “${code}”.`;
+}
+
 export const Route = createFileRoute('/')({
+  validateSearch: zodValidator(doorSearchSchema),
   component: Home,
 });
 
 function Home(): ReactElement {
+  const { error, error_description: description } = Route.useSearch();
+
   return (
     <div className="door">
       <div className="door-inner">
@@ -38,6 +62,15 @@ function Home(): ReactElement {
             Levels, role menus, tickets and scheduled messages.
           </li>
         </ul>
+
+        {error ? (
+          <div className="alert-banner" role="alert">
+            <Icon name="warning-circle" weight="fill" />
+            <span className="alert-banner-text">
+              {signInFailure(error, description)} You are not signed in.
+            </span>
+          </div>
+        ) : null}
 
         <a className="button button-discord door-button" href="/api/auth/signin/discord">
           <Icon name="discord-logo" weight="fill" />

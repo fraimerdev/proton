@@ -52,10 +52,12 @@ export function DataTable<TData extends RowData, TField extends string = string>
 
   const content = (
     <>
-      <table className={className}>
+      {/* Virtualised rows are absolutely positioned, so the table only ever holds the dozen the
+          viewport can see and a reader counting them announces a dozen of a thousand. */}
+      <table className={className} aria-rowcount={virtual ? rows.length + 1 : undefined}>
         <thead>
-          {table.getHeaderGroups().map((group) => (
-            <tr key={group.id}>
+          {table.getHeaderGroups().map((group, position) => (
+            <tr key={group.id} aria-rowindex={virtual ? position + 1 : undefined}>
               {group.headers.map((header) => (
                 <th
                   key={header.id}
@@ -163,6 +165,7 @@ function VirtualBody<TData extends RowData>({
         return (
           <tr
             key={row.id}
+            aria-rowindex={virtualRow.index + 2}
             {...(rowAttributes ? rowAttributes(row.original) : {})}
             style={{
               position: 'absolute',
@@ -237,7 +240,7 @@ export interface PagerProps {
 
 export function Pager({ className, page, lastPage, onPage, children }: PagerProps): ReactElement {
   return (
-    <nav className={className}>
+    <nav className={className} aria-label="Pages">
       <button
         type="button"
         className="button button-quiet"
@@ -246,7 +249,9 @@ export function Pager({ className, page, lastPage, onPage, children }: PagerProp
       >
         Previous
       </button>
-      {children}
+      {/* A filter that narrows a thousand cases to four changes nothing a reader is told about
+          otherwise — the rows it removed were never announced in the first place. */}
+      <span aria-live="polite">{children}</span>
       <button
         type="button"
         className="button button-quiet"

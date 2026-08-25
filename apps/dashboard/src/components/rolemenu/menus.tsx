@@ -26,6 +26,29 @@ export interface RolemenuEditorProps {
   onChange: (menus: RolemenuMenu[]) => void;
 }
 
+// Every sibling panel names the row that is wrong ("Creator channel 2: …"); this one printed the
+// Zod path verbatim, so an admin read "0.bindings.1.roleId: must be a Discord snowflake".
+function describeIssuePath(path: readonly PropertyKey[]): string {
+  const menu = typeof path[0] === 'number' ? `Menu ${path[0] + 1}` : null;
+  if (menu === null) return '';
+
+  return path[1] === 'bindings' && typeof path[2] === 'number'
+    ? `${menu}, choice ${path[2] + 1}: `
+    : `${menu}: `;
+}
+
+const KIND_LABELS: Record<RolemenuKind, string> = {
+  button: 'Buttons — one per role',
+  select: 'Dropdown — one list of roles',
+  reaction: 'Reactions on an existing message',
+};
+
+const MODE_LABELS: Record<RolemenuMode, string> = {
+  toggle: 'Toggle — pick to add, pick again to remove',
+  'add-only': 'Add only — roles can be taken but not given back',
+  unique: 'Unique — only one role from this menu at a time',
+};
+
 const MODE_HELP: Record<RolemenuMode, string> = {
   toggle: 'Picking a choice adds the role, picking it again removes it.',
   'add-only': 'Roles can be taken but never given back.',
@@ -120,7 +143,7 @@ export function RolemenuEditor({
               >
                 {ROLEMENU_KINDS.map((kind) => (
                   <option key={kind} value={kind}>
-                    {kind}
+                    {KIND_LABELS[kind]}
                   </option>
                 ))}
               </select>
@@ -134,7 +157,7 @@ export function RolemenuEditor({
               >
                 {ROLEMENU_MODES.map((mode) => (
                   <option key={mode} value={mode}>
-                    {mode}
+                    {MODE_LABELS[mode]}
                   </option>
                 ))}
               </select>
@@ -212,7 +235,7 @@ export function RolemenuEditor({
 
                   <button
                     type="button"
-                    className="button button-quiet"
+                    className="button button-ghost"
                     aria-label={`Remove choice ${binding.key} from ${menu.id}`}
                     disabled={menu.bindings.length <= 1}
                     onClick={() =>
@@ -245,7 +268,7 @@ export function RolemenuEditor({
 
             <button
               type="button"
-              className="button button-quiet"
+              className="button button-ghost"
               aria-label={`Remove menu ${menu.id}`}
               onClick={() => onChange(menus.filter((_, i) => i !== menuIndex))}
             >
@@ -270,7 +293,7 @@ export function RolemenuEditor({
         <ul className="ladder-errors" role="alert">
           {parsed.error.issues.map((issue) => (
             <li key={`${issue.path.map(String).join('.')}-${issue.message}`}>
-              {issue.path.length > 0 ? `${issue.path.map(String).join('.')}: ` : ''}
+              {describeIssuePath(issue.path)}
               {issue.message}
             </li>
           ))}

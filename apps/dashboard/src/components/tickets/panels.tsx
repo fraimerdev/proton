@@ -1,5 +1,7 @@
+import type { EntitlementTier } from '@proton/core';
 import { type TicketPanel, ticketPanelsSchema } from '@proton/module-tickets/config';
 import { type ReactElement, useId } from 'react';
+import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import {
   channelOptions,
   type DiscordChannel,
@@ -13,10 +15,9 @@ export interface TicketPanelsEditorProps {
   panels: readonly TicketPanel[];
   channels: readonly DiscordChannel[];
   roles: readonly DiscordRole[];
+  tier: EntitlementTier;
   onChange: (panels: TicketPanel[]) => void;
 }
-
-const MAX_PANELS = 40;
 
 const TEXT_CHANNEL_TYPE = 0;
 const CATEGORY_CHANNEL_TYPE = 4;
@@ -37,9 +38,11 @@ export function TicketPanelsEditor({
   panels,
   channels,
   roles,
+  tier,
   onChange,
 }: TicketPanelsEditorProps): ReactElement {
   const fieldId = useId();
+  const ceiling = listCeiling(tier, 'ticketPanels');
   const parsed = ticketPanelsSchema.safeParse(panels);
 
   const textChoices = channelOptions(channels, [TEXT_CHANNEL_TYPE]);
@@ -188,7 +191,7 @@ export function TicketPanelsEditor({
 
             <button
               type="button"
-              className="button button-quiet"
+              className="button button-ghost"
               aria-label={`Remove the ${panel.name} panel`}
               onClick={() => onChange(panels.filter((_, i) => i !== index))}
             >
@@ -208,9 +211,9 @@ export function TicketPanelsEditor({
         type="button"
         className="button button-quiet"
         onClick={() => onChange([...panels, blank(panels.length)])}
-        disabled={panels.length >= MAX_PANELS}
+        disabled={panels.length >= ceiling}
       >
-        {panels.length >= MAX_PANELS ? `Limit of ${MAX_PANELS} panels reached` : 'Add panel'}
+        {panels.length >= ceiling ? ceilingNote(tier, 'ticketPanels') : 'Add panel'}
       </button>
 
       {parsed.success ? null : (

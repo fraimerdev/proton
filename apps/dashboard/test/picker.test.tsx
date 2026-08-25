@@ -61,10 +61,25 @@ describe('roleOptions', () => {
 });
 
 describe('enumOptions', () => {
-  test('is the value both ways round, because an enum has nothing else to show', () => {
+  test('keeps the value as the id and shows a readable label, never the identifier', () => {
     expect(enumOptions(['warn', 'ban'])).toEqual([
-      { id: 'warn', label: 'warn' },
-      { id: 'ban', label: 'ban' },
+      { id: 'warn', label: 'Warn' },
+      { id: 'ban', label: 'Ban' },
+    ]);
+  });
+
+  test('a compound identifier reads as words', () => {
+    expect(enumOptions(['sexualContent', 'add_role', 'add-only'])).toEqual([
+      { id: 'sexualContent', label: 'Sexual content' },
+      { id: 'add_role', label: 'Add role' },
+      { id: 'add-only', label: 'Add only' },
+    ]);
+  });
+
+  test('a registered optionLabel still wins over the derived one', () => {
+    expect(enumOptions(['button', 'captcha'], { button: 'Press a button' })).toEqual([
+      { id: 'button', label: 'Press a button' },
+      { id: 'captcha', label: 'Captcha' },
     ]);
   });
 });
@@ -93,6 +108,27 @@ describe('SinglePicker', () => {
     expect(html).toContain('Lounge');
     expect(html).toContain('data-icon="speaker-high"');
     expect(html).not.toContain('picker-value-unset');
+  });
+
+  test('a saved channel the guild no longer has keeps its raw id rather than reading as unset', () => {
+    const html = render(<SinglePicker {...props} value="900000000000000009" />);
+
+    expect(html).toContain('900000000000000009');
+    expect(html).toContain('data-unknown');
+    expect(html).not.toContain('No channel');
+  });
+
+  test('the missing value says so in the accessible name, not only in the styling', () => {
+    const html = render(<SinglePicker {...props} value="900000000000000009" />);
+
+    expect(html).toContain('no longer exists in this server');
+  });
+
+  test('an unset picker is still unset, not treated as a missing id', () => {
+    const html = render(<SinglePicker {...props} value={null} />);
+
+    expect(html).not.toContain('data-unknown');
+    expect(html).toContain('No channel');
   });
 });
 

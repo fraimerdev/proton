@@ -200,10 +200,11 @@ describe('an enum carrying option labels', () => {
     expect(html).not.toContain('>captcha<');
   });
 
-  test('falls back to the option where no label names it', () => {
+  test('falls back to a readable label, not the raw option, where no label names it', () => {
     const partial: FieldDescriptor = { ...MODE, optionLabels: { button: 'Press a button' } };
 
-    expect(form([partial])).toContain('<option value="website">website</option>');
+    expect(form([partial])).toContain('<option value="website">Website</option>');
+    expect(form([partial])).toContain('<option value="button">Press a button</option>');
   });
 });
 

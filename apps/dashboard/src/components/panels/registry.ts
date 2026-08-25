@@ -1,6 +1,12 @@
-import type { FieldDescriptor } from '@proton/core';
+import type { EntitlementTier, FieldDescriptor } from '@proton/core';
 import { EMPTY_MESSAGE, zodToDescriptors } from '@proton/core';
+import { escalationLadderSchema } from '@proton/module-cases';
+import { honeypotChannelsSchema } from '@proton/module-honeypot/config';
+import { roleRewardsSchema } from '@proton/module-leveling/config';
 import { commandOverridesFormSchema } from '@proton/module-permissions';
+import { rolemenuMenusSchema } from '@proton/module-rolemenu/config';
+import { tempVcHubsSchema } from '@proton/module-tempvc/config';
+import { ticketPanelsSchema } from '@proton/module-tickets/config';
 import { lazyRouteComponent } from '@tanstack/react-router';
 import type { ComponentType } from 'react';
 import { z } from 'zod';
@@ -37,6 +43,10 @@ export interface PanelProps {
   roles: readonly DiscordRole[];
   liveConfig: Record<string, unknown>;
 
+  // What this server may actually hold. The config schemas cap at the pro ceiling because they are
+  // tier-agnostic; the API refuses anything above the real one at save time.
+  tier: EntitlementTier;
+
   guildId: string;
 }
 
@@ -50,6 +60,10 @@ export type PanelEntry =
       emptyValue: unknown;
       title: string;
       Panel: PanelComponent;
+
+      // The same schema the panel already safeParses to draw its own error list. Held here too so
+      // Save can be gated on it: a panel belonging to another area never mounts to report upward.
+      schema?: z.ZodType;
     }
   | {
       key: null;
@@ -80,6 +94,7 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
         key: 'escalationLadder',
         emptyValue: [],
         title: 'Warn escalation',
+        schema: escalationLadderSchema,
         Panel: panel('EscalationLadderPanel'),
       },
     ],
@@ -96,13 +111,22 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
         key: 'roleRewards',
         emptyValue: [],
         title: 'Role rewards',
+        schema: roleRewardsSchema,
         Panel: panel('RoleRewardsPanel'),
       },
       { key: null, title: 'Rank card preview', Panel: panel('RankCardPreviewPanel') },
     ],
   },
   rolemenu: {
-    panels: [{ key: 'menus', emptyValue: [], title: 'Role menus', Panel: panel('RoleMenusPanel') }],
+    panels: [
+      {
+        key: 'menus',
+        emptyValue: [],
+        title: 'Role menus',
+        Panel: panel('RoleMenusPanel'),
+        schema: rolemenuMenusSchema,
+      },
+    ],
   },
   automod: {
     panels: [{ key: null, title: 'Who enforces what', Panel: panel('EnforcementReadout') }],
@@ -113,6 +137,7 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
         key: 'channels',
         emptyValue: [],
         title: 'Honeypot channels',
+        schema: honeypotChannelsSchema,
         Panel: panel('HoneypotChannelsPanel'),
       },
     ],
@@ -124,11 +149,25 @@ export const MODULE_PANELS: Readonly<Record<string, ModulePanels>> = {
   },
   tickets: {
     panels: [
-      { key: 'panels', emptyValue: [], title: 'Ticket panels', Panel: panel('TicketPanelsPanel') },
+      {
+        key: 'panels',
+        emptyValue: [],
+        title: 'Ticket panels',
+        Panel: panel('TicketPanelsPanel'),
+        schema: ticketPanelsSchema,
+      },
     ],
   },
   tempvc: {
-    panels: [{ key: 'hubs', emptyValue: [], title: 'Hubs', Panel: panel('TempVcHubsPanel') }],
+    panels: [
+      {
+        key: 'hubs',
+        emptyValue: [],
+        title: 'Hubs',
+        Panel: panel('TempVcHubsPanel'),
+        schema: tempVcHubsSchema,
+      },
+    ],
   },
   messages: {
     panels: [
@@ -207,4 +246,25 @@ export function applyPanels(
   }
 
   return spec.transform ? spec.transform(next) : next;
+}
+
+/**
+ * The first panel whose values do not satisfy its own schema, over the whole module rather than the
+ * area on screen. Save writes every panel's values, so a hub left half-filled on another area was
+ * being written by a Save pressed here.
+ */
+export function invalidPanelOf(
+  moduleId: string,
+  values: Record<string, unknown>,
+): { key: string; title: string } | undefined {
+  const spec = specFor(moduleId);
+  if (!spec) return undefined;
+
+  for (const entry of spec.panels) {
+    if (entry.key === null || entry.schema === undefined) continue;
+    if (!entry.schema.safeParse(values[entry.key]).success)
+      return { key: entry.key, title: entry.title };
+  }
+
+  return undefined;
 }

@@ -81,7 +81,9 @@ export function ModuleHeader({
           role="switch"
           checked={summary.enabled}
           aria-checked={summary.enabled}
-          aria-label={`${summary.enabled ? 'Switch off' : 'Switch on'} ${summary.name}`}
+          // Carries the visible word and stays put. A name that flipped between "Switch on" and
+          // "Switch off" renamed the control on every toggle, and matched no label on screen.
+          aria-label={`Enabled — ${summary.name}`}
           onChange={(event) => toggle(summary, event.target.checked)}
         />
       </label>

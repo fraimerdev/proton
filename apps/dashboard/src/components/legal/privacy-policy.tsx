@@ -138,7 +138,7 @@ export function PrivacyPolicy(): ReactElement {
       <p>Requests go to the operator of this Proton instance.</p>
 
       <p>
-        <a href="/">Back to sign in</a>
+        <a href="/">Back to Proton</a>
       </p>
     </section>
   );

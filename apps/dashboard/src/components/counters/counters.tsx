@@ -1,15 +1,16 @@
+import type { EntitlementTier } from '@proton/core';
 import { COUNTER_SOURCES, type Counter, countersListSchema } from '@proton/module-counters/config';
 import type { ReactElement } from 'react';
 import { useId } from 'react';
+import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import { channelOptions, type DiscordChannel, SinglePicker } from '../form/picker.tsx';
 
 export interface CountersEditorProps {
   counters: readonly Counter[];
   channels: readonly DiscordChannel[];
+  tier: EntitlementTier;
   onChange: (counters: Counter[]) => void;
 }
-
-const MAX_SHOWN = 100;
 
 const SOURCE_LABELS: Record<(typeof COUNTER_SOURCES)[number], string> = {
   members: 'Members in the server',
@@ -24,9 +25,11 @@ function blank(): Counter {
 export function CountersEditor({
   counters,
   channels,
+  tier,
   onChange,
 }: CountersEditorProps): ReactElement {
   const id = useId();
+  const ceiling = listCeiling(tier, 'counters');
   const options = channelOptions(channels);
   const parsed = countersListSchema.safeParse(counters);
 
@@ -94,7 +97,7 @@ export function CountersEditor({
 
             <button
               type="button"
-              className="button button-quiet"
+              className="button button-ghost"
               aria-label={`Remove counter ${index + 1}`}
               onClick={() => onChange(counters.filter((_, i) => i !== index))}
             >
@@ -114,9 +117,9 @@ export function CountersEditor({
         type="button"
         className="button button-quiet"
         onClick={() => onChange([...counters, blank()])}
-        disabled={counters.length >= MAX_SHOWN}
+        disabled={counters.length >= ceiling}
       >
-        {counters.length >= MAX_SHOWN ? `Limit of ${MAX_SHOWN} reached` : 'Add counter'}
+        {counters.length >= ceiling ? ceilingNote(tier, 'counters') : 'Add counter'}
       </button>
 
       {parsed.success ? null : (

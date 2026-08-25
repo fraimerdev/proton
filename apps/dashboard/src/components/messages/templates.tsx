@@ -1,7 +1,9 @@
+import type { EntitlementTier } from '@proton/core';
 import { EMPTY_MESSAGE, liftLegacyMessage, type ProtonMessage } from '@proton/core';
 import type { SavedComponent, TemplateSchedule } from '@proton/module-messages/config';
-import { MAX_TEMPLATES, TEMPLATE_NAME_MAX } from '@proton/module-messages/config';
+import { TEMPLATE_NAME_MAX } from '@proton/module-messages/config';
 import { type ReactElement, useState } from 'react';
+import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import type { DiscordChannel, DiscordRole } from '../form/fields.tsx';
 import { MessageBuilder } from '../message/builder.tsx';
 import { messageFrom } from '../message/normalise.ts';
@@ -19,6 +21,7 @@ export interface TemplatesEditorProps {
   onChange: (templates: SavedMessageEntry[]) => void;
   channels: readonly DiscordChannel[];
   roles: readonly DiscordRole[];
+  tier: EntitlementTier;
   palette?: readonly SavedComponent[];
 }
 
@@ -65,9 +68,11 @@ export function TemplatesEditor({
   onChange,
   channels,
   roles,
+  tier,
   palette = [],
 }: TemplatesEditorProps): ReactElement {
   const messages = templates.map(normalise);
+  const ceiling = listCeiling(tier, 'savedTemplates');
 
   // Held as an index rather than a name, because the name is edited in this very pane and a
   // selection keyed on it would jump to another template on the first keystroke.
@@ -119,12 +124,12 @@ export function TemplatesEditor({
 
           <button
             className="pane-add"
-            disabled={messages.length >= MAX_TEMPLATES}
+            disabled={messages.length >= ceiling}
             onClick={add}
             type="button"
           >
             <Icon name="plus" />
-            {messages.length >= MAX_TEMPLATES ? `Limit of ${MAX_TEMPLATES}` : 'New template'}
+            {messages.length >= ceiling ? ceilingNote(tier, 'savedTemplates') : 'New template'}
           </button>
         </div>
 

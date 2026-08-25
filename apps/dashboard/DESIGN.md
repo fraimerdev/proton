@@ -9,7 +9,7 @@ colors:
   well-black: "#0b0d12"
   hairline: "#242833"
   lifted-hairline: "#333949"
-  control-stroke: "#4b5468"
+  control-stroke: "#646e86"
   paper: "#e9ebf1"
   muted-paper: "#aab1c0"
   quiet-slate: "#868e9f"
@@ -412,8 +412,11 @@ one blue for interaction, three semantic hues for state, and a gradient that is 
   section rules.
 - **Lifted Hairline** (`#333949`): The border of things that float (menus, dialogs, save bar,
   palette), the keycap border, the chip border, the scrollbar thumb.
-- **Control Stroke** (`#4b5468`): Input, select, textarea, switch and checkbox borders only. It is
-  lighter than every other line so a control reads as touchable before it is focused.
+- **Control Stroke** (`#646e86`): Input, select, textarea, switch and checkbox borders only. It is
+  lighter than every other line so a control reads as touchable before it is focused. It is also the
+  only line in the system held to WCAG 1.4.11: the boundary of an input is what says it is one, so it
+  clears 3:1 against every ground it lands on — 3.02:1 on Raised Slate, 3.30:1 on Card Slate. The
+  original `#4b5468` read 2.12:1 there and failed.
 - **Paper** (`#e9ebf1`): Primary text, headings, the name of a module that is on.
 - **Muted Paper** (`#aab1c0`): Secondary text — body copy in cards, table cells, the name of a
   module that is off, nav items at rest.

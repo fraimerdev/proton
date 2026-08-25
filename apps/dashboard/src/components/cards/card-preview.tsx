@@ -60,16 +60,28 @@ export function CardPreview(props: CardPreviewProps): ReactElement {
         });
 
         if (!response.ok) {
-          setFailure(await response.text());
+          const body = (await response.text()).trim();
+          setSrc(null);
+
+          // Only the route's own sentences are copy. Anything else — a proxy's HTML error page, an
+          // empty body — is a machine string, and printing it under the preview says nothing.
+          setFailure(
+            body.length > 0 && body.length < 300 && !body.startsWith('<')
+              ? body
+              : 'Proton could not render this card. The settings above are saved either way.',
+          );
           return;
         }
 
         objectUrl = URL.createObjectURL(await response.blob());
         setFailure(null);
         setSrc(objectUrl);
-      } catch (error) {
+      } catch {
         if (abort.signal.aborted) return;
-        setFailure(error instanceof Error ? error.message : 'the preview could not be loaded');
+        setSrc(null);
+        setFailure(
+          'Proton could not reach the preview renderer. The settings above are saved either way.',
+        );
       }
     }, DEBOUNCE_MS);
 
@@ -82,7 +94,11 @@ export function CardPreview(props: CardPreviewProps): ReactElement {
 
   return (
     <div className="card-preview">
-      {src === null ? (
+      {/* A failed render is not a render still in progress. Both failure paths leave src null, so
+          the pending frame used to sit under the coral line forever, saying the opposite of it. */}
+      {failure !== null ? (
+        <div className="card-preview-frame card-preview-failed">No preview</div>
+      ) : src === null ? (
         <div className="card-preview-frame card-preview-pending">Rendering…</div>
       ) : (
         <img alt="Preview of the card Proton will send" className="card-preview-image" src={src} />

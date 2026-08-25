@@ -10,7 +10,8 @@ import type {
 } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
 import type { ReactElement, ReactNode } from 'react';
-import { useId } from 'react';
+import { useId, useState } from 'react';
+import { optionLabel } from '../../lib/enum-labels.ts';
 import { Icon } from '../shell/icon.tsx';
 import type { DiscordChannel, DiscordRole } from './picker.tsx';
 import {
@@ -100,6 +101,11 @@ function Head({
   controlId?: string | undefined;
   describedBy: string;
 }): ReactElement {
+  // WCAG 1.4.13 asks that content shown on hover be dismissible without moving the pointer. The
+  // flag is cleared when the pointer or focus next leaves, so Escape suppresses this one reveal
+  // rather than turning the tooltip off for good.
+  const [dismissed, setDismissed] = useState(false);
+
   return (
     <span className="field-head">
       {controlId === undefined ? (
@@ -110,7 +116,16 @@ function Head({
         </label>
       )}
       {descriptor.description ? (
-        <span className="field-info">
+        // biome-ignore lint/a11y/noStaticElementInteractions: the handlers only dismiss a tooltip the button already owns
+        <span
+          className="field-info"
+          data-dismissed={dismissed || undefined}
+          onBlur={() => setDismissed(false)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') setDismissed(true);
+          }}
+          onPointerLeave={() => setDismissed(false)}
+        >
           <button
             type="button"
             className="field-info-button"
@@ -209,6 +224,15 @@ export function NumberFieldInput({
   const field = descriptor as NumberField;
   const id = useId();
   const controlId = `${id}-control`;
+  const errorId = `${id}-error`;
+
+  const empty = value === undefined && !field.optional;
+  const outOfRange =
+    typeof value === 'number' &&
+    ((field.min !== undefined && value < field.min) ||
+      (field.max !== undefined && value > field.max));
+
+  const invalid = empty || outOfRange;
 
   return (
     <Shell
@@ -219,16 +243,29 @@ export function NumberFieldInput({
       className="field-number"
       hidden={hidden}
     >
-      <input
-        id={controlId}
-        type="number"
-        value={typeof value === 'number' ? String(value) : ''}
-        min={field.min}
-        max={field.max}
-        required={!field.optional}
-        aria-describedby={describedBy(field, id)}
-        onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
-      />
+      <span className="field-control">
+        <input
+          id={controlId}
+          type="number"
+          value={typeof value === 'number' ? String(value) : ''}
+          min={field.min}
+          max={field.max}
+          required={!field.optional}
+          aria-invalid={invalid}
+          aria-describedby={
+            [describedBy(field, id), invalid ? errorId : undefined].filter(Boolean).join(' ') ||
+            undefined
+          }
+          onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.valueAsNumber)}
+        />
+        {invalid ? (
+          <span className="field-error" id={errorId} role="alert">
+            {empty
+              ? 'This needs a number. Left empty it saves as whatever the module defaults to.'
+              : `Use a number between ${field.min ?? 0} and ${field.max ?? '∞'}.`}
+          </span>
+        ) : null}
+      </span>
     </Shell>
   );
 }
@@ -247,7 +284,20 @@ export function ColourFieldInput({
   const field = descriptor as ColourField;
   const id = useId();
   const controlId = `${id}-control`;
+  const errorId = `${id}-error`;
   const hex = hexOf(value);
+
+  // Held, not derived: a controlled hex field reverts every keystroke before the sixth, so the box
+  // could only ever be pasted into. The builder's own colour input already works this way.
+  const [seen, setSeen] = useState(hex);
+  const [draft, setDraft] = useState(hex);
+
+  if (seen !== hex) {
+    setSeen(hex);
+    setDraft(hex);
+  }
+
+  const wrong = !/^#[0-9a-fA-F]{6}$/.test(draft.trim());
 
   return (
     <Shell
@@ -271,15 +321,27 @@ export function ColourFieldInput({
         <input
           className="colour-hex"
           type="text"
-          value={hex}
+          value={draft}
           spellCheck={false}
           aria-label={`${field.label} hex value`}
+          aria-invalid={wrong || undefined}
+          aria-describedby={wrong ? errorId : undefined}
+          // Blur resyncs, or a half-typed draft outlives the field it was typed into.
+          onBlur={() => setDraft(hex)}
           onChange={(e) => {
+            setDraft(e.target.value);
+
             const typed = e.target.value.trim().replace(/^#/, '');
             if (/^[0-9a-fA-F]{6}$/.test(typed)) onChange(Number.parseInt(typed, 16));
           }}
         />
       </span>
+      {wrong ? (
+        <span className="field-error" id={errorId} role="alert">
+          A colour is six hex digits, like #5865F2. The swatch keeps its value until this reads as
+          one.
+        </span>
+      ) : null}
     </Shell>
   );
 }
@@ -313,7 +375,7 @@ export function EnumFieldInput({
         {field.optional ? <option value="">Not set</option> : null}
         {field.options.map((option) => (
           <option key={option} value={option}>
-            {field.optionLabels?.[option] ?? option}
+            {optionLabel(option, field.optionLabels)}
           </option>
         ))}
       </select>
@@ -413,7 +475,12 @@ export function DurationFieldInput({
   const errorId = `${id}-error`;
 
   const text = typeof value === 'string' ? value : '';
-  const invalid = text !== '' && tryParseDuration(text) === null;
+  const unreadable = text !== '' && tryParseDuration(text) === null;
+
+  // A stored value that is already unreadable says so on arrival — the save bar gates on it. What
+  // is suppressed is only the half-typed state: "3" is not a duration yet, and neither is "30".
+  const [editing, setEditing] = useState(false);
+  const invalid = unreadable && !editing;
 
   return (
     <Shell
@@ -436,6 +503,8 @@ export function DurationFieldInput({
             [describedBy(field, id), invalid ? errorId : undefined].filter(Boolean).join(' ') ||
             undefined
           }
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
           onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
         />
         {invalid ? (
@@ -477,7 +546,7 @@ export function ArrayFieldInput({
       : descriptor.kind === 'channel-id'
         ? channelOptions(channels, descriptor.channelTypes)
         : descriptor.kind === 'enum'
-          ? enumOptions(descriptor.options)
+          ? enumOptions(descriptor.options, descriptor.optionLabels)
           : null;
 
   return (

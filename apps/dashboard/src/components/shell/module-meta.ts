@@ -187,7 +187,9 @@ const WHERE_TO_FIX: Record<string, string> = {
   missing_intent: 'Discord Developer Portal → Proton → Bot → Privileged Gateway Intents',
   missing_permission: 'Server Settings → Roles → Proton',
   missing_dependency: 'Proton’s own deployment — no server setting changes this',
-  insufficient_entitlement: 'Billing → this server’s plan',
+  // Not "Billing →": there is no billing surface in the product, and PRODUCT.md forbids
+  // inventing one. The plan is shown on the server home, which is somewhere that exists.
+  insufficient_entitlement: 'Modules → This server → Plan, for the tier this server is on',
 };
 
 export function whereToFix(code: string | undefined): string | null {
