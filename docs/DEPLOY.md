@@ -303,7 +303,7 @@ slash command answers.
 
 ```bash
 sudo -u proton -i
-/srv/proton/deploy/deploy.sh
+bash /srv/proton/deploy/deploy.sh
 ```
 
 That pulls, installs, builds, migrates, reloads and smoke-tests. It deliberately leaves the gateway
@@ -311,7 +311,7 @@ alone: Discord allows 1000 session starts per day and every gateway boot spends 
 only when its own code changed:
 
 ```bash
-/srv/proton/deploy/deploy.sh --with-gateway
+bash /srv/proton/deploy/deploy.sh --with-gateway
 ```
 
 pm2 runs these in fork mode, so a reload is a restart — expect a second or two of 502s on the
@@ -322,7 +322,7 @@ Rollback:
 
 ```bash
 cd /srv/proton && git checkout <previous-sha>
-./deploy/deploy.sh --no-pull
+bash deploy/deploy.sh --no-pull
 ```
 
 Migrations do not roll back. A release that changed the schema needs a forward fix, not a checkout.

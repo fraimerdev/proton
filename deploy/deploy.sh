@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Update a running Proton deployment in place. Run as the proton user:
-#   /srv/proton/deploy/deploy.sh [--no-pull] [--with-gateway]
+#   bash /srv/proton/deploy/deploy.sh [--no-pull] [--with-gateway]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
