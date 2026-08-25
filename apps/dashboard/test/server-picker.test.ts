@@ -30,6 +30,23 @@ describe('the invite url Proton hands Discord', () => {
   test('escapes the scope separator rather than sending a raw space', () => {
     expect(botInviteUrl(INVITE, '1')).toContain('scope=bot+applications.commands');
   });
+
+  // The public /invite link is shared before anyone has picked a server, so Discord's own picker
+  // is the right one. Pinning a guild there would name a server the visitor never chose.
+  describe('with no guild to pin', () => {
+    const open = new URL(botInviteUrl(INVITE));
+
+    test('leaves Discord to ask which server', () => {
+      expect(open.searchParams.get('guild_id')).toBeNull();
+      expect(open.searchParams.get('disable_guild_select')).toBeNull();
+    });
+
+    test('still carries the client id, the scopes and the permission mask', () => {
+      expect(open.searchParams.get('client_id')).toBe(INVITE.clientId);
+      expect(open.searchParams.get('scope')).toBe('bot applications.commands');
+      expect(open.searchParams.get('permissions')).toBe(INVITE.permissions);
+    });
+  });
 });
 
 describe('the icon a card draws', () => {

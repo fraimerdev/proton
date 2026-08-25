@@ -1,6 +1,6 @@
 import type { FieldDescriptor, ModuleConfigView, ModuleSummary } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
-import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import {
   createFileRoute,
   Link,
@@ -38,6 +38,7 @@ import {
   moduleState,
   shortReason,
 } from '../../../components/shell/module-meta.ts';
+import { Spinner } from '../../../components/shell/pending.tsx';
 import {
   type AnyViewEntry,
   activeView,
@@ -123,6 +124,7 @@ export const Route = createFileRoute('/dashboard/$guildId/$moduleId')({
   },
   head: ({ loaderData }) => ({ meta: [{ title: loaderData?.title ?? documentTitle() }] }),
   component: ModulePage,
+  pendingComponent: ModulePending,
   errorComponent: ModuleError,
 });
 
@@ -193,26 +195,25 @@ function moduleOf(modules: readonly ModuleSummary[], moduleId: string): ModuleSu
   return found;
 }
 
-function ModulePage(): ReactElement {
-  const { guildId, moduleId } = Route.useParams();
-  const { viewSearch } = Route.useLoaderData();
-  const search = Route.useSearch();
-  const navigate = useNavigate({ from: Route.fullPath });
-
-  const { modules } = useSuspenseQuery(modulesQuery(guildId)).data;
-
-  const summary = useMemo(() => moduleOf(modules, moduleId), [modules, moduleId]);
-  const commands = useMemo(
-    () => [...new Set(modules.flatMap((candidate) => candidate.commands))].sort(),
-    [modules],
-  );
-
+/**
+ * Everything above the tab body: the crumb, the title, the lede, the master switch and the tabs.
+ * Shared with the pending state rather than copied into it — the two have to agree exactly, or the
+ * header shifts when the page it belongs to finally lands.
+ */
+function ModuleChrome({
+  guildId,
+  moduleId,
+  summary,
+  search,
+}: {
+  guildId: string;
+  moduleId: string;
+  summary: ModuleSummary;
+  search: ModuleSearch;
+}): ReactElement {
   const entry = activeView(moduleId, search.view);
-
-  const areas = areasFor(moduleId);
-  const area = areas.find((candidate) => candidate.id === search.area);
+  const area = areasFor(moduleId).find((candidate) => candidate.id === search.area);
   const tabs = tabsFor(viewsFor(moduleId), search.view, area?.id);
-  const onHub = !entry && areas.length > 0 && area === undefined;
 
   return (
     <>
@@ -241,6 +242,58 @@ function ModulePage(): ReactElement {
           ))}
         </nav>
       ) : null}
+    </>
+  );
+}
+
+/**
+ * The module list is fetched by the parent route and awaited before the shell renders, so this
+ * page's name, category and blurb are in the cache while its own four fetches are still out. A bare
+ * spinner threw all of that away and then jumped the header into place when the config arrived.
+ *
+ * useQuery, not useSuspenseQuery: suspending here would replace the very header this exists to keep.
+ */
+function ModulePending(): ReactElement {
+  const { guildId, moduleId } = Route.useParams();
+  const search = Route.useSearch();
+
+  const summary = useQuery(modulesQuery(guildId)).data?.modules.find(
+    (candidate) => candidate.id === moduleId,
+  );
+
+  return (
+    <>
+      {summary ? (
+        <ModuleChrome guildId={guildId} moduleId={moduleId} summary={summary} search={search} />
+      ) : null}
+      <Spinner />
+    </>
+  );
+}
+
+function ModulePage(): ReactElement {
+  const { guildId, moduleId } = Route.useParams();
+  const { viewSearch } = Route.useLoaderData();
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
+  const { modules } = useSuspenseQuery(modulesQuery(guildId)).data;
+
+  const summary = useMemo(() => moduleOf(modules, moduleId), [modules, moduleId]);
+  const commands = useMemo(
+    () => [...new Set(modules.flatMap((candidate) => candidate.commands))].sort(),
+    [modules],
+  );
+
+  const entry = activeView(moduleId, search.view);
+
+  const areas = areasFor(moduleId);
+  const area = areas.find((candidate) => candidate.id === search.area);
+  const onHub = !entry && areas.length > 0 && area === undefined;
+
+  return (
+    <>
+      <ModuleChrome guildId={guildId} moduleId={moduleId} summary={summary} search={search} />
 
       {entry ? (
         <ActiveView

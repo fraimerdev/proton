@@ -1,24 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
-import type { ReactElement } from 'react';
+import { Spinner } from './components/shell/pending.tsx';
 import { makeQueryClient } from './lib/query-client.ts';
 import { routeTree } from './routeTree.gen';
 
 export interface RouterContext {
   queryClient: QueryClient;
-}
-
-// A module page waits on four fetches, and until one of them answered the previous page simply
-// stayed on screen. role=status with the word offscreen, because the ring itself says nothing to a
-// screen reader and a page that is still arriving has to announce that it is.
-function RoutePending(): ReactElement {
-  return (
-    <div className="route-pending" role="status">
-      <span className="spinner" />
-      <span className="sr-only">Loading</span>
-    </div>
-  );
 }
 
 export function getRouter() {
@@ -33,7 +21,9 @@ export function getRouter() {
     // while it is fresh, so a second staleness clock in the router would only mask the first.
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
-    defaultPendingComponent: RoutePending,
+    // Routes that know nothing about the page they are fetching. The module route replaces this
+    // with one that keeps its own header on screen.
+    defaultPendingComponent: Spinner,
   });
 
   setupRouterSsrQueryIntegration({ router, queryClient });

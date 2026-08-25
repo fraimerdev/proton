@@ -5273,3 +5273,1185 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   flex-basis: 100%;
   margin: 0;
 }
+
+/* ---------- public site: shell ---------- */
+
+.site {
+  --site-w: 1140px;
+  --site-pad: var(--s8);
+  --site-gap: 96px;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.site-main {
+  flex: 1;
+}
+
+.site :where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.site [id] {
+  scroll-margin-top: 88px;
+}
+
+/* The pill nav wraps to two rows below 940px, so the desktop offset drops every anchor
+   underneath it. Measured 113.7px at 375. */
+@media (max-width: 940px) {
+  .site [id] {
+    scroll-margin-top: 128px;
+  }
+}
+
+.site-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.site-label::before {
+  content: "";
+  width: 14px;
+  height: 1px;
+  flex: none;
+  background: currentColor;
+}
+
+/* ---------- public site: header ---------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: center;
+  padding: var(--s4) var(--s5) var(--s3);
+}
+
+.site-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--s5);
+  width: 100%;
+  max-width: var(--site-w);
+  padding: var(--s2) var(--s2) var(--s2) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--rail);
+}
+
+.site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.site-brand:hover {
+  text-decoration: none;
+}
+
+.site-nav-links {
+  display: flex;
+  gap: var(--s5);
+  justify-self: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-nav-links a {
+  color: var(--text-2);
+  font-size: var(--t-base);
+  transition: color 0.13s var(--ease);
+}
+
+.site-nav-links a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-nav-links a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.site-nav-cta {
+  justify-self: end;
+  height: 34px;
+  border-radius: var(--r-full);
+}
+
+/* ---------- public site: landing ---------- */
+
+.site {
+  --r-xl: 16px;
+}
+
+.button-xl {
+  height: 52px;
+  padding: 0 var(--s7);
+  border-radius: var(--r-full);
+  font-size: var(--t-md);
+}
+
+.button-xl [data-icon] {
+  font-size: 20px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: var(--s8) var(--site-pad) var(--site-gap);
+  text-align: center;
+}
+
+.hero-mark {
+  width: 88px;
+  height: 88px;
+  margin-bottom: var(--s6);
+}
+
+.hero-title {
+  margin: 0;
+  font-size: clamp(34px, 5.4vw, 60px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+}
+
+/* The second clause is the claim; it gets its own line and drops to muted. Weight and value carry
+   the emphasis — this is where a gradient would have gone. */
+.hero-title span {
+  display: block;
+  color: var(--text-2);
+}
+
+.hero-sub {
+  max-width: 62ch;
+  margin: var(--s6) 0 0;
+  color: var(--text-2);
+  font-size: clamp(15px, 1.4vw, 17px);
+  line-height: 1.68;
+  text-wrap: pretty;
+}
+
+.hero-alert {
+  margin: var(--s6) 0 0;
+  max-width: 64ch;
+  text-align: left;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s3);
+  margin-top: var(--s7);
+}
+
+/* Promoted off 12.5px/quiet: the required permission is the most trust-building sentence on the
+   page and was set in its smallest, lowest-contrast type. */
+.hero-fine {
+  margin: var(--s5) 0 0;
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.6;
+}
+
+/* ---------- public site: screenshots ---------- */
+
+.shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line-hi);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+}
+
+/* What stands in for a screenshot nobody has taken yet. It names the file it is waiting for, so
+   the gap is a instruction rather than a broken image. */
+.shot-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  aspect-ratio: 16 / 10;
+  padding: var(--s7);
+  border-style: dashed;
+  text-align: center;
+}
+
+.shot-pending [data-icon] {
+  font-size: 30px;
+  color: var(--text-3);
+}
+
+.shot-file {
+  color: var(--text-2);
+  font-size: var(--t-sm);
+}
+
+.shot-note {
+  max-width: 40ch;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+/* ---------- public site: sections ---------- */
+
+.lp {
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: var(--site-gap) var(--site-pad);
+}
+
+.lp-head {
+  max-width: 46rem;
+  margin-bottom: var(--s9);
+}
+
+.lp-title {
+  margin: 0;
+  font-size: clamp(26px, 3.4vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.lp-lede {
+  max-width: 58ch;
+  margin: var(--s4) 0 0;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.7;
+}
+
+.lp-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--s7);
+}
+
+/* ---------- public site: capability index ---------- */
+
+/* A ruled index, not a grid of cards. Each capability is one row of the record: mark, name,
+   what it does — the shape the product's own module list has. */
+.index-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.index-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 15rem) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s5);
+  padding: var(--s5) var(--s2);
+  border-bottom: 1px solid var(--line);
+  transition: background 0.13s var(--ease);
+}
+
+.index-row:hover {
+  background: var(--surface);
+}
+
+.index-row [data-icon] {
+  font-size: 19px;
+  color: var(--text-3);
+}
+
+.index-name {
+  color: var(--text);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.index-body {
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.6;
+}
+
+/* ---------- public site: showcases ---------- */
+
+/* The three proofs are one argument, so they sit on one darker ground with the gaps between them
+   tightened. Without this the page is eight sections of identical 96px padding. */
+.show-band {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: var(--rail);
+}
+
+.show-band .show {
+  padding-block: var(--s9);
+}
+
+.show-band .show:first-child {
+  padding-top: var(--site-gap);
+}
+
+.show-band .show:last-child {
+  padding-bottom: var(--site-gap);
+}
+
+.show-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: var(--s10);
+}
+
+.show-flip .show-figure {
+  order: -1;
+}
+
+.show-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: var(--s6) 0 var(--s7);
+  padding: 0;
+  list-style: none;
+}
+
+.show-list li {
+  position: relative;
+  padding-left: 28px;
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.55;
+}
+
+.show-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--ok-line);
+  border-radius: var(--r-full);
+  background: var(--ok-wash);
+}
+
+.show-list li::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 7px;
+  width: 4px;
+  height: 8px;
+  border-right: 2px solid var(--ok);
+  border-bottom: 2px solid var(--ok);
+  transform: rotate(45deg);
+}
+
+/* ---------- public site: command strip ---------- */
+
+.strip {
+  padding: var(--site-gap) 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.strip-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  max-width: var(--site-w);
+  margin: 0 auto var(--s8);
+  padding: 0 var(--site-pad);
+}
+
+.strip-head .lp-title {
+  margin: 0;
+}
+
+.marquee {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.marquee-row {
+  overflow: hidden;
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 52s linear infinite;
+}
+
+.marquee-row[data-reverse] .marquee-track {
+  animation-direction: reverse;
+}
+
+.strip:hover .marquee-track,
+.strip:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+
+.marquee-run {
+  display: flex;
+  gap: var(--s5);
+  padding-right: var(--s5);
+}
+
+.marquee-item {
+  padding: var(--s2) var(--s5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--t-md);
+  white-space: nowrap;
+}
+
+/* The track holds two identical runs, so half a track is one whole loop. */
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ---------- public site: questions ---------- */
+
+.faq-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.faq-item + .faq-item {
+  border-top: 1px solid var(--line);
+}
+
+.faq-item > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  padding: var(--s4) var(--s5);
+  cursor: pointer;
+  list-style: none;
+  transition: background 0.13s var(--ease);
+}
+
+.faq-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item > summary:hover {
+  background: var(--surface-hi);
+}
+
+.faq-q {
+  color: var(--text);
+  font-size: var(--t-md);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.faq-mark {
+  flex: none;
+  color: var(--text-3);
+  font-size: 16px;
+}
+
+/* Drawn, not rotated: a transform transition would be the only one in the system. */
+.faq-item[open] .faq-mark-shut,
+.faq-item:not([open]) .faq-mark-open {
+  display: none;
+}
+
+.faq-a {
+  max-width: 74ch;
+  padding: 0 var(--s5) var(--s5);
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.68;
+}
+
+.faq-a p {
+  margin: 0 0 var(--s3);
+}
+
+.faq-a p:last-child {
+  margin-bottom: 0;
+}
+
+.faq-a strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.faq-a code {
+  padding: 2px var(--s1);
+  border-radius: var(--r-xs);
+  background: var(--surface-hi);
+  font: 400 0.88em var(--mono);
+}
+
+/* ---------- public site: closing call ---------- */
+
+.closer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--site-gap) var(--site-pad);
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  text-align: center;
+}
+
+.closer-title {
+  margin: 0;
+  font-size: clamp(30px, 4.4vw, 48px);
+  font-weight: 600;
+  letter-spacing: -0.032em;
+  line-height: 1.1;
+}
+
+.closer-sub {
+  max-width: 52ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.65;
+}
+
+/* ---------- public site: footer ---------- */
+
+.site-footer {
+  position: relative;
+  padding-top: 120px;
+  background: var(--rail);
+}
+
+/* The page ground shows through above the curve, so the footer reads as the floor the page sits
+   on rather than one more section of it. It is the only non-rectangular edge in the product. */
+.site-wave {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 120px;
+  display: block;
+  fill: var(--rail);
+}
+
+.site-footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 1fr)) minmax(0, 1.1fr);
+  align-items: start;
+  gap: var(--s8);
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: 0 var(--site-pad) var(--s9);
+}
+
+.site-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--text);
+  font-size: var(--t-2xl);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.site-footer-heading {
+  display: block;
+  color: var(--text);
+  font-size: var(--t-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.site-footer-group ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: var(--s4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-footer-group a {
+  color: var(--text-2);
+  font-size: var(--t-base);
+  transition: color 0.13s var(--ease);
+}
+
+.site-footer-group a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.site-footer-call {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.site-footer-base {
+  max-width: var(--site-w);
+  margin: 0 auto;
+  padding: var(--s5) var(--site-pad);
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  text-align: center;
+}
+
+/* ---------- public site: commands ---------- */
+
+.cmd-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+
+.cmd-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 260px;
+}
+
+.cmd-search [data-icon] {
+  position: absolute;
+  left: var(--s3);
+  color: var(--text-3);
+  font-size: 17px;
+  pointer-events: none;
+}
+
+.cmd-search input {
+  width: 100%;
+  height: 40px;
+  padding: 0 var(--s4) 0 38px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--text);
+  font: 400 var(--t-base) / 1 var(--font);
+}
+
+.cmd-search input::placeholder {
+  color: var(--text-3);
+}
+
+.cmd-search input:hover {
+  border-color: var(--text-3);
+}
+
+.cmd-search input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+  outline: none;
+}
+
+.cmd-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.cmd-filter {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  font: 500 var(--t-sm) / 1 var(--font);
+  transition:
+    background 0.13s var(--ease),
+    border-color 0.13s var(--ease),
+    color 0.13s var(--ease);
+}
+
+.cmd-filter:hover {
+  border-color: var(--line-hi);
+  background: var(--surface-hi);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.cmd-filter[aria-current] {
+  border-color: var(--accent-line);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+.cmd-count {
+  margin: 0 0 var(--s6);
+  color: var(--text-3);
+  font-size: var(--t-sm);
+}
+
+.cmd-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s8);
+}
+
+.cmd-group-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s4);
+  margin-bottom: var(--s3);
+}
+
+.cmd-group-head > i {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-lg);
+  background: var(--surface-hi);
+  color: var(--text-3);
+  font-size: 20px;
+}
+
+.cmd-group-title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.cmd-group-blurb {
+  max-width: 74ch;
+  margin: 2px 0 0;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.cmd-group-count {
+  color: var(--text-3);
+  font-size: var(--t-sm);
+}
+
+.cmd-list {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.cmd-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--s3) var(--s5);
+  padding: var(--s4) var(--s5);
+  transition: background 0.13s var(--ease);
+}
+
+.cmd-row + .cmd-row {
+  border-top: 1px solid var(--line);
+}
+
+.cmd-row:hover {
+  background: var(--surface-hi);
+}
+
+.cmd-usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--s2);
+  min-width: 0;
+  font: 400 var(--t-base) / 1.5 var(--mono);
+  font-variant-ligatures: none;
+}
+
+.cmd-usage b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.cmd-arg {
+  color: var(--text-3);
+}
+
+.cmd-arg-req {
+  color: var(--text-2);
+}
+
+.cmd-desc {
+  grid-column: 1;
+  max-width: 76ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--t-sm);
+  line-height: 1.55;
+}
+
+.cmd-perm {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+}
+
+.cmd-foot {
+  max-width: 68ch;
+  margin: var(--s8) 0 0;
+  color: var(--text-3);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+}
+
+.doc-page .empty-state code,
+.cmd-foot code {
+  padding: 2px var(--s1);
+  border-radius: var(--r-xs);
+  background: var(--surface-hi);
+  font: 400 0.88em var(--mono);
+}
+
+/* ---------- public site: prose pages ---------- */
+
+.doc-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: var(--s9) var(--site-pad) var(--site-gap);
+}
+
+.doc-page-wide {
+  max-width: var(--site-w);
+}
+
+.doc-head {
+  max-width: 46rem;
+  margin-bottom: var(--s9);
+}
+
+.doc-title {
+  margin: var(--s3) 0 0;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.12;
+}
+
+.doc-lede {
+  max-width: 62ch;
+  margin: var(--s4) 0 0;
+  color: var(--text-2);
+  font-size: var(--t-md);
+  line-height: 1.68;
+}
+
+.doc-split {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s10);
+}
+
+.doc-nav {
+  position: sticky;
+  top: 100px;
+}
+
+.doc-nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: var(--s4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-nav a {
+  color: var(--text-2);
+  font-size: var(--t-base);
+}
+
+.doc-nav a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.doc-nav-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin-top: var(--s6);
+  padding-top: var(--s5);
+  border-top: 1px solid var(--line);
+}
+
+.doc-nav-foot a {
+  color: var(--text-3);
+  font-size: var(--t-sm);
+}
+
+.doc-body {
+  min-width: 0;
+}
+
+.faq-group + .faq-group {
+  margin-top: var(--s8);
+}
+
+.faq-group-title {
+  margin: 0 0 var(--s4);
+  color: var(--text);
+  font-size: var(--t-lg);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.doc-tail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s5);
+  margin-top: var(--s8);
+  padding: var(--s5) var(--s6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.doc-tail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.doc-tail p {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--t-base);
+  line-height: 1.6;
+}
+
+/* ---------- public site: responsive ---------- */
+
+@media (max-width: 1080px) {
+  .site {
+    --site-pad: var(--s6);
+    --site-gap: 76px;
+  }
+
+  .show-inner,
+  .doc-split {
+    gap: var(--s8);
+  }
+}
+
+/* Every text link in the chrome is an 18px line box, which is a 18px hit target on a phone.
+   The padding is negative-margined back out so the visual rhythm does not change. */
+@media (pointer: coarse), (max-width: 940px) {
+  .site-nav-links a,
+  .site-footer-group a,
+  .doc-nav a,
+  .doc-nav-foot a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-block: -13px;
+  }
+
+  .site-brand {
+    min-height: 44px;
+  }
+
+  .site-nav-cta,
+  .site .button {
+    height: 44px;
+  }
+
+  .site .button-xl {
+    height: 52px;
+  }
+
+  .skip-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 940px) {
+  .site-nav {
+    grid-template-columns: 1fr auto;
+    row-gap: var(--s3);
+    padding: var(--s3) var(--s3) var(--s3) var(--s4);
+    border-radius: var(--r-lg);
+  }
+
+  .site-nav-links {
+    order: 3;
+    grid-column: 1 / -1;
+    justify-self: start;
+    flex-wrap: wrap;
+    gap: var(--s4);
+  }
+
+  .show-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The figure goes back under the copy on one column: reversing it there would put a picture
+     above the sentence that says what it is a picture of. */
+  .show-flip .show-figure {
+    order: 0;
+  }
+
+  .strip-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .site-footer {
+    padding-top: 84px;
+  }
+
+  .site-wave {
+    height: 84px;
+  }
+
+  .site-footer-inner {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s7);
+  }
+
+  .site-footer-brand,
+  .site-footer-call {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .cmd-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cmd-perm {
+    grid-row: auto;
+    grid-column: 1;
+    justify-self: start;
+  }
+
+  .doc-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .doc-nav {
+    position: static;
+  }
+
+  .doc-nav ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--s4);
+  }
+
+  .doc-nav-foot {
+    flex-direction: row;
+    gap: var(--s4);
+  }
+}
+
+@media (max-width: 620px) {
+  .site {
+    --site-pad: var(--s4);
+    --site-gap: 60px;
+  }
+
+  .site-header {
+    padding: var(--s3) var(--s3) var(--s2);
+  }
+
+  .hero-mark {
+    width: 72px;
+    height: 72px;
+  }
+
+  .hero-actions .button-xl {
+    width: 100%;
+  }
+
+  .index-row {
+    grid-template-columns: 22px minmax(0, 1fr);
+    gap: var(--s2) var(--s4);
+    padding-block: var(--s4);
+  }
+
+  .index-body {
+    grid-column: 2;
+    font-size: var(--t-base);
+  }
+
+  .site-footer-inner {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s6);
+  }
+
+  .cmd-group-head {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+  }
+
+  .cmd-group-head > i {
+    width: 34px;
+    height: 34px;
+    border-radius: var(--r-md);
+    font-size: 17px;
+  }
+
+  .faq-item > summary,
+  .faq-a {
+    padding-inline: var(--s4);
+  }
+
+  .doc-tail {
+    padding: var(--s4);
+  }
+}

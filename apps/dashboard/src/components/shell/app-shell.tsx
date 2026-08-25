@@ -17,6 +17,7 @@ import { areaForField, areasFor } from '../panels/areas.ts';
 import { useDismiss, useFocusTrap } from './dismiss.ts';
 import { Icon } from './icon.tsx';
 import type { IconName } from './icon-set.gen.ts';
+import { ProtonMark } from './mark.tsx';
 import {
   BROWSE_VIEWS,
   type BrowseView,
@@ -28,6 +29,7 @@ import {
   moduleState,
 } from './module-meta.ts';
 
+export { ProtonMark } from './mark.tsx';
 export { type ModuleState, moduleState } from './module-meta.ts';
 
 export function browsableViews(modules: readonly ModuleSummary[]): BrowseView[] {
@@ -413,19 +415,6 @@ export function AppShell({
         ) : null}
       </div>
     </>
-  );
-}
-
-export function ProtonMark({ size = 28 }: { size?: number }): ReactElement {
-  return (
-    <img
-      src="/proton-mark.png"
-      alt="Proton"
-      width={size}
-      height={size}
-      decoding="async"
-      style={{ display: 'block' }}
-    />
   );
 }
 

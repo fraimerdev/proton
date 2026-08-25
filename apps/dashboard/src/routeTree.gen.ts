@@ -10,7 +10,11 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CommandsRouteImport } from './routes/commands'
+import { Route as FaqRouteImport } from './routes/faq'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardGuildIdRouteImport } from './routes/dashboard/$guildId'
 import { Route as VerifyTokenRouteImport } from './routes/verify/$token'
@@ -25,9 +29,29 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CommandsRoute = CommandsRouteImport.update({
+  id: '/commands',
+  path: '/commands',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FaqRoute = FaqRouteImport.update({
+  id: '/faq',
+  path: '/faq',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
@@ -75,7 +99,11 @@ const ApiGuildsGuildIdCardPreviewRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/commands': typeof CommandsRoute
+  '/faq': typeof FaqRoute
+  '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -87,7 +115,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/commands': typeof CommandsRoute
+  '/faq': typeof FaqRoute
+  '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -99,7 +131,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/commands': typeof CommandsRoute
+  '/faq': typeof FaqRoute
+  '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
@@ -113,7 +149,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/commands'
+    | '/faq'
+    | '/invite'
     | '/privacy'
+    | '/terms'
     | '/dashboard/$guildId'
     | '/verify/$token'
     | '/dashboard/'
@@ -125,7 +165,11 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/commands'
+    | '/faq'
+    | '/invite'
     | '/privacy'
+    | '/terms'
     | '/verify/$token'
     | '/dashboard'
     | '/api/auth/$'
@@ -136,7 +180,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/commands'
+    | '/faq'
+    | '/invite'
     | '/privacy'
+    | '/terms'
     | '/dashboard/$guildId'
     | '/verify/$token'
     | '/dashboard/'
@@ -149,7 +197,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CommandsRoute: typeof CommandsRoute
+  FaqRoute: typeof FaqRoute
+  InviteRoute: typeof InviteRoute
   PrivacyRoute: typeof PrivacyRoute
+  TermsRoute: typeof TermsRoute
   DashboardGuildIdRoute: typeof DashboardGuildIdRouteWithChildren
   VerifyTokenRoute: typeof VerifyTokenRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
@@ -167,11 +219,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/commands': {
+      id: '/commands'
+      path: '/commands'
+      fullPath: '/commands'
+      preLoaderRoute: typeof CommandsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/faq': {
+      id: '/faq'
+      path: '/faq'
+      fullPath: '/faq'
+      preLoaderRoute: typeof FaqRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dashboard/': {
@@ -248,7 +328,11 @@ const DashboardGuildIdRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CommandsRoute: CommandsRoute,
+  FaqRoute: FaqRoute,
+  InviteRoute: InviteRoute,
   PrivacyRoute: PrivacyRoute,
+  TermsRoute: TermsRoute,
   DashboardGuildIdRoute: DashboardGuildIdRouteWithChildren,
   VerifyTokenRoute: VerifyTokenRoute,
   DashboardIndexRoute: DashboardIndexRoute,
