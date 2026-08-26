@@ -109,7 +109,10 @@ export class TemporaryVoiceService {
         return { refused: 'moved_existing', detail: `sent to their existing channel` };
       }
 
-      return { refused: 'at_limit', detail: `already has ${reservation.live} channel(s)` };
+      return {
+        refused: 'at_limit',
+        detail: `already has ${reservation.live} channel${reservation.live === 1 ? '' : 's'}`,
+      };
     }
 
     const row = reservation.reserved;

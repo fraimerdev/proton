@@ -289,7 +289,7 @@ describe('phishing permission failures', () => {
       failure: {
         code: 'missing_permission',
         humanReason:
-          'Proton needs the ModerateMembers permission in this server, and does not have it.',
+          'Proton needs the Timeout Members permission in this server, and does not have it.',
       },
     };
 
@@ -301,7 +301,7 @@ describe('phishing permission failures', () => {
     const errored = harness.logs.find(
       (entry) => entry.level === 'error' && entry.message.includes('could not timeout'),
     );
-    expect(errored?.message).toContain('ModerateMembers');
+    expect(errored?.message).toContain('Timeout Members');
     expect(errored?.message).toContain(BAD_DOMAIN);
   });
 

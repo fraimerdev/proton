@@ -493,7 +493,7 @@ function builder(): SlashCommandBuilder {
             option.setName('member').setDescription('Who to block.').setRequired(true),
           )
           .addStringOption((option) =>
-            option.setName('reason').setDescription('Why.').setMaxLength(200),
+            option.setName('reason').setDescription('Why they are blocked.').setMaxLength(200),
           ),
       )
       .addSubcommand((sub) =>

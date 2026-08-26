@@ -1,6 +1,7 @@
+import type { Logger } from '../modules/manifest.ts';
 import type { CaseRecorder } from './case-recorder.ts';
 import type { DedupeStore } from './dedupe.ts';
-import { isNeverRecorded, reversalOf } from './kinds.ts';
+import { type ActionKind, isNeverRecorded, reversalOf } from './kinds.ts';
 import { type PrecheckInput, runPrechecks } from './prechecks.ts';
 import type { RestProxyClient } from './rest-client.ts';
 import { toRestCall } from './rest-mapping.ts';
@@ -25,6 +26,10 @@ export interface ActionExecutorDeps {
   dedupeTtlMs?: number;
 
   scheduleReversal?(request: ActionRequest, caseId: string): Promise<void>;
+
+  // Where the technical half of a failure goes. What the caller gets back is written for whoever
+  // typed the command, so the status code and Discord's own wording survive only if this is bound.
+  logger?: Logger;
 }
 
 export class DefaultActionExecutor implements ActionExecutor {
@@ -47,16 +52,22 @@ export class DefaultActionExecutor implements ActionExecutor {
     if (!parsed.success) {
       return this.#precheckFailure(
         'invalid_request',
-        `Invalid action request: ${parsed.error.issues
+        "I couldn't carry that out, and nothing was changed. This is a Proton problem, not a " +
+          'setting in this server.',
+        `invalid action request: ${parsed.error.issues
           .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
           .join('; ')}`,
+        request,
       );
     }
 
     if (request.expiresAt && !this.#deps.scheduleReversal) {
       return this.#precheckFailure(
         'unsupported_expiry',
-        'Temporary actions are not available yet — no reversal scheduler is configured.',
+        "I can't set that to lift on its own — this Proton deployment has nothing to schedule " +
+          'the reversal with. Nothing was changed.',
+        'the request carried an expiry but no reversal scheduler is bound',
+        request,
       );
     }
 
@@ -99,11 +110,14 @@ export class DefaultActionExecutor implements ActionExecutor {
 
       if (response.status >= 400) {
         await this.#deps.dedupe.release(request.idempotencyKey);
+        const said = discordMessage(response.body);
+        this.#log(request, `Discord answered ${response.status}${said ? `: ${said}` : ''}`);
+
         return {
           status: 'failed_api',
           failure: {
             code: `discord_${response.status}`,
-            humanReason: describeDiscordError(response.status, response.body),
+            humanReason: describeDiscordError(response.status),
           },
         };
       }
@@ -114,15 +128,15 @@ export class DefaultActionExecutor implements ActionExecutor {
         try {
           await this.#deps.scheduleReversal?.(request, caseId);
         } catch (error) {
+          this.#log(request, `the reversal could not be scheduled: ${detailOf(error)}`);
           return {
             caseId,
             status: 'executed',
             failure: {
               code: 'reversal_not_scheduled',
               humanReason:
-                `The ${request.kind} was applied, but I couldn't schedule its automatic ` +
-                `reversal (${error instanceof Error ? error.message : String(error)}). ` +
-                'It will not lift on its own — reverse it manually.',
+                `${appliedPhrase(request.kind)}, but I couldn't schedule it to lift on its own. ` +
+                'It will stay in place until somebody reverses it.',
             },
           };
         }
@@ -135,20 +149,36 @@ export class DefaultActionExecutor implements ActionExecutor {
       };
     } catch (error) {
       await this.#deps.dedupe.release(request.idempotencyKey);
+      this.#log(request, `could not reach Discord: ${detailOf(error)}`);
+
       return {
         status: 'failed_api',
         failure: {
           code: 'transport_failure',
-          humanReason: `Couldn't reach Discord: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          humanReason:
+            "I couldn't reach Discord. That may not have gone through — check before trying again.",
         },
       };
     }
   }
 
-  #precheckFailure(code: string, humanReason: string): ActionResult {
+  #precheckFailure(
+    code: string,
+    humanReason: string,
+    detail?: string,
+    request?: ActionRequest,
+  ): ActionResult {
+    if (detail && request) this.#log(request, detail);
+
     return { status: 'failed_precheck', failure: { code, humanReason } };
+  }
+
+  #log(request: ActionRequest, detail: string): void {
+    this.#deps.logger?.warn(`${request.kind} failed: ${detail}`, {
+      guildId: request.guildId,
+      moduleId: request.moduleId,
+      kind: request.kind,
+    });
   }
 
   async #record(request: ActionRequest): Promise<{ caseId?: string }> {
@@ -195,20 +225,49 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
-function describeDiscordError(status: number, body: unknown): string {
-  const message =
-    typeof body === 'object' && body !== null && 'message' in body
-      ? String((body as { message: unknown }).message)
-      : undefined;
+function discordMessage(body: unknown): string | undefined {
+  return typeof body === 'object' && body !== null && 'message' in body
+    ? String((body as { message: unknown }).message)
+    : undefined;
+}
 
+function detailOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+const APPLIED: Partial<Record<ActionKind, string>> = {
+  ban: 'The ban went through',
+  timeout: 'The timeout went through',
+  add_role: 'The role was added',
+  lockdown: 'The channel was locked',
+};
+
+function appliedPhrase(kind: ActionKind): string {
+  return APPLIED[kind] ?? 'That went through';
+}
+
+function describeDiscordError(status: number): string {
   if (status === 403) {
-    return `Discord refused the request (403 Forbidden)${message ? `: ${message}` : ''}. This is usually a missing permission or role hierarchy.`;
+    return (
+      "Discord wouldn't let me do that. It is normally a permission I'm missing, or a role " +
+      'ranked above mine.'
+    );
   }
   if (status === 404) {
-    return `Discord couldn't find the target (404)${message ? `: ${message}` : ''}. It may have been deleted, or the member may have left.`;
+    return (
+      "I couldn't find what that was meant to act on. It may have been deleted, or the member " +
+      'may have left.'
+    );
   }
   if (status === 429) {
-    return 'Discord rate-limited this action. It will be retried automatically.';
+    return "Discord is rate-limiting Proton right now. I'll retry this on my own.";
   }
-  return `Discord returned ${status}${message ? `: ${message}` : ''}.`;
+  if (status >= 500) {
+    return 'Discord is having trouble right now, so that may not have gone through.';
+  }
+
+  return (
+    'Discord refused that, and nothing was changed. This is a Proton problem, not a setting in ' +
+    'this server.'
+  );
 }

@@ -36,6 +36,23 @@ const NO_LAYOUT =
 const PREVIEW_ONLY =
   'Nothing was changed. Run the same command with `confirm: true` to carry this out.';
 
+const NOT_WIRED =
+  "I can't reach this server's backups because Proton isn't fully wired up in this deployment. " +
+  'Nothing was saved. The Proton logs name the exact missing piece.';
+
+const STORE_UNREADABLE =
+  "I couldn't read this server's snapshots, so I don't know which ones it has. Nothing was " +
+  'changed. The Proton logs name what went wrong.';
+
+const STORE_UNWRITABLE =
+  'The snapshot could not be saved, so this server has NO new backup. Nothing else was changed, ' +
+  'and the Proton logs name what went wrong. Try again in a moment.';
+
+const WRONG_SERVER =
+  "I read another server's structure while snapshotting this one, so I stopped rather than save " +
+  'something wrong. Nothing has been saved. This is a Proton problem, not a setting in this ' +
+  'server.';
+
 export function createBackupCommands(deps: BackupDeps): CommandDefinition<BackupConfig>[] {
   return [
     {
@@ -99,9 +116,11 @@ async function bound(
 
   const result = bindDeps(deps);
   if ('unbound' in result) {
-    const message = describeUnbound(result.unbound);
-    ctx.logger.error(message, { guildId: ctx.guildId, moduleId: MODULE_ID });
-    await reply(ctx, [message]);
+    ctx.logger.error(describeUnbound(result.unbound), {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+    });
+    await reply(ctx, [NOT_WIRED]);
     return null;
   }
 
@@ -116,11 +135,12 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
   if (!layout) return reply(ctx, [NO_LAYOUT]);
 
   if (layout.guildId !== ctx.guildId) {
-    const message =
-      `Proton read the structure of server ${layout.guildId} while backing up ${ctx.guildId}, ` +
-      'which is a bug in this deployment. Nothing has been saved.';
-    ctx.logger.error(message, { guildId: ctx.guildId, moduleId: MODULE_ID });
-    return reply(ctx, [message]);
+    ctx.logger.error(
+      `read the layout of guild ${layout.guildId} while backing up ${ctx.guildId} — refusing to ` +
+        'save it',
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+    return reply(ctx, [WRONG_SERVER]);
   }
 
   const capturedAt = ports.now();
@@ -142,10 +162,7 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    return reply(ctx, [
-      'The snapshot could not be saved, so this server has NO new backup. Proton’s database ' +
-        `refused the write: ${detail}`,
-    ]);
+    return reply(ctx, [STORE_UNWRITABLE]);
   }
 
   const lines = [`Backup \`${backupId}\` saved.`, ...describeCapture(report)];
@@ -191,7 +208,9 @@ function summarise(record: BackupRecord): string {
   const who = record.createdBy ? `<@${record.createdBy}>` : 'Proton';
   const hidden =
     coverage.obfuscatedChannelIds.length > 0
-      ? `, ${coverage.obfuscatedChannelIds.length} channel(s) NOT captured`
+      ? `, ${coverage.obfuscatedChannelIds.length} channel${
+          coverage.obfuscatedChannelIds.length === 1 ? '' : 's'
+        } NOT captured`
       : '';
 
   return (
@@ -214,8 +233,11 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
     record = await ports.store.get(ctx.guildId, backupId);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
-    ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
-    return reply(ctx, [detail]);
+    ctx.logger.error(`snapshot ${backupId} could not be read: ${detail}`, {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+    });
+    return reply(ctx, [STORE_UNREADABLE]);
   }
 
   if (!record) {
@@ -259,7 +281,8 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
   const applied = await applyRestore(ctx, ctx.executor, record.id, planned.ops);
 
   const lines = [
-    `Restored ${applied.createdRoles} role(s) and ${applied.createdChannels} channel(s) from ` +
+    `Restored ${applied.createdRoles} role${applied.createdRoles === 1 ? '' : 's'} and ` +
+      `${applied.createdChannels} channel${applied.createdChannels === 1 ? '' : 's'} from ` +
       `\`${record.id}\`.`,
     ...describeRestore({ ...planned, ops: [] }).slice(1),
   ];

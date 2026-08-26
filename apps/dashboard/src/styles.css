@@ -672,7 +672,7 @@ h3 {
   left: calc(var(--rail-w) + var(--s2));
   bottom: var(--s3);
   z-index: 120;
-  width: 232px;
+  width: 264px;
   padding: var(--s2);
   border: 1px solid var(--line-hi);
   border-radius: var(--r-lg);
@@ -681,9 +681,39 @@ h3 {
 }
 
 .user-menu-head {
-  padding: var(--s2) var(--s3) var(--s3);
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
   border-bottom: 1px solid var(--line);
   margin-bottom: var(--s2);
+}
+
+.user-menu-avatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--r-full);
+  background: var(--surface-hi);
+  color: var(--text-2);
+  font: 600 var(--t-sm) / 1 var(--font);
+}
+
+.user-menu-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* min-width:0 so the two truncating lines below can actually shrink: a flex child defaults to
+   min-content, which lets a long address push the menu wider instead of ellipsing. */
+.user-menu-who {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
 }
 
 .user-menu-name {
@@ -695,8 +725,17 @@ h3 {
 
 .user-menu-role {
   margin-top: 1px;
+  overflow: hidden;
   color: var(--text-3);
   font-size: var(--t-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-group + .user-menu-group {
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
 }
 
 .menu-item {
@@ -732,6 +771,16 @@ h3 {
 .menu-item [data-icon] {
   font-size: 16px;
   color: var(--text-3);
+}
+
+.menu-item-danger,
+.menu-item-danger [data-icon] {
+  color: var(--danger);
+}
+
+.menu-item-danger:hover {
+  background: var(--danger-wash);
+  color: var(--danger);
 }
 
 /* ---------- surfaces ---------- */
@@ -3300,6 +3349,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   min-height: 320px;
 }
 
+/* The whole viewport, because nothing else is on screen yet. `dvh` and not `vh`: on mobile the
+   dynamic unit follows the address bar, and a fixed 100vh parks the ring below the fold. */
+.route-pending-page {
+  min-height: 100dvh;
+  padding: var(--s6);
+}
+
 /* Three sides transparent, so what turns is an arc rather than a ring with a bright quarter. The
    track is left out on purpose: a visible one reads as a progress bar that never fills. */
 .spinner {
@@ -4065,10 +4121,61 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-size: var(--t-sm);
 }
 
-.dc-message {
+/* Discord's interaction header. It spans both columns of .dc-message and indents past the
+   avatar, so the hook draws from under the reply's own gutter the way Discord's does. */
+.dc-used {
   display: flex;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+  margin-bottom: var(--s1);
+  padding-left: 20px;
+  position: relative;
+  color: var(--dc-muted);
+  font-size: 13px;
+}
+
+.dc-used-hook {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 12px;
+  height: 10px;
+  border-top: 1.5px solid var(--dc-line);
+  border-left: 1.5px solid var(--dc-line);
+  border-top-left-radius: 6px;
+}
+
+.dc-used-pip {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: var(--r-full);
+  background: var(--dc-blurple);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 600;
+  object-fit: cover;
+}
+
+.dc-attachment {
+  margin-top: var(--s2);
+}
+
+.dc-attachment img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-md);
+}
+
+.dc-message {
+  display: grid;
   align-items: flex-start;
-  gap: var(--s4);
+  gap: 0 var(--s4);
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .dc-avatar {
@@ -4099,7 +4206,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font-weight: 500;
 }
 
-.dc-bot {
+.dc-app {
   display: inline-flex;
   align-items: center;
   height: 15px;
@@ -4208,6 +4315,10 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   border-radius: 3px;
   background: var(--dc-mention-bg);
   color: var(--dc-mention-text);
+  font-weight: 500;
+}
+.dc-used .dc-mention,
+.dc-used .dc-link {
   font-weight: 500;
 }
 
@@ -5475,47 +5586,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   line-height: 1.6;
 }
 
-/* ---------- public site: screenshots ---------- */
-
-.shot {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--line-hi);
-  border-radius: var(--r-xl);
-  background: var(--surface);
-}
-
-/* What stands in for a screenshot nobody has taken yet. It names the file it is waiting for, so
-   the gap is a instruction rather than a broken image. */
-.shot-pending {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s3);
-  aspect-ratio: 16 / 10;
-  padding: var(--s7);
-  border-style: dashed;
-  text-align: center;
-}
-
-.shot-pending [data-icon] {
-  font-size: 30px;
-  color: var(--text-3);
-}
-
-.shot-file {
-  color: var(--text-2);
-  font-size: var(--t-sm);
-}
-
-.shot-note {
-  max-width: 40ch;
-  color: var(--text-3);
-  font-size: var(--t-sm);
-  line-height: 1.5;
-}
+/* ---------- landing scenes ---------- */
 
 /* ---------- public site: sections ---------- */
 
@@ -5550,49 +5621,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   display: flex;
   justify-content: center;
   margin-top: var(--s7);
-}
-
-/* ---------- public site: capability index ---------- */
-
-/* A ruled index, not a grid of cards. Each capability is one row of the record: mark, name,
-   what it does — the shape the product's own module list has. */
-.index-list {
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--line);
-  list-style: none;
-}
-
-.index-row {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 15rem) minmax(0, 1fr);
-  align-items: baseline;
-  gap: var(--s5);
-  padding: var(--s5) var(--s2);
-  border-bottom: 1px solid var(--line);
-  transition: background 0.13s var(--ease);
-}
-
-.index-row:hover {
-  background: var(--surface);
-}
-
-.index-row [data-icon] {
-  font-size: 19px;
-  color: var(--text-3);
-}
-
-.index-name {
-  color: var(--text);
-  font-size: var(--t-md);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-
-.index-body {
-  color: var(--text-2);
-  font-size: var(--t-md);
-  line-height: 1.6;
 }
 
 /* ---------- public site: showcases ---------- */
@@ -6417,17 +6445,6 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
 
   .hero-actions .button-xl {
     width: 100%;
-  }
-
-  .index-row {
-    grid-template-columns: 22px minmax(0, 1fr);
-    gap: var(--s2) var(--s4);
-    padding-block: var(--s4);
-  }
-
-  .index-body {
-    grid-column: 2;
-    font-size: var(--t-base);
   }
 
   .site-footer-inner {

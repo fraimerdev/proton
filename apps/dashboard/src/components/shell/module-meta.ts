@@ -42,6 +42,7 @@ const MODULE_BLURBS: Record<string, string> = {
     'Every action Proton takes, numbered and searchable, with the ladder that escalates repeat warnings.',
   counters: 'Channels whose names carry a count of this server, rewritten every ten minutes.',
   giveaways: 'Giveaways members enter with a button, drawn and announced by Proton.',
+  help: 'The /help overview of what Proton does, and the link that sends a member back to this dashboard.',
   honeypot:
     'Channels nobody has a reason to post in. Anyone who posts in one is removed on the spot, which is how spam bots and compromised accounts give themselves away.',
   joinroles: 'Roles handed out when somebody joins, and the roles they get back if they return.',
@@ -124,6 +125,7 @@ const PHOSPHOR: Record<string, IconName> = {
   gift: 'gift',
   'hand-wave': 'hand-waving',
   hash: 'hash',
+  'help-circle': 'question',
   'layout-template': 'layout',
   'list-checks': 'list-checks',
   lightbulb: 'lightbulb',

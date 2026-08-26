@@ -49,7 +49,7 @@ describe('runPrechecks', () => {
 
     expect(failure?.code).toBe('missing_permission');
 
-    expect(failure?.humanReason).toContain('SendMessages');
+    expect(failure?.humanReason).toContain('Send Messages');
     expect(failure?.humanReason).toContain(CHANNEL);
   });
 
@@ -62,18 +62,18 @@ describe('runPrechecks', () => {
       }),
     );
 
-    expect(failure?.humanReason).toContain('SendMessages');
+    expect(failure?.humanReason).toContain('Send Messages');
     expect(failure?.humanReason).toContain(CHANNEL);
-    expect(failure?.humanReason).toContain('guild 900000000000000001');
-    expect(failure?.humanReason).not.toMatch(/permission in channel/);
+    expect(failure?.humanReason).toContain('this server');
+    expect(failure?.humanReason).not.toMatch(/permission in <#/);
   });
 
   test('sends the admin to the guild, not a channel, when no channel was resolved', () => {
     const failure = runPrechecks(guildScoped());
 
-    expect(failure?.humanReason).toContain('BanMembers');
-    expect(failure?.humanReason).toContain(`guild ${GUILD}`);
-    expect(failure?.humanReason).not.toContain('channel');
+    expect(failure?.humanReason).toContain('Ban Members');
+    expect(failure?.humanReason).toContain('this server');
+    expect(failure?.humanReason).not.toContain('<#');
   });
 
   test('sends the admin to the parent channel when the permission is missing in a thread', () => {
@@ -86,9 +86,9 @@ describe('runPrechecks', () => {
       }),
     );
 
-    expect(failure?.humanReason).toContain('SendMessagesInThreads');
-    expect(failure?.humanReason).toContain(`thread ${THREAD}`);
-    expect(failure?.humanReason).toContain(`parent channel ${CHANNEL}`);
+    expect(failure?.humanReason).toContain('Send Messages in Threads');
+    expect(failure?.humanReason).toContain(`<#${THREAD}>`);
+    expect(failure?.humanReason).toContain(`<#${CHANNEL}>`);
   });
 
   test('reports every missing permission, not just the first', () => {
@@ -99,8 +99,8 @@ describe('runPrechecks', () => {
       }),
     );
 
-    expect(failure?.humanReason).toContain('ViewChannel');
-    expect(failure?.humanReason).toContain('SendMessages');
+    expect(failure?.humanReason).toContain('View Channel');
+    expect(failure?.humanReason).toContain('Send Messages');
   });
 
   test('refuses to act on the bot itself', () => {

@@ -71,7 +71,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ViewAuditLog');
+    expect(status.disabledReason?.humanReason).toContain('View Audit Log');
   });
 
   test('is disabled with a reason naming the intent when it cannot receive the dispatch', () => {
@@ -82,7 +82,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    expect(status.disabledReason?.humanReason).toContain('GuildModeration');
+    expect(status.disabledReason?.humanReason).toContain('Guild Moderation');
   });
 
   test('runs when it has both', () => {

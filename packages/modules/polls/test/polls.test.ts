@@ -186,11 +186,11 @@ describe('/poll create', () => {
     expect(h.polls.rows.size).toBe(0);
 
     const answer = h.lastAnswer() ?? '';
-    expect(answer).toContain('SendPolls');
+    expect(answer).toContain('Create Polls');
     expect(answer).toContain(CHANNEL);
   });
 
-  test('reports what Discord said when the send is rejected', async () => {
+  test('says the poll did not go out, in Proton’s own words', async () => {
     const h = harness();
     h.rest.failures.push({
       match: /^\/channels\/\d+\/messages$/,
@@ -201,7 +201,7 @@ describe('/poll create', () => {
     await h.run('create', CREATE);
 
     expect(h.polls.rows.size).toBe(0);
-    expect(h.lastAnswer()).toContain('Missing Access');
+    expect(h.lastAnswer()).toContain('I could not post that poll');
   });
 
   test('says so rather than pretending when Discord returns no message id', async () => {
@@ -407,7 +407,7 @@ describe('/poll end', () => {
     expect(h.cancelled).toHaveLength(0);
 
     const answer = h.lastAnswer() ?? '';
-    expect(answer).toContain('Missing Access');
+    expect(answer).toContain('I could not close that poll');
     expect(answer).toContain('running-poll limit');
     expect(answer).toContain('closes itself');
   });
@@ -580,7 +580,7 @@ describe('the announce schedule', () => {
 
     const logged = h.logs.find((line) => line.level === 'error')?.message ?? '';
     expect(logged).toContain(ANNOUNCE_CHANNEL);
-    expect(logged).toContain('SendMessages');
+    expect(logged).toContain('Send Messages');
     expect(logged).toContain('poll itself is unaffected');
   });
 

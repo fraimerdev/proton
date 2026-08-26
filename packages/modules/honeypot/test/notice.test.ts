@@ -230,7 +230,7 @@ describe('reconciling the notices when the config is saved', () => {
       changes: [{ channelId: TRAP, did: 'failed' }],
     });
     expect(h.remembered()).toEqual({});
-    expect(h.said('error').at(-1)).toContain('Missing Access');
+    expect(h.said('error').at(-1)).toContain('could not post the notice');
 
     outage.on = false;
     const retried = await h.saved({ config: armed() });

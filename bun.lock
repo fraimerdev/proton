@@ -76,7 +76,9 @@
         "zod": "^4.4.3",
       },
       "devDependencies": {
+        "@napi-rs/canvas": "^1.0.7",
         "@phosphor-icons/core": "2.1.1",
+        "@proton/cards": "workspace:*",
         "@proton/modules": "workspace:*",
         "@tanstack/router-plugin": "1.168.31",
         "@types/react": "^19.0.0",
@@ -283,6 +285,16 @@
         "fast-check": "^4.9.0",
       },
     },
+    "packages/modules/help": {
+      "name": "@proton/module-help",
+      "version": "0.0.0",
+      "dependencies": {
+        "@proton/core": "workspace:*",
+        "discord-api-types": "^0.38.53",
+        "discord.js": "^14.27.0",
+        "zod": "^4.4.3",
+      },
+    },
     "packages/modules/honeypot": {
       "name": "@proton/module-honeypot",
       "version": "0.0.0",
@@ -422,6 +434,7 @@
         "@proton/module-cases": "workspace:*",
         "@proton/module-counters": "workspace:*",
         "@proton/module-giveaways": "workspace:*",
+        "@proton/module-help": "workspace:*",
         "@proton/module-honeypot": "workspace:*",
         "@proton/module-joinroles": "workspace:*",
         "@proton/module-leveling": "workspace:*",
@@ -868,6 +881,8 @@
     "@proton/module-counters": ["@proton/module-counters@workspace:packages/modules/counters"],
 
     "@proton/module-giveaways": ["@proton/module-giveaways@workspace:packages/modules/giveaways"],
+
+    "@proton/module-help": ["@proton/module-help@workspace:packages/modules/help"],
 
     "@proton/module-honeypot": ["@proton/module-honeypot@workspace:packages/modules/honeypot"],
 

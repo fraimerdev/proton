@@ -566,7 +566,7 @@ describe('welcome manifest', () => {
     });
 
     expect(status.enabled).toBe(false);
-    expect(status.disabledReason?.humanReason).toContain('GuildMembers');
+    expect(status.disabledReason?.humanReason).toContain('Server Members Intent');
   });
 
   test('reports a missing send permission by name', () => {
@@ -578,6 +578,6 @@ describe('welcome manifest', () => {
       botPermissions: Permissions.ViewChannel,
     });
 
-    expect(status.disabledReason?.humanReason).toContain('SendMessages');
+    expect(status.disabledReason?.humanReason).toContain('Send Messages');
   });
 });

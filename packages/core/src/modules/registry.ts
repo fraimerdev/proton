@@ -2,7 +2,7 @@ import { GatewayIntentBits } from 'discord-api-types/v10';
 import { type ActionKind, REQUIRED_PERMISSIONS } from '../actions/kinds.ts';
 import { type FieldDescriptor, zodToDescriptors } from '../config/descriptor.ts';
 import type { EventType } from '../events/types.ts';
-import { combinePermissions, missing, Permissions, permissionNames } from '../permissions/bits.ts';
+import { combinePermissions, missing, Permissions, permissionLabels } from '../permissions/bits.ts';
 import type { AvailableProvider } from '../providers/registry.ts';
 import { ProviderRegistry } from '../providers/registry.ts';
 import type { ModuleAvailability } from '../providers/types.ts';
@@ -82,13 +82,32 @@ function ruleActionPermissions(manifest: ModuleManifest): bigint {
   );
 }
 
-function intentNames(bits: number): string[] {
-  const names: string[] = [];
+// The developer portal lists the three privileged intents under names of its own. An admin sent
+// there looking for "GuildMembers" finds nothing called that on the page.
+const INTENT_LABELS: Record<string, string> = {
+  GuildMembers: 'Server Members Intent',
+  MessageContent: 'Message Content Intent',
+  GuildPresences: 'Presence Intent',
+};
+
+const PRIVILEGED_INTENTS =
+  GatewayIntentBits.GuildMembers |
+  GatewayIntentBits.MessageContent |
+  GatewayIntentBits.GuildPresences;
+
+// By bit, not by name: GuildBans is a deprecated alias sharing GuildModeration's value, so listing
+// names would tell an admin two intents are missing when one is.
+function intentLabels(bits: number): string[] {
+  const byBit = new Map<number, string>();
 
   for (const [name, value] of Object.entries(GatewayIntentBits) as Array<[string, number]>) {
-    if (value !== 0 && (bits & value) === value) names.push(name);
+    if (value === 0 || (bits & value) !== value) continue;
+    if (INTENT_LABELS[name] || !byBit.has(value)) {
+      byBit.set(value, INTENT_LABELS[name] ?? name.replace(/([a-z0-9])([A-Z])/g, '$1 $2'));
+    }
   }
-  return names;
+
+  return [...byBit.values()];
 }
 
 export class ModuleRegistrationError extends Error {
@@ -279,7 +298,10 @@ export class ModuleRegistry {
       return {
         id,
         enabled: false,
-        disabledReason: { code: 'missing_dependency', humanReason: `No module '${id}' is loaded.` },
+        disabledReason: {
+          code: 'missing_dependency',
+          humanReason: "This module isn't part of the Proton deployment running here.",
+        },
       };
     }
 
@@ -292,9 +314,12 @@ export class ModuleRegistry {
         disabledReason: {
           code: 'missing_intent',
           humanReason:
-            `${manifest.name} needs the ${intentNames(missingIntents).join(', ')} ` +
-            'intent, which is not enabled for this application. Turn it on in the ' +
-            'Discord developer portal under Bot → Privileged Gateway Intents.',
+            `${manifest.name} can't run without ${intentLabels(missingIntents).join(' and ')}, ` +
+            ((missingIntents & PRIVILEGED_INTENTS) !== 0
+              ? 'which is switched off for this bot. Turn it on in the Discord developer ' +
+                'portal, under Bot → Privileged Gateway Intents.'
+              : "which this Proton deployment doesn't connect with. Nothing in this server's " +
+                'settings can change that.'),
         },
       };
     }
@@ -308,9 +333,9 @@ export class ModuleRegistry {
         disabledReason: {
           code: 'missing_permission',
           humanReason:
-            `${manifest.name} needs the ${permissionNames(lacking).join(', ')} ` +
-            'permission, which the bot does not have in this server. Grant it in ' +
-            'Server Settings → Roles, or re-invite the bot with the correct permissions.',
+            `${manifest.name} needs the ${permissionLabels(lacking).join(', ')} permission` +
+            `${permissionLabels(lacking).length === 1 ? '' : 's'}, which Proton doesn't have in ` +
+            'this server. Grant it in Server Settings → Roles, or re-invite the bot with it.',
         },
       };
     }
@@ -322,7 +347,9 @@ export class ModuleRegistry {
           enabled: false,
           disabledReason: {
             code: 'missing_dependency',
-            humanReason: `${manifest.name} depends on the '${dependency}' module, which is not loaded.`,
+            humanReason:
+              `${manifest.name} needs another Proton module that this deployment isn't ` +
+              "running. Nothing in this server's settings can change that.",
           },
         };
       }
@@ -335,7 +362,7 @@ export class ModuleRegistry {
         enabled: false,
         disabledReason: {
           code: 'insufficient_entitlement',
-          humanReason: `${manifest.name} requires the ${required} tier.`,
+          humanReason: `${manifest.name} isn't included on this server's plan.`,
         },
       };
     }

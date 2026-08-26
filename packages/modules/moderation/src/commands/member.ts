@@ -114,6 +114,7 @@ async function addBan(ctx: CommandContext<ModerationConfig>): Promise<void> {
     ...(reason ? { reason } : {}),
     expiresAt: new Date(Date.now() + duration.ms),
     success: `Banned <@${userId}> for ${formatDuration(duration.ms)} — it lifts automatically.`,
+    successWithoutReversal: `Banned <@${userId}>.`,
   });
 }
 

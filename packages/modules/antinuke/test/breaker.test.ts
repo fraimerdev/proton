@@ -137,8 +137,8 @@ describe('when Proton cannot do its half', () => {
 
     const alert = h.alertContent() ?? '';
     expect(alert).toContain('What did NOT work');
-    expect(alert).toContain('ManageRoles');
-    expect(alert).toContain(`guild ${GUILD}`);
+    expect(alert).toContain('Manage Roles');
+    expect(alert).toContain('this server');
 
     expect(h.cases().map((recorded) => recorded.kind)).toEqual(['send']);
   });

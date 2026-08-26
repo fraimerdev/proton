@@ -54,7 +54,7 @@ describe('logging failure paths', () => {
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
 
-    expect(status.disabledReason?.humanReason).toContain('MessageContent');
+    expect(status.disabledReason?.humanReason).toContain('Message Content Intent');
     expect(status.disabledReason?.humanReason).toContain('developer portal');
   });
 
@@ -66,6 +66,6 @@ describe('logging failure paths', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ViewChannel');
+    expect(status.disabledReason?.humanReason).toContain('View Channel');
   });
 });

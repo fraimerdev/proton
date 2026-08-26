@@ -10,6 +10,7 @@ import {
   CHANNEL_NAME_MAX,
   MODULE_ID,
   type OwnerControl,
+  PRIVACY_LABELS,
   PRIVACY_MODES,
   type PrivacyMode,
   type TempVcConfig,
@@ -125,7 +126,7 @@ function builder(): SlashCommandBuilder {
       .addIntegerOption((option) =>
         option
           .setName('limit')
-          .setDescription('0 to 99.')
+          .setDescription('How many members may join, from 0 to 99. 0 removes the limit.')
           .setRequired(true)
           .setMinValue(0)
           .setMaxValue(99),
@@ -139,33 +140,31 @@ function builder(): SlashCommandBuilder {
       .addStringOption((option) =>
         option
           .setName('mode')
-          .setDescription('public, locked or private.')
+          .setDescription('How open the channel is.')
           .setRequired(true)
           .addChoices(
             ...PRIVACY_MODES.map((mode) => ({
-              name: mode,
+              name: PRIVACY_LABELS[mode],
               value: mode,
             })),
           ),
       ),
   );
 
-  for (const [name, describe] of [
-    ['trust', 'Let somebody join even when the channel is locked.'],
-    ['untrust', 'Take back that trust.'],
-    ['block', 'Keep somebody out, and disconnect them if they are inside.'],
-    ['unblock', 'Lift a block.'],
-    ['invite', 'Send somebody a link to your channel.'],
-    ['kick', 'Disconnect somebody from your channel.'],
-    ['transfer', 'Hand the channel to somebody else in it.'],
+  for (const [name, describe, whom] of [
+    ['trust', 'Let somebody join even when the channel is locked.', 'Who to let in.'],
+    ['untrust', 'Take back that trust.', 'Who to stop trusting.'],
+    ['block', 'Keep somebody out, and disconnect them if they are inside.', 'Who to keep out.'],
+    ['unblock', 'Lift a block.', 'Who to unblock.'],
+    ['invite', 'Send somebody a link to your channel.', 'Who to invite.'],
+    ['kick', 'Disconnect somebody from your channel.', 'Who to disconnect.'],
+    ['transfer', 'Hand the channel to somebody else in it.', 'Who takes it over.'],
   ] as const) {
     command.addSubcommand((sub) =>
       sub
         .setName(name)
         .setDescription(describe)
-        .addUserOption((option) =>
-          option.setName('member').setDescription('Who.').setRequired(true),
-        ),
+        .addUserOption((option) => option.setName('member').setDescription(whom).setRequired(true)),
     );
   }
 

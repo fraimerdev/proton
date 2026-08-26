@@ -160,7 +160,7 @@ describe('ModuleRegistry gating', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    expect(status.disabledReason?.humanReason).toContain('MessageContent');
+    expect(status.disabledReason?.humanReason).toContain('Message Content Intent');
 
     expect(status.disabledReason?.humanReason).toContain('developer portal');
   });
@@ -173,7 +173,7 @@ describe('ModuleRegistry gating', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ManageRoles');
+    expect(status.disabledReason?.humanReason).toContain('Manage Roles');
     expect(status.disabledReason?.humanReason).toContain('Server Settings');
   });
 
@@ -190,7 +190,7 @@ describe('ModuleRegistry gating', () => {
     const noIntent = registry.evaluate('ping', env);
 
     expect(noIntent.disabledReason?.code).toBe('missing_intent');
-    expect(noIntent.disabledReason?.humanReason).toContain('GuildModeration');
+    expect(noIntent.disabledReason?.humanReason).toContain('Guild Moderation');
 
     const withIntent = registry.evaluate('ping', {
       ...env,
@@ -198,7 +198,7 @@ describe('ModuleRegistry gating', () => {
     });
 
     expect(withIntent.disabledReason?.code).toBe('missing_permission');
-    expect(withIntent.disabledReason?.humanReason).toContain('ViewAuditLog');
+    expect(withIntent.disabledReason?.humanReason).toContain('View Audit Log');
     expect(withIntent.disabledReason?.humanReason).toContain('Server Settings');
   });
 
@@ -209,7 +209,7 @@ describe('ModuleRegistry gating', () => {
     const status = registry.evaluate('ping', env);
 
     expect(status.disabledReason?.code).toBe('missing_dependency');
-    expect(status.disabledReason?.humanReason).toContain('cases');
+    expect(status.disabledReason?.humanReason).toContain("deployment isn't running");
   });
 
   test('gates on entitlement tier without any per-module code', () => {
@@ -375,7 +375,7 @@ describe('aggregate requirements', () => {
     );
 
     expect(registry.invitePermissions() & Permissions.SendPolls).toBe(Permissions.SendPolls);
-    expect(registry.evaluate('ping', env).disabledReason?.humanReason).toContain('SendPolls');
+    expect(registry.evaluate('ping', env).disabledReason?.humanReason).toContain('Create Polls');
   });
 
   test('computes the gateway intent bitfield from manifests', () => {

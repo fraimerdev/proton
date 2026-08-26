@@ -170,8 +170,8 @@ describe('failure paths', () => {
 
     expect(h.memberCalls()).toHaveLength(0);
     const warning = h.logs.find((line) => line.level === 'warn');
-    expect(warning?.message).toContain('ManageRoles');
-    expect(warning?.message).toContain(`guild ${GUILD}`);
+    expect(warning?.message).toContain('Manage Roles');
+    expect(warning?.message).toContain('this server');
 
     expect(h.alertContent()).toContain('Raid mode');
   });

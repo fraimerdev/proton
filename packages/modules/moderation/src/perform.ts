@@ -26,6 +26,11 @@ export interface ActionPlan {
 
   success: string;
 
+  // What to say instead when the action landed but its automatic reversal never got scheduled.
+  // `success` promises the ban or timeout lifts on its own, and appending the failure underneath
+  // that promise told the moderator both that it lifts and that it does not.
+  successWithoutReversal?: string;
+
   onRecorded?(): Promise<void>;
 }
 
@@ -120,11 +125,12 @@ function stamped(text: string, result: ActionResult): string {
 
 function describe(plan: ActionPlan, result: ActionResult): string {
   switch (result.status) {
-    case 'executed':
-      return stamped(
-        result.failure ? `${plan.success}\n\n${result.failure.humanReason}` : plan.success,
-        result,
-      );
+    case 'executed': {
+      if (!result.failure) return stamped(plan.success, result);
+
+      const landed = plan.successWithoutReversal ?? plan.success;
+      return stamped(`${landed}\n\n${result.failure.humanReason}`, result);
+    }
 
     case 'dry_run':
       return stamped(

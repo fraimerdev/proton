@@ -10,3 +10,14 @@ export function Spinner(): ReactElement {
     </div>
   );
 }
+
+// The router's default, which renders straight into the root outlet with no shell around it. It
+// has the whole viewport to centre in; Spinner is sized for a panel that already has a page on it.
+export function RoutePending(): ReactElement {
+  return (
+    <div className="route-pending route-pending-page" role="status">
+      <span className="spinner" />
+      <span className="sr-only">Loading</span>
+    </div>
+  );
+}

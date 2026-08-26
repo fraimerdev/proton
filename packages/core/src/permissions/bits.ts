@@ -37,6 +37,33 @@ export function permissionNames(permissions: bigint): PermissionName[] {
   return names;
 }
 
+// Discord's own client labels several permissions differently from their API names — its docs name
+// three outright. An admin told to grant "ManageGuild" or "ModerateMembers" will search Server
+// Settings → Roles for a switch that is not spelled that way anywhere in Discord.
+const PERMISSION_LABELS: Partial<Record<PermissionName, string>> = {
+  ManageGuild: 'Manage Server',
+  ModerateMembers: 'Timeout Members',
+  SendPolls: 'Create Polls',
+  UseVAD: 'Use Voice Activity',
+  SendMessagesInThreads: 'Send Messages in Threads',
+  SendTTSMessages: 'Send Text-To-Speech Messages',
+  UseExternalEmojis: 'Use External Emoji',
+  ViewGuildInsights: 'View Server Insights',
+  Stream: 'Video',
+  CreateInstantInvite: 'Create Invite',
+  ManageGuildExpressions: 'Manage Expressions',
+  CreateGuildExpressions: 'Create Expressions',
+  UseEmbeddedActivities: 'Use Activities',
+};
+
+export function permissionLabel(name: PermissionName): string {
+  return PERMISSION_LABELS[name] ?? name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+}
+
+export function permissionLabels(permissions: bigint): string[] {
+  return permissionNames(permissions).map(permissionLabel);
+}
+
 export function combinePermissions(required: Iterable<bigint>): bigint {
   let acc = 0n;
   for (const bit of required) acc |= bit;

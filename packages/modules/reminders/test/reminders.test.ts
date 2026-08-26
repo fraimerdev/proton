@@ -249,7 +249,7 @@ describe('delivery', () => {
     const h = harness({ botPermissions: Permissions.ViewChannel });
     const reminder = await set(h);
 
-    await expect(h.deliver({ reminderId: reminder.id })).rejects.toThrow(/SendMessages/);
+    await expect(h.deliver({ reminderId: reminder.id })).rejects.toThrow(/Send Messages/);
 
     expect((await h.reminders.get(GUILD, reminder.id))?.deliveredAt).toBeNull();
   });

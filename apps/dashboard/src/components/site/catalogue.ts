@@ -106,6 +106,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
     icon: 'hash',
     commands: ['/counters'],
   },
+  { id: 'help', name: 'Help', category: 'utility', icon: 'question', commands: ['/help'] },
   { id: 'joinroles', name: 'Join Roles', category: 'utility', icon: 'user-plus', commands: [] },
   {
     id: 'messages',
@@ -161,8 +162,8 @@ export const OAUTH_SCOPES = ['identify', 'guilds', 'guilds.members.read'] as con
 export const MODULE_COUNT = CATALOGUE.length;
 
 // Copied rather than derived. Reading the log counts off @proton/module-serverlog/catalogue puts
-// all 88 event specs in the bundle, and COMMAND_COUNT off command-set.gen.ts puts all 111 commands
+// all 88 event specs in the bundle, and COMMAND_COUNT off command-set.gen.ts puts all 112 commands
 // there — on pages that print an integer. catalogue.test.ts fails when any of them drift.
 export const LOG_EVENT_COUNT = 88;
 export const LOG_CATEGORY_COUNT = 13;
-export const COMMAND_COUNT = 111;
+export const COMMAND_COUNT = 112;

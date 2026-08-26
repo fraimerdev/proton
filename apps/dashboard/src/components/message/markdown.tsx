@@ -2,9 +2,19 @@ import type { ReactElement, ReactNode } from 'react';
 import { type MarkdownNode, parseDiscordMarkdown } from '../../lib/discord-markdown.ts';
 import type { DiscordChannel, DiscordRole } from '../form/fields.tsx';
 
+export interface MentionUser {
+  id: string;
+  name: string;
+}
+
 export interface MentionNames {
   channels: readonly DiscordChannel[];
   roles: readonly DiscordRole[];
+
+  // Empty in the dashboard, which cannot fetch a member list and so shows the id Discord would
+  // have resolved. The marketing scenes supply their own so a recreation of a posted message
+  // reads the way the posted message reads.
+  users?: readonly MentionUser[] | undefined;
 }
 
 const TIMESTAMP_STYLES: Readonly<Record<string, Intl.DateTimeFormatOptions>> = {
@@ -132,8 +142,10 @@ function MarkdownFragment({ node, ctx }: { node: MarkdownNode; ctx: RenderContex
         </span>
       );
 
-    case 'userMention':
-      return <span className="dc-mention">@{node.id}</span>;
+    case 'userMention': {
+      const name = ctx.users?.find((user) => user.id === node.id)?.name;
+      return <span className="dc-mention">@{name ?? node.id}</span>;
+    }
 
     case 'roleMention': {
       const name = roleName(node.id, ctx.roles);
@@ -172,8 +184,15 @@ export interface MarkdownProps extends MentionNames {
   now?: number;
 }
 
-export function Markdown({ text, channels, roles, inline, now }: MarkdownProps): ReactElement {
-  const ctx: RenderContext = { channels, roles, now: now ?? Date.now() };
+export function Markdown({
+  text,
+  channels,
+  roles,
+  users,
+  inline,
+  now,
+}: MarkdownProps): ReactElement {
+  const ctx: RenderContext = { channels, roles, users, now: now ?? Date.now() };
   const nodes = parseDiscordMarkdown(text);
 
   if (inline) {

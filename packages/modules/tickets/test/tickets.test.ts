@@ -611,7 +611,7 @@ describe('when Discord says no', () => {
     await h.press(pressEvent(OPEN));
 
     expect(h.store.rows.size).toBe(0);
-    expect(h.lastTold()?.toLowerCase()).toContain('managechannels');
+    expect(h.lastTold()?.toLowerCase()).toContain('manage channels');
   });
 
   test('a failed transcript still leaves the ticket closed, and says so in the log', async () => {

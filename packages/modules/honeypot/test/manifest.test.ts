@@ -74,7 +74,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('BanMembers');
+    expect(status.disabledReason?.humanReason).toContain('Ban Members');
   });
 
   test('is disabled with the intent named when it cannot see messages', () => {
@@ -85,7 +85,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    expect(status.disabledReason?.humanReason).toContain('GuildMessages');
+    expect(status.disabledReason?.humanReason).toContain('Guild Messages');
   });
 
   test('declares every kind a trap and its notice can execute', () => {

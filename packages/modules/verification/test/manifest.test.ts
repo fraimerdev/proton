@@ -108,7 +108,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    expect(status.disabledReason?.humanReason).toContain('GuildMembers');
+    expect(status.disabledReason?.humanReason).toContain('Server Members Intent');
   });
 
   test('is disabled with a reason naming the permission when it cannot move roles', () => {
@@ -119,7 +119,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ManageRoles');
+    expect(status.disabledReason?.humanReason).toContain('Manage Roles');
   });
 
   test('runs when it has both', () => {

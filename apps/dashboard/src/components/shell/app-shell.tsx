@@ -40,6 +40,7 @@ export interface ShellUser {
   id: string;
   name: string;
   image: string | null;
+  email: string | null;
 }
 
 export function initialsOf(name: string): string {
@@ -514,17 +515,57 @@ function UserMenu({
   return (
     <div className="user-menu" ref={ref} role="menu" aria-label="Account">
       <div className="user-menu-head">
-        <div className="user-menu-name">{user.name}</div>
-        <div className="user-menu-role">Signed in with Discord</div>
+        <span className="user-menu-avatar" aria-hidden="true">
+          {user.image ? (
+            <img src={user.image} alt="" width={38} height={38} decoding="async" />
+          ) : (
+            initialsOf(user.name)
+          )}
+        </span>
+        <span className="user-menu-who">
+          <span className="user-menu-name">{user.name}</span>
+          <span className="user-menu-role">{user.email ?? 'Signed in with Discord'}</span>
+        </span>
       </div>
-      <Link to="/privacy" className="menu-item" role="menuitem" ref={first} onClick={onClose}>
-        <Icon name="shield-check" />
-        What Proton stores
-      </Link>
-      <button type="button" className="menu-item" role="menuitem" onClick={() => void signOut()}>
-        <Icon name="sign-out" />
-        Sign out
-      </button>
+
+      <div className="user-menu-group" role="none">
+        <Link to="/dashboard" className="menu-item" role="menuitem" ref={first} onClick={onClose}>
+          <Icon name="layout" />
+          Your servers
+        </Link>
+        <Link to="/commands" className="menu-item" role="menuitem" onClick={onClose}>
+          <Icon name="command" />
+          Commands
+        </Link>
+        <Link to="/faq" className="menu-item" role="menuitem" onClick={onClose}>
+          <Icon name="question" />
+          FAQ
+        </Link>
+      </div>
+
+      <div className="user-menu-group" role="none">
+        <Link to="/privacy" className="menu-item" role="menuitem" onClick={onClose}>
+          <Icon name="shield-check" />
+          What Proton stores
+        </Link>
+        <Link to="/terms" className="menu-item" role="menuitem" onClick={onClose}>
+          <Icon name="file-text" />
+          Terms
+        </Link>
+      </div>
+
+      <div className="user-menu-group" role="none">
+        <button
+          type="button"
+          className="menu-item menu-item-danger"
+          role="menuitem"
+          onClick={() => void signOut()}
+        >
+          <Icon name="sign-out" />
+          Sign out
+        </button>
+      </div>
+
       {signOutFailed ? (
         <p className="user-menu-failure" role="alert">
           Proton could not end the session. You are still signed in — try again, or close the

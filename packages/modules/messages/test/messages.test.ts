@@ -312,7 +312,7 @@ describe('/message post', () => {
     expect(h.sends()).toHaveLength(0);
 
     const reply = h.lastSaid() ?? '';
-    expect(reply).toContain('SendMessages');
+    expect(reply).toContain('Send Messages');
     expect(reply).toContain(CHANNEL);
     expect(reply).toContain('could not post **welcome**');
   });
@@ -331,7 +331,7 @@ describe('/message post', () => {
     expect(h.sends()).toHaveLength(0);
 
     const reply = h.lastSaid() ?? '';
-    expect(reply).toContain('SendMessages');
+    expect(reply).toContain('Send Messages');
     expect(reply).toContain('Manage Messages');
   });
 
@@ -504,7 +504,7 @@ describe('the /message send modal submission', () => {
     expect(h.sends()).toHaveLength(0);
 
     const reply = h.lastSaid() ?? '';
-    expect(reply).toContain('SendMessages');
+    expect(reply).toContain('Send Messages');
     expect(reply).toContain(CHANNEL);
   });
 

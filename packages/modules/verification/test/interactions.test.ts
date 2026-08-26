@@ -118,8 +118,8 @@ describe('a press the bot cannot honour (the permission-failure path)', () => {
     const outcome = await h.press(verifyPress(), { config: GATED });
 
     expect(outcome.action).toBe('refused');
-    expect(h.lastTold()).toContain('ManageRoles');
-    expect(h.lastTold()).toContain(`guild ${GUILD}`);
+    expect(h.lastTold()).toContain('Manage Roles');
+    expect(h.lastTold()).toContain('this server');
     expect(sorted(h.rolesOf(MEMBER))).toEqual(sorted([EVERYONE_ROLE, UNVERIFIED_ROLE]));
   });
 
