@@ -1,6 +1,6 @@
 import type { ActionKind, ActionResult, ModuleContext } from '@proton/core';
 import { CLASS_LABELS, type NukeClass } from './classes.ts';
-import type { AntinukeConfig } from './config.ts';
+import type { AfterStripAction, AntinukeConfig } from './config.ts';
 import type { BoundAntinukeDeps } from './deps.ts';
 
 export const MODULE_ID = 'antinuke';
@@ -31,6 +31,17 @@ function describe(input: BreakerInput): string {
   return `${input.count} ${CLASS_LABELS[input.nukeClass]} within ${input.window} by ${input.actorId}`;
 }
 
+// The audit-log reason and the logs keep the bare id; Discord renders neither <@id> nor <@&id>
+// in an audit-log entry, so a mention there reads as literal angle brackets.
+function forAlert(input: BreakerInput): string {
+  return `${input.count} ${CLASS_LABELS[input.nukeClass]} within ${input.window} by <@${input.actorId}>`;
+}
+
+const AFTER_STRIP_PHRASE: Record<Exclude<AfterStripAction, 'none'>, string> = {
+  ban: 'They were then banned from this server.',
+  kick: 'They were then removed from this server.',
+};
+
 export async function tripBreaker(
   ctx: ModuleContext<AntinukeConfig>,
   deps: BoundAntinukeDeps,
@@ -41,9 +52,9 @@ export async function tripBreaker(
 
   if (state?.ownerId === input.actorId) {
     const summary =
-      `Anti-nuke detected ${detected}, and that member owns this server. Discord does not let ` +
-      "any bot remove the owner's roles, ban them or kick them, so Proton has done nothing and " +
-      'cannot. Recover the account, then transfer ownership or enable server-wide 2FA.';
+      `Anti-nuke detected ${forAlert(input)}, and that member owns this server. Discord does not ` +
+      "let any bot remove the owner's roles, ban them or kick them, so Proton has done nothing " +
+      'and cannot. Recover the account, then transfer ownership or enable server-wide 2FA.';
     ctx.logger.warn(summary, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: input.actorId });
     await announce(ctx, input.eventId, summary);
 
@@ -67,9 +78,9 @@ export async function tripBreaker(
 
   if (roleIds === null) {
     const summary =
-      `Anti-nuke detected ${detected}, but I could not read that member's roles, so I have ` +
-      'stripped nothing and taken no further action. They may have already left the server. ' +
-      'Check the audit log and act by hand — this one needs a person.';
+      `Anti-nuke detected ${forAlert(input)}, but I could not read that member's roles, so I ` +
+      'have stripped nothing and taken no further action. They may have already left the ' +
+      'server. Check the audit log and act by hand — this one needs a person.';
     ctx.logger.error(summary, {
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
@@ -100,7 +111,7 @@ export async function tripBreaker(
     });
 
     attempted.push('remove_role');
-    collect(failures, result, `removing role ${roleId}`);
+    collect(failures, result, `removing <@&${roleId}>`);
     if (result.status === 'executed' || result.status === 'dry_run') stripped.push(roleId);
   }
 
@@ -122,7 +133,7 @@ export async function tripBreaker(
     collect(failures, result, `${kind === 'ban' ? 'banning' : 'kicking'} that member`);
   }
 
-  const summary = summarise(ctx.config, input, detected, stripped, strippable, failures);
+  const summary = summarise(ctx.config, input, forAlert(input), stripped, strippable, failures);
 
   ctx.logger.warn(summary, {
     guildId: ctx.guildId,
@@ -165,9 +176,9 @@ function summarise(
     lines.push('They held no removable roles, so there was nothing to strip.');
   } else {
     lines.push(
-      `Removed ${stripped.length} of ${attempted.length} roles from them first: ` +
-        `${attempted.join(', ')}. Every removal is recorded as a Proton case carrying the full ` +
-        'set, so their roles can be restored exactly.',
+      `Removed ${stripped.length} of their ${attempted.length} roles first: ` +
+        `${attempted.map((roleId) => `<@&${roleId}>`).join(', ')}. Every removal is recorded as ` +
+        'a Proton case carrying the full set, so their roles can be restored exactly.',
     );
   }
 
@@ -177,7 +188,7 @@ function summarise(
         'audit log and decide.',
     );
   } else {
-    lines.push(`Then: ${config.afterStrip}.`);
+    lines.push(AFTER_STRIP_PHRASE[config.afterStrip]);
   }
 
   if (failures.length > 0) {
@@ -231,7 +242,13 @@ export async function announce(
     moduleId: MODULE_ID,
     kind: 'send',
     actorId: ANTINUKE_ACTOR,
-    payload: { channelId, content: content.slice(0, MESSAGE_MAX) },
+    // The alert names roles and the member by mention so they are readable, and must not ping
+    // a whole server mid-incident.
+    payload: {
+      channelId,
+      content: content.slice(0, MESSAGE_MAX),
+      allowedMentions: { parse: [] },
+    },
     dryRun: false,
     idempotencyKey: `${MODULE_ID}:${eventId}:${keySuffix}`,
   });

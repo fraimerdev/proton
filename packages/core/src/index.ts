@@ -493,6 +493,8 @@ export {
   hasWithAdmin,
   missing,
   Permissions,
+  permissionLabel,
+  permissionLabels,
   permissionNames,
 } from './permissions/bits.ts';
 export {

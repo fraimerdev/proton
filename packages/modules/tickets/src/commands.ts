@@ -391,7 +391,7 @@ function builder(): SlashCommandBuilder {
             option.setName('user').setDescription('Who to block.').setRequired(true),
           )
           .addStringOption((option) =>
-            option.setName('reason').setDescription('Why.').setMaxLength(512),
+            option.setName('reason').setDescription('Why they are blocked.').setMaxLength(512),
           )
           .addStringOption((option) =>
             option
@@ -980,7 +980,7 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
       ctx,
       entries.length === 0
         ? 'Nobody is blocked from opening tickets in this server.'
-        : `**${entries.length} member(s) blocked**\n` +
+        : `**${entries.length} member${entries.length === 1 ? '' : 's'} blocked**\n` +
             entries
               .map(
                 (entry) =>

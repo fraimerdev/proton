@@ -112,6 +112,7 @@ export const lockdownCommand: Command = {
       ...(reason ? { reason } : {}),
       expiresAt: new Date(Date.now() + duration.ms),
       success: `Locked this channel. It reopens automatically in ${formatDuration(duration.ms)}.`,
+      successWithoutReversal: 'Locked this channel.',
     });
   },
 };

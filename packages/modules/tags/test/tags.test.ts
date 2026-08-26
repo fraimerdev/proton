@@ -248,7 +248,7 @@ describe('/tags list and info', () => {
     await h.run('tags', subcommand('info', [stringOption('name', 'rules')]));
 
     expect(h.replyContent()).toContain(`<@${MEMBER}>`);
-    expect(h.replyContent()).toContain('posted 1 time(s)');
+    expect(h.replyContent()).toContain('posted 1 time.');
     expect(h.bodies().at(-1)?.data?.allowed_mentions).toEqual({ parse: [] });
   });
 });

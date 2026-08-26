@@ -1,4 +1,4 @@
-import type { EventListener, EventType } from '@proton/core';
+import type { ActionKind, EventListener, EventType } from '@proton/core';
 import type { AutomodHit } from './checks.ts';
 import { type AutomodConfig, readSettings } from './config.ts';
 import { type AutomodDeps, bindDeps, describeUnbound, MODULE_ID } from './deps.ts';
@@ -8,6 +8,15 @@ import { screen } from './pipeline.ts';
 import { respond } from './respond.ts';
 
 export const AUTOMOD_EVENT_TYPES: EventType[] = ['message.created', 'message.updated'];
+
+// The alert reads to a moderator, so it says what happened rather than naming the action kind the
+// executor was handed.
+const WHAT_THEY_GOT: Partial<Record<ActionKind, string>> = {
+  warn: 'They were warned.',
+  timeout: 'They were timed out.',
+  kick: 'They were removed from the server.',
+  ban: 'They were banned.',
+};
 
 function describe(hit: AutomodHit, also: readonly AutomodHit[]): string {
   const extra = also.length > 0 ? ` It also matched ${also.map((h) => h.check).join(', ')}.` : '';
@@ -89,7 +98,8 @@ export function createAutomodListener(deps: AutomodDeps): EventListener<AutomodC
         `Automod acted on <@${facts.authorId}> in <#${facts.channelId}>.`,
         describe(verdict.hit, verdict.also),
         outcome.deleted ? 'The message was deleted.' : 'The message was left up.',
-        outcome.action ? `They were given: ${outcome.action}.` : 'No action was taken on them.',
+        (outcome.action ? WHAT_THEY_GOT[outcome.action] : null) ??
+          'Nothing was done to the member.',
         ...outcome.failures.map((detail) => `⚠ ${detail}`),
       ];
 

@@ -6,6 +6,7 @@ import { type BackupDeps, createBackupModule } from '@proton/module-backup';
 import { type CasesDeps, createCasesModule } from '@proton/module-cases';
 import { type CountersDeps, createCountersModule } from '@proton/module-counters';
 import { createGiveawaysModule, type GiveawaysDeps } from '@proton/module-giveaways';
+import { createHelpModule, type HelpDeps } from '@proton/module-help';
 import { createHoneypotModule, type HoneypotDeps } from '@proton/module-honeypot';
 import { createJoinRolesModule, type JoinRolesDeps } from '@proton/module-joinroles';
 import { createLevelingModule, type LevelingDeps } from '@proton/module-leveling';
@@ -28,6 +29,7 @@ import { createVerificationModule, type VerificationDeps } from '@proton/module-
 import { createWelcomeModule, type WelcomeDeps } from '@proton/module-welcome';
 
 export interface ModuleBindings {
+  help?: HelpDeps;
   cases?: CasesDeps;
 
   antinuke?: AntinukeDeps;
@@ -59,6 +61,7 @@ export interface ModuleBindings {
 
 export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
   return [
+    createHelpModule(bindings.help ?? {}) as ModuleManifest,
     pingModule as ModuleManifest,
     createCasesModule(bindings.cases ?? {}) as ModuleManifest,
     moderationModule as ModuleManifest,

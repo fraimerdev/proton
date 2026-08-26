@@ -323,8 +323,8 @@ describe('when Proton cannot act', () => {
 
     const outcome = await h.trip({ config: { ...armed(), logChannelId: LOG } });
 
-    expect(refusal(outcome)).toContain('BanMembers');
-    expect(refusal(outcome)).toContain(`guild ${GUILD}`);
+    expect(refusal(outcome)).toContain('Ban Members');
+    expect(refusal(outcome)).toContain('this server');
   });
 
   test('half-applies nothing without Ban Members — no ban, and so no lift to owe', async () => {

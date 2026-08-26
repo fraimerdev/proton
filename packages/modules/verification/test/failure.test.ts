@@ -144,7 +144,7 @@ describe('running out of attempts', () => {
     const error = h.logs.find((entry) => entry.level === 'error');
     expect(error?.message).toContain(MEMBER);
     expect(error?.message).toContain('kicked');
-    expect(error?.message).toContain('Missing Permissions');
+    expect(error?.message).toContain("Discord wouldn't let me do that");
   });
 });
 

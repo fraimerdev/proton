@@ -71,11 +71,12 @@ describe('/phishing', () => {
     expect(content).toContain('503');
   });
 
-  test('names the port and the constructor when nothing is bound', async () => {
+  test('says it cannot answer when nothing is bound, without naming Proton internals', async () => {
     const content = await run({});
 
-    expect(content).toContain('RedisBlocklistStore');
-    expect(content).toContain('createPhishingModule');
+    expect(content).toContain("isn't fully wired up");
+    expect(content).not.toContain('RedisBlocklistStore');
+    expect(content).not.toContain('createPhishingModule');
   });
 
   test('answers even when the cache read throws', async () => {
@@ -85,7 +86,8 @@ describe('/phishing', () => {
     };
 
     const content = await run({ blocklist: store, botUserId: BOT });
-    expect(content).toContain('Connection is closed.');
+    expect(content).toContain('could not read the phishing blocklist');
+    expect(content).not.toContain('Connection is closed.');
   });
 
   test('replies ephemerally — this is server health, not an announcement', async () => {

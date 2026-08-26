@@ -121,9 +121,15 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
         channelId: facts.channelId,
       });
     } catch (error) {
+      ctx.logger.error(
+        `automod could not publish the offence for escalation: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { guildId: ctx.guildId, moduleId: MODULE_ID },
+      );
       outcome.failures.push(
-        `the offence was recorded but could not be published, so it will not count toward ` +
-          `escalation: ${error instanceof Error ? error.message : String(error)}`,
+        'the offence was recorded, but it will not count toward escalation — something went ' +
+          'wrong passing it on',
       );
     }
   }

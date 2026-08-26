@@ -61,7 +61,7 @@ export const listGuilds = createServerFn({ method: 'GET' })
     return {
       guilds: withPresence(guilds, present),
       invite,
-      user: { id: user.id, name: user.name, image: user.image ?? null },
+      user: { id: user.id, name: user.name, image: user.image ?? null, email: user.email ?? null },
     };
   });
 

@@ -9,6 +9,8 @@
     "build": "vite build",
     "build:icons": "bun run scripts/build-icons.ts",
     "build:commands": "bun run scripts/build-commands.ts",
+    "build:rank-card": "bun run scripts/build-rank-card.ts",
+    "build:author-avatar": "bun run scripts/build-author-avatar.ts",
     "start": "bun --env-file=../../.env serve.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -49,6 +51,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^1.0.7",
+    "@proton/cards": "workspace:*",
     "@phosphor-icons/core": "2.1.1",
     "@proton/modules": "workspace:*",
     "@tanstack/router-plugin": "1.168.31",

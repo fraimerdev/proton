@@ -3,17 +3,23 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import type { ReactElement } from 'react';
 import { z } from 'zod';
 import { Icon } from '../components/shell/icon.tsx';
-import type { IconName } from '../components/shell/icon-set.gen.ts';
 import {
   COMMAND_COUNT,
+  LOG_CATEGORY_COUNT,
   LOG_EVENT_COUNT,
   MODULE_COUNT,
-  OAUTH_SCOPES,
   TOP_LEVEL_COMMANDS,
 } from '../components/site/catalogue.ts';
 import { SitePage } from '../components/site/chrome.tsx';
 import { featured, QuestionList } from '../components/site/faq.tsx';
-import { SHOTS, ShotFrame } from '../components/site/shot.tsx';
+import {
+  ModerationScene,
+  RankCardScene,
+  RefusalScene,
+  ServerLogScene,
+  StarboardScene,
+  TicketPanelScene,
+} from '../components/site/scene.tsx';
 import { SITE_DESCRIPTION } from '../lib/site-meta.ts';
 
 // Better Auth redirects a failed OAuth callback back here with these two, and until it had a route
@@ -103,8 +109,6 @@ function Home(): ReactElement {
         <p className="hero-fine">Needs Manage Server in the server you are adding it to.</p>
       </section>
 
-      <Capabilities />
-
       <Showcases />
 
       <CommandStrip />
@@ -141,161 +145,130 @@ function Home(): ReactElement {
   );
 }
 
-interface Capability {
-  icon: IconName;
+interface Feature {
+  id: string;
   title: string;
-  body: string;
+  lede: string;
+  points: readonly string[];
+  scene: ReactElement;
+  cta: ReactElement;
 }
 
-const CAPABILITIES: readonly Capability[] = [
-  {
-    icon: 'gavel',
-    title: 'Moderation cases',
-    body: 'Every ban, kick and timeout becomes a numbered case you can search and reverse.',
-  },
-  {
-    icon: 'shield-warning',
-    title: 'AutoMod filters',
-    body: 'Spam, banned words, links and shouting, checked on every message that lands.',
-  },
-  {
-    icon: 'lightning-slash',
-    title: 'Anti-nuke and anti-raid',
-    body: 'Trips a breaker on mass deletions, and gates a join wave before it lands.',
-  },
-  {
-    icon: 'fish',
-    title: 'Phishing and honeypots',
-    body: 'Known bad links blocked on sight, and channels that catch bots outright.',
-  },
-  {
-    icon: 'ticket',
-    title: 'Tickets',
-    body: 'Private support channels with intake forms, timers, staff and transcripts.',
-  },
-  {
-    icon: 'trend-up',
-    title: 'Leveling and XP',
-    body: 'XP for talking and for voice, role rewards, and a drawn /rank card.',
-  },
-  {
-    icon: 'list-magnifying-glass',
-    title: 'Server logs',
-    body: `${LOG_EVENT_COUNT} Discord events routed to whichever channels you pick.`,
-  },
-  {
-    icon: 'list-checks',
-    title: 'Role menus',
-    body: 'Members click a button or a dropdown and give themselves roles.',
-  },
-  {
-    icon: 'gift',
-    title: 'Giveaways and polls',
-    body: 'Button-entry giveaways, drawn, rerolled and announced by Proton.',
-  },
-];
+const invite = (
+  <a className="button button-discord" href="/invite">
+    <Icon name="discord-logo" weight="fill" />
+    Add to Discord
+  </a>
+);
 
-function Capabilities(): ReactElement {
+function browse(to: '/commands' | '/faq', label: string): ReactElement {
   return (
-    <section className="lp" id="features">
-      <header className="lp-head">
-        <h2 className="lp-title">Everything a server needs, in one bot</h2>
-        <p className="lp-lede">
-          All {MODULE_COUNT} modules ship with Proton — {COMMAND_COUNT} commands, {LOG_EVENT_COUNT}{' '}
-          logged events, and exactly {OAUTH_SCOPES.length} OAuth scopes asked for. Each module has
-          its own page and its own switch; turn one on and it is live in Discord immediately.
-        </p>
-      </header>
-
-      <ul className="index-list">
-        {CAPABILITIES.map((capability) => (
-          <li className="index-row" key={capability.title}>
-            <Icon name={capability.icon} />
-            <span className="index-name">{capability.title}</span>
-            <span className="index-body">{capability.body}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <Link to={to} className="button button-quiet">
+      {label}
+      <Icon name="arrow-right" />
+    </Link>
   );
 }
+
+const FEATURES: readonly Feature[] = [
+  {
+    id: 'moderation',
+    title: 'Read it back six months later',
+    lede: 'A ban is not a message that scrolls away. Proton writes one numbered case per action — the moderator, the target, the reason they typed, the time — and keeps it for as long as it is in your server.',
+    points: [
+      'The case id is stamped on the reply, so the ledger is searchable from Discord.',
+      'Reversals land back on the case they reverse, so nothing is rewritten.',
+      'Actions Proton took by itself are recorded the same way.',
+    ],
+    scene: <ModerationScene />,
+    cta: invite,
+  },
+  {
+    id: 'leveling',
+    title: 'Levels, ranks and a card worth posting',
+    lede: 'XP for talking and for time in voice, with role rewards at the levels you choose. /rank draws the member a card; /leaderboard ranks the server.',
+    points: [
+      'The card is drawn by Proton — pick a preset, an accent and a background.',
+      'Voice XP is counted per session, not per message.',
+      'Role rewards are granted the moment the level lands.',
+    ],
+    scene: <RankCardScene />,
+    cta: browse('/commands', 'Browse the commands'),
+  },
+  {
+    id: 'starboard',
+    title: 'The good messages get a second life',
+    lede: 'React with a star. Once enough people have, Proton reposts the message to the board with a link back to where it was said.',
+    points: [
+      'The count is recomputed, not incremented, so removed stars come off again.',
+      'Attachments come along; the first image is shown in the post.',
+      'Pick the emoji, the threshold and whether self-stars count.',
+    ],
+    scene: <StarboardScene />,
+    cta: browse('/faq', 'How it handles failure'),
+  },
+  {
+    id: 'tickets',
+    title: 'Support that stays private and gets written down',
+    lede: 'Post a panel and members open a ticket by pressing it. Each one is a channel only they and your support roles can read — configured on the web, pressed in Discord.',
+    points: [
+      'Ticket types carry their own staff roles, form fields and claim rules.',
+      'Transcripts are optional, and kept for 30 days when you turn them on.',
+      'Closing, claiming and transferring are all recorded.',
+    ],
+    scene: <TicketPanelScene />,
+    cta: invite,
+  },
+  {
+    id: 'logs',
+    title: 'Every audit event, in the channel you choose',
+    lede: `Discord's own audit log, read and routed. ${LOG_EVENT_COUNT} events across ${LOG_CATEGORY_COUNT} categories, each one able to go to its own channel.`,
+    points: [
+      'Who did it is resolved and printed, not left as an id to look up.',
+      'Message edits and deletions are opt-in, and archived for 30 days.',
+      'Proton’s own actions are logged beside Discord’s.',
+    ],
+    scene: <ServerLogScene />,
+    cta: browse('/commands', 'Browse the commands'),
+  },
+  {
+    id: 'honesty',
+    title: 'When it cannot run, it says which permission is missing',
+    lede: 'Discord will not tell a bot what it is allowed to do, so Proton never claims everything is fine. It names the exact permission it is missing, under the name your server settings use.',
+    points: [
+      'A module that cannot run is never greyed out — its switch stays live.',
+      'Every state colour is printed next to a word that says the same thing.',
+      'Proton queues through a Discord outage rather than dropping the work.',
+    ],
+    scene: <RefusalScene />,
+    cta: browse('/faq', 'How it handles failure'),
+  },
+];
 
 function Showcases(): ReactElement {
   return (
     <div className="show-band">
-      <section className="lp show" id="audit">
-        <div className="show-inner">
-          <div className="show-copy">
-            <h2 className="lp-title">Read it back six months later</h2>
-            <p className="lp-lede">
-              A ban is not a message that scrolls away. Proton writes one numbered case per action —
-              the moderator, the target, the reason they typed, the time — and keeps it for as long
-              as it is in your server.
-            </p>
-            <ul className="show-list">
-              <li>Reversals land back on the case they reverse, so nothing is rewritten.</li>
-              <li>Filters live in the URL, so a search is a link you can send.</li>
-              <li>Actions Proton took by itself are recorded the same way.</li>
-            </ul>
-            <a className="button button-discord" href="/invite">
-              <Icon name="discord-logo" weight="fill" />
-              Add to Discord
-            </a>
+      {FEATURES.map((feature, index) => (
+        <section
+          className={`lp show${index % 2 === 1 ? ' show-flip' : ''}`}
+          id={feature.id}
+          key={feature.id}
+        >
+          <div className="show-inner">
+            <div className="show-copy">
+              <h2 className="lp-title">{feature.title}</h2>
+              <p className="lp-lede">{feature.lede}</p>
+              <ul className="show-list">
+                {feature.points.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
+              </ul>
+              {feature.cta}
+            </div>
+            <div className="show-figure">{feature.scene}</div>
           </div>
-          <div className="show-figure">
-            <ShotFrame shot={SHOTS.cases} />
-          </div>
-        </div>
-      </section>
-
-      <section className="lp show show-flip" id="modules">
-        <div className="show-inner">
-          <div className="show-copy">
-            <h2 className="lp-title">Set it up on the web, run it in Discord</h2>
-            <p className="lp-lede">
-              No chains of setup commands in a channel nobody can read back. Every module is one
-              page: a switch, its settings, and the reason beside the switch if it cannot run.
-            </p>
-            <ul className="show-list">
-              <li>Roles and channels are picked from your server, not typed as raw ids.</li>
-              <li>Unsaved work is never lost quietly — it blocks navigation and asks.</li>
-              <li>Every change is audited with who made it and what it was before.</li>
-            </ul>
-            <Link to="/commands" className="button button-quiet">
-              Browse the commands
-              <Icon name="arrow-right" />
-            </Link>
-          </div>
-          <div className="show-figure">
-            <ShotFrame shot={SHOTS.modules} />
-          </div>
-        </div>
-      </section>
-
-      <section className="lp show" id="honesty">
-        <div className="show-inner">
-          <div className="show-copy">
-            <h2 className="lp-title">When it cannot run, it says which permission is missing</h2>
-            <p className="lp-lede">
-              Discord will not tell a bot what it is allowed to do, so Proton never claims
-              everything is fine. It names the exact permission or intent it is missing, and prints
-              the path in Discord that fixes it.
-            </p>
-            <ul className="show-list">
-              <li>A module that cannot run is never greyed out — its switch stays live.</li>
-              <li>Every state colour is printed next to a word that says the same thing.</li>
-              <li>Proton queues through a Discord outage rather than dropping the work.</li>
-            </ul>
-            <Link to="/faq" className="button button-quiet">
-              How it handles failure
-              <Icon name="arrow-right" />
-            </Link>
-          </div>
-          <div className="show-figure">
-            <ShotFrame shot={SHOTS.notRunning} />
-          </div>
-        </div>
-      </section>
+        </section>
+      ))}
     </div>
   );
 }

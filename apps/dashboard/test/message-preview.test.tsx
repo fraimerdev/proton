@@ -24,8 +24,8 @@ describe('the Discord preview', () => {
   test('names the bot and marks it as one', () => {
     const html = render({ content: 'hello' });
 
-    expect(html).toContain('dc-bot');
-    expect(html).toContain('BOT');
+    expect(html).toContain('dc-app');
+    expect(html).toContain('APP');
     expect(html).toContain('Proton');
   });
 

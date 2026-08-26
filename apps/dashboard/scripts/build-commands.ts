@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { permissionNames } from '@proton/core';
+import { permissionLabels } from '@proton/core';
 import { MODULES } from '@proton/modules';
 
 const ROOT = join(import.meta.dir, '..');
@@ -50,17 +50,13 @@ function argsOf(options: readonly RawOption[] | undefined): CommandArg[] {
     }));
 }
 
-// Discord names its permissions in PascalCase; the consent screen and the server settings both
-// print them spaced, which is the spelling an admin is looking for.
-function spaced(name: string): string {
-  return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
-}
-
+// permissionLabels, not the API names spaced out: Discord's own client calls MANAGE_GUILD
+// "Manage Server", which is the spelling an admin is looking for and the one the landing page uses.
 function permissionOf(data: RawCommand): string | null {
   const mask = data.default_member_permissions;
   if (!mask || mask === '0') return null;
 
-  const names = permissionNames(BigInt(mask)).map(spaced);
+  const names = permissionLabels(BigInt(mask));
 
   return names.length > 0 ? names.join(', ') : null;
 }

@@ -430,6 +430,6 @@ describe('embeds component presses', () => {
     });
 
     expect(outcome).toMatchObject({ action: 'refused' });
-    expect(h.lastSaid()).toContain('ManageRoles');
+    expect(h.lastSaid()).toContain('Manage Roles');
   });
 });

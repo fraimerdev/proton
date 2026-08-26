@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
-import { Spinner } from './components/shell/pending.tsx';
+import { RoutePending } from './components/shell/pending.tsx';
 import { makeQueryClient } from './lib/query-client.ts';
 import { routeTree } from './routeTree.gen';
 
@@ -23,7 +23,7 @@ export function getRouter() {
     scrollRestoration: true,
     // Routes that know nothing about the page they are fetching. The module route replaces this
     // with one that keeps its own header on screen.
-    defaultPendingComponent: Spinner,
+    defaultPendingComponent: RoutePending,
   });
 
   setupRouterSsrQueryIntegration({ router, queryClient });

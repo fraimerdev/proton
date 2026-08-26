@@ -177,7 +177,7 @@ describe('/suggest', () => {
     await h.run('suggest', [stringOption('text', 'Add a bot-commands channel.')]);
 
     const said = h.followUpContent() ?? '';
-    expect(said).toContain('SendMessages');
+    expect(said).toContain('Send Messages');
     expect(said).toContain(SUGGESTION_CHANNEL);
   });
 
@@ -242,7 +242,7 @@ describe('/suggest and its discussion thread', () => {
 
     const said = h.followUpContent() ?? '';
     expect(said).toContain('suggestion #1');
-    expect(said).toContain('CreatePublicThreads');
+    expect(said).toContain('Create Public Threads');
   });
 });
 

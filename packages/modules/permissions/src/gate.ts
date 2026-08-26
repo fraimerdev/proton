@@ -58,7 +58,6 @@ function describeRefusal(commandName: string, required: readonly string[]): stri
   return (
     `You need ${roles} to use /${commandName} in this server. ` +
     'This is a Proton command override, not a Discord permission — a server admin can change it ' +
-    `in the dashboard under Permissions → /${commandName}. ` +
-    `(required role ${listed.length === 1 ? 'id' : 'ids'}: ${listed.join(', ')})`
+    `in the dashboard under Permissions → /${commandName}.`
   );
 }

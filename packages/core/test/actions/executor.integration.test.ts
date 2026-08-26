@@ -135,7 +135,7 @@ describe('DefaultActionExecutor', () => {
 
     expect(result.status).toBe('failed_precheck');
     expect(result.failure?.code).toBe('missing_permission');
-    expect(result.failure?.humanReason).toContain('SendMessages');
+    expect(result.failure?.humanReason).toContain('Send Messages');
     expect(rest.calls).toHaveLength(0);
     expect(recorder.recorded).toHaveLength(0);
   });

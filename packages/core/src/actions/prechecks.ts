@@ -1,4 +1,4 @@
-import { missing, permissionNames } from '../permissions/bits.ts';
+import { missing, permissionLabels } from '../permissions/bits.ts';
 import type { ActionFailure } from './types.ts';
 
 export interface PrecheckInput {
@@ -20,32 +20,33 @@ export interface PrecheckInput {
 }
 
 function whereItIsMissing(input: PrecheckInput): string {
-  if (!input.channelId) return `guild ${input.guildId}`;
+  if (!input.channelId) return 'this server';
 
   if (input.channelOverwritesUnknown) {
     return (
-      `guild ${input.guildId}. I couldn't check channel ${input.channelId} itself — it is not in ` +
-      "my cached channel list, so that channel's own permission overwrites were not applied"
+      `this server. I couldn't check <#${input.channelId}> itself — it isn't in my channel list ` +
+      "yet, so that channel's own permission overwrites weren't taken into account"
     );
   }
 
   if (input.threadParentId) {
     return (
-      `thread ${input.channelId} — a thread has no permission overwrites of its own, so grant it ` +
-      `in its parent channel ${input.threadParentId}`
+      `<#${input.channelId}> — a thread has no permission overwrites of its own, so grant it in ` +
+      `<#${input.threadParentId}> instead`
     );
   }
 
-  return `channel ${input.channelId}`;
+  return `<#${input.channelId}>`;
 }
 
 export function runPrechecks(input: PrecheckInput): ActionFailure | null {
   const lacking = missing(input.botChannelPermissions, input.requiredPermissions);
   if (lacking !== 0n) {
-    const names = permissionNames(lacking).join(', ');
+    const labels = permissionLabels(lacking);
+    const names = labels.join(', ');
     return {
       code: 'missing_permission',
-      humanReason: `I'm missing the ${names} permission in ${whereItIsMissing(input)}.`,
+      humanReason: `I'm missing the ${names} permission${labels.length === 1 ? '' : 's'} in ${whereItIsMissing(input)}.`,
     };
   }
 

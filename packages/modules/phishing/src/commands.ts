@@ -1,10 +1,14 @@
-import { type CommandDefinition, formatDuration, Permissions } from '@proton/core';
+import { type CommandDefinition, formatDuration, type Logger, Permissions } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import type { PhishingConfig } from './config.ts';
 import { bindDeps, describeUnbound, type PhishingDeps } from './deps.ts';
 import { MODULE_ID } from './listener.ts';
 import type { BlocklistStats } from './store.ts';
+
+const NOT_WIRED =
+  "I can't tell you the state of the phishing blocklist because Proton isn't fully wired up " +
+  'in this deployment. The Proton logs name the exact missing piece.';
 
 export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefinition<PhishingConfig> {
   return {
@@ -22,10 +26,17 @@ export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefiniti
     async handler(ctx) {
       const bound = bindDeps(deps);
 
+      if ('unbound' in bound) {
+        ctx.logger.error(describeUnbound(bound.unbound), {
+          guildId: ctx.guildId,
+          moduleId: MODULE_ID,
+        });
+      }
+
       const body =
         'unbound' in bound
-          ? describeUnbound(bound.unbound)
-          : await describeStats(bound.deps.blocklist.stats(), ctx.config);
+          ? NOT_WIRED
+          : await describeStats(bound.deps.blocklist.stats(), ctx.config, ctx.logger);
 
       const result = await ctx.executor.execute({
         guildId: ctx.guildId,
@@ -58,14 +69,23 @@ export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefiniti
 async function describeStats(
   pending: Promise<BlocklistStats>,
   config: PhishingConfig,
+  logger: Logger,
 ): Promise<string> {
   let stats: BlocklistStats;
   try {
     stats = await pending;
   } catch (error) {
+    logger.error(
+      `the blocklist cache could not be read: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { moduleId: MODULE_ID },
+    );
+
     return (
-      'I could not read the phishing blocklist cache, so I do not know whether this server ' +
-      `is protected: ${error instanceof Error ? error.message : String(error)}`
+      'I could not read the phishing blocklist, so I cannot tell you whether this server is ' +
+      'protected right now. Link checking may still be running. This is a Proton-side problem, ' +
+      'not a setting in this server.'
     );
   }
 

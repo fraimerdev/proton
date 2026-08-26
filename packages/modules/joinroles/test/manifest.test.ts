@@ -47,7 +47,7 @@ describe('join roles manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    expect(status.disabledReason?.humanReason).toContain('GuildMembers');
+    expect(status.disabledReason?.humanReason).toContain('Server Members Intent');
   });
 
   test('reports a missing permission by name and says where to grant it', () => {
@@ -60,7 +60,7 @@ describe('join roles manifest', () => {
     });
 
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ManageRoles');
+    expect(status.disabledReason?.humanReason).toContain('Manage Roles');
     expect(status.disabledReason?.humanReason).toContain('Server Settings');
   });
 

@@ -201,6 +201,6 @@ describe('join roles end to end', () => {
     });
 
     expect(rest.calls).toEqual([]);
-    expect(logged.join(' ')).toContain('ManageRoles');
+    expect(logged.join(' ')).toContain('Manage Roles');
   });
 });

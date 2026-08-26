@@ -20,7 +20,7 @@ export function bindFollowUp(deps: MessagesDeps): BindResult<BoundFollowUpDeps> 
 
 export function describeUnbound(what: string, unbound: readonly string[]): string {
   return (
-    `${what} — the embeds module was built without ${unbound.join(', ')}. The process running ` +
+    `${what} — the messages module was built without ${unbound.join(', ')}. The process running ` +
     `modules must call createMessagesModule({ ${unbound
       .map((port) => PORT_HINTS[port] ?? port)
       .join(', ')} }).`

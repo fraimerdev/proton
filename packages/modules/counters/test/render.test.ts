@@ -217,12 +217,12 @@ describe('renderReport', () => {
       unchanged: 0,
       unavailable: 0,
       failures: [
-        { channelId: COUNTER_A, humanReason: "I'm missing the ManageChannels permission." },
+        { channelId: COUNTER_A, humanReason: "I'm missing the Manage Channels permission." },
       ],
     });
 
     expect(text).toContain(`<#${COUNTER_A}>`);
-    expect(text).toContain('ManageChannels');
+    expect(text).toContain('Manage Channels');
   });
 
   test('says a server has none rather than reporting zero of zero', () => {

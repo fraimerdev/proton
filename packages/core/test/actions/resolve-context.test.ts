@@ -261,7 +261,7 @@ describe('the channel the action actually targets', () => {
     const failure = runPrechecks(result.context);
 
     expect(failure?.code).toBe('missing_permission');
-    expect(failure?.humanReason).toContain('SendMessages');
+    expect(failure?.humanReason).toContain('Send Messages');
     expect(failure?.humanReason).toContain(OTHER_CHANNEL);
   });
 
@@ -423,8 +423,8 @@ describe('the shape apps/worker gives every slash command: scoped to the invocat
     const failure = runPrechecks(result.context);
 
     expect(failure?.code).toBe('missing_permission');
-    expect(failure?.humanReason).toContain('BanMembers');
-    expect(failure?.humanReason).toContain(`guild ${GUILD}`);
+    expect(failure?.humanReason).toContain('Ban Members');
+    expect(failure?.humanReason).toContain('this server');
     expect(failure?.humanReason).not.toContain(CHANNEL);
   });
 
@@ -450,8 +450,8 @@ describe('the shape apps/worker gives every slash command: scoped to the invocat
 
     const failure = runPrechecks(result.context);
 
-    expect(failure?.humanReason).toContain('ManageRoles');
-    expect(failure?.humanReason).toContain(`guild ${GUILD}`);
+    expect(failure?.humanReason).toContain('Manage Roles');
+    expect(failure?.humanReason).toContain('this server');
     expect(failure?.humanReason).not.toContain(CHANNEL);
   });
 
@@ -492,7 +492,7 @@ describe('a channel that is really a thread', () => {
     const failure = runPrechecks(result.context);
 
     expect(failure?.code).toBe('missing_permission');
-    expect(failure?.humanReason).toContain('SendMessagesInThreads');
+    expect(failure?.humanReason).toContain('Send Messages in Threads');
   });
 
   test('names the thread and the parent channel the permission is actually granted in', async () => {
@@ -506,7 +506,7 @@ describe('a channel that is really a thread', () => {
 
     const failure = runPrechecks(result.context);
 
-    expect(failure?.humanReason).toContain(`thread ${THREAD}`);
+    expect(failure?.humanReason).toContain(`<#${THREAD}>`);
     expect(failure?.humanReason).toContain(CHANNEL);
   });
 
@@ -534,7 +534,7 @@ describe('a channel that is really a thread', () => {
     );
     if (!('context' in result)) throw new Error('expected a context');
 
-    expect(runPrechecks(result.context)?.humanReason).toContain('SendMessagesInThreads');
+    expect(runPrechecks(result.context)?.humanReason).toContain('Send Messages in Threads');
   });
 
   test('still needs the thread bit when an interaction in it reports app_permissions', async () => {
@@ -545,7 +545,7 @@ describe('a channel that is really a thread', () => {
     );
     if (!('context' in result)) throw new Error('expected a context');
 
-    expect(runPrechecks(result.context)?.humanReason).toContain('SendMessagesInThreads');
+    expect(runPrechecks(result.context)?.humanReason).toContain('Send Messages in Threads');
   });
 
   test('leaves an ordinary channel asking for SendMessages', async () => {
@@ -577,9 +577,9 @@ describe('a channel that guild state has never seen', () => {
     expect(result.context.channelOverwritesUnknown).toBe(true);
 
     const failure = runPrechecks(result.context);
-    expect(failure?.humanReason).toContain('CreatePublicThreads');
-    expect(failure?.humanReason).toContain(GUILD);
-    expect(failure?.humanReason).toContain('not in my cached channel list');
+    expect(failure?.humanReason).toContain('Create Public Threads');
+    expect(failure?.humanReason).toContain('this server');
+    expect(failure?.humanReason).toContain("isn't in my channel list yet");
   });
 
   test('is still reported as a channel-level check when app_permissions covered it', async () => {
@@ -596,7 +596,7 @@ describe('a channel that guild state has never seen', () => {
     expect(result.context.channelOverwritesUnknown).toBeUndefined();
 
     const failure = runPrechecks(result.context);
-    expect(failure?.humanReason).toContain(`channel ${UNCACHED_CHANNEL}`);
+    expect(failure?.humanReason).toContain(`<#${UNCACHED_CHANNEL}>`);
     expect(failure?.humanReason).not.toContain('cached channel list');
   });
 });
@@ -615,7 +615,7 @@ describe('the requirement the payload decides', () => {
     if (!('context' in result)) throw new Error('expected a context');
 
     expect(result.context.requiredPermissions & Permissions.SendPolls).toBe(Permissions.SendPolls);
-    expect(runPrechecks(result.context)?.humanReason).toContain('SendPolls');
+    expect(runPrechecks(result.context)?.humanReason).toContain('Create Polls');
   });
 
   test('a public thread is prechecked against the public bit the guild may hold', async () => {
@@ -629,7 +629,7 @@ describe('the requirement the payload decides', () => {
     if (!('context' in result)) throw new Error('expected a context');
 
     expect(result.context.requiredPermissions & Permissions.CreatePrivateThreads).toBe(0n);
-    expect(runPrechecks(result.context)?.humanReason).toContain('CreatePublicThreads');
+    expect(runPrechecks(result.context)?.humanReason).toContain('Create Public Threads');
   });
 });
 

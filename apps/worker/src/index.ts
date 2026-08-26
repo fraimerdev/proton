@@ -210,6 +210,7 @@ const dedupe = new RedisDedupeStore(dedupeRedis);
 const executor = new DefaultActionExecutor({
   dedupe,
   rest,
+  logger: console,
   recorder: new PublishingCaseRecorder({
     inner: new DrizzleCaseRecorder(handle),
     bus,
@@ -236,6 +237,7 @@ const providerRegistry = new ProviderRegistry();
 
 const registry = createModuleRegistry(
   {
+    help: { dashboardUrl: env.DASHBOARD_URL },
     cases: { history: new DrizzleCaseHistoryStore(handle) },
     antinuke: {
       rateWindow,

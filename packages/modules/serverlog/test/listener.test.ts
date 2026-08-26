@@ -371,7 +371,7 @@ describe('failures are named, not swallowed', () => {
       status: 'failed_precheck',
       failure: {
         code: 'missing_permission',
-        humanReason: "I'm missing the EmbedLinks permission in that channel",
+        humanReason: "I'm missing the Embed Links permission in that channel",
       },
     };
     const { logger, lines } = collectingLogger();
@@ -380,7 +380,7 @@ describe('failures are named, not swallowed', () => {
 
     expect(lines.join(' ')).toContain('Member joined');
     expect(lines.join(' ')).toContain(LOG_CHANNEL);
-    expect(lines.join(' ')).toContain('EmbedLinks');
+    expect(lines.join(' ')).toContain('Embed Links');
   });
 });
 

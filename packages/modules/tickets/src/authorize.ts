@@ -195,7 +195,7 @@ export function authorizeTicket(input: TicketAuthInput): TicketAuthDecision {
     return refusal(
       'not_permitted',
       ticket === null
-        ? 'You do not have permission to do that in this server. It needs Manage Server, or one ' +
+        ? "You don't have permission to do that in this server. It needs Manage Server, or one " +
             'of the support roles configured under Tickets.'
         : `You cannot do that to ticket #${ticket.number}. It is open to the member who raised ` +
             'it, the support roles configured for this ticket type, and anyone with Manage ' +

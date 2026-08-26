@@ -72,10 +72,10 @@ describe('/counters refresh', () => {
     expect(h.patches()).toHaveLength(0);
 
     const reply = h.replyContent() ?? '';
-    expect(reply).toContain('ManageChannels');
+    expect(reply).toContain('Manage Channels');
     expect(reply).toContain(`<#${COUNTER_A}>`);
     expect(
-      h.logs.some((line) => line.level === 'error' && line.message.includes('ManageChannels')),
+      h.logs.some((line) => line.level === 'error' && line.message.includes('Manage Channels')),
     ).toBe(true);
   });
 

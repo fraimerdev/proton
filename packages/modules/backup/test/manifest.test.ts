@@ -50,7 +50,7 @@ describe('the manifest', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ViewChannel');
+    expect(status.disabledReason?.humanReason).toContain('View Channel');
     expect(status.disabledReason?.humanReason).toContain('Server Settings');
   });
 

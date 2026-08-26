@@ -274,7 +274,10 @@ export function renderList(
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
   if (names.length === 0) {
-    return `Page ${page} is empty — this server has ${total} tag(s) across ${pages} page(s).`;
+    return (
+      `Page ${page} is empty — this server has ${total} tag${total === 1 ? '' : 's'} across ` +
+      `${pages} page${pages === 1 ? '' : 's'}.`
+    );
   }
 
   return (
@@ -322,7 +325,8 @@ async function info(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
   await reply(
     ctx,
     `**${tag.name}** — created by <@${tag.createdBy}> ` +
-      `<t:${Math.floor(tag.createdAt.getTime() / 1000)}:R>, posted ${tag.uses} time(s).${edited}`,
+      `<t:${Math.floor(tag.createdAt.getTime() / 1000)}:R>, posted ${tag.uses} ` +
+      `time${tag.uses === 1 ? '' : 's'}.${edited}`,
     { ephemeral: true, allowedMentions: MENTIONS_OFF },
   );
 }

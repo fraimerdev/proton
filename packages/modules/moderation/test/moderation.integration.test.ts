@@ -64,8 +64,8 @@ describe('/ban add', () => {
     });
 
     expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('BanMembers');
-    expect(h.replyContent()).toContain(GUILD);
+    expect(h.replyContent()).toContain('Ban Members');
+    expect(h.replyContent()).toContain('this server');
   });
 
   test('a duration makes the ban temporary and schedules the unban', async () => {
@@ -97,8 +97,9 @@ describe('/ban add', () => {
     );
 
     expect(h.discordCalls()).toHaveLength(1);
-    expect(h.replyContent()).toContain('will not lift on its own');
-    expect(h.replyContent()).toContain('database unavailable');
+    expect(h.replyContent()).toContain("couldn't schedule it to lift on its own");
+    expect(h.replyContent()).not.toContain('lifts automatically');
+    expect(h.replyContent()).not.toContain('database unavailable');
   });
 
   test('passes the delete window through and defaults it from config', async () => {
@@ -206,7 +207,7 @@ describe('/kick', () => {
     });
 
     expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('KickMembers');
+    expect(h.replyContent()).toContain('Kick Members');
   });
 });
 
@@ -322,7 +323,7 @@ describe('/slowmode', () => {
     });
 
     expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('ManageChannels');
+    expect(h.replyContent()).toContain('Manage Channels');
   });
 });
 
@@ -366,7 +367,7 @@ describe('/lockdown and /unlock', () => {
     });
 
     expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('ManageRoles');
+    expect(h.replyContent()).toContain('Manage Roles');
   });
 });
 

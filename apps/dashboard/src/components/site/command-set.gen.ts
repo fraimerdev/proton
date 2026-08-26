@@ -23,35 +23,35 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'reason', required: false },
     ],
     module: 'antinuke',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/antinuke resume',
     description: 'End maintenance mode now and re-arm the breaker.',
     args: [],
     module: 'antinuke',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/antinuke status',
     description: 'Show whether the breaker is armed, and at what thresholds.',
     args: [],
     module: 'antinuke',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/backup create',
     description: 'Take a snapshot of every channel, role and permission overwrite.',
     args: [],
     module: 'backup',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/backup list',
     description: 'Show the snapshots this server has kept.',
     args: [],
     module: 'backup',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/backup restore',
@@ -61,7 +61,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'confirm', required: false },
     ],
     module: 'backup',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/ban add',
@@ -358,6 +358,13 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: null,
   },
   {
+    usage: '/help',
+    description: 'What Proton does, and where to configure it.',
+    args: [],
+    module: 'help',
+    permission: null,
+  },
+  {
     usage: '/kick',
     description: 'Remove a member from this server.',
     args: [
@@ -415,7 +422,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     description: 'Show the state of the phishing blocklist in this server.',
     args: [],
     module: 'phishing',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/ping',
@@ -828,7 +835,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'reason', required: false },
     ],
     module: 'moderation',
-    permission: 'Moderate Members',
+    permission: 'Timeout Members',
   },
   {
     usage: '/unlock',
@@ -857,7 +864,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'reason', required: false },
     ],
     module: 'moderation',
-    permission: 'Moderate Members',
+    permission: 'Timeout Members',
   },
   {
     usage: '/verify',
@@ -987,7 +994,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'reason', required: false },
     ],
     module: 'moderation',
-    permission: 'Moderate Members',
+    permission: 'Timeout Members',
   },
   {
     usage: '/xp give',
@@ -997,7 +1004,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'amount', required: true },
     ],
     module: 'leveling',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/xp set',
@@ -1007,7 +1014,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'amount', required: true },
     ],
     module: 'leveling',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
   {
     usage: '/xp take',
@@ -1017,6 +1024,6 @@ export const COMMAND_SET: readonly CommandEntry[] = [
       { name: 'amount', required: true },
     ],
     module: 'leveling',
-    permission: 'Manage Guild',
+    permission: 'Manage Server',
   },
 ];

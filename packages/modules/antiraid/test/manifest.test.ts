@@ -74,7 +74,7 @@ describe('antiraid failure paths', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
-    expect(status.disabledReason?.humanReason).toContain('GuildMembers');
+    expect(status.disabledReason?.humanReason).toContain('Server Members Intent');
     expect(status.disabledReason?.humanReason).toContain('developer portal');
   });
 
@@ -86,7 +86,7 @@ describe('antiraid failure paths', () => {
 
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_permission');
-    expect(status.disabledReason?.humanReason).toContain('ManageRoles');
+    expect(status.disabledReason?.humanReason).toContain('Manage Roles');
   });
 
   test('disables itself and names KICK_MEMBERS when the permission is missing', () => {
@@ -96,6 +96,6 @@ describe('antiraid failure paths', () => {
     });
 
     expect(status.enabled).toBe(false);
-    expect(status.disabledReason?.humanReason).toContain('KickMembers');
+    expect(status.disabledReason?.humanReason).toContain('Kick Members');
   });
 });

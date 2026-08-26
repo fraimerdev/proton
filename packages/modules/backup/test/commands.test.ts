@@ -96,7 +96,7 @@ describe('/backup create', () => {
 
     expect(store.records).toHaveLength(0);
     expect(bot.replyContent()).toContain('NO new backup');
-    expect(bot.replyContent()).toContain('connection refused');
+    expect(bot.replyContent()).not.toContain('connection refused');
     expect(bot.logged('error', 'could not be saved')).toBe(true);
   });
 
@@ -108,7 +108,7 @@ describe('/backup create', () => {
     await bot.run(subcommand('create'));
 
     expect(store.records).toHaveLength(0);
-    expect(bot.replyContent()).toContain('bug in this deployment');
+    expect(bot.replyContent()).toContain('stopped rather than save something wrong');
   });
 
   test('says so when the gateway has not sent the guild yet', async () => {
@@ -127,14 +127,14 @@ describe('/backup create', () => {
     expect(bot.replyContent()).toContain('switched off in this server');
   });
 
-  test('names the unbound port when the deployment cannot store anything', async () => {
+  test('tells the admin nothing was saved, and leaves the wiring detail in the log', async () => {
     const bot = harness({ omit: ['store'] });
 
     await bot.run(subcommand('create'));
 
     const reply = bot.replyContent() ?? '';
-    expect(reply).toContain('Nothing has been saved');
-    expect(reply).toContain('DrizzleBackupStore');
+    expect(reply).toContain('Nothing was saved');
+    expect(reply).not.toContain('DrizzleBackupStore');
     expect(bot.logged('error', 'createBackupModule')).toBe(true);
   });
 });
@@ -157,7 +157,7 @@ describe('/backup list', () => {
 
     const reply = bot.replyContent() ?? '';
     expect(reply).toContain(BACKUP_ID);
-    expect(reply).toContain('1 channel(s) NOT captured');
+    expect(reply).toContain('1 channel NOT captured');
   });
 });
 

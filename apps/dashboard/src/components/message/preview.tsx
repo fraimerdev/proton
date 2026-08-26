@@ -8,9 +8,9 @@ import type {
   ProtonMessage,
   V2Component,
 } from '@proton/core';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import type { DiscordChannel, DiscordRole } from '../form/fields.tsx';
-import { Markdown, Plain } from './markdown.tsx';
+import { Markdown, type MentionUser, Plain } from './markdown.tsx';
 
 const DEFAULT_ACCENT = '#4f545c';
 
@@ -21,6 +21,20 @@ export interface MessagePreviewProps {
 
   botName?: string;
   now?: Date;
+
+  users?: readonly MentionUser[];
+
+  // Discord's own "@somebody used /command" line, which it prints above a reply to a slash
+  // command. The builder has no invoker to name; the marketing scenes do.
+  command?: { user: string; name: string; avatar?: string };
+
+  // What the bot attached under the message. `/rank` answers with a PNG, and an image Discord
+  // renders as an attachment is not an embed.
+  attachment?: ReactNode;
+
+  // The builder's caption, which the marketing pages replace with a channel header and the
+  // dashboard leaves alone. `null` drops the header entirely.
+  head?: ReactNode;
 }
 
 function hex(color: number | undefined): string {
@@ -89,6 +103,7 @@ function groupFields(fields: readonly EmbedField[]): EmbedField[][] {
 interface MentionProps {
   channels: readonly DiscordChannel[];
   roles: readonly DiscordRole[];
+  users?: readonly MentionUser[] | undefined;
   now: number;
 }
 
@@ -376,34 +391,60 @@ export function MessagePreview({
   roles,
   botName,
   now,
+  users,
+  command,
+  attachment,
+  head,
 }: MessagePreviewProps): ReactElement {
   const at = now ?? new Date();
-  const mentions: MentionProps = { channels, roles, now: at.getTime() };
+  const mentions: MentionProps = { channels, roles, users, now: at.getTime() };
 
   const empty =
     (message.content?.trim().length ?? 0) === 0 &&
     message.embeds.length === 0 &&
     message.components.length === 0 &&
-    message.v2.length === 0;
+    message.v2.length === 0 &&
+    attachment === undefined;
 
   return (
     <figure className="dc-fence">
-      <figcaption className="dc-fence-head">
-        <span className="dc-fence-label">Discord preview</span>
-        <span className="dc-fence-note">How this looks once it is posted</span>
-      </figcaption>
+      {head === undefined ? (
+        <figcaption className="dc-fence-head">
+          <span className="dc-fence-label">Discord preview</span>
+          <span className="dc-fence-note">How this looks once it is posted</span>
+        </figcaption>
+      ) : (
+        head
+      )}
 
       <div className="dc-surface">
         {empty ? (
           <p className="dc-empty">Nothing to show yet. Add some text, an embed or a component.</p>
         ) : (
           <div className="dc-message">
+            {command ? (
+              <div className="dc-used">
+                <span className="dc-used-hook" aria-hidden="true" />
+                {command.avatar ? (
+                  <img className="dc-used-pip" src={command.avatar} alt="" decoding="async" />
+                ) : (
+                  <span className="dc-used-pip" aria-hidden="true">
+                    {command.user.slice(0, 1)}
+                  </span>
+                )}
+                <span className="dc-used-text">
+                  <span className="dc-mention">@{command.user}</span> used{' '}
+                  <span className="dc-link">/{command.name}</span>
+                </span>
+              </div>
+            ) : null}
+
             <img className="dc-avatar" src="/proton-mark.png" alt="" decoding="async" />
 
             <div className="dc-body">
               <div className="dc-head">
                 <span className="dc-author">{botName ?? 'Proton'}</span>
-                <span className="dc-bot">BOT</span>
+                <span className="dc-app">APP</span>
                 <span className="dc-time">{stamp(at)}</span>
               </div>
 
@@ -437,6 +478,8 @@ export function MessagePreview({
                   ) : null}
                 </>
               )}
+
+              {attachment ? <div className="dc-attachment">{attachment}</div> : null}
             </div>
           </div>
         )}

@@ -6,6 +6,7 @@ import { GatewayIntentBits } from 'discord-api-types/v10';
 import { createModuleRegistry, MODULES } from '../src/index.ts';
 
 const SHIPPED_MODULE_IDS = [
+  'help',
   'ping',
   'cases',
   'moderation',
