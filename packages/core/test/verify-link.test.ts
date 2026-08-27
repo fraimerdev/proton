@@ -65,7 +65,8 @@ describe('readVerifyLink', () => {
     const token = await signVerifyLink(claims(), SECRET);
     const [body, signature] = token.split('.') as [string, string];
 
-    const flipped = `${signature.slice(0, -1)}${signature.endsWith('A') ? 'B' : 'A'}`;
+    // The signature's last base64url character is mostly padding; editing it can decode unchanged.
+    const flipped = `${signature.startsWith('A') ? 'B' : 'A'}${signature.slice(1)}`;
 
     expect('invalid' in (await readVerifyLink(`${body}.${flipped}`, SECRET, NOW))).toBe(true);
   });
