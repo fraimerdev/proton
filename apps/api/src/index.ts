@@ -1,4 +1,5 @@
-import { ALL_PERMISSIONS, createRedisClient, RedisStreamsEventBus } from '@proton/core';
+import { ALL_PERMISSIONS, RedisStreamsEventBus } from '@proton/core';
+import { createRedisClient } from '@proton/core/redis';
 import { createDb, DrizzleGuildRuleStore } from '@proton/db';
 import { DrizzleAppealStore } from '@proton/module-appeals';
 import { DrizzleBrandingAssetStore } from '@proton/module-branding/store';

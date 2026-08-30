@@ -1,4 +1,5 @@
-import { createRedisClient, RedisStreamsEventBus } from '@proton/core';
+import { RedisStreamsEventBus } from '@proton/core';
+import { createRedisClient } from '@proton/core/redis';
 import { DEFAULT_PRESENCE, loadEnv } from './env.ts';
 import { createGatewayManager } from './manager.ts';
 import { RedisSessionStore } from './session-store.ts';

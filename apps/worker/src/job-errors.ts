@@ -1,4 +1,5 @@
-import { describeRedisError, type Logger } from '@proton/core';
+import type { Logger } from '@proton/core';
+import { describeRedisError } from '@proton/core/redis';
 import type { Queue, Worker } from 'bullmq';
 
 export function logQueueConnectionErrors(

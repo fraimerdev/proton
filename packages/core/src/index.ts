@@ -568,13 +568,9 @@ export {
   type TreeVerdict,
   treeFromFlat,
 } from './providers/tree.ts';
-export {
-  attachRedisLogging,
-  createRedisClient,
-  describeRedisError,
-  type RedisLoggingOptions,
-  redactRedisUrl,
-} from './redis.ts';
+// Not re-exported here: redis.ts constructs an ioredis client, and this barrel is imported by
+// dashboard components. Re-exporting put ioredis in the browser bundle, where it threw on load and
+// left the whole dashboard server-rendered but never hydrated. Import '@proton/core/redis'.
 export {
   evaluateFactCondition,
   type FactCondition,

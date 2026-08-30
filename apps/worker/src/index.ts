@@ -1,7 +1,6 @@
 import { HttpImageFetcher } from '@proton/cards';
 import {
   BulkMemberContextLoader,
-  createRedisClient,
   createUserResolver,
   DatabaseReversalScheduler,
   DefaultActionExecutor,
@@ -20,6 +19,7 @@ import {
   resolvePrecheckContext,
   ScheduledActionSweeper,
 } from '@proton/core';
+import { createRedisClient } from '@proton/core/redis';
 import {
   createDb,
   DrizzleBlockedMemberStore,
