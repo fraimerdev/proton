@@ -310,7 +310,7 @@ describe('/poll create', () => {
     await h.run('create', CREATE, { deps: {} });
 
     expect(h.sent()).toHaveLength(0);
-    expect(h.lastAnswer()).toContain("isn't fully wired up");
+    expect(h.lastAnswer()).toContain('a fault on my side');
 
     const logged = h.logs.find((line) => line.level === 'error')?.message ?? '';
     expect(logged).toContain('store');
@@ -498,7 +498,7 @@ describe('/poll list', () => {
 
     await h.run('list', [], { deps: { applicationId: BOT } });
 
-    expect(h.lastAnswer()).toContain("isn't fully wired up");
+    expect(h.lastAnswer()).toContain('a fault on my side');
   });
 });
 

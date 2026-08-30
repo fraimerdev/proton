@@ -25,6 +25,7 @@ describe('the table', () => {
       savedTemplates: 10,
       activePolls: 3,
       honeypotChannels: 3,
+      appealPanels: 1,
     });
   });
 

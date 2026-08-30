@@ -10,6 +10,7 @@ import {
   channelOptions,
   type DiscordChannel,
   type DiscordRole,
+  POSTABLE_CHANNEL_TYPES,
   roleOptions,
   SinglePicker,
 } from '../form/picker.tsx';
@@ -95,7 +96,7 @@ export function ScheduleEditor({
         <SinglePicker
           id={channelControlId}
           label="Channel"
-          options={channelOptions(channels)}
+          options={channelOptions(channels, POSTABLE_CHANNEL_TYPES)}
           value={schedule.channelId === '' ? null : schedule.channelId}
           onChange={(next) => set({ channelId: next ?? '' })}
           emptyLabel="Choose a channel…"
@@ -190,7 +191,7 @@ export function ScheduleEditor({
           type="checkbox"
         />
         <small className="field-description">
-          Switching it off takes the booking down straight away. The template stays, and{' '}
+          Switching it off stops the schedule straight away. The template stays, and{' '}
           <code>/message post</code> still posts it on request.
         </small>
       </div>

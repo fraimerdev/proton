@@ -42,7 +42,7 @@ export function createJoinRolesModule(
 ): ModuleManifest<typeof joinrolesConfigSchema> {
   return {
     id: 'joinroles',
-    name: 'Join Roles',
+    name: 'Join roles',
     category: 'utility',
     configSchema: joinrolesConfigSchema,
     defaultConfig: joinrolesDefaultConfig,

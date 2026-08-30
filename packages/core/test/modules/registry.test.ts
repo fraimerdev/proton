@@ -209,7 +209,7 @@ describe('ModuleRegistry gating', () => {
     const status = registry.evaluate('ping', env);
 
     expect(status.disabledReason?.code).toBe('missing_dependency');
-    expect(status.disabledReason?.humanReason).toContain("deployment isn't running");
+    expect(status.disabledReason?.humanReason).toContain("isn't running here");
   });
 
   test('gates on entitlement tier without any per-module code', () => {

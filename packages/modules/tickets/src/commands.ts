@@ -54,11 +54,11 @@ import { buildTranscript } from './transcript-delivery.ts';
 type Command = CommandDefinition<TicketsConfig>;
 
 const NOT_WIRED =
-  "I can't reach this server's tickets because Proton isn't fully wired up in this deployment. " +
-  'Nothing was changed. The Proton logs name the exact missing piece.';
+  'I can’t reach this server’s tickets right now. Nothing was changed. This is a fault on my ' +
+  'side, not a setting in this server.';
 
 const NOT_A_TICKET =
-  'Run this inside a ticket channel — the one Proton opened when somebody pressed a ticket ' +
+  'Run this inside a ticket channel — the one I opened when somebody pressed a ticket ' +
   'panel button — or name a ticket with `number:`.';
 
 async function reply(
@@ -813,7 +813,10 @@ async function info(ctx: CommandContext<TicketsConfig>, store: TicketStore): Pro
   });
 
   if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    await reply(ctx, `I couldn't show that ticket: ${result.failure?.humanReason ?? 'unknown'}`);
+    await reply(
+      ctx,
+      `I couldn't show that ticket: ${result.failure?.humanReason ?? 'unknown reason'}`,
+    );
   }
 }
 

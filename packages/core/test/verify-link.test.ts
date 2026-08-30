@@ -100,4 +100,20 @@ describe('readVerifyLink', () => {
 
     expect('invalid' in (await readVerifyLink(signed, SECRET, NOW))).toBe(true);
   });
+
+  // Every signed link in Proton shares one secret, so a body that merely looks like these claims
+  // must not pass. The purpose literal is what separates them.
+  test('refuses a body carrying every verification field but no purpose', async () => {
+    const { purpose: _dropped, ...withoutPurpose } = claims();
+
+    const body = btoa(JSON.stringify(withoutPurpose))
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replaceAll('=', '');
+
+    const carrier = await signVerifyLink(claims(), SECRET);
+    const signed = `${body}.${carrier.split('.')[1]}`;
+
+    expect('invalid' in (await readVerifyLink(signed, SECRET, NOW))).toBe(true);
+  });
 });

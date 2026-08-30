@@ -297,13 +297,16 @@ describe('the tables every action kind is read out of', () => {
     ]);
   });
 
-  test('leaves only the interaction replies and the ledger-only kinds requiring no permission', () => {
+  test('leaves only the interaction replies, the ledger-only kinds and the bot’s own profile requiring no permission', () => {
     expect(ACTION_KINDS.filter((kind) => requiredPermissionsFor(kind) === 0n)).toEqual([
       'interaction_reply',
       'interaction_followup',
       'warn',
       'giveaway_draw',
       'create_dm',
+      // Modify Current Member lists a permission against `nick` and none against avatar, banner or
+      // bio, which is the whole reason branding splits its push into two kinds.
+      'set_bot_profile',
     ]);
   });
 
@@ -313,11 +316,18 @@ describe('the tables every action kind is read out of', () => {
     }
   });
 
-  test('names the interaction acknowledgements and the DM lookup as never recorded', () => {
+  test('names the interaction acknowledgements, the DM lookup and the branding pushes as never recorded', () => {
     expect(ACTION_KINDS.filter((kind) => NEVER_RECORDED_KINDS.has(kind))).toEqual([
       'interaction_reply',
       'interaction_followup',
       'create_dm',
+      // Not for noise: their payload carries an image as a data URI, and cases.payload is jsonb.
+      'set_bot_nickname',
+      'set_bot_profile',
+      // Proton putting its own colour role on and off itself, on every reconnect. The role's own
+      // creation is recorded; wearing it is bookkeeping.
+      'add_bot_role',
+      'remove_bot_role',
     ]);
   });
 

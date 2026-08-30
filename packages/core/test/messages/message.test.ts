@@ -428,6 +428,7 @@ describe('toDiscordMessage', () => {
     expect(row?.components?.[0]?.url).toBeUndefined();
     expect(row?.components?.[1]?.url).toBe('https://example.com');
     expect(row?.components?.[1]?.custom_id).toBeUndefined();
+
     expect(row?.components?.[1]?.style).toBe(5);
   });
 

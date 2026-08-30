@@ -1,5 +1,22 @@
 import { type ActionKind, formatDuration, MAX_TIMEOUT_MS, tryParseDuration } from '@proton/core';
-import type { HoneypotChannel } from './config.ts';
+import { z } from 'zod';
+import { DELETE_SECONDS_MAX, HONEYPOT_ACTIONS } from './config.ts';
+
+// Detached from HoneypotConfig on purpose: a delayed punishment is booked now and carried out
+// later, and it has to run under the settings it was booked with rather than whatever the guild
+// has saved by then.
+export const punishmentSchema = z.object({
+  action: z.enum(HONEYPOT_ACTIONS),
+  deleteMessageSeconds: z.number().int().min(0).max(DELETE_SECONDS_MAX),
+  timeoutDuration: z.string(),
+
+  timeoutFirst: z.boolean().default(false),
+  timeoutFirstDuration: z.string().default('5m'),
+
+  deleteTriggerMessage: z.boolean().default(true),
+});
+
+export type Punishment = z.infer<typeof punishmentSchema>;
 
 export interface TrapStep {
   kind: ActionKind;
@@ -23,8 +40,39 @@ export interface TrapPlan {
 
 export type TrapPlanResult = { plan: TrapPlan } | { unconfigured: string };
 
-export function planTrap(channel: HoneypotChannel, userId: string, now: number): TrapPlanResult {
-  const { action, deleteMessageSeconds } = channel;
+function timeoutMs(raw: string, what: string): number | { unconfigured: string } {
+  const ms = tryParseDuration(raw);
+  if (ms === null || ms <= 0) {
+    return {
+      unconfigured:
+        `This honeypot's ${what} is stored as '${raw}', which is not a readable length. It must ` +
+        'be a number followed by s, m, h, d or w. Fix it in the Proton dashboard under Honeypot.',
+    };
+  }
+
+  return Math.min(ms, MAX_TIMEOUT_MS);
+}
+
+export function planTrap(punishment: Punishment, userId: string, now: number): TrapPlanResult {
+  const { action, deleteMessageSeconds } = punishment;
+
+  const holding: TrapStep[] = [];
+
+  // Collapsed when the punishment is itself a timeout: two timeout calls on one member is the
+  // second overwriting the first, and the holding one is always the shorter.
+  if (punishment.timeoutFirst && action !== 'timeout' && action !== 'none') {
+    const held = timeoutMs(punishment.timeoutFirstDuration, 'holding timeout');
+    if (typeof held !== 'number') return held;
+
+    holding.push({
+      kind: 'timeout',
+      payload: { userId, until: new Date(now + held) },
+
+      // Never 'timeout': the executor would call the punishment's own timeout step a duplicate,
+      // and a skipped duplicate reads as success.
+      suffix: 'timeout-first',
+    });
+  }
 
   switch (action) {
     case 'softban':
@@ -34,6 +82,7 @@ export function planTrap(channel: HoneypotChannel, userId: string, now: number):
           deletesMessages: deleteMessageSeconds > 0,
           describe: 'Softban',
           steps: [
+            ...holding,
             { kind: 'ban', payload: { userId, deleteMessageSeconds }, suffix: 'ban' },
             { kind: 'unban', payload: { userId }, suffix: 'unban' },
           ],
@@ -46,7 +95,10 @@ export function planTrap(channel: HoneypotChannel, userId: string, now: number):
           softban: false,
           deletesMessages: deleteMessageSeconds > 0,
           describe: 'Ban',
-          steps: [{ kind: 'ban', payload: { userId, deleteMessageSeconds }, suffix: 'ban' }],
+          steps: [
+            ...holding,
+            { kind: 'ban', payload: { userId, deleteMessageSeconds }, suffix: 'ban' },
+          ],
         },
       };
 
@@ -56,22 +108,13 @@ export function planTrap(channel: HoneypotChannel, userId: string, now: number):
           softban: false,
           deletesMessages: false,
           describe: 'Kick',
-          steps: [{ kind: 'kick', payload: { userId }, suffix: 'kick' }],
+          steps: [...holding, { kind: 'kick', payload: { userId }, suffix: 'kick' }],
         },
       };
 
     case 'timeout': {
-      const ms = tryParseDuration(channel.timeoutDuration);
-      if (ms === null || ms <= 0) {
-        return {
-          unconfigured:
-            `This honeypot's timeout length is stored as '${channel.timeoutDuration}', which is ` +
-            'not a readable length. It must be a number followed by s, m, h, d or w. Fix it in ' +
-            'the Proton dashboard under Honeypot.',
-        };
-      }
-
-      const capped = Math.min(ms, MAX_TIMEOUT_MS);
+      const capped = timeoutMs(punishment.timeoutDuration, 'timeout length');
+      if (typeof capped !== 'number') return capped;
 
       return {
         plan: {
@@ -96,6 +139,7 @@ export function planTrap(channel: HoneypotChannel, userId: string, now: number):
           deletesMessages: false,
           describe: 'Warning',
           steps: [
+            ...holding,
             {
               kind: 'warn',
               payload: { userId, note: 'Posted in a honeypot channel.' },

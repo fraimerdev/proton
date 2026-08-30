@@ -37,8 +37,8 @@ async function ready(
     });
     await reply(
       ctx,
-      "I can't read this server's XP because Proton isn't fully wired up in this deployment. " +
-        'Nothing was changed. The Proton logs name the exact missing piece.',
+      "I can't reach this server's XP records right now. Nothing was changed. This is a fault " +
+        'on my side, not a setting in this server.',
       { ephemeral: true },
     );
     return null;
@@ -79,15 +79,6 @@ export function rankCommand(deps: LevelingDeps): Command {
       }
 
       const progress = levelProgress(record.xp);
-      const next =
-        progress.span === 0
-          ? `That is the highest level Proton awards — ${count(record.xp)} XP and still counting.`
-          : `${count(progress.remaining)} XP to level ${progress.level + 1} ` +
-            `(${count(progress.into)}/${count(progress.span)}).`;
-
-      const text =
-        `**<@${userId}>** — level ${progress.level}, ${count(record.xp)} XP, ` +
-        `rank #${count(record.rank)}.\n${next}`;
 
       const card = ctx.config.rankCard
         ? await renderRankCard(ctx, deps, {
@@ -101,7 +92,21 @@ export function rankCommand(deps: LevelingDeps): Command {
           })
         : null;
 
-      await reply(ctx, text, card ? { files: [card] } : {});
+      if (card) {
+        await reply(ctx, '', { files: [card] });
+        return;
+      }
+
+      // Not a written-out version of the card: a reply carrying neither content nor attachment is
+      // the one thing Discord refuses, so the no-card paths have to say why there is no card.
+      await reply(
+        ctx,
+        ctx.config.rankCard
+          ? 'Proton could not draw the rank card just now. The XP behind it is intact — try again ' +
+              'in a moment.'
+          : 'Rank cards are switched off in this server. An admin can turn them on from the ' +
+              'Proton dashboard.',
+      );
     },
   };
 }

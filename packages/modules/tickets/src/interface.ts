@@ -263,7 +263,7 @@ export function buildControlRows(view: TicketView): BuildResult<Record<string, u
   }
 
   primary.push(
-    button(ButtonStyle.Secondary, 'Add user', add.value),
+    button(ButtonStyle.Secondary, 'Add member', add.value),
     button(ButtonStyle.Secondary, 'Options', options.value),
   );
 
@@ -309,7 +309,7 @@ export function buildOptionRows(view: TicketView): BuildResult<Record<string, un
         locked
           ? button(ButtonStyle.Success, 'Unlock', lock.value)
           : button(ButtonStyle.Secondary, 'Lock', lock.value),
-        button(ButtonStyle.Secondary, 'Remove user', remove.value),
+        button(ButtonStyle.Secondary, 'Remove member', remove.value),
         button(ButtonStyle.Secondary, 'Rename', rename.value),
         button(ButtonStyle.Secondary, 'Info', info.value),
         button(ButtonStyle.Secondary, 'Transcript', transcript.value),
@@ -414,8 +414,8 @@ export function buildCloseRequestComponents(
         text(
           `<@${byId}> would like to close this ticket.` +
             (reason ? `\n\n**Reason**\n${reason}` : '') +
-            `\n\n<@${ticket.ownerId}>, confirm below if your problem is solved, or say it is not ` +
-            'and the ticket stays open.',
+            `\n\n<@${ticket.ownerId}>, confirm below if your problem is solved, or keep it open ` +
+            'if it isn’t.',
         ),
         spacer(),
         row(

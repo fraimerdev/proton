@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CHANNEL_ICON_NAMES } from '../src/components/form/fields.tsx';
-import { AREA_ICON_NAMES } from '../src/components/panels/areas.ts';
+import { AREA_ICON_NAMES } from '../src/components/module/area-index.ts';
 import {
   ACTION_ICON_NAMES,
   BROWSE_VIEWS,

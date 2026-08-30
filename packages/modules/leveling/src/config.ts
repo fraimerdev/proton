@@ -1,6 +1,6 @@
 // /presets, not the barrel: the barrel reaches @napi-rs/canvas, a native addon that the
 // dashboard's bundler cannot load. Config is read in the browser.
-import { CARD_PRESETS } from '@proton/cards/presets';
+import { CARD_PRESETS, DEFAULT_CARD_ACCENT } from '@proton/cards/presets';
 import {
   DEFAULT_MENTION_POLICY,
   durationStringSchema,
@@ -49,9 +49,9 @@ export function liftLevelUpMessage(value: unknown): unknown {
 }
 
 const NO_INTERACTIVE =
-  'a level-up message can carry link buttons and nothing else: the leveling module has no ' +
-  'interaction listener, so a press on anything else would go unanswered. Make it a link button, ' +
-  'or post the interactive message with the Embeds module instead.';
+  'a level-up message can carry link buttons and nothing else: Proton does not watch for presses ' +
+  'on a level-up announcement, so any other button would do nothing when a member pressed it. ' +
+  'Make it a link button, or post the interactive message with the Embeds module instead.';
 
 export function isSilentLevelUp(message: {
   content?: string | undefined;
@@ -113,11 +113,17 @@ const levelingShape = {
     label: 'Card style',
   }),
 
-  cardAccent: z.number().int().min(0).max(0xffffff).default(0x5865f2).register(protonFields, {
-    field: 'colour',
-    label: 'Accent colour',
-    description: 'Top three ranks keep gold, silver and bronze regardless',
-  }),
+  cardAccent: z
+    .number()
+    .int()
+    .min(0)
+    .max(0xffffff)
+    .default(DEFAULT_CARD_ACCENT)
+    .register(protonFields, {
+      field: 'colour',
+      label: 'Accent colour',
+      description: 'Colours the progress bar, the rank number and the avatar ring',
+    }),
 
   cardBackgroundUrl: z
     .url({ protocol: /^https$/ })
@@ -203,7 +209,7 @@ export const levelingDefaultConfig: LevelingConfig = {
   xpPerMessageMin: 15,
   rankCard: false,
   cardPreset: 'midnight',
-  cardAccent: 0x5865f2,
+  cardAccent: DEFAULT_CARD_ACCENT,
   cardShowRank: true,
   cardShowPercent: true,
   cardShowTotalXp: true,

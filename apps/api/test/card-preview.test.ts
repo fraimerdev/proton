@@ -62,19 +62,21 @@ describe('GET /guilds/:guildId/cards/preview', () => {
   test('a render failure answers 400 rather than a broken image', async () => {
     const service = new CardPreviewService({
       render: async () => {
-        throw new Error('canvas exploded');
+        throw new Error('the rasteriser exploded');
       },
     });
 
     const response = await get(appWith(service), 'kind=rank');
 
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { message: string }).message).toContain('canvas exploded');
+    expect(((await response.json()) as { message: string }).message).toContain(
+      'the rasteriser exploded',
+    );
   });
 });
 
 describe('previewDescriptor', () => {
-  test('carries the guild’s accent through as canvas hex', () => {
+  test('carries the guild’s accent through as CSS hex', () => {
     const descriptor = previewDescriptor(parse({ kind: 'rank', accent: String(0x5865f2) }));
 
     expect(descriptor.accent).toBe('#5865f2');

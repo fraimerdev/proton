@@ -40,7 +40,7 @@ export const componentKeySchema = z
     'must start with a letter or digit and hold only letters, digits, hyphens and underscores',
   )
   .refine((key) => !key.includes(CUSTOM_ID_SEPARATOR), {
-    message: `must not contain '${CUSTOM_ID_SEPARATOR}' — it separates the segments of a custom_id`,
+    message: `must not contain '${CUSTOM_ID_SEPARATOR}' — Proton reserves it to tell components apart`,
   });
 
 export const ROLE_ACTION_MODES = ['toggle', 'add', 'remove'] as const;

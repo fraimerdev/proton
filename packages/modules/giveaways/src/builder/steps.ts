@@ -443,7 +443,7 @@ export function stepScreen(
       const picker = pickerRow(
         'r',
         shown,
-        'No requirements are available — no module that provides them is on',
+        'No requirements available — switch on a module that provides them',
       );
       if (picker) middle.push(picker);
 
@@ -474,7 +474,11 @@ export function stepScreen(
       const categories = categoryRow(draft, multipliers, category);
       if (categories) middle.push(categories);
 
-      const picker = pickerRow('m', shown, 'No bonus-entry rules are available');
+      const picker = pickerRow(
+        'm',
+        shown,
+        'No bonus entries available — switch on a module that provides them',
+      );
       if (picker) middle.push(picker);
 
       const mode = modeRow(draft);

@@ -146,7 +146,7 @@ export function PaletteEditor({ components, onChange, roles }: PaletteEditorProp
         type="button"
       >
         {components.length >= MAX_SAVED_COMPONENTS
-          ? `Limit of ${MAX_SAVED_COMPONENTS} reached`
+          ? `Limit of ${MAX_SAVED_COMPONENTS} components reached`
           : 'Add component'}
       </button>
     </div>

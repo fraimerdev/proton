@@ -86,6 +86,13 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: 'Ban Members',
   },
   {
+    usage: '/branding',
+    description: 'Re-apply how Proton looks in this server, and report what Discord said.',
+    args: [],
+    module: 'branding',
+    permission: 'Manage Server',
+  },
+  {
     usage: '/counters refresh',
     description: 'Update every counter channel now instead of waiting for the timer.',
     args: [],
@@ -480,7 +487,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/remind',
-    description: 'Have Proton remind you about something later, in this channel.',
+    description: 'Remind yourself about something later, in this channel.',
     args: [
       { name: 'duration', required: true },
       { name: 'text', required: true },
@@ -828,7 +835,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/timeout',
-    description: 'Silence a member for a while.',
+    description: 'Time a member out for a while.',
     args: [
       { name: 'user', required: true },
       { name: 'duration', required: false },

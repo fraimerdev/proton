@@ -136,7 +136,7 @@ export function renderSecurityTripped(input: RenderInput): RenderResult | null {
       lines: [
         { label: 'Trigger', value: payload.trigger },
         ...(payload.actorId ? [actorLine(payload.actorId)] : []),
-        ...(payload.ownerExempt ? [{ label: 'Note', value: 'the server owner was exempt' }] : []),
+        ...(payload.ownerExempt ? [{ label: 'Note', value: 'The server owner was exempt' }] : []),
         { label: 'What happened', value: payload.summary },
       ],
       ...(payload.actionsTaken.length > 0

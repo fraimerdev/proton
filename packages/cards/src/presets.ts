@@ -1,3 +1,5 @@
+export const DEFAULT_CARD_ACCENT = 0x317ff5;
+
 export const CARD_PRESETS = ['midnight', 'aurora', 'parchment'] as const;
 
 export type CardPreset = (typeof CARD_PRESETS)[number];
@@ -6,6 +8,13 @@ export interface PresetPalette {
   background: string;
 
   surface: string;
+
+  line: string;
+
+  // Opaque, not a white wash: the track sits over a guild's background image as often as over the
+  // card's own ground, and a photo showing through the one element that must be read precisely is
+  // the difference between a progress bar and a smear.
+  track: string;
 
   text: string;
 
@@ -18,30 +27,36 @@ export interface PresetPalette {
 
 export const PRESET_PALETTES: Record<CardPreset, PresetPalette> = {
   midnight: {
-    background: '#1a1c22',
-    surface: '#2b2e36',
-    text: '#f2f3f5',
-    muted: '#a7adb8',
-    accent: '#5865f2',
-    accentSoft: '#343a63',
+    background: '#0a0a0a',
+    surface: '#17181b',
+    line: 'rgba(255, 255, 255, 0.10)',
+    track: '#4d4d4d',
+    text: '#f4f6f9',
+    muted: '#8b8f98',
+    accent: '#317ff5',
+    accentSoft: '#16233a',
   },
 
   aurora: {
-    background: '#0e2b2f',
-    surface: '#164046',
+    background: '#04110f',
+    surface: '#0d2320',
+    line: 'rgba(255, 255, 255, 0.10)',
+    track: '#38504c',
     text: '#eafbf8',
-    muted: '#8fc3bd',
-    accent: '#22d3b8',
-    accentSoft: '#175e57',
+    muted: '#7fada8',
+    accent: '#15b39b',
+    accentSoft: '#0f4b43',
   },
 
   parchment: {
-    background: '#f6f1e7',
-    surface: '#e3dbcb',
-    text: '#2b2419',
-    muted: '#6f6353',
+    background: '#f7f3ec',
+    surface: '#e9e1d3',
+    line: 'rgba(28, 22, 14, 0.14)',
+    track: '#cfc6b6',
+    text: '#211b12',
+    muted: '#6c6252',
     accent: '#b4621a',
-    accentSoft: '#e8d3bb',
+    accentSoft: '#e5cdb0',
   },
 };
 

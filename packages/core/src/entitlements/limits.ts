@@ -12,6 +12,7 @@ export const LIMIT_KEYS = [
   'savedTemplates',
   'activePolls',
   'honeypotChannels',
+  'appealPanels',
 ] as const;
 
 export type LimitKey = (typeof LIMIT_KEYS)[number];
@@ -24,10 +25,11 @@ export const LIMIT_LABELS: Record<LimitKey, string> = {
   ticketTypes: 'ticket types',
   openTicketsPerUser: 'open tickets per member',
   counters: 'counter channels',
-  tempVcHubs: 'temporary-voice hubs',
+  tempVcHubs: 'creator channels',
   savedTemplates: 'saved templates',
   activePolls: 'running polls',
   honeypotChannels: 'honeypot channels',
+  appealPanels: 'appeal forms',
 };
 
 export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
@@ -43,6 +45,7 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     savedTemplates: 10,
     activePolls: 3,
     honeypotChannels: 3,
+    appealPanels: 1,
   },
   plus: {
     tags: 125,
@@ -56,6 +59,7 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     savedTemplates: 50,
     activePolls: 15,
     honeypotChannels: 10,
+    appealPanels: 5,
   },
   pro: {
     tags: 500,
@@ -69,6 +73,7 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     savedTemplates: 200,
     activePolls: 60,
     honeypotChannels: 25,
+    appealPanels: 15,
   },
 };
 

@@ -6,6 +6,7 @@ import type {
   EnumField,
   FieldDescriptor,
   NumberField,
+  RoleIdField,
   StringField,
 } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
@@ -147,6 +148,46 @@ function describedBy(descriptor: FieldDescriptor, id: string): string | undefine
   return descriptor.description ? id : undefined;
 }
 
+/**
+ * An emptied optional text box means "unset", not the empty string. Those fields are
+ * `z.string().min(1)…optional()`, which rejects '' — so clearing Branding's "Server nickname",
+ * whose own help text says to leave it empty to use Proton's own name, wrote a value its schema
+ * refuses and made the whole module unsavable.
+ *
+ * A required box keeps the '' instead of falling back to its default. Unlike a picker, whose clear
+ * is one discrete act, '' here is a keystroke on the way somewhere: substituting the default would
+ * refill the box under the cursor, and backspacing Ping's "Pong!" looped forever.
+ */
+export function emptied(field: StringField, next: string): string | undefined {
+  if (next !== '') return next;
+
+  return field.optional ? undefined : '';
+}
+
+/**
+ * SinglePicker reports `null` for "cleared", and no config schema in the product accepts null —
+ * every channel and role field is `snowflakeSchema.optional()`, which is `string | undefined`. So
+ * a cleared field has to be written as undefined or the whole module's save is rejected with
+ * "expected string, received null".
+ *
+ * A field carrying a default clears back to that default instead: serverlog's per-category channels
+ * default to '' meaning "inherit", and without this they could be set but never unset.
+ *
+ * Shared by both id pickers because they diverged once already — the role one passed the raw null
+ * straight through, and unsetting any role broke saving for that module entirely.
+ */
+export function clearingOf(field: ChannelIdField | RoleIdField): {
+  clearable: boolean;
+  cleared: (next: string | null) => string | undefined;
+} {
+  const fallback = typeof field.defaultValue === 'string' ? field.defaultValue : null;
+
+  return {
+    clearable: field.optional || fallback !== null,
+    cleared: (next) => next ?? fallback ?? undefined,
+  };
+}
+
 export function BooleanFieldInput({
   descriptor,
   value,
@@ -191,6 +232,25 @@ export function StringFieldInput({
   const id = useId();
   const controlId = `${id}-control`;
 
+  const held = typeof value === 'string' ? value : '';
+
+  const control = (
+    <input
+      id={controlId}
+      type="text"
+      value={held}
+      minLength={field.minLength}
+      maxLength={field.maxLength}
+      required={!field.optional}
+      aria-describedby={describedBy(field, id)}
+      onChange={(e) => onChange(emptied(field, e.target.value))}
+    />
+  );
+
+  // Wrapped only when there is a counter to carry: .field is a two-column grid, so an unconditional
+  // wrapper would move every string field in the product into a box it did not have before.
+  const counted = field.maxLength !== undefined && param === undefined;
+
   return (
     <Shell
       descriptor={field}
@@ -200,16 +260,19 @@ export function StringFieldInput({
       className="field-string"
       hidden={hidden}
     >
-      <input
-        id={controlId}
-        type="text"
-        value={typeof value === 'string' ? value : ''}
-        minLength={field.minLength}
-        maxLength={field.maxLength}
-        required={!field.optional}
-        aria-describedby={describedBy(field, id)}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {counted ? (
+        <span className="field-counted">
+          {control}
+          {/* Counted in UTF-16 units, matching both maxLength above and Zod's .max(), because
+              Discord documents "32 characters" without saying which unit it counts — and the
+              stricter reading is the one that never earns a 400. */}
+          <span className="field-counter" aria-hidden="true">
+            {held.length}/{field.maxLength}
+          </span>
+        </span>
+      ) : (
+        control
+      )}
     </Shell>
   );
 }
@@ -335,13 +398,15 @@ export function ColourFieldInput({
             if (/^[0-9a-fA-F]{6}$/.test(typed)) onChange(Number.parseInt(typed, 16));
           }}
         />
+        {/* Inside .colour-input, not beside it: .field is a two-column grid, so a third child
+            landed in the label column of the row below. */}
+        {wrong ? (
+          <span className="field-error" id={errorId} role="alert">
+            A colour is six hex digits, like #5865F2. The swatch keeps its value until this reads as
+            one.
+          </span>
+        ) : null}
       </span>
-      {wrong ? (
-        <span className="field-error" id={errorId} role="alert">
-          A colour is six hex digits, like #5865F2. The swatch keeps its value until this reads as
-          one.
-        </span>
-      ) : null}
     </Shell>
   );
 }
@@ -395,11 +460,7 @@ export function ChannelIdFieldInput({
   const id = useId();
   const controlId = `${id}-control`;
 
-  // A field carrying a default is never required, and clearing it means going back to that default
-  // rather than to null — which is not a value its schema accepts. Serverlog's per-category
-  // channels default to '' meaning "inherit", and without this they could be set but never unset.
-  const fallback = typeof field.defaultValue === 'string' ? field.defaultValue : null;
-  const clearable = field.optional || fallback !== null;
+  const { clearable, cleared } = clearingOf(field);
 
   return (
     <Shell
@@ -416,7 +477,7 @@ export function ChannelIdFieldInput({
           label={param?.name ?? field.label}
           options={channelOptions(channels, field.channelTypes)}
           value={typeof value === 'string' ? value : null}
-          onChange={(next) => onChange(next ?? fallback ?? undefined)}
+          onChange={(next) => onChange(cleared(next))}
           emptyLabel={param?.emptyLabel ?? (clearable ? 'No channel' : 'Select a channel')}
           clearable={clearable}
           describedBy={describedBy(field, id)}
@@ -434,12 +495,15 @@ export function RoleIdFieldInput({
   param,
   hidden,
 }: FieldProps): ReactElement {
+  const field = descriptor as RoleIdField;
   const id = useId();
   const controlId = `${id}-control`;
 
+  const { clearable, cleared } = clearingOf(field);
+
   return (
     <Shell
-      descriptor={descriptor}
+      descriptor={field}
       param={param}
       controlId={controlId}
       describedBy={id}
@@ -449,13 +513,13 @@ export function RoleIdFieldInput({
       <span className="field-control">
         <SinglePicker
           id={controlId}
-          label={descriptor.label}
+          label={param?.name ?? field.label}
           options={roleOptions(roles)}
           value={typeof value === 'string' ? value : null}
-          onChange={onChange}
-          emptyLabel={descriptor.optional ? 'No role' : 'Select a role'}
-          clearable={descriptor.optional}
-          describedBy={describedBy(descriptor, id)}
+          onChange={(next) => onChange(cleared(next))}
+          emptyLabel={param?.emptyLabel ?? (clearable ? 'No role' : 'Select a role')}
+          clearable={clearable}
+          describedBy={describedBy(field, id)}
         />
       </span>
     </Shell>
@@ -587,5 +651,88 @@ export function UnsupportedFieldInput({ descriptor, hidden }: FieldProps): React
       Cannot render “{descriptor.label}”: unsupported field type “
       {(descriptor as { kind: string }).kind}”. This is a bug in Proton, not in your configuration.
     </div>
+  );
+}
+
+const SECONDS_PARTS = [
+  { key: 'days', label: 'days', per: 86_400 },
+  { key: 'hours', label: 'hrs', per: 3_600 },
+  { key: 'minutes', label: 'min', per: 60 },
+  { key: 'seconds', label: 'sec', per: 1 },
+] as const;
+
+function splitSeconds(total: number): Record<string, number> {
+  let left = Math.max(0, Math.trunc(total));
+
+  const parts: Record<string, number> = {};
+  for (const part of SECONDS_PARTS) {
+    parts[part.key] = Math.floor(left / part.per);
+    left -= (parts[part.key] as number) * part.per;
+  }
+
+  return parts;
+}
+
+export function SecondsFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
+  const field = descriptor as NumberField;
+  const id = useId();
+  const errorId = `${id}-error`;
+
+  const total = typeof value === 'number' ? value : 0;
+  const parts = splitSeconds(total);
+
+  const max = field.max ?? Number.MAX_SAFE_INTEGER;
+  const outOfRange = total > max || total < (field.min ?? 0);
+
+  const set = (key: string, next: number): void => {
+    const rebuilt = SECONDS_PARTS.reduce(
+      (sum, part) => sum + (part.key === key ? next : (parts[part.key] as number)) * part.per,
+      0,
+    );
+
+    onChange(Math.min(max, Math.max(field.min ?? 0, rebuilt)));
+  };
+
+  return (
+    <Shell
+      descriptor={field}
+      param={param}
+      describedBy={id}
+      className="field-seconds"
+      hidden={hidden}
+    >
+      <span className="field-control">
+        {/* One grouped control rather than four labelled rows: the spinners are one setting, and
+            each carries the field's name so it is not announced as a bare number. */}
+        <fieldset className="seconds">
+          <legend className="sr-only">{field.label}</legend>
+          {SECONDS_PARTS.map((part) => (
+            <span className="seconds-part" key={part.key}>
+              <input
+                type="number"
+                min={0}
+                aria-label={`${field.label}, ${part.label}`}
+                aria-invalid={outOfRange}
+                value={String(parts[part.key] ?? 0)}
+                onChange={(e) => set(part.key, e.target.value === '' ? 0 : e.target.valueAsNumber)}
+              />
+              <span className="seconds-unit">{part.label}</span>
+            </span>
+          ))}
+        </fieldset>
+
+        {outOfRange ? (
+          <span className="field-error" id={errorId} role="alert">
+            That comes to {total} seconds, and this setting allows at most {max}.
+          </span>
+        ) : null}
+      </span>
+    </Shell>
   );
 }

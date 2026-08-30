@@ -4,7 +4,6 @@ import {
   getGuildOverview,
   getGuildRoles,
   getModuleConfig,
-  getModuleDescriptors,
   listGuilds,
   listModules,
 } from '../server/modules.ts';
@@ -42,14 +41,6 @@ export function moduleConfigQuery(guildId: string, moduleId: string) {
     queryFn: () => getModuleConfig({ data: { guildId, moduleId } }),
     staleTime: STALE.moduleConfig,
     ...LIVE,
-  });
-}
-
-export function moduleDescriptorsQuery(guildId: string, moduleId: string) {
-  return queryOptions({
-    queryKey: queryKeys.moduleDescriptors(moduleId),
-    queryFn: () => getModuleDescriptors({ data: { guildId, moduleId } }),
-    staleTime: STALE.descriptors,
   });
 }
 

@@ -90,7 +90,7 @@ export function buildSuggestionEmbed(
 ): Embed {
   const attribution = options.anonymous
     ? 'Suggested anonymously.'
-    : `Suggested by <@${view.authorId}>`;
+    : `Suggested by <@${view.authorId}>.`;
 
   const fields: Array<Record<string, unknown>> = [
     {

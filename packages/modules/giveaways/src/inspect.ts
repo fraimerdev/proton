@@ -104,7 +104,7 @@ export async function renderMultipliers(
 
   return (
     `**Bonus entries — ${title}**\n${body}\n\n` +
-    `On today's figures you would enter with **${weight.total}** ` +
+    `On today’s figures you would enter with **${weight.total}** ` +
     `${weight.total === 1 ? 'entry' : 'entries'}${cap}.`
   );
 }

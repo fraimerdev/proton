@@ -77,6 +77,9 @@ export const EVENT_TYPES = [
 
   'verification.web_passed',
 
+  'appeals.submitted',
+  'appeals.decided',
+
   'xp.level_gained',
 
   'proton.config_changed',
@@ -93,6 +96,7 @@ export const SERVICE_EMITTED_EVENT_TYPES = [
   'proton.config_changed',
   'proton.action_executed',
   'verification.web_passed',
+  'appeals.submitted',
 ] as const satisfies readonly EventType[];
 
 export type ServiceEmittedEventType = (typeof SERVICE_EMITTED_EVENT_TYPES)[number];

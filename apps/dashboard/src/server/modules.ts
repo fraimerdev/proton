@@ -1,4 +1,9 @@
-import { caseQuerySchema, leaderboardQuerySchema } from '@proton/core';
+import {
+  BLOCK_REASON_MAX,
+  blockedMemberQuerySchema,
+  caseQuerySchema,
+  leaderboardQuerySchema,
+} from '@proton/core';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { ticketQuerySchema } from '@proton/module-tickets/query';
 import { createServerFn } from '@tanstack/react-start';
@@ -20,26 +25,30 @@ import { withAudit } from './audit.ts';
 const env = loadEnv();
 const api = new ApiClient(env.API_URL, env.API_SHARED_SECRET);
 
-// Every server reads as one Proton is in when this lookup fails, which is the list as it was
-// before presence existed. Failing the other way would tell an admin the bot had left a server
-// it is still sitting in, over nothing worse than the api being briefly unreachable.
-async function presentIds(guilds: readonly DiscordUserGuild[]): Promise<Set<string>> {
+interface Presence {
+  present: Set<string>;
+  known: boolean;
+}
+
+// Unreachable is its own answer, not a guess in either direction. Calling it joined hands an admin
+// a settings page for a server Proton is not in, whose every save lands nowhere; calling it absent
+// tells them the bot left servers it is still sitting in. The picker renders the third state.
+async function presence(guilds: readonly DiscordUserGuild[]): Promise<Presence> {
   const ids = guilds.map((guild) => guild.id);
+  if (ids.length === 0) return { present: new Set(), known: true };
 
   try {
-    return new Set(await api.guildPresence(ids));
+    const answer = await api.guildPresence(ids);
+    return { present: new Set(answer.present), known: answer.known };
   } catch (error) {
-    console.warn(
-      'the api could not say which servers Proton is in, showing them all as joined:',
-      error,
-    );
-    return new Set(ids);
+    console.warn('the api could not say which servers Proton is in:', error);
+    return { present: new Set(), known: false };
   }
 }
 
 // null rather than a guess: the permission set is unioned over the modules the api has loaded, and
 // an invite built from a stale or invented one asks Discord for the wrong scopes. The picker drops
-// the Add button and says Proton is not there, which is true either way.
+// the button and falls back to whatever presence it does know.
 async function botInvite(): Promise<BotInvite | null> {
   try {
     return { clientId: env.DISCORD_CLIENT_ID, permissions: await api.invitePermissions() };
@@ -56,10 +65,11 @@ export const listGuilds = createServerFn({ method: 'GET' })
     const user = context.session.user;
     const guilds = administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token));
 
-    const [present, invite] = await Promise.all([presentIds(guilds), botInvite()]);
+    const [joined, invite] = await Promise.all([presence(guilds), botInvite()]);
 
     return {
-      guilds: withPresence(guilds, present),
+      guilds: withPresence(guilds, joined.present),
+      presenceKnown: joined.known,
       invite,
       user: { id: user.id, name: user.name, image: user.image ?? null, email: user.email ?? null },
     };
@@ -80,11 +90,6 @@ export const getModuleConfig = createServerFn({ method: 'GET' })
   .validator(z.object({ guildId: z.string().min(1), moduleId: z.string().min(1) }))
   .handler(({ data }) => api.getModule(data.guildId, data.moduleId));
 
-export const getModuleDescriptors = createServerFn({ method: 'GET' })
-  .middleware([requireGuildAccess])
-  .validator(z.object({ guildId: z.string().min(1), moduleId: z.string().min(1) }))
-  .handler(({ data }) => api.getModuleDescriptors(data.guildId, data.moduleId));
-
 export const getGuildChannels = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(z.object({ guildId: z.string().min(1) }))
@@ -102,6 +107,34 @@ export const searchCases = createServerFn({ method: 'GET' })
     const { guildId, ...query } = data;
     return api.searchCases(guildId, query);
   });
+
+export const searchBlockedMembers = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(blockedMemberQuerySchema.extend({ guildId: z.string().min(1) }))
+  .handler(({ data }) => {
+    const { guildId, ...query } = data;
+    return api.searchBlockedMembers(guildId, query);
+  });
+
+// requireManageGuild, not requireGuildAccess: lifting a block restores somebody's way back into
+// the server, which is a moderation decision rather than something a reader may make.
+export const liftBlockedMember = createServerFn({ method: 'POST' })
+  .middleware([requireManageGuild])
+  .validator(
+    z.object({
+      guildId: z.string().min(1),
+      userId: z.string().min(1),
+      liftReason: z.string().trim().min(1).max(BLOCK_REASON_MAX),
+    }),
+  )
+  .handler(({ data, context }) =>
+    withAudit(context.session.user.id, (stamp) =>
+      api.liftBlockedMember(data.guildId, data.userId, {
+        ...stamp,
+        liftReason: data.liftReason,
+      }),
+    ),
+  );
 
 export const searchLeaderboard = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])

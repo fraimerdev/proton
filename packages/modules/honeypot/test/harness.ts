@@ -1,11 +1,14 @@
 import {
   type ActionExecutor,
   type ActionRequest,
+  type BlockedMemberStore,
+  type BlockMemberInput,
   type CaseInput,
   type CaseRecorder,
   type ChannelState,
   type DedupeStore,
   DefaultActionExecutor,
+  type EntitlementTier,
   type EventType,
   type GuildRole,
   type GuildState,
@@ -21,7 +24,9 @@ import {
   type RestRequestOptions,
   type RestResponse,
   resolvePrecheckContext,
+  type ScheduledHandler,
 } from '@proton/core';
+import { CAMO_JOB, createCamouflageHandler, reconcileCamouflage } from '../src/camouflage.ts';
 import {
   type HoneypotChannel,
   type HoneypotConfig,
@@ -31,11 +36,18 @@ import {
 } from '../src/config.ts';
 import type { HoneypotDeps } from '../src/deps.ts';
 import { handleStatsPress, type StatsOutcome } from '../src/interactions.ts';
-import { handleMessage, type TrapOutcome } from '../src/listener.ts';
+import { handleMessage, punishmentOf, type TrapOutcome } from '../src/listener.ts';
+import { markSettled, type PendingOutcome } from '../src/pending.ts';
+import type { Punishment } from '../src/plan.ts';
+import { PUNISH_JOB } from '../src/punish.ts';
+import { createPunishHandler } from '../src/punish-handler.ts';
 import { type NoticeOutcome, reconcileNotices } from '../src/service.ts';
 import {
   type CaughtInput,
+  type DmChannelStore,
+  EXEMPT_ACTION,
   type HoneypotLock,
+  type HoneypotPendingStore,
   type HoneypotStats,
   type HoneypotStatsStore,
   type NoticeBook,
@@ -66,6 +78,8 @@ export const MESSAGE = '1400000000000000001';
 
 export const NOTICE = '700000000000009002';
 
+export const DM_CHANNEL = '800000000000000001';
+
 export const INTERACTION = '600000000000000001';
 
 export const APPLICATION = '300000000000000009';
@@ -85,6 +99,10 @@ export const LOW_ROLE = '410000000000000001';
 export const BOT_ROLE = '410000000000000002';
 export const ABOVE_BOT_ROLE = '410000000000000009';
 
+export const ADMIN_ROLE = '410000000000000003';
+
+export const STAFF_ROLE = '410000000000000004';
+
 export const JOIN_MESSAGE_TYPE = 7;
 
 export const BOOST_MESSAGE_TYPE = 8;
@@ -92,6 +110,8 @@ export const BOOST_MESSAGE_TYPE = 8;
 const POSITIONS: Record<string, number> = {
   [EVERYONE_ROLE]: 0,
   [LOW_ROLE]: 1,
+  [STAFF_ROLE]: 2,
+  [ADMIN_ROLE]: 3,
   [BOT_ROLE]: 5,
   [ABOVE_BOT_ROLE]: 9,
 };
@@ -104,21 +124,99 @@ export const BOT_PERMISSIONS =
   Permissions.ManageMessages |
   Permissions.BanMembers |
   Permissions.KickMembers |
-  Permissions.ModerateMembers;
+  Permissions.ModerateMembers |
+  Permissions.ManageChannels;
 
 const CHANNELS: ChannelState[] = [
-  { id: TRAP, parentId: null, type: 0, overwrites: [] },
-  { id: THREAD, parentId: TRAP, type: 11, overwrites: [] },
-  { id: LOUNGE, parentId: null, type: 0, overwrites: [] },
-  { id: LOG, parentId: null, type: 0, overwrites: [] },
+  { id: TRAP, parentId: null, type: 0, overwrites: [], name: 'do-not-post' },
+  { id: THREAD, parentId: TRAP, type: 11, overwrites: [], name: 'thread' },
+  { id: LOUNGE, parentId: null, type: 0, overwrites: [], name: 'lounge' },
+  { id: LOG, parentId: null, type: 0, overwrites: [], name: 'server-logs' },
 ];
 
 export function trap(overrides: Partial<HoneypotChannel> = {}): HoneypotChannel {
   return honeypotChannelSchema.parse({ channelId: TRAP, ...overrides });
 }
 
-export function armed(overrides: Partial<HoneypotChannel> = {}): Partial<HoneypotConfig> {
-  return { enabled: true, channels: [trap(overrides)] };
+// Overrides spread at the top level, because what used to sit on the row — the action, the delete
+// window, the timeout length — is now module-wide. `armed({ enabled: false })` therefore switches
+// the MODULE off, not the row; a test that wants a parked trap has to say so with `channels`.
+// The direct message is off here, and on in the product — manifest.test.ts pins that default and
+// dm.test.ts drives it. Leaving it on would put two extra REST calls into every assertion about
+// what a punishment does, and make each of those tests about two things.
+export function armed(overrides: Partial<HoneypotConfig> = {}): Partial<HoneypotConfig> {
+  return { enabled: true, sendDirectMessage: false, channels: [trap()], ...overrides };
+}
+
+export function config(overrides: Partial<HoneypotConfig> = {}): HoneypotConfig {
+  return { ...honeypotDefaultConfig, ...overrides };
+}
+
+export function punishment(overrides: Partial<Punishment> = {}): Punishment {
+  return { ...punishmentOf(honeypotDefaultConfig), ...overrides };
+}
+
+export class MemoryBlockedStore implements BlockedMemberStore {
+  readonly blocks: BlockMemberInput[] = [];
+
+  async block(input: BlockMemberInput): Promise<{ blocked: boolean }> {
+    const already = this.blocks.some((held) => held.idempotencyKey === input.idempotencyKey);
+    if (!already) this.blocks.push(input);
+
+    return { blocked: !already };
+  }
+
+  async find(): Promise<null> {
+    return null;
+  }
+
+  list(): Promise<never> {
+    throw new Error('the honeypot never lists the blocked list');
+  }
+
+  lift(): Promise<never> {
+    throw new Error('the honeypot never lifts from the blocked list');
+  }
+}
+
+export class MemoryDmStore implements DmChannelStore {
+  readonly records = new Map<string, { channelId: string | null; attempts: number }>();
+
+  async recall(
+    guildId: string,
+    root: string,
+  ): Promise<{ channelId: string | null; attempts: number }> {
+    return this.records.get(`${guildId}:${root}`) ?? { channelId: null, attempts: 0 };
+  }
+
+  async remember(guildId: string, root: string, channelId: string): Promise<void> {
+    const key = `${guildId}:${root}`;
+    const held = this.records.get(key) ?? { channelId: null, attempts: 0 };
+
+    this.records.set(key, { ...held, channelId });
+  }
+
+  async attempted(guildId: string, root: string): Promise<number> {
+    const key = `${guildId}:${root}`;
+    const held = this.records.get(key) ?? { channelId: null, attempts: 0 };
+
+    const attempts = held.attempts + 1;
+    this.records.set(key, { ...held, attempts });
+
+    return attempts;
+  }
+}
+
+export class MemoryPendingStore implements HoneypotPendingStore {
+  readonly settledIds = new Set<string>();
+
+  async settle(guildId: string, userId: string): Promise<void> {
+    this.settledIds.add(`${guildId}:${userId}`);
+  }
+
+  async settled(guildId: string, userId: string): Promise<boolean> {
+    return this.settledIds.has(`${guildId}:${userId}`);
+  }
 }
 
 class MemoryDedupe implements DedupeStore {
@@ -239,11 +337,11 @@ export class MemoryStatsStore implements HoneypotStatsStore {
 
     if (!already) this.entries.push({ guildId, channelId, messageId: entry.messageId, entry });
 
-    return this.caught(guildId, channelId).length;
+    return this.total(guildId, channelId);
   }
 
   async total(guildId: string, channelId: string): Promise<number> {
-    return this.caught(guildId, channelId).length;
+    return this.caught(guildId, channelId).filter((entry) => entry.action !== EXEMPT_ACTION).length;
   }
 
   async read(guildId: string, channelId: string, now: number): Promise<HoneypotStats> {
@@ -255,7 +353,7 @@ export class MemoryStatsStore implements HoneypotStatsStore {
     const within = (ms: number): number => caught.filter((entry) => entry.at >= now - ms).length;
 
     return {
-      total: caught.length,
+      total: caught.filter((entry) => entry.action !== EXEMPT_ACTION).length,
       lastDay: within(24 * 60 * 60 * 1000),
       lastWeek: within(7 * 24 * 60 * 60 * 1000),
       byAction,
@@ -298,6 +396,12 @@ export class FakeRest implements RestProxyClient {
     const refusal = this.refusals.find((candidate) => candidate.match(options));
     if (refusal) return refusal.response;
 
+    // Discord answers the DM open with the channel it made, and the honeypot writes that id down
+    // before it sends. A fake that answered nothing would make every DM look like a closed inbox.
+    if (options.method === 'POST' && options.path === '/users/@me/channels') {
+      return { status: 200, body: { id: DM_CHANNEL } };
+    }
+
     if (options.method === 'POST' && /^\/channels\/\d+\/messages$/.test(options.path)) {
       this.#messages += 1;
 
@@ -324,6 +428,11 @@ export interface PublishedEvent {
 
 export interface TripOverrides {
   config: Partial<HoneypotConfig>;
+  tier: EntitlementTier;
+
+  roleIds: string[];
+  withoutMember: boolean;
+  payloadContent: string;
 
   channelId: string;
   authorId: string;
@@ -338,6 +447,7 @@ export interface TripOverrides {
 
 export interface SaveOverrides {
   config: Partial<HoneypotConfig>;
+  tier: EntitlementTier;
 
   moduleId: string;
   enabledAfter: boolean;
@@ -347,6 +457,7 @@ export interface SaveOverrides {
 
 export interface PressOverrides {
   config: Partial<HoneypotConfig>;
+  tier: EntitlementTier;
 
   userId: string;
 
@@ -358,7 +469,17 @@ export interface PressOverrides {
   eventId: string;
 }
 
+export interface BookedJob {
+  jobId: string;
+  naturalKey: string;
+  runAt: number;
+  data: unknown;
+}
+
 export interface Harness {
+  booked: BookedJob[];
+  cancelled: Array<{ jobId: string; naturalKey: string }>;
+
   rest: FakeRest;
   lock: MemoryHoneypotLock;
   notices: MemoryNoticeStore;
@@ -401,7 +522,15 @@ export interface Harness {
 
   remembered(): NoticeBook;
 
+  pending: MemoryPendingStore;
+  blocked: MemoryBlockedStore;
+  dms: MemoryDmStore;
+
   trip(overrides?: Partial<TripOverrides>): Promise<TrapOutcome>;
+
+  runDue(jobId: string, naturalKey: string, config?: Partial<HoneypotConfig>): Promise<void>;
+
+  left(userId: string, config?: Partial<HoneypotConfig>): Promise<PendingOutcome>;
 
   saved(overrides?: Partial<SaveOverrides>): Promise<NoticeOutcome>;
 
@@ -409,11 +538,25 @@ export interface Harness {
 }
 
 export function harness(
-  options: { botPermissions?: bigint; notices?: boolean; stats?: boolean } = {},
+  options: {
+    botPermissions?: bigint;
+    notices?: boolean;
+    stats?: boolean;
+    blocked?: boolean;
+    dms?: boolean;
+    link?: boolean;
+  } = {},
 ): Harness {
   const botPermissions = options.botPermissions ?? BOT_PERMISSIONS;
 
   let clock = Date.now();
+
+  const pending = new MemoryPendingStore();
+  const blocked = new MemoryBlockedStore();
+  const dms = new MemoryDmStore();
+
+  const booked: BookedJob[] = [];
+  const cancelled: Array<{ jobId: string; naturalKey: string }> = [];
   const now = (): number => clock;
 
   const rest = new FakeRest();
@@ -442,7 +585,12 @@ export function harness(
     new Map(
       Object.entries(POSITIONS).map(([id, position]) => [
         id,
-        { id, permissions: id === BOT_ROLE ? botPermissions : 0n, position },
+        {
+          id,
+          permissions:
+            id === BOT_ROLE ? botPermissions : id === ADMIN_ROLE ? Permissions.Administrator : 0n,
+          position,
+        },
       ]),
     );
 
@@ -501,23 +649,66 @@ export function harness(
     now,
     ...(options.notices === false ? {} : { notices }),
     ...(options.stats === false ? {} : { stats }),
+    pending,
+    ...(options.blocked === false ? {} : { blocked }),
+    ...(options.dms === false ? {} : { dms }),
+    guildName: async () => 'Test Guild',
+    ...(options.link === false
+      ? {}
+      : { linkSecret: 'a'.repeat(32), linkBaseUrl: 'https://prtn.xyz' }),
   };
 
-  const moduleContext = (config: Partial<HoneypotConfig> = {}): ModuleContext<HoneypotConfig> => ({
+  const moduleContext = (
+    config: Partial<HoneypotConfig> = {},
+    tier?: EntitlementTier,
+    scheduler = true,
+  ): ModuleContext<HoneypotConfig> => ({
     guildId: GUILD,
     config: { ...honeypotDefaultConfig, ...config },
+    ...(tier ? { tier } : {}),
     executor: recording,
     logger,
     publish: async (type, naturalKey, payload) => {
       published.push({ type, naturalKey, payload });
     },
+
+    ...(scheduler
+      ? {
+          schedule: async (jobId, runAt, naturalKey, data, options) => {
+            const already = booked.find(
+              (job) => job.jobId === jobId && job.naturalKey === naturalKey,
+            );
+
+            if (already && options?.replace !== true) return { scheduled: false, replaced: false };
+
+            if (already) {
+              already.runAt = runAt.getTime();
+              already.data = data;
+              return { scheduled: true, replaced: true };
+            }
+
+            booked.push({ jobId, naturalKey, runAt: runAt.getTime(), data });
+            return { scheduled: true, replaced: false };
+          },
+
+          cancel: async (jobId, naturalKey) => {
+            cancelled.push({ jobId, naturalKey });
+
+            const index = booked.findIndex(
+              (job) => job.jobId === jobId && job.naturalKey === naturalKey,
+            );
+
+            if (index >= 0) booked.splice(index, 1);
+          },
+        }
+      : {}),
   });
 
   const messagePayload = (overrides: Partial<TripOverrides>): Record<string, unknown> => ({
     id: overrides.messageId ?? MESSAGE,
     channel_id: overrides.channelId ?? TRAP,
     guild_id: GUILD,
-    content: 'hello',
+    content: overrides.payloadContent ?? 'hello',
     timestamp: '2026-08-14T09:01:00.000000+00:00',
     edited_timestamp: null,
     tts: false,
@@ -537,6 +728,17 @@ export function harness(
       avatar: null,
       bot: overrides.bot ?? false,
     },
+
+    // Discord puts `member` on every guild MESSAGE_CREATE. Omitting it here would make the
+    // exemption check read every fixture as a member it could not resolve.
+    ...(overrides.withoutMember
+      ? {}
+      : {
+          member: {
+            roles: overrides.roleIds ?? [],
+            joined_at: '2026-08-15T12:00:00.000000+00:00',
+          },
+        }),
     ...(overrides.webhookId ? { webhook_id: overrides.webhookId } : {}),
   });
 
@@ -609,6 +811,8 @@ export function harness(
     stats,
     logs,
     published,
+    booked,
+    cancelled,
     memberRoles,
     deps,
     now,
@@ -653,6 +857,40 @@ export function harness(
 
     remembered: () => notices.read(GUILD),
 
+    pending,
+    blocked,
+    dms,
+
+    async runDue(jobId, naturalKey, config = {}) {
+      const job = booked.find(
+        (candidate) => candidate.jobId === jobId && candidate.naturalKey === naturalKey,
+      );
+
+      if (!job) throw new Error(`no '${jobId}' job is booked under '${naturalKey}'`);
+
+      const handlers: Record<string, ScheduledHandler<HoneypotConfig> | undefined> = {
+        [PUNISH_JOB]: createPunishHandler(deps),
+        [CAMO_JOB]: createCamouflageHandler(deps),
+      };
+
+      const handler = handlers[jobId];
+      if (!handler) throw new Error(`the honeypot harness drives no '${jobId}' handler`);
+
+      await handler(job.data, moduleContext(config));
+    },
+
+    async left(userId, config = {}) {
+      const event: ProtonEvent = {
+        id: `member.left:${userId}`,
+        type: 'member.left',
+        guildId: GUILD,
+        occurredAt: now(),
+        payload: { user: { id: userId } },
+      };
+
+      return markSettled(event, moduleContext(config), deps);
+    },
+
     async trip(overrides = {}) {
       const messageId = overrides.messageId ?? MESSAGE;
 
@@ -664,7 +902,7 @@ export function harness(
         payload: overrides.payload ?? messagePayload(overrides),
       };
 
-      return handleMessage(event, moduleContext(overrides.config), deps);
+      return handleMessage(event, moduleContext(overrides.config, overrides.tier), deps);
     },
 
     async saved(overrides = {}) {
@@ -689,7 +927,14 @@ export function harness(
         },
       };
 
-      return reconcileNotices(event, moduleContext(overrides.config), deps);
+      // Both listeners subscribe to proton.config_changed, so a save delivers to both. Driving
+      // only one here would let a schedule that never books look fine.
+      const ctx = moduleContext(overrides.config, overrides.tier);
+
+      const outcome = await reconcileNotices(event, ctx, deps);
+      await reconcileCamouflage(event, ctx);
+
+      return outcome;
     },
 
     async press(customId, overrides = {}) {
@@ -703,7 +948,7 @@ export function harness(
         payload: pressPayload(customId, { ...overrides, interactionId }),
       };
 
-      return handleStatsPress(event, moduleContext(overrides.config), deps);
+      return handleStatsPress(event, moduleContext(overrides.config, overrides.tier), deps);
     },
   };
 }

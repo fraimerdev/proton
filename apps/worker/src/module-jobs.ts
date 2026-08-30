@@ -8,6 +8,7 @@ import type {
 } from '@proton/core';
 import { type ConnectionOptions, Queue, Worker } from 'bullmq';
 import { ConfigUnavailableError } from './config-provider.ts';
+import { logQueueConnectionErrors } from './job-errors.ts';
 import { moduleExecutor } from './module-actions.ts';
 import type { ModulePublisherFactory } from './module-publish.ts';
 import type { ModuleSchedulerFactory } from './module-schedule.ts';
@@ -189,6 +190,8 @@ export function startModuleJobs(deps: ModuleJobsDeps): ModuleJobs {
       stack: error.stack,
     });
   });
+
+  logQueueConnectionErrors('module jobs', deps.logger, queue, worker);
 
   for (const { key, job } of declared) {
     void queue

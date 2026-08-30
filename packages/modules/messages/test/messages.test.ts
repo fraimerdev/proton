@@ -355,7 +355,7 @@ describe('/message post', () => {
     });
 
     expect(h.sends()).toHaveLength(0);
-    expect(h.lastSaid()).toContain("isn't fully set up");
+    expect(h.lastSaid()).toContain('a fault on my side');
     expect(
       h.logs.some((line) => line.level === 'error' && line.message.includes('applicationId')),
     ).toBe(true);
@@ -523,7 +523,7 @@ describe('the /message send modal submission', () => {
     await h.modal(modalEvent({ [DESCRIPTION_FIELD]: 'x' }), { deps: {} });
 
     expect(h.sends()).toHaveLength(0);
-    expect(h.lastSaid()).toContain("isn't fully set up");
+    expect(h.lastSaid()).toContain('a fault on my side');
   });
 
   test('leaves another module’s modal alone', async () => {

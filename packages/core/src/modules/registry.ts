@@ -50,6 +50,7 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   unlock: 0n,
   create_channel: Permissions.ManageRoles,
   create_role: 0n,
+  edit_role: 0n,
   delete_channel: 0n,
   edit_channel: Permissions.ManageRoles,
   set_channel_overwrite: 0n,
@@ -63,6 +64,10 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   automod_rule_delete: 0n,
   giveaway_draw: 0n,
   create_dm: 0n,
+  set_bot_nickname: 0n,
+  set_bot_profile: 0n,
+  add_bot_role: 0n,
+  remove_bot_role: 0n,
 };
 
 // Not requiredPermissionsFor(kind, payload): a rung carries no channelId until the engine merges
@@ -300,7 +305,8 @@ export class ModuleRegistry {
         enabled: false,
         disabledReason: {
           code: 'missing_dependency',
-          humanReason: "This module isn't part of the Proton deployment running here.",
+          humanReason:
+            "Proton isn't running this module. Nothing in this server's settings can change that.",
         },
       };
     }
@@ -316,9 +322,9 @@ export class ModuleRegistry {
           humanReason:
             `${manifest.name} can't run without ${intentLabels(missingIntents).join(' and ')}, ` +
             ((missingIntents & PRIVILEGED_INTENTS) !== 0
-              ? 'which is switched off for this bot. Turn it on in the Discord developer ' +
+              ? 'which is switched off for Proton. Turn it on in the Discord developer ' +
                 'portal, under Bot → Privileged Gateway Intents.'
-              : "which this Proton deployment doesn't connect with. Nothing in this server's " +
+              : "which Proton isn't set up to receive. Nothing in this server's " +
                 'settings can change that.'),
         },
       };
@@ -335,7 +341,7 @@ export class ModuleRegistry {
           humanReason:
             `${manifest.name} needs the ${permissionLabels(lacking).join(', ')} permission` +
             `${permissionLabels(lacking).length === 1 ? '' : 's'}, which Proton doesn't have in ` +
-            'this server. Grant it in Server Settings → Roles, or re-invite the bot with it.',
+            'this server. Grant it in Server Settings → Roles, or re-invite Proton with it.',
         },
       };
     }
@@ -348,8 +354,8 @@ export class ModuleRegistry {
           disabledReason: {
             code: 'missing_dependency',
             humanReason:
-              `${manifest.name} needs another Proton module that this deployment isn't ` +
-              "running. Nothing in this server's settings can change that.",
+              `${manifest.name} needs another Proton module that isn't running here. ` +
+              "Nothing in this server's settings can change that.",
           },
         };
       }

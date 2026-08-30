@@ -202,7 +202,7 @@ function EmbedCard({
             </span>
           ) : null}
           {embed.footer?.text && footerAt ? <span className="dc-dot">•</span> : null}
-          {footerAt ? <span>{footerAt}</span> : null}
+          {footerAt ? <span suppressHydrationWarning>{footerAt}</span> : null}
         </div>
       ) : null}
     </div>
@@ -445,7 +445,13 @@ export function MessagePreview({
               <div className="dc-head">
                 <span className="dc-author">{botName ?? 'Proton'}</span>
                 <span className="dc-app">APP</span>
-                <span className="dc-time">{stamp(at)}</span>
+                {/* Both halves of this string are ambient: the wall clock when no `now` is
+                    supplied, and the viewer's locale and timezone in either case. The server
+                    renders one and the browser another, so the text is allowed to differ rather
+                    than logged as a hydration mismatch on every page that shows a preview. */}
+                <span className="dc-time" suppressHydrationWarning>
+                  {stamp(at)}
+                </span>
               </div>
 
               {message.v2.length > 0 ? (

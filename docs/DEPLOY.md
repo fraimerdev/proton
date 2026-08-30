@@ -144,6 +144,13 @@ openssl rand -base64 32   # API_SHARED_SECRET
 openssl rand -base64 32   # VERIFY_LINK_SECRET
 ```
 
+`VERIFY_LINK_SECRET` now signs two things: verification links, which live 15 minutes, and **appeal
+links, which live 30 days**. Rotating it therefore invalidates up to a month of outstanding appeal
+links — every banned member holding one is told the link is no longer valid, with no way to mint
+them a new one short of the punishing module catching them again. Rotate it deliberately, and only
+alongside a decision about the appeals in flight. The worker and the dashboard must always hold the
+same value; the API never sees a token at all.
+
 `PORT` and `HOST` are intentionally absent from `.env` — three services listen and they cannot
 share one `PORT`, so pm2 sets both per process. Bun's `--env-file` does not override a real
 environment variable, so the pm2 values win.
@@ -326,6 +333,11 @@ bash deploy/deploy.sh --no-pull
 ```
 
 Migrations do not roll back. A release that changed the schema needs a forward fix, not a checkout.
+
+Rolling back past the `branding` module is the one case where a checkout is not enough. Proton wears
+a per-server nickname, avatar, banner and bio that live on Discord, not in this repo, and removing
+the code that sets them does not remove them — it removes the only thing that could. Switch the
+module off in each affected server first, let the teardown run, and only then roll back.
 
 ## 12. Backups
 

@@ -23,7 +23,9 @@ export async function reply(
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
 
-      content: content.slice(0, 2000),
+      // Omitted rather than sent empty: /rank answers with the card alone, and Discord reads a
+      // present-but-empty content as a caption to render rather than as no caption at all.
+      ...(content ? { content: content.slice(0, 2000) } : {}),
       ephemeral: options.ephemeral ?? false,
       ...(options.files?.length ? { files: options.files } : {}),
     },

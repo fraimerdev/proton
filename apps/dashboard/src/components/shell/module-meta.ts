@@ -30,17 +30,32 @@ export function isCategory(value: string): value is Category {
   return (CATEGORY_ORDER as readonly string[]).includes(value);
 }
 
+// Presentation, not architecture: branding is an ordinary module underneath — it needs the config
+// store, the audit trail and the reconciliation listener — but it configures Proton's own identity
+// in this server rather than adding a feature to it, so listing it beside Tickets and Tags reads
+// wrong. It sits above the categories on both surfaces instead.
+const SERVER_LEVEL: ReadonlySet<string> = new Set(['branding']);
+
+export function isServerLevel(moduleId: string): boolean {
+  return SERVER_LEVEL.has(moduleId);
+}
+
 // Held here rather than on the manifest: a module tells the worker what it does by doing it, and
-// adding a prose field to ModuleManifest would put dashboard copy in twenty-seven packages the
+// adding a prose field to ModuleManifest would put dashboard copy in twenty-nine packages the
 // worker loads. A module with no entry falls back to its category, which is never wrong.
 const MODULE_BLURBS: Record<string, string> = {
+  appeals:
+    'The forms somebody fills in to argue against a ban, and where your moderators read and decide them.',
   antinuke: 'Trips a breaker when one member deletes channels, roles or webhooks too quickly.',
   antiraid: 'Watches the join rate and how new the accounts are, and gates a suspected raid.',
   automod: 'Checks every message for spam, banned words, links and shouting.',
   backup: 'Snapshots this server’s channels and roles, and previews a restore before it runs.',
+  branding:
+    'What Proton is called and what it looks like in this server — nickname, avatar, banner and bio. Only here; other servers are unaffected.',
   cases:
     'Every action Proton takes, numbered and searchable, with the ladder that escalates repeat warnings.',
-  counters: 'Channels whose names carry a count of this server, rewritten every ten minutes.',
+  counters:
+    'Channels whose names carry a count of this server’s members, roles or channels. Proton makes them, locks them, and rewrites them every ten minutes.',
   giveaways: 'Giveaways members enter with a button, drawn and announced by Proton.',
   help: 'The /help overview of what Proton does, and the link that sends a member back to this dashboard.',
   honeypot:
@@ -106,6 +121,12 @@ export interface BrowseView {
 // view-registry.test.tsx fails if the two ever disagree.
 export const BROWSE_VIEWS: readonly BrowseView[] = [
   { moduleId: 'cases', viewId: 'cases', title: 'Cases', icon: 'scales' },
+  {
+    moduleId: 'moderation',
+    viewId: 'blocked',
+    title: 'Blocked members',
+    icon: 'shield-slash',
+  },
   { moduleId: 'leveling', viewId: 'leaderboard', title: 'Leaderboard', icon: 'ranking' },
   { moduleId: 'tags', viewId: 'tags', title: 'Tags', icon: 'tag' },
   { moduleId: 'tickets', viewId: 'tickets', title: 'Tickets', icon: 'ticket' },
@@ -117,6 +138,7 @@ const MODULE_ICON_FALLBACK: IconName = 'puzzle-piece';
 
 const PHOSPHOR: Record<string, IconName> = {
   activity: 'pulse',
+  scales: 'scales',
   'alarm-clock': 'alarm',
   archive: 'archive',
   'bar-chart-3': 'chart-bar',
@@ -126,6 +148,7 @@ const PHOSPHOR: Record<string, IconName> = {
   'hand-wave': 'hand-waving',
   hash: 'hash',
   'help-circle': 'question',
+  'id-card': 'identification-badge',
   'layout-template': 'layout',
   'list-checks': 'list-checks',
   lightbulb: 'lightbulb',
@@ -186,10 +209,20 @@ export function moduleState(module: ModuleSummary): ModuleState {
 // still names a module that was saved while switched off.
 export const SWITCH_NOTE = 'Turn this module on or off for this server.';
 
+// A server-level entry is not a module the server switches on to gain a feature, so the generic
+// note would be describing something the page is not.
+const SERVER_LEVEL_SWITCH_NOTES: Record<string, string> = {
+  branding: 'Use this name and these pictures for Proton in this server.',
+};
+
+export function switchNote(moduleId: string): string {
+  return SERVER_LEVEL_SWITCH_NOTES[moduleId] ?? SWITCH_NOTE;
+}
+
 const WHERE_TO_FIX: Record<string, string> = {
   missing_intent: 'Discord Developer Portal → Proton → Bot → Privileged Gateway Intents',
   missing_permission: 'Server Settings → Roles → Proton',
-  missing_dependency: 'Proton’s own deployment — no server setting changes this',
+  missing_dependency: 'Proton’s operator — no server setting changes this',
   // Not "Billing →": there is no billing surface in the product, and PRODUCT.md forbids
   // inventing one. The plan is shown on the server home, which is somewhere that exists.
   insufficient_entitlement: 'Modules → This server → Plan, for the tier this server is on',

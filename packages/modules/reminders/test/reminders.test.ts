@@ -158,7 +158,7 @@ describe('/remind', () => {
     await h.run('remind', remind(), { scheduler: false });
 
     expect(h.reminders.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('no scheduler');
+    expect(h.replyContent()).toContain('no way to come back at that time');
     expect(h.logs.some((line) => line.level === 'error')).toBe(true);
   });
 
@@ -169,7 +169,7 @@ describe('/remind', () => {
     await h.run('remind', remind());
 
     expect(h.reminders.rows.size).toBe(0);
-    expect(h.replyContent()).toContain("couldn't book");
+    expect(h.replyContent()).toContain('threw it away');
     expect(
       h.logs.some((line) => line.level === 'error' && line.message.includes('unreachable')),
     ).toBe(true);
@@ -189,7 +189,7 @@ describe('/remind', () => {
 
     await h.run('remind', remind(), { deps: {} });
 
-    expect(h.replyContent()).toContain("isn't fully wired up");
+    expect(h.replyContent()).toContain('a fault on my side');
     expect(h.logs.some((line) => line.level === 'error' && line.message.includes('store'))).toBe(
       true,
     );

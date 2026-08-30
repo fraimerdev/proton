@@ -6,6 +6,7 @@ import { GatewayIntentBits } from 'discord-api-types/v10';
 import { createModuleRegistry, MODULES } from '../src/index.ts';
 
 const SHIPPED_MODULE_IDS = [
+  'appeals',
   'help',
   'ping',
   'cases',
@@ -37,6 +38,7 @@ const SHIPPED_MODULE_IDS = [
   'honeypot',
   'counters',
   'suggestions',
+  'branding',
 ];
 
 describe('shipped module registry', () => {
@@ -112,6 +114,9 @@ describe('shipped module registry', () => {
       ['ManageMessages', Permissions.ManageMessages],
       ['AddReactions', Permissions.AddReactions],
       ['ManageGuild', Permissions.ManageGuild],
+      // Branding widened the consent screen. Every guild installed before it keeps the older
+      // grant, so this is the line that says the invite link itself has to change.
+      ['ChangeNickname', Permissions.ChangeNickname],
     ];
 
     expect(named.filter(([, bit]) => (invited & bit) === 0n).map(([name]) => name)).toEqual([]);
@@ -162,5 +167,15 @@ describe('shipped module registry', () => {
     ).map((manifest) => manifest.id);
 
     expect(empty).toEqual([]);
+  });
+
+  // Honeypot's Ban Appeal points at one of appeals' forms by id, so shipping honeypot without
+  // appeals would leave that setting pointing at a module nobody could configure. Asserted here
+  // rather than with dependsOn, which would report *honeypot* disabled over a packaging mistake
+  // and take the trap offline.
+  test('appeals ships wherever honeypot does', () => {
+    const ids = MODULES.map((m) => m.id);
+
+    expect(ids.includes('honeypot') && ids.includes('appeals')).toBe(true);
   });
 });

@@ -213,13 +213,16 @@ export async function handleWebPassed(
 
   // Nobody to reply to — the member is on the website, not in Discord — so a failure here is only
   // ever visible in the log, which is why it is logged at error rather than warn.
-  const result = await runVerification(ctx, plan, userId, event.id);
+  const result = await runVerification(ctx, plan, userId, event.id, deps);
 
   if (!result.verified) {
-    ctx.logger.error(
-      `${userId} passed verification on the website and was NOT given their role: ${result.message}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, jti },
-    );
+    const line = `${userId} passed verification on the website and was NOT given their role: ${result.message}`;
+    const where = { guildId: ctx.guildId, moduleId: MODULE_ID, jti };
+
+    // A blocked member is the gate working, not the gate broken, so it does not page anyone.
+    if (result.blocked) ctx.logger.warn(line, where);
+    else ctx.logger.error(line, where);
+
     return { action: 'refused', reason: result.message };
   }
 

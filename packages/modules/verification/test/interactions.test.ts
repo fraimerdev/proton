@@ -202,7 +202,7 @@ describe('a deployment that was never fully wired', () => {
       const outcome = await h.press(verifyPress(), { config: mode.config, deps: {} });
 
       expect(outcome.action).toBe('refused');
-      expect(h.lastTold()).toContain("isn't fully set up");
+      expect(h.lastTold()).toContain('not anything you did');
       expect(h.roleCalls()).toEqual([]);
     });
   }
@@ -221,7 +221,7 @@ describe('a deployment that was never fully wired', () => {
     }
 
     expect(h.told()).toHaveLength(2);
-    expect(h.told().every((content) => content.includes("isn't fully set up"))).toBe(true);
+    expect(h.told().every((content) => content.includes('not anything you did'))).toBe(true);
   });
 
   test('names the port the deployment forgot, in the log, for the admin who has to fix it', async () => {

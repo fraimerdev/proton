@@ -5,8 +5,11 @@ import { MODULE_ID, REFRESH_INTERVAL_MS } from '../src/config.ts';
 import { createCountersModule } from '../src/index.ts';
 import { REFRESH_JOB, REFRESH_KEY } from '../src/refresh.ts';
 import {
+  BOT_PERMISSIONS,
   COUNTER_A,
   COUNTER_B,
+  CREATED,
+  GUILD,
   harness,
   MEMBER_COUNT,
   NO_CACHED_STATE,
@@ -14,8 +17,20 @@ import {
   subcommand,
 } from './harness.ts';
 
-const MEMBERS = { channelId: COUNTER_A, template: 'Members: {count}', source: 'members' } as const;
-const ROLES = { channelId: COUNTER_B, template: 'Roles: {count}', source: 'roles' } as const;
+const MEMBERS = {
+  id: COUNTER_A,
+  channelId: COUNTER_A,
+  template: 'Members: {count}',
+  source: 'members',
+} as const;
+const ROLES = {
+  id: COUNTER_B,
+  channelId: COUNTER_B,
+  template: 'Roles: {count}',
+  source: 'roles',
+} as const;
+
+const OWNED = { id: 'members', template: 'Members: {count}', source: 'members' } as const;
 
 const refreshSubcommand = subcommand('refresh');
 
@@ -116,7 +131,7 @@ describe('/counters refresh', () => {
     await h.run(refreshSubcommand, { config: { counters: [MEMBERS] } });
 
     expect(h.patches()).toHaveLength(0);
-    expect(h.replyContent()).toContain("isn't fully wired up");
+    expect(h.replyContent()).toContain('nowhere to come from');
     expect(
       h.logs.some((line) => line.level === 'error' && line.message.includes('guildState')),
     ).toBe(true);
@@ -207,6 +222,148 @@ describe('the refresh loop', () => {
     expect(
       h.logs.some((line) => line.level === 'error' && line.message.includes('/counters refresh')),
     ).toBe(true);
+  });
+});
+
+describe('a counter Proton makes the channel for', () => {
+  test('makes a voice channel at the top of the list and records which one it is', async () => {
+    const h = harness();
+
+    await h.refresh({ config: { counters: [OWNED] } });
+
+    expect(h.creates()).toHaveLength(1);
+    expect(h.creates()[0]?.path).toBe(`/guilds/${GUILD}/channels`);
+    expect(h.creates()[0]?.body).toEqual({
+      name: `Members: ${MEMBER_COUNT}`,
+      type: 2,
+      position: 0,
+    });
+
+    expect(h.owned.rows.get(OWNED.id)).toBe(CREATED);
+  });
+
+  test('is born showing the number, so it is never renamed straight afterwards', async () => {
+    const h = harness();
+
+    await h.refresh({ config: { counters: [OWNED] } });
+
+    expect(h.patches()).toHaveLength(0);
+  });
+
+  test('stops members joining it, which is what makes it a sign rather than a room', async () => {
+    const h = harness({ botPermissions: BOT_PERMISSIONS | Permissions.ManageRoles });
+
+    await h.refresh({ config: { counters: [OWNED] } });
+
+    expect(h.overwrites()).toHaveLength(1);
+    expect(h.overwrites()[0]?.path).toBe(`/channels/${CREATED}/permissions/${GUILD}`);
+    expect(h.overwrites()[0]?.body).toEqual({
+      type: 0,
+      allow: '0',
+      deny: String(Permissions.Connect),
+    });
+  });
+
+  test('renames the channel it already made instead of making a second one', async () => {
+    const h = harness();
+    h.owned.rows.set(OWNED.id, COUNTER_A);
+
+    await h.refresh({ config: { counters: [OWNED] } });
+
+    expect(h.creates()).toHaveLength(0);
+    expect(h.patches()).toHaveLength(1);
+    expect(h.patches()[0]?.path).toBe(`/channels/${COUNTER_A}`);
+  });
+
+  test('records nothing and says why when Discord refuses to make it', async () => {
+    const h = harness();
+    h.rest.createResponse = { status: 403, body: { message: 'Missing Permissions' } };
+
+    await h.run(refreshSubcommand, { config: { counters: [OWNED] } });
+
+    expect(h.owned.rows.size).toBe(0);
+    expect(h.replyContent()).toContain('could not make the channel');
+    expect(h.replyContent()).toContain(`Members: ${MEMBER_COUNT}`);
+  });
+
+  test('counts a channel it could not lock as made, and says it is not locked', async () => {
+    // The harness bot has no Manage Roles, which is exactly what refuses the lock.
+    const h = harness();
+
+    await h.run(refreshSubcommand, { config: { counters: [OWNED] } });
+
+    expect(h.owned.rows.get(OWNED.id)).toBe(CREATED);
+    expect(h.replyContent()).toContain('1 created');
+    expect(h.replyContent()).toContain('Manage Roles');
+  });
+
+  test('refuses to make one when the deployment cannot record it, and still refreshes the rest', async () => {
+    const h = harness();
+
+    await h.run(refreshSubcommand, {
+      config: { counters: [MEMBERS, OWNED] },
+      deps: { guildState: h.stateStore },
+    });
+
+    expect(h.creates()).toHaveLength(0);
+    expect(h.patches()).toHaveLength(1);
+    expect(h.replyContent()).toContain('nowhere to record');
+  });
+
+  test('leaves every counter alone rather than duplicating when the record cannot be read', async () => {
+    const h = harness();
+    h.owned.failOn = 'list';
+
+    await h.run(refreshSubcommand, { config: { counters: [MEMBERS, OWNED] } });
+
+    expect(h.creates()).toHaveLength(0);
+    expect(h.patches()).toHaveLength(0);
+    expect(h.replyContent()).toContain('duplicates');
+  });
+
+  test('says so, and records nothing, when it made the channel but could not file it', async () => {
+    const h = harness();
+    h.owned.failOn = 'attach';
+
+    await h.run(refreshSubcommand, { config: { counters: [OWNED] } });
+
+    expect(h.creates()).toHaveLength(1);
+    expect(h.owned.rows.size).toBe(0);
+    expect(h.replyContent()).toContain('could not record it');
+  });
+
+  test('refuses to make a second channel for a counter whose first was never filed', async () => {
+    const h = harness();
+    h.owned.failOn = 'attach';
+
+    await h.refresh({ config: { counters: [OWNED] } });
+
+    h.owned.failOn = null;
+    await h.run(refreshSubcommand, { config: { counters: [OWNED] } });
+
+    expect(h.creates()).toHaveLength(1);
+    expect(h.replyContent()).toContain('stray counter channel');
+  });
+
+  test('does not make the channel until it knows the number to put on it', async () => {
+    const h = harness();
+    delete h.state.memberCount;
+
+    await h.refresh({ config: { counters: [OWNED] } });
+
+    expect(h.creates()).toHaveLength(0);
+    expect(h.owned.rows.size).toBe(0);
+  });
+
+  test('forgets a counter that was deleted, and leaves its channel where it is', async () => {
+    const h = harness();
+    h.owned.rows.set('gone', CREATED);
+
+    await h.refresh({ config: { counters: [MEMBERS] } });
+
+    expect(h.owned.rows.has('gone')).toBe(false);
+    expect(h.calls().some((call) => call.method === 'DELETE')).toBe(false);
+    expect(h.logs.some((line) => line.message.includes(CREATED))).toBe(true);
   });
 });
 

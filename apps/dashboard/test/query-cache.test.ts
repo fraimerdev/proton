@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { hashKey } from '@tanstack/react-query';
 import { redirect } from '@tanstack/react-router';
+import { MODULE_ROUTE_IDS } from '../src/components/module/paths.ts';
 import { makeQueryClient } from '../src/lib/query-client.ts';
 import { queryKeys, STALE } from '../src/lib/query-keys.ts';
 
 const SRC = join(import.meta.dir, '..', 'src');
+const ROUTES = join(SRC, 'routes', 'dashboard');
+const PAGES = join(ROUTES, '$guildId');
 
 function code(source: string): string {
   return source
@@ -14,6 +17,24 @@ function code(source: string): string {
     .filter((line) => !line.trimStart().startsWith('//'))
     .join('\n');
 }
+
+function read(...parts: string[]): string {
+  return readFileSync(join(SRC, ...parts), 'utf8');
+}
+
+function route(...parts: string[]): string {
+  return readFileSync(join(ROUTES, ...parts), 'utf8');
+}
+
+function occurrences(source: string, needle: string): number {
+  return source.split(needle).length - 1;
+}
+
+// The 29 module pages replaced the one dynamic $moduleId route, so every invariant this file used
+// to assert about that single file now has to hold 29 times over. Read once, keyed by module id.
+const pages = new Map(
+  MODULE_ROUTE_IDS.map((id) => [id, readFileSync(join(PAGES, `${id}.tsx`), 'utf8')]),
+);
 
 const GUILD = '900000000000000001';
 const OTHER = '900000000000000002';
@@ -140,34 +161,99 @@ describe('staleness', () => {
   });
 });
 
-describe('loaders go through the cache', () => {
-  const ROUTES = join(SRC, 'routes', 'dashboard');
+// Every assertion below is a scan over files picked by name, so a rename would quietly leave it
+// asserting over nothing. This is the guard: the ids and the directory have to agree first.
+describe('the module pages this file asserts over', () => {
+  test('every routed module id has a page, and every page is a routed module id', () => {
+    const onDisk = readdirSync(PAGES)
+      .filter((name) => name.endsWith('.tsx') && name !== 'index.tsx')
+      .map((name) => name.slice(0, -'.tsx'.length))
+      .sort();
 
-  function route(...parts: string[]): string {
-    return readFileSync(join(ROUTES, ...parts), 'utf8');
+    expect(onDisk).toEqual([...MODULE_ROUTE_IDS].sort());
+  });
+
+  // A floor, not an equality: a thirtieth module is a normal Tuesday, but a collapse back towards
+  // one page would leave every scan below asserting almost nothing and still green.
+  test('there are 29 of them, not the one dynamic route they replaced', () => {
+    expect(pages.size).toBeGreaterThanOrEqual(29);
+  });
+
+  // The id is written three times per file, and the middle one is the cache key: a page whose
+  // useModuleForm says 'welcome' under a route that says 'welcomes' reads, edits and saves another
+  // module's config entry. This is what replaced the dynamic route's key={moduleId} — the component
+  // is no longer shared across module ids, so nothing can carry the previous module's edits in.
+  test('a page, its route path, its loader and its form all name the same module', () => {
+    for (const [id, source] of pages) {
+      expect(`${id}: route path`).toBe(
+        source.includes(`createFileRoute('/dashboard/$guildId/${id}')`)
+          ? `${id}: route path`
+          : `${id}: missing createFileRoute('/dashboard/$guildId/${id}')`,
+      );
+
+      const named = [
+        ...source.matchAll(/moduleRoute\('([^']+)'/g),
+        ...source.matchAll(/useModuleForm\(guildId, '([^']+)'/g),
+      ].map((match) => match[1]);
+
+      expect(`${id}: ${named.join(',')}`).toBe(`${id}: ${id},${id}`);
+    }
+  });
+
+  // The dynamic route re-seeded four useStates by hand when :moduleId changed. useModuleForm holds
+  // edited paths instead, and its only re-seed is the one below.
+  test('no page re-seeds its form state by hand', () => {
+    for (const [id, source] of pages) {
+      expect(`${id}: ${source.includes('seededFor')}`).toBe(`${id}: false`);
+    }
+  });
+});
+
+describe('loaders go through the cache', () => {
+  // Every loader in the app: the guild picker, the guild shell, the module list, the verify link,
+  // and the one moduleRoute spreads into all 29 module pages.
+  const LOADERS: readonly [string, string][] = [
+    ['dashboard/index.tsx', route('index.tsx')],
+    ['dashboard/$guildId.tsx', route('$guildId.tsx')],
+    ['dashboard/$guildId/index.tsx', route('$guildId', 'index.tsx')],
+    ['components/module/route.tsx', read('components', 'module', 'route.tsx')],
+    ['verify/$token.tsx', read('routes', 'verify', '$token.tsx')],
+  ];
+
+  // The loader object ends where the route's other options begin. `component:` is lowercase on
+  // purpose — it must not match pendingComponent: or errorComponent:.
+  function loaderBody(source: string): string {
+    const from = source.indexOf('loader:');
+    if (from < 0) throw new Error('no loader in this route');
+
+    const ends = ['head:', 'component:']
+      .map((marker) => source.indexOf(marker, from))
+      .filter((index) => index > from);
+
+    return code(source.slice(from, Math.min(...ends)));
   }
 
-  test('no route loader calls a server function directly any more', () => {
-    const loaders = [
-      route('index.tsx'),
-      route('$guildId.tsx'),
-      route('$guildId', 'index.tsx'),
-      route('$guildId', '$moduleId.tsx'),
-    ];
-
-    for (const source of loaders) {
-      // A route whose data its parent layout already awaited declares no loader at all — the
-      // overview reads only the module list, which $guildId.tsx has to fetch anyway.
-      if (!source.includes('loader:')) continue;
-
-      const body = code(source.slice(source.indexOf('loader:'), source.indexOf('component:')));
+  test('no route loader calls a server function directly', () => {
+    for (const [name, source] of LOADERS) {
+      const body = loaderBody(source);
 
       // fetchQuery, not ensureQueryData: ensureQueryData resolves from the cache at any age and
       // revalidates through prefetchQuery, whose rejection is swallowed — so a loader built on
       // it can neither await fresh data nor see the refusal it is supposed to redirect on.
-      expect(body).toContain('fetchQuery(');
-      expect(body).not.toContain('ensureQueryData');
-      expect(body).not.toMatch(/\b(listGuilds|listModules|getModuleConfig|getGuild\w+)\(/);
+      expect(`${name}: ${body.includes('fetchQuery(')}`).toBe(`${name}: true`);
+      expect(`${name}: ${body.includes('ensureQueryData')}`).toBe(`${name}: false`);
+      expect(
+        `${name}: ${/\b(listGuilds|listModules|getModuleConfig|getGuild\w+)\(/.test(body)}`,
+      ).toBe(`${name}: false`);
+    }
+  });
+
+  // All 29 spread one loader out of moduleRoute. The split between a browse tab and the settings
+  // form lives in that loader and nowhere else, so a page that grew its own would fetch around it.
+  test('no module page declares a loader of its own', () => {
+    for (const [id, source] of pages) {
+      expect(`${id}: ${source.includes('loader:')}`).toBe(`${id}: false`);
+      expect(`${id}: ${source.includes('...moduleRoute(')}`).toBe(`${id}: true`);
     }
   });
 
@@ -176,37 +262,71 @@ describe('loaders go through the cache', () => {
     expect(route('$guildId.tsx')).toContain('fetchQuery(sessionQuery())');
   });
 
-  // The switch is in the sidebar, which the layout owns, so a page under it must never grow its
-  // own copy of the toggle: two optimistic writers on one cache entry cannot agree.
+  // The switch is in the sidebar and in the module header, both of which the layout owns, so a page
+  // must never grow its own copy of the toggle: two optimistic writers on one cache entry cannot
+  // agree about which value settled last.
   test('only the guild layout mutates the module switch', () => {
-    for (const file of ['index.tsx', '$moduleId.tsx']) {
-      expect(`${file}: ${route('$guildId', file).includes('enabled: ')}`).toBe(`${file}: false`);
+    for (const [id, source] of [...pages, ['index.tsx', route('$guildId', 'index.tsx')] as const]) {
+      expect(`${id}: ${source.includes('useMutation')}`).toBe(`${id}: false`);
+      expect(`${id}: ${source.includes('updateModuleConfig')}`).toBe(`${id}: false`);
     }
   });
 
-  test('the module page no longer refetches the whole route to save one form', () => {
-    expect(route('$guildId', '$moduleId.tsx')).not.toContain('router.invalidate()');
-    expect(route('$guildId', 'index.tsx')).not.toContain('router.invalidate()');
+  test('and the page that renders switches reaches the layout for one', () => {
+    expect(route('$guildId', 'index.tsx')).toContain('useToggleModule()');
+  });
+
+  // A save writes the fresh config into the cache entry the page already reads. Reloading the route
+  // to achieve the same thing re-runs every fetch in the loader for a form the mutation just
+  // answered — and on a module with areas it also throws away the open area's scroll position.
+  test('nothing refetches the whole route to save one form', () => {
+    const scanned = [
+      ...pages,
+      ['$guildId/index.tsx', route('$guildId', 'index.tsx')] as const,
+      ['$guildId.tsx', route('$guildId.tsx')] as const,
+      ['module/form.ts', read('components', 'module', 'form.ts')] as const,
+      ['module/page.tsx', read('components', 'module', 'page.tsx')] as const,
+      ['module/route.tsx', read('components', 'module', 'route.tsx')] as const,
+    ];
+
+    for (const [id, source] of scanned) {
+      expect(`${id}: ${source.includes('router.invalidate(')}`).toBe(`${id}: false`);
+    }
   });
 });
 
 describe('a view tab does not pay for the settings form', () => {
-  const module = readFileSync(
-    join(SRC, 'routes', 'dashboard', '$guildId', '$moduleId.tsx'),
-    'utf8',
-  );
+  const module = read('components', 'module', 'route.tsx');
 
   const SETTINGS_ONLY = ['moduleConfigQuery', 'channelsQuery', 'rolesQuery'];
 
+  // The pages that carry browse tabs. Pinned, because every test below scans exactly these and an
+  // empty list would pass all of them.
+  const BROWSABLE = [...pages].filter(([, source]) => source.includes('views: VIEWS'));
+
   function loader(): string {
-    return code(module.slice(module.indexOf('loader:'), module.indexOf('component: ModulePage')));
+    return code(module.slice(module.indexOf('loader:'), module.indexOf('head: (')));
   }
+
+  test('the five pages with browse tabs are the five this asserts over', () => {
+    expect(BROWSABLE.map(([id]) => id)).toEqual([
+      'cases',
+      'leveling',
+      'moderation',
+      'tags',
+      'tickets',
+    ]);
+  });
 
   test('the loader branches on the active view before it fetches anything', () => {
     const body = loader();
 
-    expect(body).toContain('const entry = resolveView(params.moduleId, deps.view);');
+    expect(body).toContain('const entry = resolveView(moduleId, views, deps.view);');
     expect(body.indexOf('resolveView')).toBeLessThan(body.indexOf('fetchQuery'));
+
+    // Same reason, for the other thing that can be wrong in the address bar: a bad ?area= has to
+    // reach the error component with its sentence rather than render an empty settings page.
+    expect(body.indexOf('resolveArea')).toBeLessThan(body.indexOf('fetchQuery'));
   });
 
   test('opening a view tab asks for the view and the module list, nothing else', () => {
@@ -222,33 +342,46 @@ describe('a view tab does not pay for the settings form', () => {
     expect(branch).toContain('entry.query(');
   });
 
-  // Sliced to ModulePage's own closing brace rather than to the next component, because the
-  // components between them are the ones the queries are meant to be read in.
-  test('the settings queries are read where they are rendered, not in the page shell', () => {
-    const from = module.slice(module.indexOf('function ModulePage('));
-    const shell = from.slice(0, from.indexOf('\n}\n') + 2);
-
-    expect(shell).toContain('function ModulePage(');
-    expect(shell.length).toBeLessThan(from.length);
+  // Not a settings query in sight: the pending component renders from the module list the parent
+  // layout already awaited, so a browse tab's spinner does not fetch a config it will never show.
+  test('the pending header reads only what the parent already fetched', () => {
+    const pending = module.slice(module.indexOf('function ModulePending('));
 
     for (const name of SETTINGS_ONLY) {
-      expect(`${name} in ModulePage: ${shell.includes(name)}`).toBe(`${name} in ModulePage: false`);
+      expect(`${name} in ModulePending: ${pending.includes(name)}`).toBe(
+        `${name} in ModulePending: false`,
+      );
     }
+
+    expect(pending).toContain('modulesQuery(guildId)');
   });
 
-  // The route component is reused across :moduleId, so without a key the next module opens holding
-  // the previous one's edits. This replaced a useEffect that re-seeded four useStates by hand.
-  test('the settings form is remounted per module rather than re-seeded by an effect', () => {
-    expect(module).toContain('key={moduleId}');
-    expect(module).not.toContain('seededFor');
+  // useModuleForm suspends on the config, the channel list and the role list — the three fetches
+  // the loader skips while a view tab is open. Calling it in the component that renders both tabs
+  // would suspend the browse table on data nothing asked for.
+  test('the settings form is mounted in its own component, not in the page shell', () => {
+    for (const [id, source] of BROWSABLE) {
+      const name = /\n {2}component: (\w+),/.exec(source)?.[1];
+      expect(`${id}: ${name !== undefined}`).toBe(`${id}: true`);
+
+      const from = source.slice(source.indexOf(`function ${name}(`));
+      const shell = from.slice(0, from.indexOf('\n}\n') + 2);
+
+      // Sliced to the page component's own closing brace rather than to the next component,
+      // because the components between them are the ones the form is meant to be mounted in.
+      expect(`${id}: sliced`).toBe(
+        shell.length < from.length ? `${id}: sliced` : `${id}: whole file`,
+      );
+
+      expect(`${id}: ${shell.includes('useModuleForm(')}`).toBe(`${id}: false`);
+      expect(source).toContain('useModuleForm(guildId');
+    }
   });
 });
 
 describe('what a mutation leaves behind', () => {
-  const ROUTES = join(SRC, 'routes', 'dashboard');
-
-  const shell = readFileSync(join(ROUTES, '$guildId.tsx'), 'utf8');
-  const module = readFileSync(join(ROUTES, '$guildId', '$moduleId.tsx'), 'utf8');
+  const shell = route('$guildId.tsx');
+  const form = read('components', 'module', 'form.ts');
 
   // One useMutation backs every switch, and its observer only reports the newest call — so a slow
   // toggle that fails after a later one succeeded would flip back with no banner naming why.
@@ -266,23 +399,42 @@ describe('what a mutation leaves behind', () => {
     expect(onMutate).toContain('setFailure(null)');
   });
 
+  const onSuccess = form.slice(form.indexOf('onSuccess:'), form.indexOf('\n  });'));
+
   // The API normalises some configs on the way in, so the submitted values are not necessarily
   // what was stored. Seeding the baseline from them hides the difference behind a clean form.
   test('a save re-seeds the form from what the server stored, not from what was sent', () => {
-    const onSuccess = module.slice(module.indexOf('onSuccess:'), module.indexOf('const dirty'));
+    expect(onSuccess).toContain('onSuccess: (result) =>');
+    expect(onSuccess).toContain('result.after');
 
-    expect(onSuccess).toContain('reseed(result.after)');
-    expect(onSuccess).not.toContain('setBaseline(submitted)');
+    // react-query hands the submitted config to onSuccess as its second argument. Taking it is
+    // the whole of the bug: nothing else here can reach what was sent.
+    expect(onSuccess).not.toContain('variables');
   });
 
+  // Into the entry the page reads, addressed through the same factory the read went through: a
+  // hand-written key here writes a second entry and the form re-renders from the stale first one.
+  test('and it writes them into the entry the page is already reading', () => {
+    expect(onSuccess).toContain(
+      'queryClient.setQueryData(moduleConfigQuery(guildId, moduleId).queryKey, result.after);',
+    );
+  });
+
+  // A config change can switch a module from running to blocked — the header, the sidebar row and
+  // the saved line all read that off the module list, which the write did not touch.
+  test('a save invalidates the module list, because saving can change whether it runs', () => {
+    expect(onSuccess).toContain('invalidateQueries({ queryKey: queryKeys.modules(guildId) })');
+  });
+
+  // The edits map is the whole of the form's state, so dropping it is the re-seed: the next read
+  // falls through to the config that arrived underneath.
   test('an untouched form follows the config when it changes underneath', () => {
-    expect(module).toContain('if (!dirty) reseed(settings);');
+    expect(form).toContain('if (!dirty) setEdits({});');
   });
 });
 
 describe('what a tab left open still notices', () => {
-  const queries = readFileSync(join(SRC, 'lib', 'queries.ts'), 'utf8');
-  const views = readFileSync(join(SRC, 'components', 'views', 'registry.ts'), 'utf8');
+  const queries = read('lib', 'queries.ts');
 
   function factories(source: string): Map<string, string> {
     const found = new Map<string, string>();
@@ -297,21 +449,16 @@ describe('what a tab left open still notices', () => {
     return found;
   }
 
-  function occurrences(source: string, needle: string): number {
-    return source.split(needle).length - 1;
-  }
-
-  // Proton's own guild row moves on a join or a tier change and the field descriptors only on a
-  // redeploy; everything else here is owned by Discord or by another admin, and a config dashboard
-  // that never notices is worse than a chatty one.
-  const OPTED_OUT = ['guildQuery', 'moduleDescriptorsQuery'];
+  // Proton's own guild row moves only on a join or a tier change; everything else here is owned by
+  // Discord or by another admin, and a config dashboard that never notices is worse than a chatty
+  // one.
+  const OPTED_OUT = ['guildQuery'];
 
   test('the factories this asserts over really are all of them', () => {
     expect([...factories(queries).keys()].sort()).toEqual([
       'channelsQuery',
       'guildQuery',
       'moduleConfigQuery',
-      'moduleDescriptorsQuery',
       'modulesQuery',
       'rolesQuery',
       'sessionQuery',
@@ -326,13 +473,31 @@ describe('what a tab left open still notices', () => {
     }
   });
 
+  // The browse queries moved out of one registry and into the four pages that own them, so this
+  // counts per page instead: a view declared without ...LIVE shows a case list that never notices
+  // the moderator sitting next to you closing one.
   test('and so does every browsable view', () => {
-    expect(occurrences(views, '...LIVE')).toBe(occurrences(views, 'staleTime: STALE.browse'));
+    let browse = 0;
+
+    for (const [id, source] of pages) {
+      const views = occurrences(source, 'staleTime: STALE.browse');
+      browse += views;
+
+      expect(`${id}: ${occurrences(source, '...LIVE')} live for ${views} browse`).toBe(
+        `${id}: ${views} live for ${views} browse`,
+      );
+
+      // And keyed under the guild through the shared factory, so leaving the server clears them
+      // with everything else it owns.
+      expect(`${id}: ${occurrences(source, 'queryKey: queryKeys.view(guildId,')} keyed`).toBe(
+        `${id}: ${views} keyed`,
+      );
+    }
+
+    expect(browse).toBeGreaterThan(0);
   });
 
   test('focus refetching stays opt-in, so a new query cannot become chatty by omission', () => {
-    const client = readFileSync(join(SRC, 'lib', 'query-client.ts'), 'utf8');
-
-    expect(client).toContain('refetchOnWindowFocus: false');
+    expect(read('lib', 'query-client.ts')).toContain('refetchOnWindowFocus: false');
   });
 });

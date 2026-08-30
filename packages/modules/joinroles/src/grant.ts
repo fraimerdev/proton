@@ -42,7 +42,7 @@ export function planGrant(input: {
       skipped.push({
         roleId,
         reason:
-          'it no longer exists in this server. Remove it from the Join Roles list in the Proton ' +
+          'it no longer exists in this server. Remove it from the Join roles list in the Proton ' +
           'dashboard.',
       });
       continue;

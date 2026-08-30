@@ -423,7 +423,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'voice.joined',
     category: 'voice',
-    label: 'Joined a voice channel',
+    label: 'Member joined a voice channel',
     colour: ServerLogColors.Add,
     triggers: ['voice.state_updated'],
     primary: 'immediate',
@@ -432,7 +432,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'voice.left',
     category: 'voice',
-    label: 'Left voice',
+    label: 'Member left voice',
     colour: ServerLogColors.Remove,
     triggers: ['voice.state_updated'],
     primary: 'immediate',
@@ -441,7 +441,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'voice.moved_by_moderator',
     category: 'voice',
-    label: 'Moved between voice channels',
+    label: 'Members moved between voice channels',
     colour: ServerLogColors.Modify,
     triggers: ['audit.entry'],
     auditActions: [AuditLogEvent.MemberMove],
@@ -451,7 +451,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'voice.disconnected_by_moderator',
     category: 'voice',
-    label: 'Disconnected from voice',
+    label: 'Members disconnected from voice',
     colour: ServerLogColors.Remove,
     triggers: ['audit.entry'],
     auditActions: [AuditLogEvent.MemberDisconnect],
@@ -932,7 +932,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'proton.security_tripped',
     category: 'proton',
-    label: 'A security module tripped',
+    label: 'Security module tripped',
     colour: ServerLogColors.Remove,
     triggers: ['proton.security_tripped'],
     primary: 'immediate',

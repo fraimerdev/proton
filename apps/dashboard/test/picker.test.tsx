@@ -121,7 +121,7 @@ describe('SinglePicker', () => {
   test('the missing value says so in the accessible name, not only in the styling', () => {
     const html = render(<SinglePicker {...props} value="900000000000000009" />);
 
-    expect(html).toContain('no longer exists in this server');
+    expect(html).toContain('cannot find in this server');
   });
 
   test('an unset picker is still unset, not treated as a missing id', () => {

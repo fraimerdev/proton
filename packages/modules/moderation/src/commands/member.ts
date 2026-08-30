@@ -220,11 +220,11 @@ export const kickCommand: Command = {
 
 export const timeoutCommand: Command = {
   name: 'timeout',
-  description: 'Silence a member for a while.',
+  description: 'Time a member out for a while.',
 
   data: new SlashCommandBuilder()
     .setName('timeout')
-    .setDescription('Silence a member for a while.')
+    .setDescription('Time a member out for a while.')
     .setContexts(InteractionContextType.Guild)
     .setDefaultMemberPermissions(Permissions.ModerateMembers)
     .addUserOption((option) =>

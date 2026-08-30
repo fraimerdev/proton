@@ -47,12 +47,11 @@ const MESSAGE_DESCRIPTION =
 
 const CROSS_CHANNEL_GATE =
   ' `/message` is limited to members with Manage Messages, and posting into a channel other than ' +
-  'the one you are in also needs Proton to be able to see and post there.';
+  'the one you are in also needs me to be able to see and post there.';
 
 const NOT_WIRED =
-  "I can't post that: this Proton deployment isn't fully set up, so I have no way to tell you " +
-  'afterwards whether it worked. Nothing was posted. A server admin should check the Proton ' +
-  'logs — the exact missing piece is named there.';
+  'I can’t post that: I would have no way to tell you afterwards whether it worked. Nothing ' +
+  'was posted. This is a fault on my side, not a setting in this server.';
 
 function interactionOf(ctx: CommandContext<MessagesConfig>): InteractionRef {
   return {
@@ -200,7 +199,8 @@ async function send(ctx: CommandContext<MessagesConfig>): Promise<void> {
     await replyEphemeral(
       ctx,
       to,
-      'I could not open the message composer. Nothing was posted, and the Proton logs say why.',
+      'I could not open the message composer, so nothing was posted. This is a fault on my ' +
+        'side, not a setting in this server.',
     );
     return;
   }

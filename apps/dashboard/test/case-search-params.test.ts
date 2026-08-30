@@ -1,26 +1,53 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { CASE_PAGE_SIZE_MAX, type CaseQueryInput, caseQuerySchema } from '@proton/core';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
-import {
-  type AnyViewEntry,
-  activeView,
-  moduleSearchSchema,
-  parseViewSearch,
-} from '../src/components/views/registry.ts';
+import { z } from 'zod';
+import { type ModuleView, parseViewSearch } from '../src/components/module/views.ts';
 import { pageSizeOf } from '../src/components/views/views.tsx';
 
 function roundTrip(input: CaseQueryInput) {
   return caseQuerySchema.parse(defaultParseSearch(defaultStringifySearch(input)));
 }
 
+/**
+ * A copy, not the import: moduleSearchSchema lives in components/module/route.tsx, which reaches
+ * lib/queries and through it the database at module scope. view-registry.test.tsx pins the real
+ * declaration against the route's source, so a change there fails rather than leaving this loose.
+ */
+const moduleSearchSchema = z.looseObject({
+  view: z.unknown().optional(),
+  area: z.unknown().optional(),
+});
+
 const routeValidator = zodValidator(moduleSearchSchema);
 
-function casesView(): AnyViewEntry {
-  const entry = activeView('cases', 'cases');
-  if (!entry) throw new Error("the cases module registers no 'cases' view");
+const ROUTES = join(import.meta.dir, '..', 'src', 'routes', 'dashboard', '$guildId');
 
-  return entry;
+const DECLARED_VIEW = /\{ id: '([^']+)', title: '([^']+)', searchSchema: ([A-Za-z0-9_]+),/;
+
+/**
+ * There is no MODULE_VIEWS any more: the cases route declares its own VIEWS inline, and that file
+ * cannot be imported either. The entry is rebuilt from what the route actually declares, so a route
+ * that stops filtering with caseQuerySchema fails here instead of leaving this file exercising a
+ * fossil — the same guard the old activeView('cases', 'cases') lookup gave.
+ */
+function casesView(): ModuleView {
+  const source = readFileSync(join(ROUTES, 'cases.tsx'), 'utf8').replace(/\s+/g, ' ');
+  const [, id, title, schema] = DECLARED_VIEW.exec(source) ?? [];
+
+  if (id !== 'cases' || schema !== 'caseQuerySchema' || title === undefined)
+    throw new Error("the cases route registers no 'cases' view filtered by caseQuerySchema");
+
+  return {
+    id,
+    title,
+    searchSchema: caseQuerySchema,
+    query: ({ guildId }) => ({ queryKey: [guildId, 'cases'], queryFn: async () => undefined }),
+    View: () => null,
+  };
 }
 
 function fromUrl(url: string): unknown {

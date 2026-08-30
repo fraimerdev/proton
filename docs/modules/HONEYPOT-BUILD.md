@@ -229,3 +229,80 @@ exactly that broken path. Latent — no module used it — but it was one copy-p
 **Still open**: `RedisHoneypotStatsStore.record` is two round trips (ZADD NX, then the counters). A
 process death in that window loses one count permanently, because the surviving ZSET entry makes
 every retry a no-op. The correct fix is one Lua script; it is not written.
+
+---
+
+## 8. The upgrade: module-wide config, and two new subsystems
+
+Built against a configuration guide the owner supplied. Four decisions were put to them and taken
+before any code was written; two of the four widened the work considerably.
+
+### The config reshape
+
+v1 kept the action, the delete window and the timeout length **on every channel row**. The guide
+treats them as one setting for the whole module, so `channels` is now a plain list of
+`{ channelId, enabled }` and `liftStoredConfig` collapses the old shape.
+
+Rows that disagreed cannot all be honoured. **The first armed row decides**, falling back to the
+first row when none is armed; a key already present at the top level is never overwritten. The lift
+runs on every read *and* every write, so it is gated on a row still carrying a v1 key and returns
+the **same reference** when there is nothing to do — a copy would read as a change to anything
+comparing by identity. `config.test.ts` pins both, plus a fast-check property that the multiset of
+`(channelId, enabled)` pairs survives whatever the rows held.
+
+`HONEYPOT_SCHEMA_VERSION` went to 2. That flag only flips `migrated: true` on the read; it triggers
+no transform. All the work is in the lift.
+
+### What the reshape cost the test suite
+
+The `armed()` helper now spreads at the top level, which migrated roughly ninety call sites in one
+edit. Three call sites passed `armed({ enabled: false })` meaning *disarm the row*; under the new
+helper that switches the **module** off, and `ignore.test.ts`'s "the honeypot row is switched off"
+would have quietly started asserting a different reason from a different branch. All three were
+rewritten by hand.
+
+One case was deleted rather than rewritten: "two armed channels get two notices, each with its own
+delete window" described a difference the schema no longer has.
+
+### Two rulings made against the written plan
+
+1. **System buttons are appended at render, not stored with placeholder urls.** The plan called for
+   reserved keys carrying an unresolvable `https://proton.invalid/...` address, substituted at send
+   through a new `UrlFor` hook in core. But a stored non-link button must carry a `ComponentAction`
+   (`components.ts` refuses one without), and there is no action in that vocabulary for "open this
+   trap's tally". The counter, appeal and rejoin buttons are Proton's, appended to the last
+   container at render. `UrlFor` was added to core and then reverted rather than shipped unused.
+2. **Declaring `MessageContent` costs no gateway deploy.** `DEFAULT_INTENTS` already carries it for
+   automod, logging and phishing. Two of the design areas built sequencing around an outage that
+   does not exist.
+
+### The intent, reversed on purpose
+
+`manifest.test.ts`'s "never asks for Message Content" was **inverted in place** rather than deleted.
+The case now asserts the intent is declared, with the reasoning beside it. That test is where the
+retired property is recorded; deleting it would have left no trace that a decision was reversed.
+
+Quoting is off by default, the body is fenced and de-backticked before it reaches an embed, and the
+privacy policy names it.
+
+### A security hole closed on the way through
+
+`verifyLinkClaimsSchema` is a plain `z.object`, so it strips unknown keys, and `readVerifyLink`
+accepted anything that parsed. An appeal token signed with the shared `VERIFY_LINK_SECRET` would
+have redeemed at `/verify/<token>` as a **verification pass**. Both schemas now carry a `purpose`
+literal and both readers check it — shipped in the first stage of this work, six stages before
+anything could mint an appeal token, and tested in both directions.
+
+### Found, filed, not fixed
+
+`apps/worker/src/listener-runtime.ts` returns early on `event.guildId === null`, so **no component
+press inside a DM reaches any module**. Tickets' DM rating buttons and verification's DM captcha
+buttons are dead in `main` today. It is why the appeal boundary is a signed link rather than a
+button. Repairing the runtime that serves all thirty modules should not ride along on this change.
+
+### Still open
+
+- The integration suites remain dark on the Windows host. `blocked-member-store`, `appeals` and the
+  migration suite have all been written and none has been executed.
+- `RedisHoneypotStatsStore.record` is still two round trips (§7 of this document). The `'exempt'`
+  carve-out added a branch to it but did not fix the underlying race.

@@ -15,6 +15,7 @@ export { countersCommand, countersCommands } from './commands.ts';
 export {
   CHANNEL_NAME_MAX,
   COUNT_PLACEHOLDER,
+  COUNTER_ID_MAX,
   COUNTER_SOURCES,
   COUNTERS_CEILING,
   COUNTERS_SCHEMA_VERSION,
@@ -31,6 +32,13 @@ export {
   TEMPLATE_MAX,
 } from './config.ts';
 export {
+  type CreateOutcome,
+  createCounterChannel,
+  LOST_CREATE,
+  NO_CHANNEL_ID,
+  VOICE_CHANNEL_TYPE,
+} from './create.ts';
+export {
   bindGuildState,
   type CountersDeps,
   describeUnbound,
@@ -42,7 +50,7 @@ export {
   reconcileSchedule,
   type ScheduleOutcomeName,
 } from './listener.ts';
-export { NO_STATE, NOT_WIRED, renameChannel, reply } from './perform.ts';
+export { NO_STATE, NO_STORE, NOT_WIRED, renameChannel, reply } from './perform.ts';
 export {
   createRefreshHandler,
   REFRESH_JOB,
@@ -52,9 +60,11 @@ export {
   refreshKeyRoot,
 } from './refresh.ts';
 export {
+  type CounterCreation,
   type CounterEdit,
   type CounterFailure,
   type CounterPlan,
+  type CreationFailure,
   countFor,
   NO_COUNTERS,
   plan,
@@ -62,6 +72,12 @@ export {
   renderName,
   renderReport,
 } from './render.ts';
+export {
+  type CounterChannelStore,
+  DrizzleCounterChannelStore,
+  type OwnedChannel,
+} from './store.ts';
+export { type CounterChannelRow, counterChannels } from './table.ts';
 
 export function createCountersModule(
   deps: CountersDeps = {},
@@ -77,8 +93,11 @@ export function createCountersModule(
 
     requiredIntents: [GatewayIntentBits.Guilds],
 
+    // Manage Roles is deliberately absent: it is needed only to deny Connect on a channel Proton
+    // makes, and requiring it here would switch the whole module off for a server that only
+    // renames channels it was pointed at.
     requiredPermissions: [Permissions.ViewChannel, Permissions.ManageChannels],
-    actionKinds: ['interaction_reply', 'edit_channel'],
+    actionKinds: ['interaction_reply', 'edit_channel', 'create_channel', 'set_channel_overwrite'],
 
     configLimits: [{ key: 'counters', path: 'counters' }],
 

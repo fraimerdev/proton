@@ -1,4 +1,17 @@
-const ALLOWED_HOSTS = new Set(['cdn.discordapp.com', 'media.discordapp.net']);
+export const CARD_IMAGE_HOSTS = ['cdn.discordapp.com', 'media.discordapp.net'] as const;
+
+const ALLOWED_HOSTS = new Set<string>(CARD_IMAGE_HOSTS);
+
+// The dashboard's live preview loads card images itself and would otherwise draw a background the
+// renderer refuses — and with it the scrim and lifted ink that come with having one at all.
+export function cardImageHostAllowed(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && ALLOWED_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
 
 const ALLOWED_CONTENT_TYPES = ['image/png', 'image/jpeg', 'image/gif'];
 
@@ -143,8 +156,15 @@ function startsWith(bytes: Uint8Array, magic: Uint8Array): boolean {
   return magic.every((byte, index) => bytes[index] === byte);
 }
 
+export function imageMimeType(bytes: Uint8Array): string | null {
+  if (startsWith(bytes, PNG)) return 'image/png';
+  if (startsWith(bytes, JPEG)) return 'image/jpeg';
+  if (startsWith(bytes, GIF)) return 'image/gif';
+  return null;
+}
+
 export function isRenderableImage(bytes: Uint8Array): boolean {
-  return startsWith(bytes, PNG) || startsWith(bytes, JPEG) || startsWith(bytes, GIF);
+  return imageMimeType(bytes) !== null;
 }
 
 export function discordAvatarUrl(userId: string, avatarHash: string, size = 256): string {

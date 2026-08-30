@@ -1053,8 +1053,8 @@ async function pressDelete(session: Session, confirmed: boolean): Promise<PressO
         {
           type: ComponentType.TextDisplay,
           content:
-            `### Delete ticket #${ticket.number}?\nThis removes the channel and everything in ` +
-            'it. The transcript is kept, the conversation is not.',
+            `### Delete ticket #${ticket.number}?\nThis removes the channel and everything said ` +
+            'in it, and it cannot be undone.',
         },
         {
           type: ComponentType.ActionRow,

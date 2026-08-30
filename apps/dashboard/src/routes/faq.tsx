@@ -66,7 +66,7 @@ function FaqPage(): ReactElement {
                 Nothing here answers it? Ask in the support server. The{' '}
                 <Link to="/privacy">privacy policy</Link> is the complete list of what Proton
                 stores, and the <Link to="/terms">Terms of Service</Link> cover what you are
-                agreeing to you add it.
+                agreeing to when you add it.
               </p>
               <div className="doc-tail-actions">
                 <a

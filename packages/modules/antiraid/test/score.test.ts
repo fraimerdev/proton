@@ -110,7 +110,7 @@ describe('scoreJoin', () => {
     expect(scored.score).toBe(0);
     expect(scored.reasons).toEqual([
       'The account age could not be read from the user id, so it was not weighed.',
-      'The join carried no user object, so the avatar was not weighed.',
+      'The join carried no profile details, so the avatar was not weighed.',
     ]);
   });
 });

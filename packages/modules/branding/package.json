@@ -1,0 +1,32 @@
+{
+  "name": "@proton/module-branding",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/config.ts",
+    "./names": "./src/names.ts",
+    "./store": "./src/store.ts",
+    "./image": "./src/image.ts",
+    "./kinds": "./src/kinds.ts",
+    "./typeface": "./src/typeface.ts",
+    "./colour": "./src/colour.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@proton/core": "workspace:*",
+    "discord-api-types": "^0.38.53",
+    "discord.js": "^14.27.0",
+    "zod": "^4.4.3",
+    "@proton/db": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@proton/fixtures": "workspace:*",
+    "@proton/gateway": "workspace:*"
+  }
+}

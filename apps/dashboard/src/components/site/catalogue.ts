@@ -9,9 +9,10 @@ export interface CatalogueEntry {
   commands: readonly string[];
 }
 
-// The manifests live in twenty-seven worker packages whose barrels drag discord.js, so the public
+// The manifests live in twenty-nine worker packages whose barrels drag discord.js, so the public
 // pages cannot read them. catalogue.test.ts fails when this list and those manifests disagree.
 export const CATALOGUE: readonly CatalogueEntry[] = [
+  { id: 'appeals', name: 'Appeals', category: 'moderation', icon: 'scales', commands: [] },
   { id: 'cases', name: 'Cases', category: 'moderation', icon: 'gavel', commands: [] },
   {
     id: 'moderation',
@@ -100,6 +101,13 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
   },
 
   {
+    id: 'branding',
+    name: 'Branding',
+    category: 'utility',
+    icon: 'identification-badge',
+    commands: ['/branding'],
+  },
+  {
     id: 'counters',
     name: 'Counter channels',
     category: 'utility',
@@ -107,7 +115,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
     commands: ['/counters'],
   },
   { id: 'help', name: 'Help', category: 'utility', icon: 'question', commands: ['/help'] },
-  { id: 'joinroles', name: 'Join Roles', category: 'utility', icon: 'user-plus', commands: [] },
+  { id: 'joinroles', name: 'Join roles', category: 'utility', icon: 'user-plus', commands: [] },
   {
     id: 'messages',
     name: 'Messages',
@@ -128,7 +136,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
   { id: 'tags', name: 'Tags', category: 'utility', icon: 'tag', commands: ['/tag', '/tags'] },
   {
     id: 'tempvc',
-    name: 'Temporary Voice Channels',
+    name: 'Temporary voice channels',
     category: 'utility',
     icon: 'speaker-high',
     commands: ['/voice'],
@@ -136,7 +144,7 @@ export const CATALOGUE: readonly CatalogueEntry[] = [
   { id: 'tickets', name: 'Tickets', category: 'utility', icon: 'ticket', commands: ['/ticket'] },
 
   { id: 'logging', name: 'Message logs', category: 'logging', icon: 'scroll', commands: [] },
-  { id: 'serverlog', name: 'Server Logs', category: 'logging', icon: 'scroll', commands: [] },
+  { id: 'serverlog', name: 'Server logs', category: 'logging', icon: 'scroll', commands: [] },
 ];
 
 export interface CatalogueGroup {
@@ -162,8 +170,8 @@ export const OAUTH_SCOPES = ['identify', 'guilds', 'guilds.members.read'] as con
 export const MODULE_COUNT = CATALOGUE.length;
 
 // Copied rather than derived. Reading the log counts off @proton/module-serverlog/catalogue puts
-// all 88 event specs in the bundle, and COMMAND_COUNT off command-set.gen.ts puts all 112 commands
+// all 88 event specs in the bundle, and COMMAND_COUNT off command-set.gen.ts puts all 113 commands
 // there — on pages that print an integer. catalogue.test.ts fails when any of them drift.
 export const LOG_EVENT_COUNT = 88;
 export const LOG_CATEGORY_COUNT = 13;
-export const COMMAND_COUNT = 112;
+export const COMMAND_COUNT = 113;

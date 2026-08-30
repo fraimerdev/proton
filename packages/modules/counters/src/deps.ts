@@ -1,11 +1,17 @@
 import type { GuildStateStore } from '@proton/core';
+import type { CounterChannelStore } from './store.ts';
 
 export interface CountersDeps {
   guildState?: GuildStateStore;
+
+  // Only the counters whose channel Proton makes itself need this; one pointed at an existing
+  // channel refreshes without it.
+  channels?: CounterChannelStore;
 }
 
 const PORT_HINTS: Record<string, string> = {
   guildState: 'guildState: new RedisGuildStateStore(stateRedis)',
+  channels: 'channels: new DrizzleCounterChannelStore(handle)',
 };
 
 export function describeUnbound(what: string, unbound: readonly string[]): string {

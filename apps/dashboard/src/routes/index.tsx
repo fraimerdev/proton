@@ -43,7 +43,7 @@ export function signInFailure(code: string, description?: string): string {
 }
 
 export const INVITE_UNAVAILABLE =
-  'Proton could not work out which permissions to ask Discord for, so the invite was not started. Its API is not answering.';
+  'Proton could not work out which permissions to ask Discord for, so the invite was not started. Try again in a minute.';
 
 export const Route = createFileRoute('/')({
   validateSearch: zodValidator(doorSearchSchema),

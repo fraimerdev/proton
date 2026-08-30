@@ -116,7 +116,7 @@ describe('/backup create', () => {
 
     await bot.run(subcommand('create'));
 
-    expect(bot.replyContent()).toContain('does not have this server’s channel and role list yet');
+    expect(bot.replyContent()).toContain('channel and role list yet');
   });
 
   test('answers when the module is switched off, rather than failing the interaction', async () => {

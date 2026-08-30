@@ -21,8 +21,8 @@ import type { TagStore } from './store.ts';
 type Command = CommandDefinition<TagsConfig>;
 
 const NOT_WIRED =
-  "I can't reach this server's tags because Proton isn't fully wired up in this deployment. " +
-  'Nothing was changed. The Proton logs name the exact missing piece.';
+  'I can’t reach this server’s tags right now. Nothing was changed. This is a fault on my side, ' +
+  'not a setting in this server.';
 
 async function ready(
   ctx: CommandContext<TagsConfig>,

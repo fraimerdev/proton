@@ -69,5 +69,5 @@ function describe(name: string): string {
   if (name === RULE_NAMES.keywords) return 'One keyword rule carries every word and pattern.';
   if (name === RULE_NAMES.presets) return 'Your allowed words are exceptions to it.';
   if (name === RULE_NAMES.mentions) return 'Counted by Discord, before the message is posted.';
-  return 'Discord’s own heuristic, at no cost to this server.';
+  return 'Discord’s own heuristic, with nothing here to tune.';
 }

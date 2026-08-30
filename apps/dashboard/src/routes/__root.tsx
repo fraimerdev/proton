@@ -18,9 +18,11 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
       // The two faces --font and --mono actually name. Archivo and IBM Plex Mono were fetched here
       // and referenced by nothing, so every glyph in the product fell back to Segoe UI and Consolas.
+      // Manrope and Inter are not the product's faces: they are the two the card renderer embeds,
+      // and the live card preview is only honest if the browser draws it in the same ones.
       {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Onest:wght@400..700&family=Spline+Sans+Mono:wght@400..600&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Onest:wght@400..700&family=Spline+Sans+Mono:wght@400..600&family=Manrope:wght@400;600;700;800&family=Inter:wght@400;700&display=swap',
       },
       { rel: 'stylesheet', href: appCss },
     ],

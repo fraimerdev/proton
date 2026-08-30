@@ -15,14 +15,45 @@ import { Route as FaqRouteImport } from './routes/faq'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as AppealTokenRouteImport } from './routes/appeal/$token'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardGuildIdRouteImport } from './routes/dashboard/$guildId'
 import { Route as VerifyTokenRouteImport } from './routes/verify/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as DashboardGuildIdIndexRouteImport } from './routes/dashboard/$guildId/index'
-import { Route as DashboardGuildIdModuleIdRouteImport } from './routes/dashboard/$guildId/$moduleId'
+import { Route as DashboardGuildIdAntinukeRouteImport } from './routes/dashboard/$guildId/antinuke'
+import { Route as DashboardGuildIdAntiraidRouteImport } from './routes/dashboard/$guildId/antiraid'
+import { Route as DashboardGuildIdAppealsRouteImport } from './routes/dashboard/$guildId/appeals'
+import { Route as DashboardGuildIdAutomodRouteImport } from './routes/dashboard/$guildId/automod'
+import { Route as DashboardGuildIdBackupRouteImport } from './routes/dashboard/$guildId/backup'
+import { Route as DashboardGuildIdBrandingRouteImport } from './routes/dashboard/$guildId/branding'
+import { Route as DashboardGuildIdCasesRouteImport } from './routes/dashboard/$guildId/cases'
+import { Route as DashboardGuildIdCountersRouteImport } from './routes/dashboard/$guildId/counters'
+import { Route as DashboardGuildIdGiveawaysRouteImport } from './routes/dashboard/$guildId/giveaways'
+import { Route as DashboardGuildIdHelpRouteImport } from './routes/dashboard/$guildId/help'
+import { Route as DashboardGuildIdHoneypotRouteImport } from './routes/dashboard/$guildId/honeypot'
+import { Route as DashboardGuildIdJoinrolesRouteImport } from './routes/dashboard/$guildId/joinroles'
+import { Route as DashboardGuildIdLevelingRouteImport } from './routes/dashboard/$guildId/leveling'
+import { Route as DashboardGuildIdLoggingRouteImport } from './routes/dashboard/$guildId/logging'
+import { Route as DashboardGuildIdMessagesRouteImport } from './routes/dashboard/$guildId/messages'
+import { Route as DashboardGuildIdModerationRouteImport } from './routes/dashboard/$guildId/moderation'
+import { Route as DashboardGuildIdPermissionsRouteImport } from './routes/dashboard/$guildId/permissions'
+import { Route as DashboardGuildIdPhishingRouteImport } from './routes/dashboard/$guildId/phishing'
+import { Route as DashboardGuildIdPingRouteImport } from './routes/dashboard/$guildId/ping'
+import { Route as DashboardGuildIdPollsRouteImport } from './routes/dashboard/$guildId/polls'
+import { Route as DashboardGuildIdRemindersRouteImport } from './routes/dashboard/$guildId/reminders'
+import { Route as DashboardGuildIdRolemenuRouteImport } from './routes/dashboard/$guildId/rolemenu'
+import { Route as DashboardGuildIdServerlogRouteImport } from './routes/dashboard/$guildId/serverlog'
+import { Route as DashboardGuildIdStarboardRouteImport } from './routes/dashboard/$guildId/starboard'
+import { Route as DashboardGuildIdSuggestionsRouteImport } from './routes/dashboard/$guildId/suggestions'
+import { Route as DashboardGuildIdTagsRouteImport } from './routes/dashboard/$guildId/tags'
+import { Route as DashboardGuildIdTempvcRouteImport } from './routes/dashboard/$guildId/tempvc'
+import { Route as DashboardGuildIdTicketsRouteImport } from './routes/dashboard/$guildId/tickets'
+import { Route as DashboardGuildIdVerificationRouteImport } from './routes/dashboard/$guildId/verification'
+import { Route as DashboardGuildIdWelcomeRouteImport } from './routes/dashboard/$guildId/welcome'
 import { Route as ApiAuthSigninDiscordRouteImport } from './routes/api/auth/signin/discord'
 import { Route as ApiGuildsGuildIdCardPreviewRouteImport } from './routes/api/guilds/$guildId/card-preview'
+import { Route as ApiGuildsGuildIdBrandingKindRouteImport } from './routes/api/guilds/$guildId/branding.$kind'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -54,6 +85,11 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppealTokenRoute = AppealTokenRouteImport.update({
+  id: '/appeal/$token',
+  path: '/appeal/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/dashboard/',
   path: '/dashboard/',
@@ -79,12 +115,174 @@ const DashboardGuildIdIndexRoute = DashboardGuildIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardGuildIdRoute,
 } as any)
-const DashboardGuildIdModuleIdRoute =
-  DashboardGuildIdModuleIdRouteImport.update({
-    id: '/$moduleId',
-    path: '/$moduleId',
+const DashboardGuildIdAntinukeRoute =
+  DashboardGuildIdAntinukeRouteImport.update({
+    id: '/antinuke',
+    path: '/antinuke',
     getParentRoute: () => DashboardGuildIdRoute,
   } as any)
+const DashboardGuildIdAntiraidRoute =
+  DashboardGuildIdAntiraidRouteImport.update({
+    id: '/antiraid',
+    path: '/antiraid',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdAppealsRoute = DashboardGuildIdAppealsRouteImport.update({
+  id: '/appeals',
+  path: '/appeals',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdAutomodRoute = DashboardGuildIdAutomodRouteImport.update({
+  id: '/automod',
+  path: '/automod',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdBackupRoute = DashboardGuildIdBackupRouteImport.update({
+  id: '/backup',
+  path: '/backup',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdBrandingRoute =
+  DashboardGuildIdBrandingRouteImport.update({
+    id: '/branding',
+    path: '/branding',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdCasesRoute = DashboardGuildIdCasesRouteImport.update({
+  id: '/cases',
+  path: '/cases',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdCountersRoute =
+  DashboardGuildIdCountersRouteImport.update({
+    id: '/counters',
+    path: '/counters',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdGiveawaysRoute =
+  DashboardGuildIdGiveawaysRouteImport.update({
+    id: '/giveaways',
+    path: '/giveaways',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdHelpRoute = DashboardGuildIdHelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdHoneypotRoute =
+  DashboardGuildIdHoneypotRouteImport.update({
+    id: '/honeypot',
+    path: '/honeypot',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdJoinrolesRoute =
+  DashboardGuildIdJoinrolesRouteImport.update({
+    id: '/joinroles',
+    path: '/joinroles',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdLevelingRoute =
+  DashboardGuildIdLevelingRouteImport.update({
+    id: '/leveling',
+    path: '/leveling',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdLoggingRoute = DashboardGuildIdLoggingRouteImport.update({
+  id: '/logging',
+  path: '/logging',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdMessagesRoute =
+  DashboardGuildIdMessagesRouteImport.update({
+    id: '/messages',
+    path: '/messages',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdModerationRoute =
+  DashboardGuildIdModerationRouteImport.update({
+    id: '/moderation',
+    path: '/moderation',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdPermissionsRoute =
+  DashboardGuildIdPermissionsRouteImport.update({
+    id: '/permissions',
+    path: '/permissions',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdPhishingRoute =
+  DashboardGuildIdPhishingRouteImport.update({
+    id: '/phishing',
+    path: '/phishing',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdPingRoute = DashboardGuildIdPingRouteImport.update({
+  id: '/ping',
+  path: '/ping',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdPollsRoute = DashboardGuildIdPollsRouteImport.update({
+  id: '/polls',
+  path: '/polls',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdRemindersRoute =
+  DashboardGuildIdRemindersRouteImport.update({
+    id: '/reminders',
+    path: '/reminders',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdRolemenuRoute =
+  DashboardGuildIdRolemenuRouteImport.update({
+    id: '/rolemenu',
+    path: '/rolemenu',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdServerlogRoute =
+  DashboardGuildIdServerlogRouteImport.update({
+    id: '/serverlog',
+    path: '/serverlog',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdStarboardRoute =
+  DashboardGuildIdStarboardRouteImport.update({
+    id: '/starboard',
+    path: '/starboard',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdSuggestionsRoute =
+  DashboardGuildIdSuggestionsRouteImport.update({
+    id: '/suggestions',
+    path: '/suggestions',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdTagsRoute = DashboardGuildIdTagsRouteImport.update({
+  id: '/tags',
+  path: '/tags',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdTempvcRoute = DashboardGuildIdTempvcRouteImport.update({
+  id: '/tempvc',
+  path: '/tempvc',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdTicketsRoute = DashboardGuildIdTicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
+const DashboardGuildIdVerificationRoute =
+  DashboardGuildIdVerificationRouteImport.update({
+    id: '/verification',
+    path: '/verification',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
+const DashboardGuildIdWelcomeRoute = DashboardGuildIdWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
 const ApiAuthSigninDiscordRoute = ApiAuthSigninDiscordRouteImport.update({
   id: '/api/auth/signin/discord',
   path: '/api/auth/signin/discord',
@@ -96,6 +294,12 @@ const ApiGuildsGuildIdCardPreviewRoute =
     path: '/api/guilds/$guildId/card-preview',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiGuildsGuildIdBrandingKindRoute =
+  ApiGuildsGuildIdBrandingKindRouteImport.update({
+    id: '/api/guilds/$guildId/branding/$kind',
+    path: '/api/guilds/$guildId/branding/$kind',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -104,14 +308,45 @@ export interface FileRoutesByFullPath {
   '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/appeal/$token': typeof AppealTokenRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
+  '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
+  '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
+  '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
+  '/dashboard/$guildId/automod': typeof DashboardGuildIdAutomodRoute
+  '/dashboard/$guildId/backup': typeof DashboardGuildIdBackupRoute
+  '/dashboard/$guildId/branding': typeof DashboardGuildIdBrandingRoute
+  '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
+  '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
+  '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
+  '/dashboard/$guildId/help': typeof DashboardGuildIdHelpRoute
+  '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
+  '/dashboard/$guildId/joinroles': typeof DashboardGuildIdJoinrolesRoute
+  '/dashboard/$guildId/leveling': typeof DashboardGuildIdLevelingRoute
+  '/dashboard/$guildId/logging': typeof DashboardGuildIdLoggingRoute
+  '/dashboard/$guildId/messages': typeof DashboardGuildIdMessagesRoute
+  '/dashboard/$guildId/moderation': typeof DashboardGuildIdModerationRoute
+  '/dashboard/$guildId/permissions': typeof DashboardGuildIdPermissionsRoute
+  '/dashboard/$guildId/phishing': typeof DashboardGuildIdPhishingRoute
+  '/dashboard/$guildId/ping': typeof DashboardGuildIdPingRoute
+  '/dashboard/$guildId/polls': typeof DashboardGuildIdPollsRoute
+  '/dashboard/$guildId/reminders': typeof DashboardGuildIdRemindersRoute
+  '/dashboard/$guildId/rolemenu': typeof DashboardGuildIdRolemenuRoute
+  '/dashboard/$guildId/serverlog': typeof DashboardGuildIdServerlogRoute
+  '/dashboard/$guildId/starboard': typeof DashboardGuildIdStarboardRoute
+  '/dashboard/$guildId/suggestions': typeof DashboardGuildIdSuggestionsRoute
+  '/dashboard/$guildId/tags': typeof DashboardGuildIdTagsRoute
+  '/dashboard/$guildId/tempvc': typeof DashboardGuildIdTempvcRoute
+  '/dashboard/$guildId/tickets': typeof DashboardGuildIdTicketsRoute
+  '/dashboard/$guildId/verification': typeof DashboardGuildIdVerificationRoute
+  '/dashboard/$guildId/welcome': typeof DashboardGuildIdWelcomeRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
   '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
+  '/api/guilds/$guildId/branding/$kind': typeof ApiGuildsGuildIdBrandingKindRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,13 +355,44 @@ export interface FileRoutesByTo {
   '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/appeal/$token': typeof AppealTokenRoute
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
+  '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
+  '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
+  '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
+  '/dashboard/$guildId/automod': typeof DashboardGuildIdAutomodRoute
+  '/dashboard/$guildId/backup': typeof DashboardGuildIdBackupRoute
+  '/dashboard/$guildId/branding': typeof DashboardGuildIdBrandingRoute
+  '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
+  '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
+  '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
+  '/dashboard/$guildId/help': typeof DashboardGuildIdHelpRoute
+  '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
+  '/dashboard/$guildId/joinroles': typeof DashboardGuildIdJoinrolesRoute
+  '/dashboard/$guildId/leveling': typeof DashboardGuildIdLevelingRoute
+  '/dashboard/$guildId/logging': typeof DashboardGuildIdLoggingRoute
+  '/dashboard/$guildId/messages': typeof DashboardGuildIdMessagesRoute
+  '/dashboard/$guildId/moderation': typeof DashboardGuildIdModerationRoute
+  '/dashboard/$guildId/permissions': typeof DashboardGuildIdPermissionsRoute
+  '/dashboard/$guildId/phishing': typeof DashboardGuildIdPhishingRoute
+  '/dashboard/$guildId/ping': typeof DashboardGuildIdPingRoute
+  '/dashboard/$guildId/polls': typeof DashboardGuildIdPollsRoute
+  '/dashboard/$guildId/reminders': typeof DashboardGuildIdRemindersRoute
+  '/dashboard/$guildId/rolemenu': typeof DashboardGuildIdRolemenuRoute
+  '/dashboard/$guildId/serverlog': typeof DashboardGuildIdServerlogRoute
+  '/dashboard/$guildId/starboard': typeof DashboardGuildIdStarboardRoute
+  '/dashboard/$guildId/suggestions': typeof DashboardGuildIdSuggestionsRoute
+  '/dashboard/$guildId/tags': typeof DashboardGuildIdTagsRoute
+  '/dashboard/$guildId/tempvc': typeof DashboardGuildIdTempvcRoute
+  '/dashboard/$guildId/tickets': typeof DashboardGuildIdTicketsRoute
+  '/dashboard/$guildId/verification': typeof DashboardGuildIdVerificationRoute
+  '/dashboard/$guildId/welcome': typeof DashboardGuildIdWelcomeRoute
   '/dashboard/$guildId': typeof DashboardGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
   '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
+  '/api/guilds/$guildId/branding/$kind': typeof ApiGuildsGuildIdBrandingKindRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -136,14 +402,45 @@ export interface FileRoutesById {
   '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/appeal/$token': typeof AppealTokenRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/dashboard/$guildId/$moduleId': typeof DashboardGuildIdModuleIdRoute
+  '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
+  '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
+  '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
+  '/dashboard/$guildId/automod': typeof DashboardGuildIdAutomodRoute
+  '/dashboard/$guildId/backup': typeof DashboardGuildIdBackupRoute
+  '/dashboard/$guildId/branding': typeof DashboardGuildIdBrandingRoute
+  '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
+  '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
+  '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
+  '/dashboard/$guildId/help': typeof DashboardGuildIdHelpRoute
+  '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
+  '/dashboard/$guildId/joinroles': typeof DashboardGuildIdJoinrolesRoute
+  '/dashboard/$guildId/leveling': typeof DashboardGuildIdLevelingRoute
+  '/dashboard/$guildId/logging': typeof DashboardGuildIdLoggingRoute
+  '/dashboard/$guildId/messages': typeof DashboardGuildIdMessagesRoute
+  '/dashboard/$guildId/moderation': typeof DashboardGuildIdModerationRoute
+  '/dashboard/$guildId/permissions': typeof DashboardGuildIdPermissionsRoute
+  '/dashboard/$guildId/phishing': typeof DashboardGuildIdPhishingRoute
+  '/dashboard/$guildId/ping': typeof DashboardGuildIdPingRoute
+  '/dashboard/$guildId/polls': typeof DashboardGuildIdPollsRoute
+  '/dashboard/$guildId/reminders': typeof DashboardGuildIdRemindersRoute
+  '/dashboard/$guildId/rolemenu': typeof DashboardGuildIdRolemenuRoute
+  '/dashboard/$guildId/serverlog': typeof DashboardGuildIdServerlogRoute
+  '/dashboard/$guildId/starboard': typeof DashboardGuildIdStarboardRoute
+  '/dashboard/$guildId/suggestions': typeof DashboardGuildIdSuggestionsRoute
+  '/dashboard/$guildId/tags': typeof DashboardGuildIdTagsRoute
+  '/dashboard/$guildId/tempvc': typeof DashboardGuildIdTempvcRoute
+  '/dashboard/$guildId/tickets': typeof DashboardGuildIdTicketsRoute
+  '/dashboard/$guildId/verification': typeof DashboardGuildIdVerificationRoute
+  '/dashboard/$guildId/welcome': typeof DashboardGuildIdWelcomeRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
   '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
+  '/api/guilds/$guildId/branding/$kind': typeof ApiGuildsGuildIdBrandingKindRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -154,14 +451,45 @@ export interface FileRouteTypes {
     | '/invite'
     | '/privacy'
     | '/terms'
+    | '/appeal/$token'
     | '/dashboard/$guildId'
     | '/verify/$token'
     | '/dashboard/'
     | '/api/auth/$'
-    | '/dashboard/$guildId/$moduleId'
+    | '/dashboard/$guildId/antinuke'
+    | '/dashboard/$guildId/antiraid'
+    | '/dashboard/$guildId/appeals'
+    | '/dashboard/$guildId/automod'
+    | '/dashboard/$guildId/backup'
+    | '/dashboard/$guildId/branding'
+    | '/dashboard/$guildId/cases'
+    | '/dashboard/$guildId/counters'
+    | '/dashboard/$guildId/giveaways'
+    | '/dashboard/$guildId/help'
+    | '/dashboard/$guildId/honeypot'
+    | '/dashboard/$guildId/joinroles'
+    | '/dashboard/$guildId/leveling'
+    | '/dashboard/$guildId/logging'
+    | '/dashboard/$guildId/messages'
+    | '/dashboard/$guildId/moderation'
+    | '/dashboard/$guildId/permissions'
+    | '/dashboard/$guildId/phishing'
+    | '/dashboard/$guildId/ping'
+    | '/dashboard/$guildId/polls'
+    | '/dashboard/$guildId/reminders'
+    | '/dashboard/$guildId/rolemenu'
+    | '/dashboard/$guildId/serverlog'
+    | '/dashboard/$guildId/starboard'
+    | '/dashboard/$guildId/suggestions'
+    | '/dashboard/$guildId/tags'
+    | '/dashboard/$guildId/tempvc'
+    | '/dashboard/$guildId/tickets'
+    | '/dashboard/$guildId/verification'
+    | '/dashboard/$guildId/welcome'
     | '/dashboard/$guildId/'
     | '/api/auth/signin/discord'
     | '/api/guilds/$guildId/card-preview'
+    | '/api/guilds/$guildId/branding/$kind'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -170,13 +498,44 @@ export interface FileRouteTypes {
     | '/invite'
     | '/privacy'
     | '/terms'
+    | '/appeal/$token'
     | '/verify/$token'
     | '/dashboard'
     | '/api/auth/$'
-    | '/dashboard/$guildId/$moduleId'
+    | '/dashboard/$guildId/antinuke'
+    | '/dashboard/$guildId/antiraid'
+    | '/dashboard/$guildId/appeals'
+    | '/dashboard/$guildId/automod'
+    | '/dashboard/$guildId/backup'
+    | '/dashboard/$guildId/branding'
+    | '/dashboard/$guildId/cases'
+    | '/dashboard/$guildId/counters'
+    | '/dashboard/$guildId/giveaways'
+    | '/dashboard/$guildId/help'
+    | '/dashboard/$guildId/honeypot'
+    | '/dashboard/$guildId/joinroles'
+    | '/dashboard/$guildId/leveling'
+    | '/dashboard/$guildId/logging'
+    | '/dashboard/$guildId/messages'
+    | '/dashboard/$guildId/moderation'
+    | '/dashboard/$guildId/permissions'
+    | '/dashboard/$guildId/phishing'
+    | '/dashboard/$guildId/ping'
+    | '/dashboard/$guildId/polls'
+    | '/dashboard/$guildId/reminders'
+    | '/dashboard/$guildId/rolemenu'
+    | '/dashboard/$guildId/serverlog'
+    | '/dashboard/$guildId/starboard'
+    | '/dashboard/$guildId/suggestions'
+    | '/dashboard/$guildId/tags'
+    | '/dashboard/$guildId/tempvc'
+    | '/dashboard/$guildId/tickets'
+    | '/dashboard/$guildId/verification'
+    | '/dashboard/$guildId/welcome'
     | '/dashboard/$guildId'
     | '/api/auth/signin/discord'
     | '/api/guilds/$guildId/card-preview'
+    | '/api/guilds/$guildId/branding/$kind'
   id:
     | '__root__'
     | '/'
@@ -185,14 +544,45 @@ export interface FileRouteTypes {
     | '/invite'
     | '/privacy'
     | '/terms'
+    | '/appeal/$token'
     | '/dashboard/$guildId'
     | '/verify/$token'
     | '/dashboard/'
     | '/api/auth/$'
-    | '/dashboard/$guildId/$moduleId'
+    | '/dashboard/$guildId/antinuke'
+    | '/dashboard/$guildId/antiraid'
+    | '/dashboard/$guildId/appeals'
+    | '/dashboard/$guildId/automod'
+    | '/dashboard/$guildId/backup'
+    | '/dashboard/$guildId/branding'
+    | '/dashboard/$guildId/cases'
+    | '/dashboard/$guildId/counters'
+    | '/dashboard/$guildId/giveaways'
+    | '/dashboard/$guildId/help'
+    | '/dashboard/$guildId/honeypot'
+    | '/dashboard/$guildId/joinroles'
+    | '/dashboard/$guildId/leveling'
+    | '/dashboard/$guildId/logging'
+    | '/dashboard/$guildId/messages'
+    | '/dashboard/$guildId/moderation'
+    | '/dashboard/$guildId/permissions'
+    | '/dashboard/$guildId/phishing'
+    | '/dashboard/$guildId/ping'
+    | '/dashboard/$guildId/polls'
+    | '/dashboard/$guildId/reminders'
+    | '/dashboard/$guildId/rolemenu'
+    | '/dashboard/$guildId/serverlog'
+    | '/dashboard/$guildId/starboard'
+    | '/dashboard/$guildId/suggestions'
+    | '/dashboard/$guildId/tags'
+    | '/dashboard/$guildId/tempvc'
+    | '/dashboard/$guildId/tickets'
+    | '/dashboard/$guildId/verification'
+    | '/dashboard/$guildId/welcome'
     | '/dashboard/$guildId/'
     | '/api/auth/signin/discord'
     | '/api/guilds/$guildId/card-preview'
+    | '/api/guilds/$guildId/branding/$kind'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -202,12 +592,14 @@ export interface RootRouteChildren {
   InviteRoute: typeof InviteRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
+  AppealTokenRoute: typeof AppealTokenRoute
   DashboardGuildIdRoute: typeof DashboardGuildIdRouteWithChildren
   VerifyTokenRoute: typeof VerifyTokenRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiAuthSigninDiscordRoute: typeof ApiAuthSigninDiscordRoute
   ApiGuildsGuildIdCardPreviewRoute: typeof ApiGuildsGuildIdCardPreviewRoute
+  ApiGuildsGuildIdBrandingKindRoute: typeof ApiGuildsGuildIdBrandingKindRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -254,6 +646,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/appeal/$token': {
+      id: '/appeal/$token'
+      path: '/appeal/$token'
+      fullPath: '/appeal/$token'
+      preLoaderRoute: typeof AppealTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/': {
       id: '/dashboard/'
       path: '/dashboard'
@@ -289,11 +688,214 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardGuildIdIndexRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
-    '/dashboard/$guildId/$moduleId': {
-      id: '/dashboard/$guildId/$moduleId'
-      path: '/$moduleId'
-      fullPath: '/dashboard/$guildId/$moduleId'
-      preLoaderRoute: typeof DashboardGuildIdModuleIdRouteImport
+    '/dashboard/$guildId/antinuke': {
+      id: '/dashboard/$guildId/antinuke'
+      path: '/antinuke'
+      fullPath: '/dashboard/$guildId/antinuke'
+      preLoaderRoute: typeof DashboardGuildIdAntinukeRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/antiraid': {
+      id: '/dashboard/$guildId/antiraid'
+      path: '/antiraid'
+      fullPath: '/dashboard/$guildId/antiraid'
+      preLoaderRoute: typeof DashboardGuildIdAntiraidRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/appeals': {
+      id: '/dashboard/$guildId/appeals'
+      path: '/appeals'
+      fullPath: '/dashboard/$guildId/appeals'
+      preLoaderRoute: typeof DashboardGuildIdAppealsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/automod': {
+      id: '/dashboard/$guildId/automod'
+      path: '/automod'
+      fullPath: '/dashboard/$guildId/automod'
+      preLoaderRoute: typeof DashboardGuildIdAutomodRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/backup': {
+      id: '/dashboard/$guildId/backup'
+      path: '/backup'
+      fullPath: '/dashboard/$guildId/backup'
+      preLoaderRoute: typeof DashboardGuildIdBackupRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/branding': {
+      id: '/dashboard/$guildId/branding'
+      path: '/branding'
+      fullPath: '/dashboard/$guildId/branding'
+      preLoaderRoute: typeof DashboardGuildIdBrandingRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/cases': {
+      id: '/dashboard/$guildId/cases'
+      path: '/cases'
+      fullPath: '/dashboard/$guildId/cases'
+      preLoaderRoute: typeof DashboardGuildIdCasesRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/counters': {
+      id: '/dashboard/$guildId/counters'
+      path: '/counters'
+      fullPath: '/dashboard/$guildId/counters'
+      preLoaderRoute: typeof DashboardGuildIdCountersRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/giveaways': {
+      id: '/dashboard/$guildId/giveaways'
+      path: '/giveaways'
+      fullPath: '/dashboard/$guildId/giveaways'
+      preLoaderRoute: typeof DashboardGuildIdGiveawaysRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/help': {
+      id: '/dashboard/$guildId/help'
+      path: '/help'
+      fullPath: '/dashboard/$guildId/help'
+      preLoaderRoute: typeof DashboardGuildIdHelpRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/honeypot': {
+      id: '/dashboard/$guildId/honeypot'
+      path: '/honeypot'
+      fullPath: '/dashboard/$guildId/honeypot'
+      preLoaderRoute: typeof DashboardGuildIdHoneypotRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/joinroles': {
+      id: '/dashboard/$guildId/joinroles'
+      path: '/joinroles'
+      fullPath: '/dashboard/$guildId/joinroles'
+      preLoaderRoute: typeof DashboardGuildIdJoinrolesRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/leveling': {
+      id: '/dashboard/$guildId/leveling'
+      path: '/leveling'
+      fullPath: '/dashboard/$guildId/leveling'
+      preLoaderRoute: typeof DashboardGuildIdLevelingRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/logging': {
+      id: '/dashboard/$guildId/logging'
+      path: '/logging'
+      fullPath: '/dashboard/$guildId/logging'
+      preLoaderRoute: typeof DashboardGuildIdLoggingRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/messages': {
+      id: '/dashboard/$guildId/messages'
+      path: '/messages'
+      fullPath: '/dashboard/$guildId/messages'
+      preLoaderRoute: typeof DashboardGuildIdMessagesRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/moderation': {
+      id: '/dashboard/$guildId/moderation'
+      path: '/moderation'
+      fullPath: '/dashboard/$guildId/moderation'
+      preLoaderRoute: typeof DashboardGuildIdModerationRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/permissions': {
+      id: '/dashboard/$guildId/permissions'
+      path: '/permissions'
+      fullPath: '/dashboard/$guildId/permissions'
+      preLoaderRoute: typeof DashboardGuildIdPermissionsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/phishing': {
+      id: '/dashboard/$guildId/phishing'
+      path: '/phishing'
+      fullPath: '/dashboard/$guildId/phishing'
+      preLoaderRoute: typeof DashboardGuildIdPhishingRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/ping': {
+      id: '/dashboard/$guildId/ping'
+      path: '/ping'
+      fullPath: '/dashboard/$guildId/ping'
+      preLoaderRoute: typeof DashboardGuildIdPingRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/polls': {
+      id: '/dashboard/$guildId/polls'
+      path: '/polls'
+      fullPath: '/dashboard/$guildId/polls'
+      preLoaderRoute: typeof DashboardGuildIdPollsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/reminders': {
+      id: '/dashboard/$guildId/reminders'
+      path: '/reminders'
+      fullPath: '/dashboard/$guildId/reminders'
+      preLoaderRoute: typeof DashboardGuildIdRemindersRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/rolemenu': {
+      id: '/dashboard/$guildId/rolemenu'
+      path: '/rolemenu'
+      fullPath: '/dashboard/$guildId/rolemenu'
+      preLoaderRoute: typeof DashboardGuildIdRolemenuRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/serverlog': {
+      id: '/dashboard/$guildId/serverlog'
+      path: '/serverlog'
+      fullPath: '/dashboard/$guildId/serverlog'
+      preLoaderRoute: typeof DashboardGuildIdServerlogRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/starboard': {
+      id: '/dashboard/$guildId/starboard'
+      path: '/starboard'
+      fullPath: '/dashboard/$guildId/starboard'
+      preLoaderRoute: typeof DashboardGuildIdStarboardRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/suggestions': {
+      id: '/dashboard/$guildId/suggestions'
+      path: '/suggestions'
+      fullPath: '/dashboard/$guildId/suggestions'
+      preLoaderRoute: typeof DashboardGuildIdSuggestionsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/tags': {
+      id: '/dashboard/$guildId/tags'
+      path: '/tags'
+      fullPath: '/dashboard/$guildId/tags'
+      preLoaderRoute: typeof DashboardGuildIdTagsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/tempvc': {
+      id: '/dashboard/$guildId/tempvc'
+      path: '/tempvc'
+      fullPath: '/dashboard/$guildId/tempvc'
+      preLoaderRoute: typeof DashboardGuildIdTempvcRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/tickets': {
+      id: '/dashboard/$guildId/tickets'
+      path: '/tickets'
+      fullPath: '/dashboard/$guildId/tickets'
+      preLoaderRoute: typeof DashboardGuildIdTicketsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/verification': {
+      id: '/dashboard/$guildId/verification'
+      path: '/verification'
+      fullPath: '/dashboard/$guildId/verification'
+      preLoaderRoute: typeof DashboardGuildIdVerificationRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/welcome': {
+      id: '/dashboard/$guildId/welcome'
+      path: '/welcome'
+      fullPath: '/dashboard/$guildId/welcome'
+      preLoaderRoute: typeof DashboardGuildIdWelcomeRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
     '/api/auth/signin/discord': {
@@ -310,16 +912,81 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGuildsGuildIdCardPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/guilds/$guildId/branding/$kind': {
+      id: '/api/guilds/$guildId/branding/$kind'
+      path: '/api/guilds/$guildId/branding/$kind'
+      fullPath: '/api/guilds/$guildId/branding/$kind'
+      preLoaderRoute: typeof ApiGuildsGuildIdBrandingKindRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface DashboardGuildIdRouteChildren {
-  DashboardGuildIdModuleIdRoute: typeof DashboardGuildIdModuleIdRoute
+  DashboardGuildIdAntinukeRoute: typeof DashboardGuildIdAntinukeRoute
+  DashboardGuildIdAntiraidRoute: typeof DashboardGuildIdAntiraidRoute
+  DashboardGuildIdAppealsRoute: typeof DashboardGuildIdAppealsRoute
+  DashboardGuildIdAutomodRoute: typeof DashboardGuildIdAutomodRoute
+  DashboardGuildIdBackupRoute: typeof DashboardGuildIdBackupRoute
+  DashboardGuildIdBrandingRoute: typeof DashboardGuildIdBrandingRoute
+  DashboardGuildIdCasesRoute: typeof DashboardGuildIdCasesRoute
+  DashboardGuildIdCountersRoute: typeof DashboardGuildIdCountersRoute
+  DashboardGuildIdGiveawaysRoute: typeof DashboardGuildIdGiveawaysRoute
+  DashboardGuildIdHelpRoute: typeof DashboardGuildIdHelpRoute
+  DashboardGuildIdHoneypotRoute: typeof DashboardGuildIdHoneypotRoute
+  DashboardGuildIdJoinrolesRoute: typeof DashboardGuildIdJoinrolesRoute
+  DashboardGuildIdLevelingRoute: typeof DashboardGuildIdLevelingRoute
+  DashboardGuildIdLoggingRoute: typeof DashboardGuildIdLoggingRoute
+  DashboardGuildIdMessagesRoute: typeof DashboardGuildIdMessagesRoute
+  DashboardGuildIdModerationRoute: typeof DashboardGuildIdModerationRoute
+  DashboardGuildIdPermissionsRoute: typeof DashboardGuildIdPermissionsRoute
+  DashboardGuildIdPhishingRoute: typeof DashboardGuildIdPhishingRoute
+  DashboardGuildIdPingRoute: typeof DashboardGuildIdPingRoute
+  DashboardGuildIdPollsRoute: typeof DashboardGuildIdPollsRoute
+  DashboardGuildIdRemindersRoute: typeof DashboardGuildIdRemindersRoute
+  DashboardGuildIdRolemenuRoute: typeof DashboardGuildIdRolemenuRoute
+  DashboardGuildIdServerlogRoute: typeof DashboardGuildIdServerlogRoute
+  DashboardGuildIdStarboardRoute: typeof DashboardGuildIdStarboardRoute
+  DashboardGuildIdSuggestionsRoute: typeof DashboardGuildIdSuggestionsRoute
+  DashboardGuildIdTagsRoute: typeof DashboardGuildIdTagsRoute
+  DashboardGuildIdTempvcRoute: typeof DashboardGuildIdTempvcRoute
+  DashboardGuildIdTicketsRoute: typeof DashboardGuildIdTicketsRoute
+  DashboardGuildIdVerificationRoute: typeof DashboardGuildIdVerificationRoute
+  DashboardGuildIdWelcomeRoute: typeof DashboardGuildIdWelcomeRoute
   DashboardGuildIdIndexRoute: typeof DashboardGuildIdIndexRoute
 }
 
 const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
-  DashboardGuildIdModuleIdRoute: DashboardGuildIdModuleIdRoute,
+  DashboardGuildIdAntinukeRoute: DashboardGuildIdAntinukeRoute,
+  DashboardGuildIdAntiraidRoute: DashboardGuildIdAntiraidRoute,
+  DashboardGuildIdAppealsRoute: DashboardGuildIdAppealsRoute,
+  DashboardGuildIdAutomodRoute: DashboardGuildIdAutomodRoute,
+  DashboardGuildIdBackupRoute: DashboardGuildIdBackupRoute,
+  DashboardGuildIdBrandingRoute: DashboardGuildIdBrandingRoute,
+  DashboardGuildIdCasesRoute: DashboardGuildIdCasesRoute,
+  DashboardGuildIdCountersRoute: DashboardGuildIdCountersRoute,
+  DashboardGuildIdGiveawaysRoute: DashboardGuildIdGiveawaysRoute,
+  DashboardGuildIdHelpRoute: DashboardGuildIdHelpRoute,
+  DashboardGuildIdHoneypotRoute: DashboardGuildIdHoneypotRoute,
+  DashboardGuildIdJoinrolesRoute: DashboardGuildIdJoinrolesRoute,
+  DashboardGuildIdLevelingRoute: DashboardGuildIdLevelingRoute,
+  DashboardGuildIdLoggingRoute: DashboardGuildIdLoggingRoute,
+  DashboardGuildIdMessagesRoute: DashboardGuildIdMessagesRoute,
+  DashboardGuildIdModerationRoute: DashboardGuildIdModerationRoute,
+  DashboardGuildIdPermissionsRoute: DashboardGuildIdPermissionsRoute,
+  DashboardGuildIdPhishingRoute: DashboardGuildIdPhishingRoute,
+  DashboardGuildIdPingRoute: DashboardGuildIdPingRoute,
+  DashboardGuildIdPollsRoute: DashboardGuildIdPollsRoute,
+  DashboardGuildIdRemindersRoute: DashboardGuildIdRemindersRoute,
+  DashboardGuildIdRolemenuRoute: DashboardGuildIdRolemenuRoute,
+  DashboardGuildIdServerlogRoute: DashboardGuildIdServerlogRoute,
+  DashboardGuildIdStarboardRoute: DashboardGuildIdStarboardRoute,
+  DashboardGuildIdSuggestionsRoute: DashboardGuildIdSuggestionsRoute,
+  DashboardGuildIdTagsRoute: DashboardGuildIdTagsRoute,
+  DashboardGuildIdTempvcRoute: DashboardGuildIdTempvcRoute,
+  DashboardGuildIdTicketsRoute: DashboardGuildIdTicketsRoute,
+  DashboardGuildIdVerificationRoute: DashboardGuildIdVerificationRoute,
+  DashboardGuildIdWelcomeRoute: DashboardGuildIdWelcomeRoute,
   DashboardGuildIdIndexRoute: DashboardGuildIdIndexRoute,
 }
 
@@ -333,12 +1000,14 @@ const rootRouteChildren: RootRouteChildren = {
   InviteRoute: InviteRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
+  AppealTokenRoute: AppealTokenRoute,
   DashboardGuildIdRoute: DashboardGuildIdRouteWithChildren,
   VerifyTokenRoute: VerifyTokenRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiAuthSigninDiscordRoute: ApiAuthSigninDiscordRoute,
   ApiGuildsGuildIdCardPreviewRoute: ApiGuildsGuildIdCardPreviewRoute,
+  ApiGuildsGuildIdBrandingKindRoute: ApiGuildsGuildIdBrandingKindRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

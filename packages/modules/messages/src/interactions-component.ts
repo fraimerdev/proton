@@ -24,12 +24,11 @@ import {
 
 export const MESSAGES_COMPONENT_EVENT_TYPES: EventType[] = ['interaction.component'];
 
-const WHERE = 'the Proton dashboard (Modules → Embeds)';
+const WHERE = 'the Proton dashboard (Modules → Messages)';
 
 const NOT_WIRED =
-  "I can't finish that: this Proton deployment isn't fully set up, so I have no way to tell you " +
-  'what happened afterwards. Nothing was changed. A server admin should check the Proton logs — ' +
-  'the exact missing piece is named there.';
+  'I can’t finish that: I would have no way to tell you what happened afterwards. Nothing was ' +
+  'changed. This is a fault on my side, not a setting in this server.';
 
 export type ComponentOutcome =
   | { action: 'ignored'; reason: string }
@@ -72,8 +71,8 @@ export async function handleComponentPress(
     await replyEphemeral(
       ctx,
       to,
-      `This ${what} does nothing right now: the embed builder is switched off in this server. An ` +
-        `admin can turn it back on from ${WHERE}.`,
+      `This ${what} does nothing right now: the Messages module is switched off in this server. ` +
+        `An admin can turn it back on from ${WHERE}.`,
     );
     return { action: 'refused', reason: 'embeds is switched off in this server' };
   }

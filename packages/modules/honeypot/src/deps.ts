@@ -1,5 +1,11 @@
-import type { GuildStateStore } from '@proton/core';
-import type { HoneypotLock, HoneypotStatsStore, NoticeStore } from './store.ts';
+import type { BlockedMemberStore, GuildStateStore } from '@proton/core';
+import type {
+  DmChannelStore,
+  HoneypotLock,
+  HoneypotPendingStore,
+  HoneypotStatsStore,
+  NoticeStore,
+} from './store.ts';
 
 export interface HoneypotDeps {
   lock?: HoneypotLock;
@@ -11,6 +17,18 @@ export interface HoneypotDeps {
   notices?: NoticeStore;
 
   stats?: HoneypotStatsStore;
+
+  blocked?: BlockedMemberStore;
+
+  pending?: HoneypotPendingStore;
+
+  dms?: DmChannelStore;
+
+  guildName?(guildId: string): Promise<string>;
+
+  linkSecret?: string;
+
+  linkBaseUrl?: string;
 
   now?(): number;
 }
@@ -29,6 +47,11 @@ const PORT_HINTS: Record<string, string> = {
   guildState: 'guildState: new RedisGuildStateStore(redis)',
   notices: 'notices: new RedisNoticeStore(redis)',
   stats: 'stats: new RedisHoneypotStatsStore(redis)',
+  blocked: 'blocked: new DrizzleBlockedMemberStore(handle)',
+  pending: 'pending: new RedisHoneypotPendingStore(redis)',
+  dms: 'dms: new RedisDmChannelStore(redis)',
+  linkSecret: 'linkSecret: env.VERIFY_LINK_SECRET',
+  linkBaseUrl: 'linkBaseUrl: env.DASHBOARD_URL',
 };
 
 export function bindHoneypotDeps(deps: HoneypotDeps): BindResult<BoundHoneypotDeps> {

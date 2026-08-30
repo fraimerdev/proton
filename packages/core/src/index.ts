@@ -99,6 +99,41 @@ export {
   type ScopedActionExecutor,
 } from './actions/types.ts';
 export {
+  APPEAL_LINK_PATH,
+  APPEAL_LINK_TTL_MS,
+  APPEAL_PANEL_ID_MAX,
+  type AppealLinkClaims,
+  type AppealLinkResult,
+  appealLinkClaimsSchema,
+  appealLinkUrl,
+  type NewAppealLinkInput,
+  newAppealLinkClaims,
+  readAppealLink,
+  signAppealLink,
+} from './appeal-link.ts';
+export {
+  BLOCK_REASON_MAX,
+  BLOCKED_PAGE_SIZE_DEFAULT,
+  BLOCKED_PAGE_SIZE_MAX,
+  BLOCKED_STATES,
+  type BlockedEvidence,
+  type BlockedMember,
+  type BlockedMemberList,
+  type BlockedMemberQuery,
+  type BlockedMemberStore,
+  type BlockedState,
+  type BlockMemberInput,
+  blockedEvidenceSchema,
+  blockedMemberListSchema,
+  blockedMemberQuerySchema,
+  blockedMemberSchema,
+  blockMemberInputSchema,
+  type LiftBlockInput,
+  type LiftBlockResult,
+  liftBlockInputSchema,
+  liftBlockResultSchema,
+} from './blocked/query.ts';
+export {
   type BooleanField,
   type ChannelIdField,
   type ColourField,
@@ -136,6 +171,14 @@ export {
   TIER_LIMITS,
 } from './entitlements/limits.ts';
 export { createEnv, EnvValidationError } from './env.ts';
+export {
+  APPEAL_DECISIONS,
+  type AppealDecided,
+  type AppealDecision,
+  type AppealSubmitted,
+  appealDecidedSchema,
+  appealSubmittedSchema,
+} from './events/appeals.ts';
 export {
   AUDIT_LOG_EVENT_TYPES,
   type AuditChange,
@@ -440,7 +483,6 @@ export {
   guildOverviewSchema,
   guildPresenceSchema,
   type ModuleConfigView,
-  type ModuleDescriptors,
   type ModuleField,
   type ModuleIndex,
   type ModuleSection,
@@ -448,7 +490,6 @@ export {
   type ModuleSummary,
   type ModuleUpdateResult,
   moduleConfigViewSchema,
-  moduleDescriptorsSchema,
   moduleFieldSchema,
   moduleIndexSchema,
   moduleSectionSchema,
@@ -527,6 +568,9 @@ export {
   type TreeVerdict,
   treeFromFlat,
 } from './providers/tree.ts';
+// Not re-exported here: redis.ts constructs an ioredis client, and this barrel is imported by
+// dashboard components. Re-exporting put ioredis in the browser bundle, where it threw on load and
+// left the whole dashboard server-rendered but never hydrated. Import '@proton/core/redis'.
 export {
   evaluateFactCondition,
   type FactCondition,
@@ -587,6 +631,13 @@ export {
   ruleTriggerSchema,
   type ScheduledJob,
 } from './rules/types.ts';
+export {
+  readLink,
+  SIGNED_LINK_SECRET_MIN,
+  type SignedLinkClaims,
+  type SignedLinkResult,
+  signLink,
+} from './signed-link.ts';
 export {
   DOMAIN_MAX_LENGTH,
   domainCandidates,

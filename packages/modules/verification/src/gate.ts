@@ -177,8 +177,8 @@ export async function runVerify(
     ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
     await reply(
       ctx,
-      "I couldn't verify you because Proton isn't fully wired up in this deployment. A server " +
-        'admin should check the Proton logs — the exact missing piece is named there.',
+      'I can’t verify you right now. Nothing was changed. This is a fault on my side, not ' +
+        'anything you did.',
     );
     return;
   }
@@ -196,12 +196,48 @@ export async function runVerify(
     return;
   }
 
-  await reply(ctx, (await runVerification(ctx, plan, ctx.userId, ctx.idempotencyKey)).message);
+  await reply(
+    ctx,
+    (await runVerification(ctx, plan, ctx.userId, ctx.idempotencyKey, rawDeps)).message,
+  );
 }
 
 export interface VerifyResult {
   verified: boolean;
   message: string;
+  blocked?: boolean;
+}
+
+const BLOCKED_MESSAGE =
+  'You are on this server’s blocked list, so I can’t verify you. Nothing has changed. A ' +
+  'moderator can lift it from the Proton dashboard.';
+
+// Fail-open, and loudly. Refusing everybody when the port is unwired would turn one wiring
+// mistake into a total gate outage, and the list is a second line behind a ban that already ran.
+async function blockedFor(
+  ctx: ModuleContext<VerificationConfig>,
+  deps: VerificationDeps,
+  userId: string,
+): Promise<boolean> {
+  if (!deps.blocked) {
+    ctx.logger.error(describeUnbound('the blocked list was not consulted', ['blocked']), {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      userId,
+    });
+    return false;
+  }
+
+  const block = await deps.blocked.find(ctx.guildId, userId);
+  if (!block) return false;
+
+  ctx.logger.warn(
+    `verification refused ${userId}: they are on this server’s blocked list, added by ` +
+      `${block.moduleId} — ${block.reason}`,
+    { guildId: ctx.guildId, moduleId: MODULE_ID, userId },
+  );
+
+  return true;
 }
 
 export async function runVerification(
@@ -209,7 +245,13 @@ export async function runVerification(
   plan: { grant: RoleStep[]; clear: RoleStep[] },
   userId: string,
   idempotencyRoot: string,
+  deps: VerificationDeps,
 ): Promise<VerifyResult> {
+  // Before the first grant, so a blocked member is never briefly ungated.
+  if (await blockedFor(ctx, deps, userId)) {
+    return { verified: false, blocked: true, message: BLOCKED_MESSAGE };
+  }
+
   const reason = 'Verification gate: passed.';
 
   // Granting before clearing means a refused grant leaves the member exactly where they were,
@@ -250,8 +292,8 @@ export async function runVerification(
     return {
       verified: true,
       message:
-        "You're verified and your access should be live. One thing did not finish — " +
-        `${cleared.failures.join(' | ')} — so tell a moderator; it does not affect your access.`,
+        "You're verified. One thing did not finish — " +
+        `${cleared.failures.join(' | ')} — so if you still can't see the server, tell a moderator.`,
     };
   }
 

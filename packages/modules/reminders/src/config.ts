@@ -78,8 +78,8 @@ export function resolveDelay(raw: string, config: RemindersConfig): DelayResult 
     return {
       ok: false,
       humanReason:
-        `This server's reminder bounds cannot be read — soonest '${config.minDuration}', ` +
-        `furthest ahead '${config.maxDuration}'. An admin needs to fix them in the Proton ` +
+        `This server’s reminder bounds cannot be read — soonest “${config.minDuration}”, ` +
+        `furthest ahead “${config.maxDuration}”. An admin needs to fix them in the Proton ` +
         'dashboard under Reminders; each one is a number followed by s, m, h, d or w.',
     };
   }

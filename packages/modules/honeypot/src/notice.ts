@@ -1,15 +1,31 @@
-import { encodeCustomId } from '@proton/core';
-import { ButtonStyle, ComponentType } from 'discord-api-types/v10';
-import { describeWindow, type HoneypotAction, type HoneypotChannel, MODULE_ID } from './config.ts';
+import {
+  type EntitlementTier,
+  encodeCustomId,
+  MESSAGE_FLAG_IS_COMPONENTS_V2,
+  type ProtonMessage,
+  substitute,
+  toDiscordMessage,
+  type V2Component,
+} from '@proton/core';
+import { ComponentType } from 'discord-api-types/v10';
+import {
+  DEFAULT_DM_MESSAGE,
+  DEFAULT_NOTICE_MESSAGE,
+  describeWindow,
+  HONEYPOT_COLOUR,
+  type HoneypotAction,
+  type HoneypotConfig,
+  MODULE_ID,
+} from './config.ts';
+import { COUNTER_KEY, HONEYPOT_POT, QUIET_NOTICE_BODY, RECOVERY_ADVICE } from './layout.ts';
 
 export const STATS_ACTION = 'stats';
 
-// DESIGN.md's Blocked Coral: "something cannot run, or the user is about to destroy something".
-export const HONEYPOT_COLOUR = 0xff7a86;
+export const RECOVERY_ADVICE_TEXT = RECOVERY_ADVICE;
 
-export const HONEYPOT_POT = '🍯';
+export { HONEYPOT_COLOUR, HONEYPOT_POT };
 
-// The button never says "Kicks" over a trap that softbans, so the noun is read per channel.
+// The button never says "Kicks" over a trap that softbans, so the noun is read from the action.
 const CAUGHT_NOUN: Record<HoneypotAction, string> = {
   softban: 'Softbans',
   ban: 'Bans',
@@ -28,69 +44,145 @@ const CONSEQUENCE: Record<HoneypotAction, string> = {
   none: 'it is reported to the moderators',
 };
 
+export const DM_ACTION_WORD: Record<HoneypotAction, string> = {
+  softban: 'removed from the server, and can rejoin straight away',
+  ban: 'banned',
+  kick: 'removed from the server',
+  timeout: 'timed out',
+  warn: 'given a warning',
+  none: 'reported to the moderators',
+};
+
 export function caughtLabel(action: HoneypotAction, caught: number): string {
   return `${CAUGHT_NOUN[action]}: ${caught}`;
 }
 
-function text(content: string): Record<string, unknown> {
-  return { type: ComponentType.TextDisplay, content };
+export function consequenceOf(action: HoneypotAction): string {
+  return CONSEQUENCE[action];
 }
 
-function separator(): Record<string, unknown> {
-  return { type: ComponentType.Separator, divider: true, spacing: 1 };
+export function purgeSentence(config: HoneypotConfig): string {
+  const purges = config.action === 'softban' || config.action === 'ban';
+
+  return purges && config.deleteMessageSeconds > 0
+    ? ` Everything you posted in ${describeWindow(config.deleteMessageSeconds)} is deleted with you.`
+    : '';
 }
 
-function spacer(): Record<string, unknown> {
-  return { type: ComponentType.Separator, divider: false, spacing: 1 };
+export type LayoutSlot = 'noticeLayout' | 'dmLayout';
+
+const BUILT_IN: Record<LayoutSlot, ProtonMessage> = {
+  noticeLayout: DEFAULT_NOTICE_MESSAGE as ProtonMessage,
+  dmLayout: DEFAULT_DM_MESSAGE as ProtonMessage,
+};
+
+/**
+ * Render-only, and never on the write path. A free guild's own layout stays in `guild_modules`
+ * untouched — substituting here rather than at save time is what stops one unrelated toggle from
+ * overwriting work an admin did while they were on a paid tier.
+ */
+export function layoutFor(
+  config: HoneypotConfig,
+  slot: LayoutSlot,
+  tier: EntitlementTier | undefined,
+): ProtonMessage {
+  return (tier ?? 'free') === 'free' ? BUILT_IN[slot] : (config[slot] as ProtonMessage);
 }
 
-function container(
-  accent: number,
-  ...components: Record<string, unknown>[]
-): Record<string, unknown> {
-  return { type: ComponentType.Container, accent_color: accent, components };
+// Appended, not stored. The counter is Proton's own button — a stored non-link button has to
+// carry a ComponentAction, and there is no action in that vocabulary for "open this trap's tally".
+export function appendRow(v2: readonly V2Component[], row: V2Component): V2Component[] {
+  const last = v2.findLastIndex((component) => component.kind === 'container');
+  if (last === -1) return [...v2, row];
+
+  return v2.map((component, index) => {
+    if (index !== last || component.kind !== 'container') return component;
+
+    return { ...component, children: [...component.children, row as never] };
+  });
 }
 
 export type NoticeResult =
-  | { ok: true; components: Record<string, unknown>[] }
+  | { ok: true; components: Record<string, unknown>[]; flags: number }
   | { ok: false; humanReason: string };
 
-export function buildNoticeComponents(channel: HoneypotChannel, caught: number): NoticeResult {
-  const customId = encodeCustomId(MODULE_ID, STATS_ACTION, channel.channelId);
+export function buildNoticeComponents(
+  config: HoneypotConfig,
+  channelId: string,
+  caught: number,
+  tier: EntitlementTier | undefined,
+): NoticeResult {
+  const customId = encodeCustomId(MODULE_ID, STATS_ACTION, channelId);
   if (!customId.ok) return { ok: false, humanReason: customId.humanReason };
 
-  const purge =
-    (channel.action === 'softban' || channel.action === 'ban') && channel.deleteMessageSeconds > 0
-      ? ` Everything you posted in ${describeWindow(channel.deleteMessageSeconds)} is deleted with you.`
-      : '';
+  const layout = layoutFor(config, 'noticeLayout', tier);
 
-  return {
-    ok: true,
-    components: [
-      container(
-        HONEYPOT_COLOUR,
-        text(`## ${HONEYPOT_POT}  DO NOT SEND MESSAGES IN THIS CHANNEL`),
-        text(
-          'This channel is used to catch spam bots and compromised accounts, which post in every ' +
-            `channel they can see. Any message sent here means **${CONSEQUENCE[channel.action]}**.` +
-            `${purge}\n\nThere is never a reason to post here.`,
-        ),
-        spacer(),
-        {
-          type: ComponentType.ActionRow,
-          components: [
+  const body = config.hideWhatIsAHoneypot
+    ? (substitute(QUIET_NOTICE_BODY, {
+        consequence: CONSEQUENCE[config.action],
+        purge: purgeSentence(config),
+      }) as string)
+    : undefined;
+
+  const substituted = substitute(layout, {
+    consequence: CONSEQUENCE[config.action],
+    purge: purgeSentence(config),
+  }) as ProtonMessage;
+
+  const withBody = body ? replaceBody(substituted.v2, body) : substituted.v2;
+
+  const v2 = config.noticeCounterButton
+    ? appendRow(withBody, {
+        kind: 'row',
+        row: {
+          kind: 'buttons',
+          buttons: [
             {
-              type: ComponentType.Button,
-              style: ButtonStyle.Secondary,
-              label: caughtLabel(channel.action, caught),
+              key: COUNTER_KEY,
+              style: 'secondary',
+              label: caughtLabel(config.action, caught),
               emoji: { name: HONEYPOT_POT },
-              custom_id: customId.customId,
             },
           ],
         },
-      ),
-    ],
+      })
+    : withBody;
+
+  const rendered = toDiscordMessage(
+    { ...substituted, v2 },
+    {
+      customIdFor: () => customId.customId,
+    },
+  );
+
+  return {
+    ok: true,
+    components: (rendered.components ?? []) as unknown as Record<string, unknown>[],
+    flags: MESSAGE_FLAG_IS_COMPONENTS_V2,
   };
+}
+
+// The second text display of the first container is the body the default layout ships. An admin
+// who authored their own said what they wanted said, so nothing is swapped there.
+function replaceBody(v2: readonly V2Component[], body: string): V2Component[] {
+  let replaced = false;
+
+  return v2.map((component) => {
+    if (component.kind !== 'container' || replaced) return component;
+
+    let seen = 0;
+    const children = component.children.map((child) => {
+      if (child.kind !== 'text') return child;
+
+      seen += 1;
+      if (seen !== 2) return child;
+
+      replaced = true;
+      return { ...child, content: body };
+    });
+
+    return { ...component, children };
+  });
 }
 
 export interface StatsView {
@@ -105,6 +197,21 @@ export interface StatsView {
   recent: ReadonlyArray<{ userId: string; action: string; at: number }>;
 
   privileged: boolean;
+}
+
+function text(content: string): Record<string, unknown> {
+  return { type: ComponentType.TextDisplay, content };
+}
+
+function separator(): Record<string, unknown> {
+  return { type: ComponentType.Separator, divider: true, spacing: 1 };
+}
+
+function container(
+  accent: number,
+  ...components: Record<string, unknown>[]
+): Record<string, unknown> {
+  return { type: ComponentType.Container, accent_color: accent, components };
 }
 
 function plural(count: number, one: string, many: string): string {

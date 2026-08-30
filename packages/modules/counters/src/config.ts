@@ -19,33 +19,66 @@ export const COUNTER_SOURCES = ['members', 'roles', 'channels'] as const;
 
 export type CounterSource = (typeof COUNTER_SOURCES)[number];
 
-export const counterSchema = z.object({
-  // Cloned first: register() mutates the instance it is given, so registering on the shared
-  // snowflakeSchema puts this label on every channel and role field in every other module.
-  channelId: snowflakeSchema.clone().register(protonFields, {
-    field: 'channel-id',
-    label: 'Channel',
-    description: 'Discord rewrites text channel names to lowercase-with-dashes',
-  }),
+export const COUNTER_ID_MAX = 32;
 
-  template: z
-    .string()
-    .min(1)
-    .max(TEMPLATE_MAX)
-    .refine((value) => value.includes(COUNT_PLACEHOLDER), {
-      message:
-        `a counter template needs ${COUNT_PLACEHOLDER} in it — that is where the number goes, ` +
-        'as in “Members: {count}”. Without it the channel would be renamed to a fixed string ' +
-        'that never changes.',
-    })
-    .register(protonFields, {
-      label: 'Name template',
+const counterIdSchema = z
+  .string()
+  .min(1)
+  .max(COUNTER_ID_MAX)
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
+    'must start with a letter or digit and contain only letters, digits, hyphens and underscores',
+  );
+
+function liftLegacyCounter(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+
+  const counter = raw as Record<string, unknown>;
+  if (typeof counter.id === 'string') return counter;
+
+  // A counter saved before Proton could make its own channel is identified by the channel it was
+  // pointed at. Minting a fresh id here instead would hand it a different one on every read, and
+  // the id is what a Proton-made channel is filed under.
+  return typeof counter.channelId === 'string' ? { ...counter, id: counter.channelId } : counter;
+}
+
+export const counterSchema = z.preprocess(
+  liftLegacyCounter,
+  z.object({
+    id: counterIdSchema,
+
+    // Absent means Proton makes the channel and owns it from then on. Present means the counter
+    // renames a channel somebody else made, which is the only shape that existed before.
+    // Cloned first: register() mutates the instance it is given, so registering on the shared
+    // snowflakeSchema puts this label on every channel and role field in every other module.
+    channelId: snowflakeSchema
+      .clone()
+      .register(protonFields, {
+        field: 'channel-id',
+        label: 'Channel',
+        description: 'Discord rewrites text channel names to lowercase-with-dashes',
+      })
+      .optional(),
+
+    template: z
+      .string()
+      .min(1)
+      .max(TEMPLATE_MAX)
+      .refine((value) => value.includes(COUNT_PLACEHOLDER), {
+        message:
+          `a counter template needs ${COUNT_PLACEHOLDER} in it — that is where the number goes, ` +
+          'as in “Members: {count}”. Without it the channel would be renamed to a fixed string ' +
+          'that never changes.',
+      })
+      .register(protonFields, {
+        label: 'Name template',
+      }),
+
+    source: z.enum(COUNTER_SOURCES).register(protonFields, {
+      label: 'What to count',
     }),
-
-  source: z.enum(COUNTER_SOURCES).register(protonFields, {
-    label: 'What to count',
   }),
-});
+);
 
 export type Counter = z.infer<typeof counterSchema>;
 
@@ -53,10 +86,11 @@ export const countersListSchema = z
   .array(counterSchema)
   .max(COUNTERS_CEILING)
   .superRefine((counters, ctx) => {
-    const seen = new Set<string>();
+    const channels = new Set<string>();
+    const ids = new Set<string>();
 
     for (const [index, counter] of counters.entries()) {
-      if (seen.has(counter.channelId)) {
+      if (counter.channelId !== undefined && channels.has(counter.channelId)) {
         ctx.addIssue({
           code: 'custom',
           path: [index, 'channelId'],
@@ -65,7 +99,18 @@ export const countersListSchema = z
             'would spend the other’s rename allowance.',
         });
       }
-      seen.add(counter.channelId);
+      if (counter.channelId !== undefined) channels.add(counter.channelId);
+
+      if (ids.has(counter.id)) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [index, 'id'],
+          message:
+            'two counters cannot share an id — the channel Proton makes for a counter is filed ' +
+            'under it, so both would rename the same channel.',
+        });
+      }
+      ids.add(counter.id);
     }
   });
 

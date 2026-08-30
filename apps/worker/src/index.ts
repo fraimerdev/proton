@@ -19,16 +19,21 @@ import {
   resolvePrecheckContext,
   ScheduledActionSweeper,
 } from '@proton/core';
+import { createRedisClient } from '@proton/core/redis';
 import {
   createDb,
+  DrizzleBlockedMemberStore,
   DrizzleCaseRecorder,
   DrizzleGuildRuleStore,
   DrizzleMemberXpStore,
   DrizzleScheduledActionStore,
 } from '@proton/db';
 import { RedisMaintenanceStore } from '@proton/module-antinuke';
+import { DrizzleAppealStore } from '@proton/module-appeals';
 import { DrizzleBackupStore } from '@proton/module-backup';
+import { DrizzleBrandingAssetStore, DrizzleBrandingRoleStore } from '@proton/module-branding/store';
 import { DrizzleCaseHistoryStore } from '@proton/module-cases/store';
+import { DrizzleCounterChannelStore } from '@proton/module-counters';
 import {
   DrizzleGiveawayStore,
   RedisDirtyCounts,
@@ -36,7 +41,9 @@ import {
   RedisEntryBucket,
 } from '@proton/module-giveaways';
 import {
+  RedisDmChannelStore,
   RedisHoneypotLock,
+  RedisHoneypotPendingStore,
   RedisHoneypotStatsStore,
   RedisNoticeStore,
 } from '@proton/module-honeypot';
@@ -68,7 +75,6 @@ import {
   RedisQuarantineStore,
 } from '@proton/module-verification';
 import { createModuleRegistry } from '@proton/modules';
-import Redis from 'ioredis';
 import { PublishingCaseRecorder, publishableCase } from './action-events.ts';
 import { readNativeAutomodRules } from './automod-rules.ts';
 import { CachingConfigProvider, HttpConfigProvider } from './config-provider.ts';
@@ -97,13 +103,16 @@ import { createStarboardSource } from './starboard-source.ts';
 
 const env = loadEnv();
 
-const busRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_BUS });
-const dedupeRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_DEDUPE });
-const stateRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_STATE });
+const redis = (db: number, label: string) =>
+  createRedisClient(env.REDIS_URL, { db, label: `worker/${label}` });
 
-const moduleRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_MODULES });
-const userRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_USERS });
-const messageRedis = new Redis(env.REDIS_URL, { db: env.REDIS_DB_MESSAGES });
+const busRedis = redis(env.REDIS_DB_BUS, 'bus');
+const dedupeRedis = redis(env.REDIS_DB_DEDUPE, 'dedupe');
+const stateRedis = redis(env.REDIS_DB_STATE, 'guild-state');
+
+const moduleRedis = redis(env.REDIS_DB_MODULES, 'modules');
+const userRedis = redis(env.REDIS_DB_USERS, 'users');
+const messageRedis = redis(env.REDIS_DB_MESSAGES, 'messages');
 const handle = createDb(env.DATABASE_URL);
 
 const rest = new HttpRestProxyClient(env.REST_PROXY_URL);
@@ -145,6 +154,7 @@ const bus = new RedisStreamsEventBus(busRedis, {
 const guildState = new RedisGuildStateStore(stateRedis);
 const layoutStore = new RedisGuildLayoutStore(moduleRedis);
 const schedule = new DrizzleScheduledActionStore(handle);
+const blockedMembers = new DrizzleBlockedMemberStore(handle);
 const reversals = new DatabaseReversalScheduler({ store: schedule, logger: console });
 
 const fetchMemberRoles = createFetchMemberRoles(rest, {
@@ -251,12 +261,18 @@ const registry = createModuleRegistry(
     verification: {
       guildState,
       fetchMemberRoles,
+      blocked: blockedMembers,
       quarantine: new RedisQuarantineStore(moduleRedis),
       captcha: new RedisCaptchaStore(moduleRedis),
       panel: new RedisPanelStore(moduleRedis),
       applicationId: env.DISCORD_APPLICATION_ID,
       verifyLinkBaseUrl: env.DASHBOARD_URL,
       ...(env.VERIFY_LINK_SECRET ? { verifyLinkSecret: env.VERIFY_LINK_SECRET } : {}),
+    },
+    appeals: {
+      store: new DrizzleAppealStore(handle),
+      applicationId: env.DISCORD_APPLICATION_ID,
+      blocked: blockedMembers,
     },
     backup: {
       store: new DrizzleBackupStore(handle, {
@@ -280,6 +296,12 @@ const registry = createModuleRegistry(
       notices: new RedisNoticeStore(moduleRedis),
       stats: new RedisHoneypotStatsStore(moduleRedis),
       guildState,
+      blocked: blockedMembers,
+      pending: new RedisHoneypotPendingStore(moduleRedis),
+      dms: new RedisDmChannelStore(moduleRedis),
+      guildName: async (guildId) => (await guildState.get(guildId))?.name ?? 'this server',
+      linkBaseUrl: env.DASHBOARD_URL,
+      ...(env.VERIFY_LINK_SECRET ? { linkSecret: env.VERIFY_LINK_SECRET } : {}),
 
       botUserId: env.DISCORD_APPLICATION_ID,
     },
@@ -342,7 +364,13 @@ const registry = createModuleRegistry(
     },
     reminders: { store: new DrizzleReminderStore(handle) },
     messages: { applicationId: env.DISCORD_APPLICATION_ID },
-    counters: { guildState },
+    branding: {
+      assets: new DrizzleBrandingAssetStore(handle),
+      roles: new DrizzleBrandingRoleStore(handle),
+      botUserId: env.DISCORD_APPLICATION_ID,
+      applicationId: env.DISCORD_APPLICATION_ID,
+    },
+    counters: { guildState, channels: new DrizzleCounterChannelStore(handle) },
     suggestions: {
       store: new DrizzleSuggestionStore(handle),
       applicationId: env.DISCORD_APPLICATION_ID,

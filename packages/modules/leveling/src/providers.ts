@@ -287,7 +287,7 @@ export function createLevelingProviders(activity: ActivityStore): Provider[] {
 
     describeFailure(config, result) {
       if (result.indeterminate) return result.indeterminate.humanReason;
-      return `You are not in the top ${config.n} on this server's leaderboard.`;
+      return `You are not in the top ${config.n} on this server’s leaderboard.`;
     },
   };
 

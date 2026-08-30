@@ -75,7 +75,7 @@ export function scoreJoin(signals: JoinSignals, settings: ScoreSettings): RaidSc
   }
 
   if (signals.avatarless === null) {
-    reasons.push('The join carried no user object, so the avatar was not weighed.');
+    reasons.push('The join carried no profile details, so the avatar was not weighed.');
   } else if (signals.avatarless) {
     score += SIGNAL_WEIGHTS.avatarless;
     reasons.push('The account has no avatar.');

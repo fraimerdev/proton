@@ -195,7 +195,7 @@ async function discussIn(
   });
 
   if (!succeeded(thread)) {
-    return ` I could **not** open its discussion thread: ${whyItFailed(thread)}`;
+    return ` I could not open its discussion thread: ${whyItFailed(thread)}`;
   }
 
   const threadId = createdId(thread);

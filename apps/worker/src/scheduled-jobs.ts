@@ -1,5 +1,6 @@
 import type { Logger, ScheduledActionSweeper } from '@proton/core';
 import { type ConnectionOptions, Queue, Worker } from 'bullmq';
+import { logQueueConnectionErrors } from './job-errors.ts';
 
 export const SCHEDULED_QUEUE = 'proton-scheduled';
 export const SCHEDULED_SWEEP_JOB = 'sweep';
@@ -34,6 +35,8 @@ export function startScheduledActionJobs(deps: ScheduledActionJobsDeps): Schedul
   worker.on('failed', (_job, error) => {
     deps.logger.error(`scheduled action sweep failed: ${error.message}`, { stack: error.stack });
   });
+
+  logQueueConnectionErrors('the scheduled action sweep', deps.logger, queue, worker);
 
   void queue
     .upsertJobScheduler(SCHEDULED_SWEEP_JOB, { every: deps.intervalMs })

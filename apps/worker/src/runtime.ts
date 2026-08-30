@@ -167,9 +167,8 @@ export class ModuleRuntime {
     if (!manifest || !command) {
       this.#deps.logger.warn(`no module owns the command '${commandName}'`, { guildId });
       await reply(
-        `\`/${commandName}\` is registered with Discord but no Proton module claims it. That ` +
-          'usually means the bot was rolled back while the command stayed registered. It will ' +
-          'start working again after the next deploy — nothing in this server is broken.',
+        `\`/${commandName}\` isn't working right now. This is a Proton problem, not a setting ` +
+          'in this server, and nothing you did caused it.',
         'unowned-command',
         PERMISSIONS_MODULE_ID,
       );

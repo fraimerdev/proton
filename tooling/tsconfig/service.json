@@ -3,6 +3,10 @@
   "display": "Proton service (Bun runtime)",
   "extends": "./base.json",
   "compilerOptions": {
+    // Not because services render UI: @proton/cards authors the rank card as one React component
+    // that satori rasterises for Discord and the dashboard renders live, so every package that
+    // imports the renderer resolves a .tsx and needs the flag to read it.
+    "jsx": "react-jsx",
     "types": ["bun"]
   }
 }

@@ -45,8 +45,8 @@ const SWITCHED_OFF =
   'it on from the Proton dashboard.';
 
 const NOT_WIRED =
-  "I can't verify you: this Proton deployment isn't fully set up. A server admin should check " +
-  'the Proton logs — the exact missing piece is named there.';
+  'I can’t verify you right now. Nothing was changed. This is a fault on my side, not anything ' +
+  'you did.';
 
 const EXPIRED = 'That captcha has expired or been replaced. Press Verify again to get a fresh one.';
 
@@ -151,7 +151,7 @@ async function pressButton(
     return { action: 'refused', reason: plan.refusal };
   }
 
-  const result = await runVerification(ctx, plan, userId, eventId);
+  const result = await runVerification(ctx, plan, userId, eventId, deps);
   await run(ctx, followUp(followTo, result.message), 'tell the member how verification went');
 
   return result.verified ? { action: 'verified' } : { action: 'refused', reason: result.message };
@@ -349,7 +349,7 @@ export async function handleModal(
     return { action: 'refused', reason: plan.refusal };
   }
 
-  const result = await runVerification(ctx, plan, facts.userId, event.id);
+  const result = await runVerification(ctx, plan, facts.userId, event.id, deps);
   await run(ctx, followUp(followTo, result.message), 'tell the member how verification went');
 
   return result.verified ? { action: 'verified' } : { action: 'refused', reason: result.message };

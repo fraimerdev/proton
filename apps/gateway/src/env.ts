@@ -1,5 +1,10 @@
 import { createEnv } from '@proton/core/env';
-import { GatewayIntentBits } from 'discord-api-types/v10';
+import {
+  ActivityType,
+  GatewayIntentBits,
+  type GatewayPresenceUpdateData,
+  PresenceUpdateStatus,
+} from 'discord-api-types/v10';
 import { z } from 'zod';
 
 export const DEFAULT_INTENTS =
@@ -14,6 +19,17 @@ export const DEFAULT_INTENTS =
   // Both non-privileged, and both only ever deliver to a bot already holding Manage Server.
   GatewayIntentBits.AutoModerationConfiguration |
   GatewayIntentBits.AutoModerationExecution;
+
+export const STATUS_TEXT = 'prtn.xyz';
+
+export const DEFAULT_PRESENCE: GatewayPresenceUpdateData = {
+  since: null,
+  afk: false,
+  status: PresenceUpdateStatus.Online,
+  // A Custom activity renders `state` and never renders `name`; moving the text into `name` shows
+  // an empty status.
+  activities: [{ name: 'Custom Status', type: ActivityType.Custom, state: STATUS_TEXT }],
+};
 
 export const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1),

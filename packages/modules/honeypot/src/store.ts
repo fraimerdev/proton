@@ -105,10 +105,48 @@ export const HONEYPOT_CAUGHT_PREFIX = 'proton:honeypot:caught';
 
 export const HONEYPOT_REFRESH_PREFIX = 'proton:honeypot:refresh';
 
+export const HONEYPOT_TOMBSTONE_PREFIX = 'proton:honeypot:settled';
+
+// Longer than the longest wait a guild can configure, so a tombstone never expires before the job
+// it exists to stop.
+export const TOMBSTONE_TTL_MS = 8 * 24 * 60 * 60 * 1000;
+
+export interface HoneypotPendingStore {
+  settle(guildId: string, userId: string): Promise<void>;
+
+  settled(guildId: string, userId: string): Promise<boolean>;
+}
+
+export class RedisHoneypotPendingStore implements HoneypotPendingStore {
+  readonly #redis: Redis;
+
+  constructor(redis: Redis) {
+    this.#redis = redis;
+  }
+
+  async settle(guildId: string, userId: string): Promise<void> {
+    await this.#redis.set(
+      lockKey(guildId, userId, HONEYPOT_TOMBSTONE_PREFIX),
+      '1',
+      'PX',
+      TOMBSTONE_TTL_MS,
+    );
+  }
+
+  async settled(guildId: string, userId: string): Promise<boolean> {
+    return (await this.#redis.exists(lockKey(guildId, userId, HONEYPOT_TOMBSTONE_PREFIX))) === 1;
+  }
+}
+
 // A month. The lifetime total is a separate counter so this trim never rewrites the button.
 export const CAUGHT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const RECENT_SHOWN = 8;
+
+// A catch Proton logged but did nothing about. Kept in the caught set and the breakdown so a
+// moderator can see it, kept out of `total` because `total` is what the public button prints —
+// "Softbans: 12" must not include four staff nobody touched.
+export const EXEMPT_ACTION = 'exempt';
 
 export interface CaughtEntry {
   userId: string;
@@ -188,15 +226,16 @@ export class RedisHoneypotStatsStore implements HoneypotStatsStore {
 
     if (Number(added) === 0) return this.total(guildId, channelId);
 
-    const replies = await this.#redis
-      .multi()
-      .hincrby(stats, 'total', 1)
+    const pipeline = this.#redis.multi();
+
+    if (entry.action !== EXEMPT_ACTION) pipeline.hincrby(stats, 'total', 1);
+
+    await pipeline
       .hincrby(stats, `action:${entry.action}`, 1)
       .zremrangebyscore(caught, '-inf', entry.at - CAUGHT_RETENTION_MS)
       .exec();
 
-    const counted = replies?.[0]?.[1];
-    return typeof counted === 'number' ? counted : Number(counted ?? 0);
+    return this.total(guildId, channelId);
   }
 
   async total(guildId: string, channelId: string): Promise<number> {
@@ -241,5 +280,63 @@ export class RedisHoneypotStatsStore implements HoneypotStatsStore {
     );
 
     return won === 'OK';
+  }
+}
+
+export const HONEYPOT_DM_PREFIX = 'proton:honeypot:dm';
+
+export const DM_RECORD_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+
+// Five, then give up and say so in the incident log. Each attempt costs one open against Discord,
+// and a member whose DMs are shut will never accept one however many times it is tried.
+export const DM_ATTEMPTS_MAX = 5;
+
+export interface DmChannelStore {
+  // The channel id if this trap already opened one, and how many opens have been attempted.
+  recall(guildId: string, root: string): Promise<{ channelId: string | null; attempts: number }>;
+
+  remember(guildId: string, root: string, channelId: string): Promise<void>;
+
+  attempted(guildId: string, root: string): Promise<number>;
+}
+
+function dmKey(guildId: string, root: string, prefix = HONEYPOT_DM_PREFIX): string {
+  return `${prefix}:${guildId}:${root}`;
+}
+
+export class RedisDmChannelStore implements DmChannelStore {
+  readonly #redis: Redis;
+
+  constructor(redis: Redis) {
+    this.#redis = redis;
+  }
+
+  async recall(
+    guildId: string,
+    root: string,
+  ): Promise<{ channelId: string | null; attempts: number }> {
+    const [channelId, attempts] = await this.#redis.hmget(
+      dmKey(guildId, root),
+      'channelId',
+      'attempts',
+    );
+
+    return { channelId: channelId ?? null, attempts: Number(attempts) || 0 };
+  }
+
+  async remember(guildId: string, root: string, channelId: string): Promise<void> {
+    const key = dmKey(guildId, root);
+
+    await this.#redis.hset(key, 'channelId', channelId);
+    await this.#redis.pexpire(key, DM_RECORD_TTL_MS);
+  }
+
+  async attempted(guildId: string, root: string): Promise<number> {
+    const key = dmKey(guildId, root);
+
+    const attempts = await this.#redis.hincrby(key, 'attempts', 1);
+    await this.#redis.pexpire(key, DM_RECORD_TTL_MS);
+
+    return attempts;
   }
 }

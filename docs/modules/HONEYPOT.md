@@ -66,14 +66,16 @@ permission precheck, the role-hierarchy check and the case ledger for free.
 |---|---|
 | Trigger | Any `message.created` in a configured channel, from a non-bot, non-webhook, non-system author. Nothing else. |
 | Actions | `softban` (default) \| `ban` \| `kick` \| `timeout` \| `warn` \| `none`. |
-| Delete window | Per channel, 0–7 days, stored in **seconds** and offered in the dashboard as days. Applies to `softban` and `ban`; Discord has no equivalent for the others. |
+| Delete window | **Module-wide**, 0–7 days, stored in **seconds** and edited as days/hours/minutes/seconds. Applies to `softban` and `ban`; Discord has no equivalent for the others. |
 | The trigger message | Deleted explicitly for `kick`, `timeout`, `warn` and `none`. For `softban` and `ban` the delete window already removes it and a second delete would race the purge — **unless the ban was refused**, in which case nothing was purged and the message baiting the trap is still sitting there. |
-| Channels | A list. Each row carries its own channel, enabled switch, action and delete window. |
+| Channels | A list of bait channels. Each row carries **only** its channel and an enabled switch. |
+| Where the action lives | **Module-wide, since schema v2.** v1 kept the action, the delete window and the timeout length on every row; the guide the owner wrote treats them as one setting for the whole module, and `liftStoredConfig` collapses the old shape — the first armed row decides, and rows that disagreed lose that variation. |
 | Configuration | **Dashboard only.** No slash commands — this module registers none. |
-| Panel | A bespoke `MODULE_PANELS` entry: the generated form cannot render a list of objects. |
-| Warning embed | Posted **automatically when the config is saved**, one per armed channel. There is no button: a trap an admin armed and forgot to announce is exactly the case the notice exists to prevent. Saving again edits the notice already there rather than posting a second; disarming a channel, removing it, or switching the module off takes its notice down. |
+| Panel | The page is a per-module route file split into seven areas. Four keys are owned by bespoke editors rather than generated fields: `channels`, `noticeLayout`, `dmLayout` and `appealPanelId`. |
+| Warning notice | Posted when the config is saved, one per armed channel. Saving again edits the notice already there rather than posting a second; disarming a channel, removing it, or switching the module off takes its notice down. **`postNotice` is now a switch, defaulting on** — the earlier decision was that there must be none, on the grounds that a trap an admin armed and forgot to announce is what the notice exists to prevent. The owner's guide asks for the switch; the default keeps the old behaviour for anyone who never touches it. |
+| Authored messages | The notice and the DM are stored as `ProtonMessage` layouts and edited in the shared message builder. **Free servers post the built-in layout**: the substitution happens at render, never at save, so a downgrade cannot overwrite what an admin wrote. Proton appends the counter, appeal and rejoin buttons itself — a stored non-link button must carry a `ComponentAction`, and there is none for "open this trap's tally". |
 | Duplicate suppression | A short-lived Redis claim on `(guildId, userId)`. Not in-memory: the worker is horizontally scaled, and an in-memory map is per-process. |
-| Intents | `Guilds` + `GuildMessages`. **Not `MessageContent`** — the module never reads a message body, which is worth keeping true. |
+| Intents | `Guilds` + `GuildMessages` + **`MessageContent`**. This reverses the original decision. "Quote the message" puts what was posted in the incident log, and reading a body without declaring the intent would make the manifest a promise Proton was not keeping. Nothing branches on the body — the trap is still that a message exists at all — and quoting is off by default. It costs no gateway deploy: `DEFAULT_INTENTS` already carries the intent for automod, logging and phishing. |
 | Permissions | `BanMembers`. Declared module-wide, so the module reports itself disabled with a reason when it is missing rather than failing silently at the first trap. |
 | Logging | Every trigger writes a case through the executor (automatic) and, where a log channel is set, an embed naming what happened and whether it worked. |
 
@@ -81,22 +83,61 @@ permission precheck, the role-hierarchy check and the case ledger for free.
 
 ## 4. Config
 
-```
-enabled            boolean                     default false
-channels           HoneypotChannel[]           bespoke panel, tier-capped
-logChannelId       channel-id                  where incident embeds go
+Schema version **2**. Seven areas, in the order the page shows them.
 
-HoneypotChannel {
-  channelId              channel-id
-  enabled                boolean               default true
-  action                 enum                  default 'softban'
-  deleteMessageSeconds   number 0..604800      default 604800 (7 days)
-  timeoutDuration        duration              default '1h', only read when action is 'timeout'
-}
+```
+Bait channels
+  enabled                  boolean            default false — the module switch
+  includeThreads           boolean            default true
+  channels                 HoneypotChannel[]  bespoke editor, tier-capped 3/10/25
+
+  HoneypotChannel { channelId: channel-id, enabled: boolean default true }
+
+Camouflage                                    both off until turned on
+  keepChannelActive        boolean            default false
+  renameChannelDaily       boolean            default false
+
+What happens
+  action                   enum               default 'softban'
+  timeoutFirst             boolean            default false
+  timeoutFirstDuration     duration           default '5m'
+  timeoutDuration          duration           default '1h', read when action is 'timeout'
+  deleteMessageSeconds     number 0..604800   default 604800 (7 days)
+  appealPanelId            string             bespoke picker, an appeals form id
+  waitBeforeActingSeconds  number 0..604800   default 0 — zero schedules nothing at all
+  auditLogReason           string 1..512      what Discord's own audit log records
+  deleteTriggerMessage     boolean            default true
+
+Who is exempt                                 caught and counted, never acted on
+  exemptAdministrators     boolean            default true
+  exemptAdminRoleId        role-id
+  exemptRoleIds            role-id[]
+
+The warning message
+  postNotice               boolean            default true
+  noticeCounterButton      boolean            default true
+  hideWhatIsAHoneypot      boolean            default false
+  noticeLayout             ProtonMessage      bespoke editor; free servers post the default
+
+The direct message
+  sendDirectMessage        boolean            default true
+  offerWayBackIn           boolean            default false
+  inviteUrl                string             pasted; Proton mints no invite
+  dmLayout                 ProtonMessage      bespoke editor; free servers post the default
+
+Escalation and logging
+  addToBlacklist           boolean            default false
+  quoteMessage             boolean            default false
+  logChannelId             channel-id
 ```
 
-`channels` cannot go through `zodToDescriptors` (objects nest one level, arrays must be flat), so the
-manifest ships a `formSchema` that omits it and the dashboard renders the list in its own panel.
+`waitBeforeActingSeconds` is integer seconds rather than a duration string because
+`parseDuration` accepts one unit only, so `1d 2h 30m` is inexpressible. The two timeout lengths stay
+duration strings: `planTrap` already parses them, and the `duration` field kind already exists.
+
+The four keys a bespoke editor owns — `channels`, `noticeLayout`, `dmLayout`, `appealPanelId` — are
+omitted from `formSchema`. `HONEYPOT_PANEL_KEYS` names them, and `manifest.test.ts` asserts that
+every config key is either on the page or in that list.
 
 ---
 
@@ -121,16 +162,20 @@ manifest ships a `formSchema` that omits it and the dashboard renders the list i
 
 Posted into the honeypot channel the moment the honeypot is saved, and kept in step with it on every
 later save. It exists so a member who wanders in has been told, and so the trap is not a gotcha for
-someone who joined before it was set — which is why posting it is not something an admin can forget
-to do.
+someone who joined before it was set. `postNotice` can switch it off; it defaults on.
 
-**Components V2**, not an embed. One container, Blocked Coral, holding all three parts:
+**Components V2**, not an embed. A stored `ProtonMessage` an admin may author, whose default is one
+container, Blocked Coral:
 
 | | |
 |---|---|
 | Heading | `## 🍯  DO NOT SEND MESSAGES IN THIS CHANNEL` |
-| Body | What posting here costs *in that channel's own terms*: its configured action, and its configured delete window. |
-| Button | One button, below a dividerless separator. Its label counts what this trap has done, named for the action it is configured with: `Softbans: 4`, `Kicks: 4`, `Timeouts: 4`, `Warnings: 4`, `Bans: 4`, or `Caught: 4` when the action is `none`. |
+| Body | What posting here costs, in the module's own terms: `{consequence}` and `{purge}` are substituted from the configured action and delete window. `hideWhatIsAHoneypot` swaps the body for one that warns without naming the mechanism. |
+| Button | Appended by Proton, not stored, and only when `noticeCounterButton` is on. Its label counts what this trap has done, named for the action: `Softbans: 4`, `Kicks: 4`, `Timeouts: 4`, `Warnings: 4`, `Bans: 4`, or `Caught: 4` when the action is `none`. An exempt catch is counted in the breakdown but **not** in that total — the button must not overstate what the trap has actually done. |
+
+**Free servers post the built-in layout.** `layoutFor` substitutes it at render time and is called
+in exactly three places, all render-only. Nothing on the write path may reach for it: a downgraded
+server keeps its authored layout in `guild_modules`, unused, until it upgrades again.
 
 The V2 flag is set on the send and **omitted on every edit** — Discord refuses to take
 `IS_COMPONENTS_V2` off a message, and the send that created it already set the bit.
@@ -153,6 +198,35 @@ count a debounced trip misses is picked up by the next trip outside the window, 
 
 Counted only when the trap did what the notice promises: a refused ban caught nobody, and a number
 that included it would overstate what the channel has ever done.
+
+---
+
+## 6b. The direct message, and everything after it
+
+Sent **before** the punishment lands, because after a ban there is no shared server left to send it
+through. Stored as a second authored `ProtonMessage`, substituted with `{server}` and `{action}`,
+with the recovery advice and the buttons appended by Proton.
+
+| | |
+|---|---|
+| Appeal button | A link to `/appeal/<signed token>`, minted per recipient. Offered **only on a real ban** — a softban lifts itself, so an appeal there invites somebody to argue about something that is not stopping them — and only when an appeal form is picked. Every failure to mint one (no secret, an over-long url, a signing error) drops the button and still sends the message: a link that goes nowhere is worse than no button. |
+| Rejoin button | A link the admin pasted. Proton mints no invite; there is no `create_invite` action kind. |
+| Crash safety | The opened DM channel id is written to Redis **before** the send. The executor answers a redelivered `create_dm` with `skipped_duplicate` and **no body**, so without this a worker that died between the two calls would leave the member banned, never told, and with nothing to retry from. The open key carries an attempt counter; after five, the incident log says they were never reached. |
+
+The signed token is a pure function of the catch — `jti` is the trap root, `issuedAt` is the event's
+own timestamp — so a RESUME redelivery mints a byte-identical link and the appeal filed under it is
+found rather than filed twice.
+
+---
+
+## 6c. Waiting, camouflage, exemptions and escalation
+
+| | |
+|---|---|
+| Wait before acting | A one-off durable schedule keyed on the **member**, `{ replace: false }`. Keying it on the message would let a bot posting every couple of minutes park one punishment per message, because the burst lock is 60 seconds and the wait can be seven days; `replace: true` would let it push its own punishment out forever. The punishment is frozen at catch time and runs under the settings it was booked with. A `member.left` or `entity.ban_added` during the wait cancels the job **and** writes a Redis tombstone, so a sweep already holding the row still stops — without it a softban's unban leg would lift the ban a moderator placed themselves. |
+| Camouflage | **One** self-rescheduling daily job, natural key `all`, +24h with `{ replace: true }`. Two schedules would be two reschedule loops and two chances to strand one. The name and the keep-alive line are derived from the day and the channel rather than chosen at random, so a redelivered run produces the same name and does not spend a second rename out of Discord's allowance of two per ten minutes. |
+| Exemptions | Evaluated from `computeBasePermissions`, never channel permissions: Administrator cannot be granted by an overwrite, and base permissions already answers `ALL_PERMISSIONS` for the guild owner, so exempting administrators covers the owner with no second branch. A member whose roles Proton cannot read is **exempt**, not caught, whenever any exemption is configured — the worst thing this module can do is act on somebody it should not have. An exempt catch is logged in Quiet Slate, never the amber used for a refusal: nothing reached the executor, so nothing may look like it was attempted and failed. |
+| Blacklist | Written after the audit trail, gated on the punishment having succeeded, keyed on the trap root so a redelivery cannot block twice. Verification reads the list and refuses a blocked member at all of its entry points. |
 
 ---
 

@@ -9,11 +9,37 @@ import {
   countersFormSchema,
   TEMPLATE_MAX,
 } from '../src/config.ts';
-import { countFor, plan, renderName, renderReport } from '../src/render.ts';
+import { countFor, plan, type RefreshOutcome, renderName, renderReport } from '../src/render.ts';
 import { COUNTER_A, COUNTER_B, EVERYONE_ROLE, guildState, MEMBER_COUNT } from './harness.ts';
 
 function config(counters: CountersConfig['counters']): CountersConfig {
   return { ...countersDefaultConfig, enabled: true, counters };
+}
+
+function counter(
+  channelId: string,
+  template: string,
+  source: 'members' | 'roles' | 'channels',
+): CountersConfig['counters'][number] {
+  return { id: channelId, channelId, template, source };
+}
+
+function owns(counterId: string, template: string): CountersConfig['counters'][number] {
+  return { id: counterId, template, source: 'members' };
+}
+
+function outcome(over: Partial<RefreshOutcome> = {}): RefreshOutcome {
+  return {
+    total: 0,
+    created: 0,
+    updated: 0,
+    unchanged: 0,
+    unavailable: 0,
+    unlocked: [],
+    failures: [],
+    creationFailures: [],
+    ...over,
+  };
 }
 
 describe('renderName', () => {
@@ -112,20 +138,14 @@ describe('plan', () => {
       name: `Members: ${MEMBER_COUNT}`,
     });
 
-    const result = plan(
-      config([{ channelId: COUNTER_A, template: 'Members: {count}', source: 'members' }]),
-      state,
-    );
+    const result = plan(config([counter(COUNTER_A, 'Members: {count}', 'members')]), state);
 
     expect(result.edits).toEqual([]);
     expect(result.unchanged).toEqual([COUNTER_A]);
   });
 
   test('renames a counter whose number has moved, and says what it is moving from', () => {
-    const result = plan(
-      config([{ channelId: COUNTER_A, template: 'Members: {count}', source: 'members' }]),
-      guildState(),
-    );
+    const result = plan(config([counter(COUNTER_A, 'Members: {count}', 'members')]), guildState());
 
     expect(result.edits).toEqual([
       { channelId: COUNTER_A, from: 'Members: 0', to: `Members: ${MEMBER_COUNT}` },
@@ -136,10 +156,7 @@ describe('plan', () => {
     const state = guildState();
     state.channels.delete(COUNTER_A);
 
-    const result = plan(
-      config([{ channelId: COUNTER_A, template: 'Members: {count}', source: 'members' }]),
-      state,
-    );
+    const result = plan(config([counter(COUNTER_A, 'Members: {count}', 'members')]), state);
 
     expect(result.edits).toEqual([
       { channelId: COUNTER_A, from: null, to: `Members: ${MEMBER_COUNT}` },
@@ -150,12 +167,9 @@ describe('plan', () => {
     const state: GuildState = { ...guildState() };
     delete state.memberCount;
 
-    const result = plan(
-      config([{ channelId: COUNTER_A, template: 'Members: {count}', source: 'members' }]),
-      state,
-    );
+    const result = plan(config([counter(COUNTER_A, 'Members: {count}', 'members')]), state);
 
-    expect(result).toEqual({ edits: [], unchanged: [], unavailable: [COUNTER_A] });
+    expect(result).toEqual({ creations: [], edits: [], unchanged: [], unavailable: [COUNTER_A] });
   });
 
   test('plans each counter independently', () => {
@@ -167,8 +181,8 @@ describe('plan', () => {
 
     const result = plan(
       config([
-        { channelId: COUNTER_A, template: 'Members: {count}', source: 'members' },
-        { channelId: COUNTER_B, template: 'Roles: {count}', source: 'roles' },
+        counter(COUNTER_A, 'Members: {count}', 'members'),
+        counter(COUNTER_B, 'Roles: {count}', 'roles'),
       ]),
       state,
     );
@@ -177,20 +191,49 @@ describe('plan', () => {
     expect(result.unchanged).toEqual([COUNTER_B]);
   });
 
+  test('plans a channel for a counter that has none of its own', () => {
+    const result = plan(config([owns('c1', 'Members: {count}')]), guildState());
+
+    expect(result.creations).toEqual([{ counterId: 'c1', name: `Members: ${MEMBER_COUNT}` }]);
+    expect(result.edits).toEqual([]);
+  });
+
+  test('renames rather than remakes a counter whose channel Proton already made', () => {
+    const result = plan(
+      config([owns('c1', 'Members: {count}')]),
+      guildState(),
+      new Map([['c1', COUNTER_A]]),
+    );
+
+    expect(result.creations).toEqual([]);
+    expect(result.edits).toEqual([
+      { channelId: COUNTER_A, from: 'Members: 0', to: `Members: ${MEMBER_COUNT}` },
+    ]);
+  });
+
+  test('makes no channel for a counter whose figure this snapshot does not carry', () => {
+    const state: GuildState = { ...guildState() };
+    delete state.memberCount;
+
+    const result = plan(config([owns('c1', 'Members: {count}')]), state);
+
+    expect(result.creations).toEqual([]);
+    expect(result.unavailable).toEqual(['c1']);
+  });
+
   test('an empty counter list plans nothing', () => {
-    expect(plan(config([]), guildState())).toEqual({ edits: [], unchanged: [], unavailable: [] });
+    expect(plan(config([]), guildState())).toEqual({
+      creations: [],
+      edits: [],
+      unchanged: [],
+      unavailable: [],
+    });
   });
 });
 
 describe('renderReport', () => {
   test('reports what changed and what was already correct', () => {
-    const text = renderReport({
-      total: 3,
-      updated: 1,
-      unchanged: 2,
-      unavailable: 0,
-      failures: [],
-    });
+    const text = renderReport(outcome({ total: 3, updated: 1, unchanged: 2 }));
 
     expect(text).toContain('3 counter channels');
     expect(text).toContain('1 renamed');
@@ -198,37 +241,34 @@ describe('renderReport', () => {
   });
 
   test('counts one channel in the singular', () => {
-    const text = renderReport({ total: 1, updated: 0, unchanged: 1, unavailable: 0, failures: [] });
+    const text = renderReport(outcome({ total: 1, unchanged: 1 }));
 
     expect(text).toContain('1 counter channel —');
   });
 
   test('explains a skip instead of hiding it', () => {
-    const text = renderReport({ total: 1, updated: 0, unchanged: 0, unavailable: 1, failures: [] });
+    const text = renderReport(outcome({ total: 1, unavailable: 1 }));
 
     expect(text).toContain('1 skipped');
     expect(text).toContain('member count');
   });
 
   test('names the channel and the reason for every refusal', () => {
-    const text = renderReport({
-      total: 1,
-      updated: 0,
-      unchanged: 0,
-      unavailable: 0,
-      failures: [
-        { channelId: COUNTER_A, humanReason: "I'm missing the Manage Channels permission." },
-      ],
-    });
+    const text = renderReport(
+      outcome({
+        total: 1,
+        failures: [
+          { channelId: COUNTER_A, humanReason: "I'm missing the Manage Channels permission." },
+        ],
+      }),
+    );
 
     expect(text).toContain(`<#${COUNTER_A}>`);
     expect(text).toContain('Manage Channels');
   });
 
   test('says a server has none rather than reporting zero of zero', () => {
-    expect(
-      renderReport({ total: 0, updated: 0, unchanged: 0, unavailable: 0, failures: [] }),
-    ).toContain('No counter channels are set up');
+    expect(renderReport(outcome())).toContain('No counter channels are set up');
   });
 });
 
@@ -267,7 +307,7 @@ describe('countersConfigSchema', () => {
   test('refuses two counters on the same channel', () => {
     const result = countersConfigSchema.safeParse({
       counters: [
-        { channelId: COUNTER_A, template: 'Members: {count}', source: 'members' },
+        counter(COUNTER_A, 'Members: {count}', 'members'),
         { channelId: COUNTER_A, template: 'Roles: {count}', source: 'roles' },
       ],
     });
@@ -291,5 +331,56 @@ describe('countersConfigSchema', () => {
 
   test('the form schema omits the list the generator cannot draw', () => {
     expect(Object.keys(countersFormSchema.shape)).toEqual(['enabled']);
+  });
+
+  test('keeps a counter saved before Proton could make its own channel', () => {
+    const result = countersConfigSchema.safeParse({
+      counters: [{ channelId: COUNTER_A, template: 'Members: {count}', source: 'members' }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.counters).toEqual([
+      { id: COUNTER_A, channelId: COUNTER_A, template: 'Members: {count}', source: 'members' },
+    ]);
+  });
+
+  test('gives a lifted counter the same id every time it is read', () => {
+    const stored = { counters: [{ channelId: COUNTER_A, template: '{count}', source: 'members' }] };
+
+    expect(countersConfigSchema.parse(stored).counters[0]?.id).toBe(
+      countersConfigSchema.parse(stored).counters[0]?.id,
+    );
+  });
+
+  test('accepts a counter with no channel, which is one Proton makes itself', () => {
+    const result = countersConfigSchema.safeParse({
+      counters: [{ id: 'abc', template: 'Members: {count}', source: 'members' }],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.counters[0]?.channelId).toBeUndefined();
+  });
+
+  test('refuses two counters sharing an id, which would share a channel', () => {
+    const result = countersConfigSchema.safeParse({
+      counters: [
+        { id: 'abc', template: 'Members: {count}', source: 'members' },
+        { id: 'abc', template: 'Roles: {count}', source: 'roles' },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toContain('cannot share an id');
+  });
+
+  test('does not count two channel-less counters as sharing a channel', () => {
+    const result = countersConfigSchema.safeParse({
+      counters: [
+        { id: 'one', template: 'Members: {count}', source: 'members' },
+        { id: 'two', template: 'Roles: {count}', source: 'roles' },
+      ],
+    });
+
+    expect(result.success).toBe(true);
   });
 });

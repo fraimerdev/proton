@@ -88,7 +88,7 @@ export function createServerlogModule(
 ): ModuleManifest<typeof serverlogConfigSchema> {
   return {
     id: 'serverlog',
-    name: 'Server Logs',
+    name: 'Server logs',
     category: 'logging',
     configSchema: serverlogConfigSchema,
     formSchema: serverlogFormSchema,

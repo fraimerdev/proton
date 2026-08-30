@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  type BlockedMemberList,
+  blockedMemberQuerySchema,
   type CaseSearchResult,
   caseQuerySchema,
   type LeaderboardResult,
@@ -13,25 +15,167 @@ import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-rout
 import { zodValidator } from '@tanstack/zod-adapter';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { z } from 'zod';
-import { BROWSE_VIEWS } from '../src/components/shell/module-meta.ts';
+import { SETTINGS_TAB, tabsFor } from '../src/components/module/page.tsx';
+import { MODULE_ROUTE_IDS } from '../src/components/module/paths.ts';
 import {
-  type AnyViewEntry,
-  activeView,
-  MODULE_VIEWS,
-  moduleSearchSchema,
+  type ModuleView,
   parseViewSearch,
   resolveView,
-  SETTINGS_TAB,
-  tabsFor,
   viewSearchUpdate,
-  viewsFor,
-} from '../src/components/views/registry.ts';
+} from '../src/components/module/views.ts';
+import { BROWSE_VIEWS } from '../src/components/shell/module-meta.ts';
+import {
+  BlockedMembersView,
+  CaseBrowserView,
+  LeaderboardView,
+  TagBrowserView,
+  TicketBrowserView,
+} from '../src/components/views/views.tsx';
+import { queryKeys } from '../src/lib/query-keys.ts';
 
-function viewOf(moduleId: string, id: string): AnyViewEntry {
-  const entry = activeView(moduleId, id);
-  if (!entry) throw new Error(`no '${id}' view is registered for module '${moduleId}'`);
+const SRC = join(import.meta.dir, '..', 'src');
+const ROUTES = join(SRC, 'routes', 'dashboard', '$guildId');
+const MODULE_ROUTE = join(SRC, 'components', 'module', 'route.tsx');
+
+function flatten(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function sourceOf(moduleId: string): string {
+  return readFileSync(join(ROUTES, `${moduleId}.tsx`), 'utf8');
+}
+
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) sourceFiles(full, out);
+    else if (/\.tsx?$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+
+/**
+ * There is no MODULE_VIEWS any more: each of the four modules with data of its own declares a local
+ * `VIEWS` in its route file. Read rather than imported — a route file reaches lib/queries, then the
+ * server functions, then the database at module scope, so no test can import one — and the entries
+ * are rebuilt below from the real schema and the real component the route names.
+ */
+const VIEWS_BLOCK = /const VIEWS/;
+
+function viewsBlock(source: string): string | undefined {
+  const start = source.search(VIEWS_BLOCK);
+  if (start === -1) return undefined;
+
+  const end = source.indexOf('\n];', start);
+  return end === -1 ? undefined : source.slice(start, end + 3);
+}
+
+interface DeclaredView {
+  moduleId: string;
+  id: string;
+  title: string;
+  schema: string;
+  component: string;
+  keyId: string;
+  lazy: boolean;
+}
+
+// Sliced on `satisfies ViewEntry<…>`, which is what type-checks each entry's schema against the
+// result its query returns — an entry written without it lands in the previous slice, and the
+// count check below is what turns that into a failure rather than a silently shorter registry.
+function declaredIn(moduleId: string): DeclaredView[] {
+  const block = viewsBlock(sourceOf(moduleId));
+  if (block === undefined) return [];
+
+  return block
+    .split(/\}\s*satisfies ViewEntry/)
+    .slice(0, -1)
+    .map(flatten)
+    .map((entry) => ({
+      moduleId,
+      id: /\bid: '([^']+)'/.exec(entry)?.[1] ?? '',
+      title: /\btitle: '([^']+)'/.exec(entry)?.[1] ?? '',
+      schema: /\bsearchSchema: ([A-Za-z0-9_]+),/.exec(entry)?.[1] ?? '',
+      keyId: /queryKey: queryKeys\.view\(guildId, '([^']+)', search\)/.exec(entry)?.[1] ?? '',
+      component:
+        /View: lazyRouteComponent\(\s*\(\) => import\('[^']+'\), '([A-Za-z0-9_]+)',?\s*\)/.exec(
+          entry,
+        )?.[1] ?? '',
+      lazy: /View: lazyRouteComponent\(/.test(entry),
+    }));
+}
+
+const DECLARED: ReadonlyMap<string, readonly DeclaredView[]> = new Map(
+  MODULE_ROUTE_IDS.map((moduleId) => [moduleId, declaredIn(moduleId)] as const).filter(
+    ([, views]) => views.length > 0,
+  ),
+);
+
+function allDeclared(): DeclaredView[] {
+  return [...DECLARED.values()].flat();
+}
+
+const SCHEMAS: Record<string, z.ZodType> = {
+  blockedMemberQuerySchema,
+  caseQuerySchema,
+  leaderboardQuerySchema,
+  tagQuerySchema,
+  ticketQuerySchema,
+};
+
+const COMPONENTS: Record<string, ModuleView['View']> = {
+  BlockedMembersView,
+  CaseBrowserView,
+  LeaderboardView,
+  TagBrowserView,
+  TicketBrowserView,
+};
+
+function entryOf(declared: DeclaredView): ModuleView {
+  const searchSchema = SCHEMAS[declared.schema];
+  const View = COMPONENTS[declared.component];
+
+  if (!searchSchema || !View)
+    throw new Error(
+      `${declared.moduleId}/${declared.id} names '${declared.schema}' and '${declared.component}', ` +
+        'which this file has no entry for — add one rather than letting the view go unchecked',
+    );
+
+  return {
+    id: declared.id,
+    title: declared.title,
+    searchSchema,
+    query: ({ guildId, search }) => ({
+      queryKey: queryKeys.view(guildId, declared.keyId, search),
+      queryFn: async () => undefined,
+    }),
+    View,
+  };
+}
+
+const built = new Map<string, readonly ModuleView[]>();
+
+function viewsOf(moduleId: string): readonly ModuleView[] {
+  const held = built.get(moduleId);
+  if (held) return held;
+
+  const made = (DECLARED.get(moduleId) ?? []).map(entryOf);
+  built.set(moduleId, made);
+
+  return made;
+}
+
+function viewOf(moduleId: string, id: string): ModuleView {
+  const entry = viewsOf(moduleId).find((candidate) => candidate.id === id);
+  if (!entry) throw new Error(`no '${id}' view is declared by the '${moduleId}' route`);
 
   return entry;
+}
+
+function everyView(): Array<{ moduleId: string; entry: ModuleView }> {
+  return [...DECLARED.keys()].flatMap((moduleId) =>
+    viewsOf(moduleId).map((entry) => ({ moduleId, entry })),
+  );
 }
 
 const CASE_RESULT: CaseSearchResult = {
@@ -110,7 +254,32 @@ const TICKET_RESULT = {
   pageSize: 25,
 };
 
+const BLOCKED_RESULT: BlockedMemberList = {
+  rows: [
+    {
+      id: '018f6f4c-0000-7000-8000-000000000009',
+      guildId: '900000000000000001',
+      userId: '400000000000000007',
+      moduleId: 'honeypot',
+      blockedBy: 'proton:honeypot',
+      reason: 'Posted in a honeypot channel.',
+      caseId: null,
+      evidence: null,
+      createdAt: '2026-02-01T12:00:00.000Z',
+      liftedAt: null,
+      liftedBy: null,
+      liftReason: null,
+    },
+  ],
+  total: 1,
+};
+
 const FIXTURES: Record<string, { search: unknown; data: unknown; shows: string }> = {
+  'moderation/blocked': {
+    search: blockedMemberQuerySchema.parse({}),
+    data: BLOCKED_RESULT,
+    shows: '400000000000000007',
+  },
   'cases/cases': {
     search: caseQuerySchema.parse({}),
     data: CASE_RESULT,
@@ -133,38 +302,36 @@ const FIXTURES: Record<string, { search: unknown; data: unknown; shows: string }
   },
 };
 
-function everyView(): Array<{ moduleId: string; entry: AnyViewEntry }> {
-  return Object.entries(MODULE_VIEWS).flatMap(([moduleId, entries]) =>
-    entries.map((entry) => ({ moduleId, entry })),
-  );
-}
-
-describe('the module view registry', () => {
+describe('the views the module routes declare', () => {
   test('the case browser and the leaderboard belong to the modules that own their data', () => {
     const declared = Object.fromEntries(
-      Object.keys(MODULE_VIEWS).map((id) => [
-        id,
-        viewsFor(id).map((view) => [view.id, view.title]),
-      ]),
+      [...DECLARED.keys()].map((id) => [id, viewsOf(id).map((view) => [view.id, view.title])]),
     );
 
     expect(declared).toEqual({
       cases: [['cases', 'Cases']],
+      moderation: [['blocked', 'Blocked members']],
       leveling: [['leaderboard', 'Leaderboard']],
       tags: [['tags', 'Tags']],
       tickets: [['tickets', 'Tickets']],
     });
   });
 
-  test('every view is registered lazily, so the table libraries stay off the landing page', () => {
-    for (const { moduleId, entry } of everyView()) {
-      expect(`${moduleId}/${entry.id}: ${typeof entry.View.preload}`).toBe(
-        `${moduleId}/${entry.id}: function`,
+  // If the slicing stops matching the route files, every check below reads an empty registry and
+  // passes having asserted nothing at all.
+  test('the entries really parsed out of the route source', () => {
+    expect(DECLARED.size).toBeGreaterThan(0);
+
+    for (const [moduleId, views] of DECLARED) {
+      const block = viewsBlock(sourceOf(moduleId)) ?? '';
+
+      expect(`${moduleId}: ${views.length}`).toBe(
+        `${moduleId}: ${[...block.matchAll(/\bid: '/g)].length}`,
       );
     }
   });
 
-  test('every registered view resolves to a component, a search schema and a query', () => {
+  test('every declared view resolves to a component, a search schema and a query', () => {
     for (const { moduleId, entry } of everyView()) {
       expect(`${moduleId}/${entry.id}: ${typeof entry.View} ${typeof entry.query}`).toBe(
         `${moduleId}/${entry.id}: function function`,
@@ -172,6 +339,32 @@ describe('the module view registry', () => {
       expect(entry.searchSchema).toBeInstanceOf(z.ZodType);
       expect(entry.title.length).toBeGreaterThan(0);
     }
+  });
+
+  test('every view is registered lazily, so the table libraries stay off every other page', () => {
+    for (const declared of allDeclared()) {
+      expect(`${declared.moduleId}/${declared.id}: ${declared.lazy}`).toBe(
+        `${declared.moduleId}/${declared.id}: true`,
+      );
+    }
+  });
+
+  // The laziness only buys anything while the dynamic import is the sole way in: one `from` on
+  // views.tsx anywhere — the sidebar, the palette, another route — ships react-table and
+  // react-virtual to every page that reaches it, including the landing page.
+  test('nothing reaches the browse tables except through that dynamic import', () => {
+    const files = sourceFiles(SRC);
+
+    // A walk that reaches nothing reports no offenders, which reads exactly like a clean scan.
+    expect(files.map((file) => file.replace(SRC, 'src'))).toContain(
+      join('src', 'components', 'views', 'views.tsx'),
+    );
+
+    const offenders = files
+      .filter((file) => /from '[^']*views\/views\.tsx'/.test(readFileSync(file, 'utf8')))
+      .map((file) => file.replace(SRC, 'src'));
+
+    expect(offenders).toEqual([]);
   });
 
   test('every view keys its cache under the guild, its own id and the filters it was given', () => {
@@ -188,6 +381,16 @@ describe('the module view registry', () => {
     }
   });
 
+  // The entries above are rebuilt here, so without this the key being checked is this file's idea
+  // of one rather than the route's.
+  test('and that key is the route file’s own, not this file’s idea of one', () => {
+    for (const declared of allDeclared()) {
+      expect(`${declared.moduleId}/${declared.id} keyed on: ${declared.keyId}`).toBe(
+        `${declared.moduleId}/${declared.id} keyed on: ${declared.id}`,
+      );
+    }
+  });
+
   test('two guilds never share a view cache entry', () => {
     for (const { entry } of everyView()) {
       const search = parseViewSearch(entry, {});
@@ -198,16 +401,11 @@ describe('the module view registry', () => {
     }
   });
 
-  test('a module with settings but no data of its own registers no views', () => {
-    expect(viewsFor('automod')).toEqual([]);
-    expect(tabsFor(viewsFor('automod'), undefined)).toEqual([]);
-    expect(activeView('automod', 'cases')).toBeUndefined();
-  });
-
-  test('a module id nobody registered — including an inherited one — yields an empty set', () => {
-    expect(viewsFor('ticket')).toEqual([]);
-    expect(viewsFor('constructor')).toEqual([]);
-    expect(viewsFor('toString')).toEqual([]);
+  test('a module with settings but no data of its own declares no views', () => {
+    expect(DECLARED.has('automod')).toBe(false);
+    expect(viewsOf('automod')).toEqual([]);
+    expect(tabsFor(viewsOf('automod'), undefined)).toEqual([]);
+    expect(resolveView('automod', viewsOf('automod'), undefined)).toBeUndefined();
   });
 
   test('every view loads with an empty query, so a freshly opened tab is not a filter error', () => {
@@ -218,7 +416,7 @@ describe('the module view registry', () => {
     }
   });
 
-  test('every registered view has a fixture here, so a new one cannot land unrendered', () => {
+  test('every declared view has a fixture here, so a new one cannot land unrendered', () => {
     expect(
       everyView()
         .map(({ moduleId, entry }) => `${moduleId}/${entry.id}`)
@@ -226,14 +424,10 @@ describe('the module view registry', () => {
     ).toEqual(Object.keys(FIXTURES).sort());
   });
 
-  test('every registered view renders the data its loader hands back', async () => {
+  test('every declared view renders the data its loader hands back', () => {
     for (const { moduleId, entry } of everyView()) {
       const fixture = FIXTURES[`${moduleId}/${entry.id}`];
       if (!fixture) throw new Error(`no fixture for ${moduleId}/${entry.id}`);
-
-      // The registry holds these lazily so the landing page does not ship react-table; the module
-      // loader preloads them for the same reason this test has to.
-      await entry.View.preload?.();
 
       const html = renderToStaticMarkup(
         <entry.View search={fixture.search} data={fixture.data} onSearch={() => undefined} />,
@@ -247,37 +441,41 @@ describe('the module view registry', () => {
 
 describe('which tab the address bar selects', () => {
   test('a module page with no view parameter shows its settings', () => {
-    expect(resolveView('cases', undefined)).toBeUndefined();
-    expect(tabsFor(viewsFor('cases'), undefined).find((tab) => tab.current)?.title).toBe(
-      'Settings',
-    );
+    expect(resolveView('cases', viewsOf('cases'), undefined)).toBeUndefined();
+    expect(tabsFor(viewsOf('cases'), undefined).find((tab) => tab.current)?.title).toBe('Settings');
   });
 
   test('the view parameter selects that view, so the tab is shareable', () => {
-    expect(resolveView('cases', 'cases')?.title).toBe('Cases');
-    expect(resolveView('leveling', 'leaderboard')?.title).toBe('Leaderboard');
+    expect(resolveView('cases', viewsOf('cases'), 'cases')?.title).toBe('Cases');
+    expect(resolveView('leveling', viewsOf('leveling'), 'leaderboard')?.title).toBe('Leaderboard');
   });
 
   test('a view another module owns is refused here rather than rendered as an empty settings page', () => {
-    expect(() => resolveView('cases', 'leaderboard')).toThrow(/no 'leaderboard' tab/);
-    expect(() => resolveView('cases', 'leaderboard')).toThrow(/it has 'cases'/);
+    expect(() => resolveView('cases', viewsOf('cases'), 'leaderboard')).toThrow(
+      /no 'leaderboard' tab/,
+    );
+    expect(() => resolveView('cases', viewsOf('cases'), 'leaderboard')).toThrow(/it has 'cases'/);
   });
 
   test('a misspelled view parameter fails the way a bad filter does, not by showing settings', () => {
-    expect(() => resolveView('cases', 'leaderbord')).toThrow(/no 'leaderbord' tab/);
-    expect(() => resolveView('cases', 'tickets')).toThrow(
+    expect(() => resolveView('cases', viewsOf('cases'), 'leaderbord')).toThrow(
+      /no 'leaderbord' tab/,
+    );
+    expect(() => resolveView('cases', viewsOf('cases'), 'tickets')).toThrow(
       /Remove the view parameter from the address bar/,
     );
-    expect(() => resolveView('cases', 42)).toThrow(/no '42' tab/);
-    expect(() => resolveView('cases', null)).toThrow(/no 'null' tab/);
+    expect(() => resolveView('cases', viewsOf('cases'), 42)).toThrow(/no '42' tab/);
+    expect(() => resolveView('cases', viewsOf('cases'), null)).toThrow(/no 'null' tab/);
   });
 
-  test('a module that registers no views says so instead of listing an empty set', () => {
-    expect(() => resolveView('automod', 'cases')).toThrow(/it has settings only/);
+  test('a module that declares no views says so instead of listing an empty set', () => {
+    expect(() => resolveView('automod', viewsOf('automod'), 'cases')).toThrow(
+      /it has settings only/,
+    );
   });
 
-  test('the tab strip leads with settings and then every view the module registers', () => {
-    expect(tabsFor(viewsFor('cases'), 'cases')).toEqual([
+  test('the tab strip leads with settings and then every view the module declares', () => {
+    expect(tabsFor(viewsOf('cases'), 'cases')).toEqual([
       { key: SETTINGS_TAB, title: 'Settings', search: {}, current: false },
       { key: 'view:cases', title: 'Cases', search: { view: 'cases' }, current: true },
     ]);
@@ -285,7 +483,7 @@ describe('which tab the address bar selects', () => {
 });
 
 describe('a view may legally be called settings', () => {
-  const SETTINGS_NAMED: AnyViewEntry = {
+  const SETTINGS_NAMED: ModuleView = {
     id: SETTINGS_TAB,
     title: 'Settings history',
     searchSchema: z.object({}),
@@ -326,6 +524,16 @@ describe('a view may legally be called settings', () => {
 });
 
 describe('the module route validates its search loosely so each view can re-parse it', () => {
+  /**
+   * A copy, not the import: moduleSearchSchema lives in components/module/route.tsx, which reaches
+   * lib/queries and through it the database at module scope. The declaration is pinned below, so a
+   * change to the real one fails here rather than leaving this block exercising a fossil.
+   */
+  const moduleSearchSchema = z.looseObject({
+    view: z.unknown().optional(),
+    area: z.unknown().optional(),
+  });
+
   const routeValidator = zodValidator(moduleSearchSchema);
 
   const url = defaultStringifySearch({
@@ -333,6 +541,13 @@ describe('the module route validates its search loosely so each view can re-pars
     type: 'ban',
     targetId: '200000000000000002',
     page: 3,
+  });
+
+  test('the route declares the schema this block exercises', () => {
+    expect(flatten(readFileSync(MODULE_ROUTE, 'utf8'))).toContain(
+      'export const moduleSearchSchema = z.looseObject({ view: z.unknown().optional(), ' +
+        'area: z.unknown().optional(), });',
+    );
   });
 
   test('the route keeps the filters it does not itself understand', () => {
@@ -379,8 +594,8 @@ describe('the module route validates its search loosely so each view can re-pars
     (_label, url) => {
       const search = routeValidator.parse(defaultParseSearch(url)) as { view?: unknown };
 
-      expect(() => resolveView('cases', search.view)).toThrow(/tab —/);
-      expect(() => resolveView('cases', search.view)).toThrow(
+      expect(() => resolveView('cases', viewsOf('cases'), search.view)).toThrow(/tab —/);
+      expect(() => resolveView('cases', viewsOf('cases'), search.view)).toThrow(
         /Remove the view parameter from the address bar/,
       );
     },
@@ -414,20 +629,6 @@ describe('a filter a view refuses reaches the error component', () => {
   });
 });
 
-const ROUTE = join(
-  import.meta.dir,
-  '..',
-  'src',
-  'routes',
-  'dashboard',
-  '$guildId',
-  '$moduleId.tsx',
-);
-
-function flatten(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
 describe('paging a view rewrites the address bar instead of stacking history', () => {
   test('the leaderboard pager replaces its entry, so Back leaves the page rather than walking it', () => {
     expect(viewSearchUpdate({ page: 4 }).replace).toBe(true);
@@ -443,56 +644,79 @@ describe('paging a view rewrites the address bar instead of stacking history', (
     });
   });
 
-  test('both views page through that one update, so cases and the leaderboard agree', () => {
-    const route = flatten(readFileSync(ROUTE, 'utf8'));
-
-    expect(route).toContain('onSearch={(patch) => void navigate(viewSearchUpdate(patch))}');
+  // One update shared by four hand-written route files now, rather than one dynamic route: the
+  // pager and the filters of every browse tab have to agree on replace, or Back walks the reader
+  // through each page they turned on one module and not on another.
+  test('every view pages through that one update, so cases and the leaderboard agree', () => {
+    for (const moduleId of DECLARED.keys()) {
+      expect(`${moduleId}: ${flatten(sourceOf(moduleId))}`).toContain(
+        'onSearch={(patch) => void navigate(viewSearchUpdate(patch))}',
+      );
+    }
   });
 });
 
 describe('the module route loads a view only while its tab is open', () => {
-  test('the loader asks the registry for the active view before it fetches anything', () => {
-    const route = flatten(readFileSync(ROUTE, 'utf8'));
+  const route = flatten(readFileSync(MODULE_ROUTE, 'utf8'));
+  const loader = route.slice(route.indexOf('loader: async'), route.indexOf('head: ('));
 
-    expect(route).toContain('const entry = resolveView(params.moduleId, deps.view);');
-    expect(route).toContain('queryClient.fetchQuery(entry.query(');
-    expect(route).toContain('entry.View.preload?.()');
+  test('the loader resolves the active view before it fetches anything', () => {
+    expect(loader).toContain('const entry = resolveView(moduleId, views, deps.view);');
+    expect(loader).toContain('queryClient.fetchQuery(entry.query(');
+    expect(loader).toContain('entry.View.preload?.()');
   });
 
   test('the loader resolves rather than looks up, so an unknown view reaches the error component', () => {
-    const route = flatten(readFileSync(ROUTE, 'utf8'));
+    expect(loader).not.toContain('views.find(');
+    expect(route).toContain('errorComponent:');
+    expect(route).toContain('<ModuleError error={error} />');
+  });
 
-    expect(route).not.toContain('activeView(params.moduleId');
-    expect(route).toContain('errorComponent: ModuleError');
+  // The settings form's config, channel and role fetches are an api call and two Discord calls
+  // whose answers a browse tab throws away — and the view's own query is the one thing a settings
+  // tab has no use for. Fetching both is what makes either tab pay for the other.
+  test('the two tabs fetch their own half and not the other’s', () => {
+    expect(loader).toContain('entry ? Promise.all([ queryClient.fetchQuery(entry.query(');
+    expect(loader).toContain(': Promise.all([ queryClient.fetchQuery(moduleConfigQuery(');
+  });
+
+  // The loader resolves from the list the route was built with; the page picks from the same const.
+  // Two lists would render the settings form under a tab whose data the loader had just fetched.
+  test('each page dispatches on the same views its route was built with', () => {
+    for (const moduleId of DECLARED.keys()) {
+      const source = flatten(sourceOf(moduleId));
+
+      expect(`${moduleId}: ${source}`).toContain(`moduleRoute('${moduleId}', {`);
+      expect(`${moduleId}: ${source}`).toContain('views: VIEWS');
+      expect(`${moduleId}: ${source}`).toContain('VIEWS.find(');
+      expect(`${moduleId}: ${source}`).toContain('tabsFor(VIEWS, search.view');
+    }
   });
 });
 
-describe('the sidebar browse list mirrors the registry', () => {
+describe('the sidebar browse list mirrors what the routes declare', () => {
   test('every browsable view is a real view on a real module, and none is missed', () => {
-    const registry = Object.entries(MODULE_VIEWS)
-      .flatMap(([moduleId, views]) => views.map((view) => `${moduleId}/${view.id}/${view.title}`))
+    const declared = allDeclared()
+      .map((view) => `${view.moduleId}/${view.id}/${view.title}`)
       .sort();
 
     const sidebar = BROWSE_VIEWS.map(
       (entry) => `${entry.moduleId}/${entry.viewId}/${entry.title}`,
     ).sort();
 
-    expect(sidebar).toEqual(registry);
+    expect(sidebar).toEqual(declared);
   });
 });
 
 describe('a filter that navigates does not do it per keystroke', () => {
-  const views = readFileSync(
-    join(import.meta.dir, '..', 'src', 'components', 'views', 'views.tsx'),
-    'utf8',
-  );
+  const views = readFileSync(join(SRC, 'components', 'views', 'views.tsx'), 'utf8');
 
   // Every commit rewrites the query string and re-runs the loader. A controlled input wired
   // straight to onSearch also cannot show a character until its own round trip returns, so fast
   // typing drops and reorders them.
   test('the three text-entry filters commit on a pause, not on change', () => {
     expect(views).toContain('function DebouncedFilter(');
-    expect(views.split('<DebouncedFilter').length - 1).toBe(3);
+    expect(views.split('<DebouncedFilter').length - 1).toBe(5);
   });
 
   // A date picker commits once per selection and an id filter is already uncontrolled with an

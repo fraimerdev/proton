@@ -1,5 +1,5 @@
 import { renderCaptcha } from '@proton/cards';
-import type { GuildStateStore } from '@proton/core';
+import type { BlockedMemberStore, GuildStateStore } from '@proton/core';
 import type { CaptchaStore, PanelStore, QuarantineStore } from './store.ts';
 
 export interface CaptchaRenderInput {
@@ -10,6 +10,8 @@ export type CaptchaRenderer = (input: CaptchaRenderInput) => Promise<Uint8Array>
 
 export interface VerificationDeps {
   guildState?: GuildStateStore;
+
+  blocked?: BlockedMemberStore;
 
   fetchMemberRoles?(guildId: string, userId: string): Promise<string[] | null>;
 
@@ -63,6 +65,7 @@ export type BindResult<T> = { deps: T } | { unbound: string[] };
 
 const PORT_HINTS: Record<string, string> = {
   guildState: 'guildState: new RedisGuildStateStore(redis)',
+  blocked: 'blocked: new DrizzleBlockedMemberStore(handle)',
   fetchMemberRoles: 'fetchMemberRoles: the same single-member lookup resolvePrecheckContext uses',
   quarantine: 'quarantine: new RedisQuarantineStore(redis)',
   captcha: 'captcha: new RedisCaptchaStore(redis)',

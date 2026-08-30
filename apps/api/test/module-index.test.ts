@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { moduleDescriptorsSchema, moduleIndexSchema } from '@proton/core';
+import { fieldDescriptorSchema, moduleIndexSchema } from '@proton/core';
 import { createModuleRegistry } from '@proton/modules';
 import { moduleIndex } from '../src/app.ts';
 
@@ -41,36 +41,35 @@ describe('the module index the dashboard reads on every guild page load', () => 
   });
 });
 
-describe('the descriptors a settings form fetches instead', () => {
-  test('one module costs a fraction of what all of them did', () => {
-    const biggest = Math.max(...registry.all().map((m) => bytes(registry.descriptors(m.id))));
-
-    expect(biggest).toBeLessThan(descriptorBytes / 4);
-  });
-
+/**
+ * The dashboard stopped fetching these when its settings pages became hand-written React, and the
+ * endpoint that served them is gone. The generator is not: `descriptorsToModal` still renders the
+ * same descriptors as an in-Discord modal, and the module index above still reads a path and a
+ * label off each one. A module whose schema stops describing itself breaks both.
+ */
+describe('the descriptors the in-Discord builder still renders', () => {
   test('every module the registry knows describes its fields as the schema expects', () => {
     for (const module of registry.all()) {
-      const parsed = moduleDescriptorsSchema.safeParse({
-        moduleId: module.id,
-        descriptors: registry.descriptors(module.id),
-      });
+      for (const descriptor of registry.descriptors(module.id)) {
+        const parsed = fieldDescriptorSchema.safeParse(descriptor);
+        const detail = parsed.success ? '' : ` — ${parsed.error.issues[0]?.message ?? ''}`;
 
-      const detail = parsed.success ? '' : ` — ${parsed.error.issues[0]?.message ?? ''}`;
-
-      expect(`${module.id}: ${parsed.success}${detail}`).toBe(`${module.id}: true`);
+        expect(`${module.id}/${descriptor.path}: ${parsed.success}${detail}`).toBe(
+          `${module.id}/${descriptor.path}: true`,
+        );
+      }
     }
   });
 
   // Zod strips unknown keys, so a descriptor that grew a field the schema does not name would
-  // reach the browser missing it rather than failing here.
+  // reach the modal builder missing it rather than failing here.
   test('nothing is silently dropped on the way through the schema', () => {
     for (const module of registry.all()) {
-      const descriptors = registry.descriptors(module.id);
-      const parsed = moduleDescriptorsSchema.parse({ moduleId: module.id, descriptors });
-
-      expect(`${module.id}: ${bytes(parsed.descriptors)}`).toBe(
-        `${module.id}: ${bytes(descriptors)}`,
-      );
+      for (const descriptor of registry.descriptors(module.id)) {
+        expect(
+          `${module.id}/${descriptor.path}: ${bytes(fieldDescriptorSchema.parse(descriptor))}`,
+        ).toBe(`${module.id}/${descriptor.path}: ${bytes(descriptor)}`);
+      }
     }
   });
 });

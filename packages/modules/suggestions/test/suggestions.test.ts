@@ -196,7 +196,7 @@ describe('/suggest', () => {
 
     await h.run('suggest', [stringOption('text', 'Add a bot-commands channel.')], { deps: {} });
 
-    expect(h.replyContent()).toContain("isn't fully set up");
+    expect(h.replyContent()).toContain('a fault on my side');
     expect(h.logs.some((line) => line.level === 'error' && line.message.includes('store'))).toBe(
       true,
     );
@@ -385,7 +385,7 @@ describe('the vote buttons', () => {
 
     await h.press(voteEvent(voteId(suggestion.id, 'up')), { deps: {} });
 
-    expect(h.replyContent()).toContain("isn't fully set up");
+    expect(h.replyContent()).toContain('a fault on my side');
     expect(h.logs.some((line) => line.level === 'error' && line.message.includes('store'))).toBe(
       true,
     );
@@ -552,7 +552,7 @@ describe('/suggestion accept, deny and implement', () => {
 
     await h.run('suggestion', subcommand('accept', [integerOption('number', 1)]), { deps: {} });
 
-    expect(h.replyContent()).toContain("isn't fully set up");
+    expect(h.replyContent()).toContain('a fault on my side');
   });
 });
 

@@ -204,12 +204,18 @@ Satori (JSX → SVG) → resvg (SVG → PNG), per §8. Three fixed presets, no c
 
 - **Pin the runtime risk on day one.** `@resvg/resvg-js` is a native NAPI module; if it misbehaves
   under Bun, the fallback is `@resvg/resvg-wasm`. A spike test before any card work, not after.
-- **Fonts must be embedded.** No network at render time. One variable font subset, checked in, with
-  its licence recorded.
+- **Fonts must be embedded.** No network at render time. Static weights rather than one variable
+  file, because satori does no synthetic bolding — it picks the nearest declared weight, so every
+  weight the design uses is a file. Licence recorded in `packages/cards/LICENSES.md`.
 - **Avatars come from `cdn.discordapp.com`.** That is not `discord.com/api`, so I2 does not literally
   cover it — but the decision must be written down explicitly, with a byte cap, a timeout and a
   default-avatar fallback, or it will read as an I2 violation to the next reviewer. A CDN blip must
   degrade the card, never fail the command.
+- **The dashboard's live preview loads that same CDN image in an `<img>`.** The bot's copy is fetched
+  through `HttpImageFetcher` and inlined as a `data:` URI so satori never puts an unvetted request on
+  the wire; the browser's copy is a plain image load, the way the app shell already draws avatars and
+  guild icons. The preview can therefore show a background the real card drops for being too large —
+  the settings are saved either way, and the PNG is what Discord receives.
 
 ---
 
@@ -328,9 +334,11 @@ a lock.
 - `guilds/$guildId/leaderboard` — Table + Virtual + Zod search params, mirroring the cases browser.
 - Bespoke editors for role rewards, role menus and the sticky-role allowlist, following
   `EscalationLadderEditor`.
-- Card preview: static preset thumbnails rendered at build time. Live preview would need the
-  renderer reachable from the dashboard, and the decision put rendering in the worker — record the
-  limitation rather than quietly building a second renderer.
+- Card preview: live, and without a second renderer. The card is one React component in
+  `@proton/cards/design`; satori rasterises it for Discord and the dashboard renders the same
+  component with react-dom, so the preview updates on the keystroke rather than on a round trip.
+  Only satori and resvg stay out of the browser, behind the `/design` subpath the client-bundle
+  test polices.
 - Nothing new for audit: every mutation already passes `auditTrail` (I7).
 
 ---
@@ -387,7 +395,7 @@ Patterned on Gates 0–2. Every criterion proven by command output, not assertio
 |---|---|---|
 | 3.A framework | done | 5 event types, 5 action kinds, multipart, rule wiring, publish port |
 | 3.B leveling | done | curve + property tests, single-statement award, message XP, voice XP, `/rank` `/leaderboard` `/xp` |
-| 3.C cards | done | satori + `@resvg/resvg-js` **work under Bun** — R1 did not materialise. Inter (OFL) checked into `packages/cards/assets` |
+| 3.C cards | done | satori + `@resvg/resvg-js` **work under Bun** — R1 did not materialise. Manrope and Inter (OFL) checked into `packages/cards/assets` as WOFF and TTF, which satori parses and `@napi-rs/canvas` measures identically |
 | 3.D join roles + sticky | done | `joinroles` grants from a listener (people and bots, screening-aware); sticky roles in the same listener; `grant.ts`/`restore.ts` refuse `@everyone`, managed roles, roles at-or-above the bot, and anything off the allowlist |
 | 3.E rolemenu | done | reaction, button and select menus; deferred ack then follow-up |
 | 3.F starboard | done | recompute-never-increment; create keyed on `(guild, message)` not the event |
@@ -411,9 +419,10 @@ Two additions to `packages/core` that the plan did not anticipate:
    named-pipe path for Bun.
 2. **Gate 3 acceptance is therefore unproven.** Criteria 2, 3, 5, 7, 8, 9 and 10 in §4 all depend on
    integration suites. Nothing in §4 should be treated as demonstrated.
-3. **No card preview in the dashboard.** Rendering lives in `apps/worker` by decision, so the
-   settings page names the preset but cannot show it.
-3. **No card preview in the dashboard** — unchanged.
+3. **Nothing proves the live preview and the PNG agree.** They were measured against each other
+   once — every box lands on the same pixel, and only text advance widths differ by 1–2px because
+   the browser fetches Manrope from Google Fonts rather than the checked-in file. No test holds
+   that, because nothing in this repo can drive a browser.
 
 Items 4 and 5 as first written are now closed: `manifest.migrations` was deleted in favour of the
 core drizzle set that four modules already used, and `ActionResult.body` carries Discord's response

@@ -64,14 +64,16 @@ export function thresholdFor(
 
   if (typeof limit !== 'number' || typeof window !== 'string') {
     return {
-      error: `the ${nukeClass} threshold in this server's anti-nuke config is not a number and a duration.`,
+      error:
+        'its limit is not a whole number, or its window is not a duration. Fix them on the ' +
+        'Anti-nuke page of the Proton dashboard.',
     };
   }
 
   const windowMs = tryParseDuration(window);
   if (windowMs === null) {
     return {
-      error: `'${window}' is not a duration I can read, so ${nukeClass} is not being watched in this server. Fix it in the Proton dashboard.`,
+      error: `'${window}' is not a duration I can read. Fix it on the Anti-nuke page of the Proton dashboard.`,
     };
   }
 

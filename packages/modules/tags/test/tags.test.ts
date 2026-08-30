@@ -160,7 +160,7 @@ describe('/tag', () => {
 
     await h.run('tag', [stringOption('name', 'rules')], { deps: {} });
 
-    expect(h.replyContent()).toContain("isn't fully wired up");
+    expect(h.replyContent()).toContain('a fault on my side');
     expect(h.logs.some((line) => line.level === 'error' && line.message.includes('store'))).toBe(
       true,
     );

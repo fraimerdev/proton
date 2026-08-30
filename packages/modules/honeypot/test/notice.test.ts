@@ -13,7 +13,7 @@ import {
   HONEYPOT_COLOUR,
   STATS_ACTION,
 } from '../src/notice.ts';
-import { armed, GUILD, harness, LOUNGE, MEMBER, TRAP, trap } from './harness.ts';
+import { armed, config, GUILD, harness, LOUNGE, MEMBER, TRAP, trap } from './harness.ts';
 
 const REMEMBERED = '700000000000009001';
 
@@ -107,7 +107,9 @@ describe('reconciling the notices when the config is saved', () => {
     await h.saved({ config: armed() });
     const messageId = h.remembered()[TRAP]?.messageId;
 
-    const outcome = await h.saved({ config: armed({ enabled: false }) });
+    const outcome = await h.saved({
+      config: { enabled: true, channels: [trap({ enabled: false })] },
+    });
 
     expect(outcome).toEqual({
       action: 'reconciled',
@@ -171,16 +173,16 @@ describe('reconciling the notices when the config is saved', () => {
     expect(h.calls()).toEqual([]);
   });
 
-  test('two armed channels get two notices, each with its own delete window', async () => {
+  // The window is one setting for the whole module now, so both notices describe the same one.
+  // The v1 shape that let them differ is what liftStoredConfig collapses.
+  test('two armed channels get two notices, both describing the one delete window', async () => {
     const h = harness();
 
     const outcome = await h.saved({
       config: {
         enabled: true,
-        channels: [
-          trap({ deleteMessageSeconds: 86_400 }),
-          trap({ channelId: LOUNGE, deleteMessageSeconds: 3_600 }),
-        ],
+        deleteMessageSeconds: 86_400,
+        channels: [trap(), trap({ channelId: LOUNGE })],
       },
     });
 
@@ -199,7 +201,7 @@ describe('reconciling the notices when the config is saved', () => {
       'Everything you posted in the last day is deleted with you.',
     );
     expect(texts(h.componentsIn(LOUNGE)).join('\n')).toContain(
-      'Everything you posted in the last hour is deleted with you.',
+      'Everything you posted in the last day is deleted with you.',
     );
     expect(h.remembered()[TRAP]?.messageId).not.toBe(h.remembered()[LOUNGE]?.messageId as string);
   });
@@ -369,9 +371,9 @@ describe('the label on the button', () => {
     ]);
   });
 
-  test('is derived per channel, so a softban trap never says Kicks', () => {
-    const softban = buildNoticeComponents(trap({ action: 'softban' }), 4);
-    const kick = buildNoticeComponents(trap({ action: 'kick' }), 4);
+  test('is derived from the action, so a softban trap never says Kicks', () => {
+    const softban = buildNoticeComponents(config({ action: 'softban' }), TRAP, 4, 'free');
+    const kick = buildNoticeComponents(config({ action: 'kick' }), TRAP, 4, 'free');
 
     if (!softban.ok || !kick.ok) throw new Error('the notice would not build');
 
@@ -465,5 +467,110 @@ describe('what the notice promises about the channel it sits in', () => {
     await h.saved({ config: armed({ action: 'ban', deleteMessageSeconds: 0 }) });
 
     expect(texts(h.componentsIn(TRAP)).join('\n')).not.toContain('is deleted with you');
+  });
+});
+
+describe('the switches on the warning message', () => {
+  test('turning the notice off takes every one already posted down', async () => {
+    const h = harness();
+
+    await h.saved({ config: two() });
+    const first = h.remembered()[TRAP]?.messageId;
+    const second = h.remembered()[LOUNGE]?.messageId;
+
+    const outcome = await h.saved({ config: { ...two(), postNotice: false } });
+
+    expect(outcome).toEqual({
+      action: 'reconciled',
+      changes: [
+        { channelId: TRAP, did: 'removed' },
+        { channelId: LOUNGE, did: 'removed' },
+      ],
+    });
+    expect(h.deleted()).toEqual([`${TRAP}/${first}`, `${LOUNGE}/${second}`]);
+    expect(h.remembered()).toEqual({});
+  });
+
+  test('with the notice off, a save posts nothing at all', async () => {
+    const h = harness();
+
+    const outcome = await h.saved({ config: { ...armed(), postNotice: false } });
+
+    expect(outcome).toEqual({ action: 'reconciled', changes: [] });
+    expect(h.calls()).toEqual([]);
+  });
+
+  test('turning the counter off posts the warning with no button', async () => {
+    const h = harness();
+
+    await h.saved({ config: { ...armed(), noticeCounterButton: false } });
+
+    const nodes = h.componentsIn(TRAP);
+
+    expect(buttons(nodes)).toEqual([]);
+    expect(texts(nodes).join('\n')).toContain('DO NOT SEND MESSAGES IN THIS CHANNEL');
+  });
+
+  test('the counter is on by default, and carries this trap’s own channel', async () => {
+    const h = harness();
+
+    await h.saved({ config: armed() });
+
+    const pressed = buttons(h.componentsIn(TRAP))[0];
+
+    expect(parseCustomId(pressed?.custom_id)).toEqual({
+      moduleId: MODULE_ID,
+      action: STATS_ACTION,
+      args: [TRAP],
+    });
+  });
+
+  test('hiding what a honeypot is still warns, without naming the trap', async () => {
+    const h = harness();
+
+    await h.saved({ config: { ...armed(), hideWhatIsAHoneypot: true } });
+
+    const said = texts(h.componentsIn(TRAP)).join('\n');
+
+    expect(said).not.toContain('spam bots');
+    expect(said).toContain('There is never a reason to post here.');
+    expect(said).toContain('you are removed from the server and let straight back in');
+  });
+});
+
+describe('a guild that may not author its own layout', () => {
+  const CUSTOM = {
+    mentions: { everyone: false, roles: false, users: false },
+    embeds: [],
+    components: [],
+    v2: [{ kind: 'container' as const, children: [{ kind: 'text' as const, content: 'Ours.' }] }],
+  };
+
+  test('a free guild posts the built-in layout', async () => {
+    const h = harness();
+
+    await h.saved({ config: { ...armed(), noticeLayout: CUSTOM }, tier: 'free' });
+
+    expect(texts(h.componentsIn(TRAP)).join('\n')).toContain('DO NOT SEND MESSAGES');
+  });
+
+  test('a paying guild posts its own', async () => {
+    const h = harness();
+
+    await h.saved({ config: { ...armed(), noticeLayout: CUSTOM }, tier: 'plus' });
+
+    expect(texts(h.componentsIn(TRAP)).join('\n')).toBe('Ours.');
+  });
+
+  // The substitution is render-only. Nothing on the write path may reach for it, or one unrelated
+  // toggle after a downgrade would overwrite work the admin did while they were paying.
+  test('what the free guild has stored is untouched by the save', async () => {
+    const h = harness();
+    const config = { ...armed(), noticeLayout: CUSTOM };
+
+    await h.saved({ config, tier: 'free' });
+
+    expect(config.noticeLayout).toBe(CUSTOM);
+    expect(CUSTOM.v2[0]?.children[0]?.content).toBe('Ours.');
   });
 });

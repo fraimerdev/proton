@@ -16,10 +16,13 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.6.28",
+    "@proton/cards": "workspace:*",
     "@proton/core": "workspace:*",
     "@proton/db": "workspace:*",
     "@proton/module-antinuke": "workspace:*",
+    "@proton/module-appeals": "workspace:*",
     "@proton/module-automod": "workspace:*",
+    "@proton/module-branding": "workspace:*",
     "@proton/module-cases": "workspace:*",
     "@proton/module-counters": "workspace:*",
     "@proton/module-honeypot": "workspace:*",
@@ -52,7 +55,6 @@
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.7",
-    "@proton/cards": "workspace:*",
     "@phosphor-icons/core": "2.1.1",
     "@proton/modules": "workspace:*",
     "@tanstack/router-plugin": "1.168.31",

@@ -77,7 +77,6 @@ export async function handleStatsPress(
     return { action: 'refused', reason: 'the stats port is unbound' };
   }
 
-  const channel = ctx.config.channels.find((candidate) => candidate.channelId === channelId);
   const now = deps.now?.() ?? Date.now();
 
   const privileged = (readPermissions(event) & PRIVILEGED) !== 0n;
@@ -87,7 +86,7 @@ export async function handleStatsPress(
     replyEphemeral(to, {
       components: buildStatsComponents({
         channelId,
-        action: channel?.action ?? 'none',
+        action: ctx.config.action,
         total: read.total,
         lastDay: read.lastDay,
         lastWeek: read.lastWeek,

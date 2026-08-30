@@ -71,7 +71,12 @@ const lossStreakSchema = z.object({
   perLoss: z.number().min(0).max(100).default(1).register(protonFields, {
     label: 'Entries per loss',
   }),
-  cap: z.number().min(0).max(1000).default(10).register(protonFields, { label: 'Up to at most' }),
+  cap: z
+    .number()
+    .min(0)
+    .max(1000)
+    .default(10)
+    .register(protonFields, { label: 'Maximum extra entries' }),
   days: z
     .number()
     .int()
@@ -215,7 +220,7 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
 
     describe(config) {
       const roles = config.roleIds.map((id) => `<@&${id}>`).join(', ');
-      return `${roles}: ${config.amount} extra entries.`;
+      return `${roles}: ${config.amount} extra ${config.amount === 1 ? 'entry' : 'entries'}.`;
     },
   };
 
@@ -235,7 +240,7 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
     },
 
     describe(config) {
-      return `Server boosters: ${config.amount} extra entries.`;
+      return `Server boosters: ${config.amount} extra ${config.amount === 1 ? 'entry' : 'entries'}.`;
     },
   };
 
@@ -255,7 +260,10 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
     },
 
     describe(config) {
-      return `While this server is on ${config.tier}: ${config.amount} extra entries.`;
+      return (
+        `While this server is on ${config.tier}: ${config.amount} extra ` +
+        `${config.amount === 1 ? 'entry' : 'entries'}.`
+      );
     },
   };
 
@@ -296,8 +304,8 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
 
     describe(config) {
       return (
-        `${config.perLoss} extra entries for every giveaway you entered and did not win in the ` +
-        `last ${config.days} days, up to ${config.cap}.`
+        `${config.perLoss} extra ${config.perLoss === 1 ? 'entry' : 'entries'} for every giveaway ` +
+        `you entered and did not win in the last ${config.days} days, up to ${config.cap}.`
       );
     },
   };

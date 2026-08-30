@@ -21,10 +21,9 @@ import {
 const REASON_MAX = 512;
 
 const NO_STORE =
-  'Maintenance mode is unavailable: this Proton deployment was started without a maintenance ' +
-  'store, so there is nowhere to record a window — and a window nothing records is a hole ' +
-  'nothing closes. Whoever runs the bot needs to pass maintenance: new ' +
-  'RedisMaintenanceStore(redis) to createAntinukeModule().';
+  'Maintenance mode is unavailable: Proton is running with nowhere to record a window, and a ' +
+  'window nothing records is a hole nothing closes. Ask whoever runs Proton to make it ' +
+  'available — until then the breaker stays armed and cannot be suspended.';
 
 const DISABLED =
   'Anti-nuke is switched off in this server, so there is no breaker to suspend. Turn the ' +

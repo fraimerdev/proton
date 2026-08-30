@@ -1660,7 +1660,7 @@ function NodeBody({
       return (
         <>
           <p className="field-description">
-            Up to {SECTION_TEXT_MAX} blocks of text, each with one thing beside it. A section
+            Up to {SECTION_TEXT_MAX} blocks of text, with one thing beside them all. A section
             without one will not save.
           </p>
 

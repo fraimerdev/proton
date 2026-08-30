@@ -2,6 +2,7 @@ import type { ModuleSummary } from '@proton/core';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
+import { modulePath } from '../../../components/module/paths.ts';
 import {
   accessLabel,
   guildIconUrl,
@@ -12,6 +13,7 @@ import { Icon } from '../../../components/shell/icon.tsx';
 import {
   CATEGORY_LABELS,
   CATEGORY_ORDER,
+  isServerLevel,
   moduleBlurb,
   moduleIcon,
   moduleState,
@@ -36,9 +38,46 @@ function formatDay(iso: string): string {
   return iso.slice(0, 10);
 }
 
-function ModuleRow({ guildId, module }: { guildId: string; module: ModuleSummary }): ReactElement {
+// Not a ModuleRow: this is how Proton itself is set up in this server, not a feature to switch on,
+// so it carries no toggle and sits outside the categories. The switch that does exist lives on its
+// own page, where the sentence beside it can say what it actually governs.
+function ServerSettingRow({
+  guildId,
+  module,
+}: {
+  guildId: string;
+  module: ModuleSummary;
+}): ReactElement | null {
+  const to = modulePath(module.id);
+  if (!to) return null;
+
+  return (
+    <Link to={to} params={{ guildId }} search={{}} className="server-setting">
+      <i>
+        <Icon name={moduleIcon(module.dashboard?.icon)} />
+      </i>
+      <span className="server-setting-text">
+        <span className="server-setting-name">{module.name}</span>
+        <span className="server-setting-desc">{moduleBlurb(module.id, module.category)}</span>
+      </span>
+      <span className="server-setting-state">{module.enabled ? 'On' : 'Off'}</span>
+      <Icon name="caret-right" />
+    </Link>
+  );
+}
+
+function ModuleRow({
+  guildId,
+  module,
+}: {
+  guildId: string;
+  module: ModuleSummary;
+}): ReactElement | null {
   const toggle = useToggleModule();
   const state = moduleState(module);
+
+  const to = modulePath(module.id);
+  if (!to) return null;
 
   return (
     <li className={`module-row${module.enabled ? ' module-row-on' : ''}`} data-state={state}>
@@ -48,12 +87,7 @@ function ModuleRow({ guildId, module }: { guildId: string; module: ModuleSummary
           weight={module.enabled ? 'fill' : 'regular'}
         />
       </i>
-      <Link
-        to="/dashboard/$guildId/$moduleId"
-        params={{ guildId, moduleId: module.id }}
-        search={{}}
-        className="module-open"
-      >
+      <Link to={to} params={{ guildId }} search={{}} className="module-open">
         <span className="module-name">{module.name}</span>
         {/* The row holds one line and ellipsises, so a blurb written past it had no second home. */}
         <span
@@ -93,17 +127,33 @@ function GeneralSettings(): ReactElement {
   const guild = guilds.find((candidate) => candidate.id === guildId);
   const icon = guild ? guildIconUrl(guild) : null;
 
+  const serverLevel = modules.filter((module) => isServerLevel(module.id));
+
   return (
     <>
       <PageHead title="Modules" />
 
       <p className="page-lede">
-        Everything Proton can do in {overview.name}. A module does nothing until it is switched on,
-        and each one opens on its own settings.
+        Everything Proton can do in {overview.name}. How Proton itself appears here comes first;
+        below it, a module does nothing until it is switched on, and each one opens on its own
+        settings.
       </p>
 
+      {serverLevel.length > 0 ? (
+        <section className="module-group">
+          <h2 className="module-group-title">This server</h2>
+          <div className="server-settings">
+            {serverLevel.map((module) => (
+              <ServerSettingRow key={module.id} guildId={guildId} module={module} />
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {CATEGORY_ORDER.map((category) => {
-        const owned = modules.filter((module) => module.category === category);
+        const owned = modules.filter(
+          (module) => module.category === category && !isServerLevel(module.id),
+        );
         if (owned.length === 0) return null;
 
         return (
@@ -206,7 +256,7 @@ function GeneralSettingsError({ error }: { error: Error }): ReactElement {
           <span className="where">
             <Icon name="arrow-elbow-down-right" />
             Proton writes this record when it joins a server, and reads it on every page here. If it
-            cannot be read, the modules below cannot be configured until it can.
+            cannot be read, this server’s modules cannot be configured until it can.
           </span>
         </div>
       </div>
