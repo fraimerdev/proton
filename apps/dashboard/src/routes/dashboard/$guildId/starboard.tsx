@@ -2,7 +2,14 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { SectionCard } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
-import { ChannelField, Num, Text, Toggle, Tokens } from '../../../components/module/inputs.tsx';
+import {
+  ChannelField,
+  Num,
+  POSTABLE_CHANNEL_TYPES,
+  Text,
+  Toggle,
+  Tokens,
+} from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
@@ -47,6 +54,7 @@ function StarboardPage(): ReactElement {
             kind="channel-id"
             label="Source channels"
             help="Empty watches every channel Proton can see"
+            channelTypes={POSTABLE_CHANNEL_TYPES}
             maxItems={50}
           />
           <Toggle path="ignoreBots" label="Ignore bot messages" defaultValue={true} />

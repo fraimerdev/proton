@@ -2,7 +2,11 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { SectionCard } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
-import { ChannelField, Toggle } from '../../../components/module/inputs.tsx';
+import {
+  ChannelField,
+  POSTABLE_CHANNEL_TYPES,
+  Toggle,
+} from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
@@ -25,6 +29,7 @@ function SuggestionsPage(): ReactElement {
             path="channelId"
             label="Suggestion channel"
             help="Needs View Channel, Send Messages and Embed Links there"
+            channelTypes={POSTABLE_CHANNEL_TYPES}
             optional
           />
         </SectionCard>

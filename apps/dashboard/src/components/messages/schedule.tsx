@@ -10,6 +10,7 @@ import {
   channelOptions,
   type DiscordChannel,
   type DiscordRole,
+  POSTABLE_CHANNEL_TYPES,
   roleOptions,
   SinglePicker,
 } from '../form/picker.tsx';
@@ -95,7 +96,7 @@ export function ScheduleEditor({
         <SinglePicker
           id={channelControlId}
           label="Channel"
-          options={channelOptions(channels)}
+          options={channelOptions(channels, POSTABLE_CHANNEL_TYPES)}
           value={schedule.channelId === '' ? null : schedule.channelId}
           onChange={(next) => set({ channelId: next ?? '' })}
           emptyLabel="Choose a channel…"

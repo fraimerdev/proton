@@ -1,5 +1,6 @@
 import { CARD_PRESETS, DEFAULT_CARD_ACCENT } from '@proton/cards/presets';
 import { EMPTY_MESSAGE } from '@proton/core';
+import { greetingMessageSchema } from '@proton/module-welcome/config';
 import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { SectionCard } from '../../../components/form/section.tsx';
@@ -7,7 +8,15 @@ import { WELCOME_AREAS as AREAS } from '../../../components/module/area-index.ts
 import { activeArea } from '../../../components/module/areas.ts';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
-import { ChannelField, Choice, Colour, Text, Toggle } from '../../../components/module/inputs.tsx';
+import {
+  ChannelField,
+  Choice,
+  Colour,
+  POSTABLE_CHANNEL_TYPES,
+  Text,
+  Toggle,
+  usePanelSchema,
+} from '../../../components/module/inputs.tsx';
 import { AreaHub, ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
@@ -54,17 +63,28 @@ function WelcomePage(): ReactElement {
 }
 
 function WelcomeArea({ form }: { form: ModuleForm }): ReactElement {
+  const message = form.value('welcomeMessage', EMPTY_MESSAGE);
+
+  // The builder checks core's messageSchema, which takes any button; a greeting takes link
+  // buttons only. Ungated, a finished non-link button rejected every other welcome edit.
+  usePanelSchema('welcomeMessage', 'Welcome message', greetingMessageSchema, message);
+
   return (
     <>
       <SectionCard id="welcome:welcome" title="Welcome">
-        <ChannelField path="welcomeChannelId" label="Welcome channel" optional />
+        <ChannelField
+          path="welcomeChannelId"
+          label="Welcome channel"
+          channelTypes={POSTABLE_CHANNEL_TYPES}
+          optional
+        />
       </SectionCard>
 
       <SectionCard id="welcome:panel:welcomeMessage" title="Welcome message">
         <GreetingEditor
           channels={form.channels}
           description="Posted in the welcome channel when somebody joins."
-          message={form.value('welcomeMessage', EMPTY_MESSAGE)}
+          message={message}
           onChange={(next) => form.set('welcomeMessage', next)}
           roles={form.roles}
         />
@@ -74,17 +94,28 @@ function WelcomeArea({ form }: { form: ModuleForm }): ReactElement {
 }
 
 function GoodbyeArea({ form }: { form: ModuleForm }): ReactElement {
+  const message = form.value('goodbyeMessage', EMPTY_MESSAGE);
+
+  // The builder checks core's messageSchema, which takes any button; a greeting takes link
+  // buttons only. Ungated, a finished non-link button rejected every other welcome edit.
+  usePanelSchema('goodbyeMessage', 'Goodbye message', greetingMessageSchema, message);
+
   return (
     <>
       <SectionCard id="welcome:goodbye" title="Goodbye">
-        <ChannelField path="goodbyeChannelId" label="Goodbye channel" optional />
+        <ChannelField
+          path="goodbyeChannelId"
+          label="Goodbye channel"
+          channelTypes={POSTABLE_CHANNEL_TYPES}
+          optional
+        />
       </SectionCard>
 
       <SectionCard id="welcome:panel:goodbyeMessage" title="Goodbye message">
         <GreetingEditor
           channels={form.channels}
           description="Posted in the goodbye channel when somebody leaves."
-          message={form.value('goodbyeMessage', EMPTY_MESSAGE)}
+          message={message}
           onChange={(next) => form.set('goodbyeMessage', next)}
           roles={form.roles}
         />

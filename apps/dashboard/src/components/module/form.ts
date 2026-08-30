@@ -45,8 +45,22 @@ export interface ModuleForm {
   leave: () => void;
 }
 
-function differs(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) !== JSON.stringify(b);
+function blank(value: unknown): boolean {
+  if (value === undefined || value === null || value === '') return true;
+  if (Array.isArray(value)) return value.length === 0;
+
+  return typeof value === 'object' && Object.keys(value).length === 0;
+}
+
+// JSON.stringify(undefined) is undefined rather than a string, so any value at all compares unequal
+// to a key the stored config does not have — including the empty list a token field is left holding
+// once its last chip is removed. Permissions, whose overrides start absent and whose save prunes the
+// empty ones anyway, then sat on "You have unsaved changes" with nothing on screen changed and the
+// leave-confirmation firing on every navigation.
+function differs(held: unknown, stored: unknown): boolean {
+  if (stored === undefined && blank(held)) return false;
+
+  return JSON.stringify(held) !== JSON.stringify(stored);
 }
 
 function moduleOf(modules: readonly ModuleSummary[], moduleId: string): ModuleSummary {
@@ -135,6 +149,7 @@ export function useModuleForm(
       queryClient.setQueryData(moduleConfigQuery(guildId, moduleId).queryKey, result.after);
       void queryClient.invalidateQueries({ queryKey: queryKeys.modules(guildId) });
       setEdits({});
+      setProblems({});
       setSettled(true);
     },
   });
@@ -163,6 +178,13 @@ export function useModuleForm(
 
   const problem = Object.values(problems)[0] ?? null;
 
+  function discard(): void {
+    setEdits({});
+    setProblems({});
+    setSettled(false);
+    save.reset();
+  }
+
   return {
     guildId,
     moduleId,
@@ -187,14 +209,19 @@ export function useModuleForm(
     error: save.error,
 
     save: () => save.mutate(normalise ? normalise(live) : live),
-    reset: () => {
-      setEdits({});
-      setSettled(false);
-      save.reset();
-    },
+    reset: discard,
 
     blocked: blocker.status === 'blocked',
     stay: () => blocker.reset?.(),
-    leave: () => blocker.proceed?.(),
+
+    // Discards before proceeding. proceed() alone only released the navigation: the edits stayed in
+    // state, so the form was still dirty on the far side — and a module's hub and its areas are one
+    // route, so the page never unmounts to lose them. The blocker then refused every later move
+    // into an area, while the hub renders no dialog to answer it. The module read as having stopped
+    // responding, and only a reload cleared it.
+    leave: () => {
+      discard();
+      blocker.proceed?.();
+    },
   };
 }

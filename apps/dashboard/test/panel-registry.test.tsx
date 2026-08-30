@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { EMPTY_MESSAGE } from '@proton/core';
 import { appealPanelsSchema, appealsConfigSchema } from '@proton/module-appeals/config';
 import { casesConfigSchema, escalationLadderSchema } from '@proton/module-cases';
-import { countersConfigSchema } from '@proton/module-counters/config';
+import { countersConfigSchema, countersListSchema } from '@proton/module-counters/config';
 import {
   DEFAULT_DM_MESSAGE,
   DEFAULT_NOTICE_MESSAGE,
@@ -14,8 +14,16 @@ import {
   honeypotConfigSchema,
   honeypotLayoutSchema,
 } from '@proton/module-honeypot/config';
-import { levelingConfigSchema, roleRewardsSchema } from '@proton/module-leveling/config';
-import { messagesConfigSchema } from '@proton/module-messages/config';
+import {
+  levelingConfigSchema,
+  levelUpMessageSchema,
+  roleRewardsSchema,
+} from '@proton/module-leveling/config';
+import {
+  messagesConfigSchema,
+  savedComponentsSchema,
+  templatesSchema,
+} from '@proton/module-messages/config';
 import { rolemenuConfigSchema, rolemenuMenusSchema } from '@proton/module-rolemenu/config';
 import { serverlogConfigSchema } from '@proton/module-serverlog/config';
 import { tempVcConfigSchema, tempVcHubsSchema } from '@proton/module-tempvc/config';
@@ -25,7 +33,7 @@ import {
   ticketsConfigSchema,
   ticketTypesSchema,
 } from '@proton/module-tickets/config';
-import { welcomeConfigSchema } from '@proton/module-welcome/config';
+import { greetingMessageSchema, welcomeConfigSchema } from '@proton/module-welcome/config';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -154,7 +162,12 @@ const CONFIG_SCHEMAS: Record<string, z.ZodObject> = {
 /** The schemas the save gate is handed, by the name the route file calls them. */
 const GATE_SCHEMAS: Record<string, { safeParse: (value: unknown) => { success: boolean } }> = {
   appealPanelsSchema,
+  countersListSchema,
   escalationLadderSchema,
+  greetingMessageSchema,
+  levelUpMessageSchema,
+  savedComponentsSchema,
+  templatesSchema,
   honeypotChannelsSchema,
   honeypotLayoutSchema,
   roleRewardsSchema,

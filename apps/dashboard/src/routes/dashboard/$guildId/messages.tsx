@@ -1,4 +1,8 @@
-import type { SavedComponent } from '@proton/module-messages/config';
+import {
+  type SavedComponent,
+  savedComponentsSchema,
+  templatesSchema,
+} from '@proton/module-messages/config';
 import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { SectionCard } from '../../../components/form/section.tsx';
@@ -7,6 +11,7 @@ import { MESSAGES_AREAS as AREAS } from '../../../components/module/area-index.t
 import { activeArea } from '../../../components/module/areas.ts';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
+import { usePanelSchema } from '../../../components/module/inputs.tsx';
 import { AreaHub, ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
@@ -49,10 +54,13 @@ function MessagesPage(): ReactElement {
 }
 
 function TemplatesArea({ form }: { form: ModuleForm }): ReactElement {
+  const templates = form.value('templates', []) as SavedMessageEntry[];
+  usePanelSchema('templates', 'Templates', templatesSchema, templates);
+
   return (
     <SectionCard id="messages:panel:templates" title="Templates">
       <TemplatesEditor
-        templates={form.value('templates', []) as SavedMessageEntry[]}
+        templates={templates}
         channels={form.channels}
         roles={form.roles}
         tier={form.tier}
@@ -65,10 +73,13 @@ function TemplatesArea({ form }: { form: ModuleForm }): ReactElement {
 }
 
 function ComponentsArea({ form }: { form: ModuleForm }): ReactElement {
+  const components = form.value('components', []) as SavedComponent[];
+  usePanelSchema('components', 'Components', savedComponentsSchema, components);
+
   return (
     <SectionCard id="messages:panel:components" title="Components">
       <PaletteEditor
-        components={form.value('components', []) as SavedComponent[]}
+        components={components}
         roles={form.roles}
         onChange={(next) => form.set('components', next)}
       />

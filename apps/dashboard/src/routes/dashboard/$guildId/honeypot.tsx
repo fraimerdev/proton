@@ -1,4 +1,5 @@
 import {
+  DEFAULT_AUDIT_REASON,
   DEFAULT_DM_MESSAGE,
   DEFAULT_NOTICE_MESSAGE,
   type HoneypotAction,
@@ -185,6 +186,7 @@ function ActionArea({ form }: { form: ModuleForm }): ReactElement {
         label="Audit log reason"
         help="What Discord’s own audit log records against the action"
         maxLength={512}
+        defaultValue={DEFAULT_AUDIT_REASON}
       />
       <Toggle path="deleteTriggerMessage" label="Delete their message" defaultValue={true} />
     </SectionCard>

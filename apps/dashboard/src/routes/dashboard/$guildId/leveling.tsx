@@ -1,5 +1,9 @@
 import { EMPTY_MESSAGE, type LeaderboardResult, leaderboardQuerySchema } from '@proton/core';
-import { type RoleReward, roleRewardsSchema } from '@proton/module-leveling/config';
+import {
+  levelUpMessageSchema,
+  type RoleReward,
+  roleRewardsSchema,
+} from '@proton/module-leveling/config';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, lazyRouteComponent, useNavigate } from '@tanstack/react-router';
 import { type ReactElement, useEffect } from 'react';
@@ -16,6 +20,7 @@ import {
   Colour,
   Duration,
   Num,
+  POSTABLE_CHANNEL_TYPES,
   Text,
   Toggle,
   Tokens,
@@ -170,6 +175,7 @@ function EarningArea({ form }: { form: ModuleForm }): ReactElement {
           path="excludedChannelIds"
           kind="channel-id"
           label="Excluded channels"
+          channelTypes={POSTABLE_CHANNEL_TYPES}
           maxItems={50}
         />
         <Tokens path="excludedRoleIds" kind="role-id" label="Excluded roles" maxItems={50} />
@@ -223,6 +229,13 @@ function XpRange({ form }: { form: ModuleForm }): ReactElement {
 }
 
 function LevelUpArea({ form }: { form: ModuleForm }): ReactElement {
+  const levelUpMessage = form.value('levelUpMessage', EMPTY_MESSAGE);
+
+  // The builder validates against core's messageSchema, which allows any button; the stored field
+  // is narrower and takes link buttons only. Gated here so a finished non-link button stops Save
+  // rather than rejecting every other Leveling edit at the API.
+  usePanelSchema('levelUpMessage', 'Level-up message', levelUpMessageSchema, levelUpMessage);
+
   return (
     <>
       <SectionCard id="leveling:announce" title="Level-up announcement">
@@ -237,7 +250,7 @@ function LevelUpArea({ form }: { form: ModuleForm }): ReactElement {
 
       <SectionCard id="leveling:panel:levelUpMessage" title="Level-up message">
         <LevelUpMessageEditor
-          message={form.value('levelUpMessage', EMPTY_MESSAGE)}
+          message={levelUpMessage}
           onChange={(next) => form.set('levelUpMessage', next)}
           channels={form.channels}
           roles={form.roles}

@@ -6,6 +6,7 @@ import type {
   EnumField,
   FieldDescriptor,
   NumberField,
+  RoleIdField,
   StringField,
 } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
@@ -147,6 +148,46 @@ function describedBy(descriptor: FieldDescriptor, id: string): string | undefine
   return descriptor.description ? id : undefined;
 }
 
+/**
+ * An emptied optional text box means "unset", not the empty string. Those fields are
+ * `z.string().min(1)…optional()`, which rejects '' — so clearing Branding's "Server nickname",
+ * whose own help text says to leave it empty to use Proton's own name, wrote a value its schema
+ * refuses and made the whole module unsavable.
+ *
+ * A required box keeps the '' instead of falling back to its default. Unlike a picker, whose clear
+ * is one discrete act, '' here is a keystroke on the way somewhere: substituting the default would
+ * refill the box under the cursor, and backspacing Ping's "Pong!" looped forever.
+ */
+export function emptied(field: StringField, next: string): string | undefined {
+  if (next !== '') return next;
+
+  return field.optional ? undefined : '';
+}
+
+/**
+ * SinglePicker reports `null` for "cleared", and no config schema in the product accepts null —
+ * every channel and role field is `snowflakeSchema.optional()`, which is `string | undefined`. So
+ * a cleared field has to be written as undefined or the whole module's save is rejected with
+ * "expected string, received null".
+ *
+ * A field carrying a default clears back to that default instead: serverlog's per-category channels
+ * default to '' meaning "inherit", and without this they could be set but never unset.
+ *
+ * Shared by both id pickers because they diverged once already — the role one passed the raw null
+ * straight through, and unsetting any role broke saving for that module entirely.
+ */
+export function clearingOf(field: ChannelIdField | RoleIdField): {
+  clearable: boolean;
+  cleared: (next: string | null) => string | undefined;
+} {
+  const fallback = typeof field.defaultValue === 'string' ? field.defaultValue : null;
+
+  return {
+    clearable: field.optional || fallback !== null,
+    cleared: (next) => next ?? fallback ?? undefined,
+  };
+}
+
 export function BooleanFieldInput({
   descriptor,
   value,
@@ -202,7 +243,7 @@ export function StringFieldInput({
       maxLength={field.maxLength}
       required={!field.optional}
       aria-describedby={describedBy(field, id)}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={(e) => onChange(emptied(field, e.target.value))}
     />
   );
 
@@ -357,13 +398,15 @@ export function ColourFieldInput({
             if (/^[0-9a-fA-F]{6}$/.test(typed)) onChange(Number.parseInt(typed, 16));
           }}
         />
+        {/* Inside .colour-input, not beside it: .field is a two-column grid, so a third child
+            landed in the label column of the row below. */}
+        {wrong ? (
+          <span className="field-error" id={errorId} role="alert">
+            A colour is six hex digits, like #5865F2. The swatch keeps its value until this reads as
+            one.
+          </span>
+        ) : null}
       </span>
-      {wrong ? (
-        <span className="field-error" id={errorId} role="alert">
-          A colour is six hex digits, like #5865F2. The swatch keeps its value until this reads as
-          one.
-        </span>
-      ) : null}
     </Shell>
   );
 }
@@ -417,11 +460,7 @@ export function ChannelIdFieldInput({
   const id = useId();
   const controlId = `${id}-control`;
 
-  // A field carrying a default is never required, and clearing it means going back to that default
-  // rather than to null — which is not a value its schema accepts. Serverlog's per-category
-  // channels default to '' meaning "inherit", and without this they could be set but never unset.
-  const fallback = typeof field.defaultValue === 'string' ? field.defaultValue : null;
-  const clearable = field.optional || fallback !== null;
+  const { clearable, cleared } = clearingOf(field);
 
   return (
     <Shell
@@ -438,7 +477,7 @@ export function ChannelIdFieldInput({
           label={param?.name ?? field.label}
           options={channelOptions(channels, field.channelTypes)}
           value={typeof value === 'string' ? value : null}
-          onChange={(next) => onChange(next ?? fallback ?? undefined)}
+          onChange={(next) => onChange(cleared(next))}
           emptyLabel={param?.emptyLabel ?? (clearable ? 'No channel' : 'Select a channel')}
           clearable={clearable}
           describedBy={describedBy(field, id)}
@@ -456,12 +495,15 @@ export function RoleIdFieldInput({
   param,
   hidden,
 }: FieldProps): ReactElement {
+  const field = descriptor as RoleIdField;
   const id = useId();
   const controlId = `${id}-control`;
 
+  const { clearable, cleared } = clearingOf(field);
+
   return (
     <Shell
-      descriptor={descriptor}
+      descriptor={field}
       param={param}
       controlId={controlId}
       describedBy={id}
@@ -471,13 +513,13 @@ export function RoleIdFieldInput({
       <span className="field-control">
         <SinglePicker
           id={controlId}
-          label={descriptor.label}
+          label={param?.name ?? field.label}
           options={roleOptions(roles)}
           value={typeof value === 'string' ? value : null}
-          onChange={onChange}
-          emptyLabel={descriptor.optional ? 'No role' : 'Select a role'}
-          clearable={descriptor.optional}
-          describedBy={describedBy(descriptor, id)}
+          onChange={(next) => onChange(cleared(next))}
+          emptyLabel={param?.emptyLabel ?? (clearable ? 'No role' : 'Select a role')}
+          clearable={clearable}
+          describedBy={describedBy(field, id)}
         />
       </span>
     </Shell>

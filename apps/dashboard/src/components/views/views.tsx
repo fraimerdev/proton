@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { saveFailure } from '../../lib/errors.ts';
 import { ConfirmDialog } from '../shell/confirm.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { actionLook, toneClass } from '../shell/module-meta.ts';
@@ -951,6 +952,15 @@ function LiftCell({ row }: { row: BlockedMember }): ReactElement {
       >
         Lift
       </button>
+
+      {/* The only mutation in the product that used to fail in silence: the row stayed blocked, the
+          button came back, and a moderator could not tell a refusal from a slow network. */}
+      {lift.error ? (
+        <span className="save-bar-failed" role="alert">
+          <Icon name="warning-circle" weight="fill" />
+          {saveFailure(lift.error, 'Could not lift this block')}
+        </span>
+      ) : null}
 
       {asking ? (
         <ConfirmDialog

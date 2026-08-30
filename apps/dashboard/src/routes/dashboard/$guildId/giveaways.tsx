@@ -2,7 +2,13 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { SectionCard } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
-import { ChannelField, Num, Toggle, Tokens } from '../../../components/module/inputs.tsx';
+import {
+  ChannelField,
+  Num,
+  POSTABLE_CHANNEL_TYPES,
+  Toggle,
+  Tokens,
+} from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
@@ -83,7 +89,12 @@ function GiveawaysPage(): ReactElement {
         </SectionCard>
 
         <SectionCard id="giveaways:logging" title="Logging">
-          <ChannelField path="logChannelId" label="Giveaway warning channel" optional />
+          <ChannelField
+            path="logChannelId"
+            label="Giveaway warning channel"
+            channelTypes={POSTABLE_CHANNEL_TYPES}
+            optional
+          />
         </SectionCard>
       </ModuleSettings>
     </>

@@ -15,6 +15,7 @@ import {
   channelOptions,
   type DiscordChannel,
   type DiscordRole,
+  POSTABLE_CHANNEL_TYPES,
   roleOptions,
   SinglePicker,
 } from '../form/picker.tsx';
@@ -63,7 +64,7 @@ export function RolemenuEditor({
 }: RolemenuEditorProps): ReactElement {
   const fieldId = useId();
   const parsed = rolemenuMenusSchema.safeParse(menus);
-  const channelChoices = channelOptions(channels);
+  const channelChoices = channelOptions(channels, POSTABLE_CHANNEL_TYPES);
   const roleChoices = roleOptions(roles);
 
   function updateMenu(index: number, patch: Partial<RolemenuMenu>): void {
@@ -82,11 +83,20 @@ export function RolemenuEditor({
   }
 
   function addMenu(): void {
+    // Unique against the ids already there, not a count: deleting menu-1 and adding again produced
+    // a second menu-2, and two menus sharing an id share every custom id Discord sends back.
+    const taken = new Set(menus.map((menu) => menu.id));
+    let next = menus.length + 1;
+    while (taken.has(`menu-${next}`)) next += 1;
+
     onChange([
       ...menus,
       {
-        id: `menu-${menus.length + 1}`,
-        channelId: channels[0]?.id ?? '',
+        id: `menu-${next}`,
+        // Empty, not channels[0]: the list arrives sorted with categories first, so the seed was
+        // usually a category — one this picker does not offer and a menu that could never post.
+        // The panel's schema gate keeps Save disabled until a real channel is chosen.
+        channelId: '',
         kind: 'button',
         mode: 'toggle',
         bindings: [{ key: 'choice-1', roleId: '' }],

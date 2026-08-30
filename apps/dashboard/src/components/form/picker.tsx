@@ -79,6 +79,14 @@ export interface PickerOption {
 
 export const CHANNEL_NOTE = 'Channels Proton cannot see are not listed.';
 
+/**
+ * Channels Proton can post a durable message into: text, announcement, and the two thread kinds.
+ * Categories cannot hold a message at all, and forum and media channels take posts rather than
+ * messages — an unfiltered picker offered all three, the id saved cleanly because the schema only
+ * checks it is a snowflake, and the post then failed forever with nothing on the page to show it.
+ */
+export const POSTABLE_CHANNEL_TYPES = [0, 5, 11, 12] as const;
+
 export function roleOptions(roles: readonly DiscordRole[]): PickerOption[] {
   return roles.map((role) => ({ id: role.id, label: role.name, colour: role.color }));
 }
@@ -138,6 +146,10 @@ interface PopoverProps {
   label: string;
   onPick: (id: string) => void;
   onClose: () => void;
+
+  // Set when the field is already holding as many values as it accepts. The rows stay listed and
+  // the chosen ones stay removable; what is refused is adding another.
+  full?: boolean | undefined;
 }
 
 function Popover({
@@ -147,6 +159,7 @@ function Popover({
   label,
   onPick,
   onClose,
+  full,
 }: PopoverProps): ReactElement {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -186,7 +199,13 @@ function Popover({
     setActive((matches.length + index + step) % matches.length);
   }
 
+  function blocked(id: string): boolean {
+    return full === true && !selected.includes(id);
+  }
+
   function pick(id: string): void {
+    if (blocked(id)) return;
+
     onPick(id);
     if (!multiple) onClose();
   }
@@ -215,6 +234,10 @@ function Popover({
         role="option"
         tabIndex={-1}
         aria-selected={chosen}
+        // A row that does nothing when clicked reads as a broken list, which is the whole
+        // complaint. At capacity the unchosen rows say so instead of quietly ignoring the click.
+        aria-disabled={blocked(option.id) || undefined}
+        data-blocked={blocked(option.id) || undefined}
         data-active={current?.id === option.id || undefined}
         onMouseEnter={() => setActive(matches.indexOf(option))}
         // Down rather than click, so the search box keeps focus and picking a second role needs no
@@ -266,7 +289,8 @@ function Popover({
             <Fragment key={position}>{group.options.map(row)}</Fragment>
           ) : (
             // biome-ignore lint/a11y/useSemanticElements: a listbox groups options with role=group — a fieldset inside one is not a thing
-            <div className="picker-group" key={group.label} role="group" aria-label={group.label}>
+            // biome-ignore lint/suspicious/noArrayIndexKey: positional like the branch above — Discord allows two categories to share a name, and keying on it made them one group
+            <div className="picker-group" key={position} role="group" aria-label={group.label}>
               <span className="picker-group-name">{group.label}</span>
               {group.options.map(row)}
             </div>
@@ -276,7 +300,9 @@ function Popover({
         {matches.length === 0 ? <p className="picker-empty">Nothing matches that.</p> : null}
       </div>
 
-      {options.some((option) => option.kind === 'channel') ? (
+      {full ? (
+        <p className="picker-note">This field is full. Remove one to add another.</p>
+      ) : options.some((option) => option.kind === 'channel') ? (
         <p className="picker-note">{CHANNEL_NOTE}</p>
       ) : null}
     </div>
@@ -425,8 +451,19 @@ export function TokenPicker({
   const byId = useMemo(() => new Map(options.map((option) => [option.id, option])), [options]);
   const atCapacity = max !== undefined && values.length >= max;
 
+  // Capacity is checked here and not only on the trigger: the popover stays open across picks, so
+  // disabling the + button alone stopped nothing once the list was already showing. Rows kept
+  // toggling on past the limit and the save was rejected by the API — "expected array to have <=N
+  // items" — naming no chip the admin could remove. Removing stays allowed at capacity.
   function toggle(id: string): void {
-    onChange(values.includes(id) ? values.filter((held) => held !== id) : [...values, id]);
+    if (values.includes(id)) {
+      onChange(values.filter((held) => held !== id));
+      return;
+    }
+
+    if (atCapacity) return;
+
+    onChange([...values, id]);
   }
 
   return (
@@ -474,6 +511,7 @@ export function TokenPicker({
           multiple
           label={label}
           onPick={toggle}
+          full={atCapacity}
           onClose={() => {
             setOpen(false);
             trigger.current?.focus();

@@ -150,6 +150,13 @@ function TicketsSettings(): ReactElement {
           minLength={1}
           maxLength={100}
           defaultValue="ticket-{number}"
+          // The schema refines this, and a length check cannot see it: without {number} or {user}
+          // every ticket channel would be named the same, so the API refused the whole save.
+          validate={(value) =>
+            value.includes('{number}') || value.includes('{user}')
+              ? null
+              : 'A ticket channel name needs {number} or {user} in it, or every ticket would share one name.'
+          }
         />
         <Text
           path="closeConfirmation"

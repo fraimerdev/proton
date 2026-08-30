@@ -16,6 +16,8 @@ import {
 } from '../form/fields.tsx';
 import type { ModuleForm } from './form.ts';
 
+export { POSTABLE_CHANNEL_TYPES } from '../form/picker.tsx';
+
 const FormContext = createContext<ModuleForm | null>(null);
 
 export function ModuleFormProvider({
@@ -61,6 +63,27 @@ function base(props: Common, defaultValue?: unknown): Omit<FieldDescriptor, 'kin
   };
 }
 
+/**
+ * Gates Save on the constraint the field already draws its own error from. Without this the page
+ * showed the problem and let Save go out anyway, and the API rejected the whole module config —
+ * `ModuleConfigService.update` parses all of it — for a value the page had flagged on screen.
+ *
+ * No unmount cleanup, for the reason usePanelSchema gives below: leaving the area does not take the
+ * bad value out of `edits`.
+ */
+function useFieldGate(path: string, hidden: boolean | undefined, problem: string | null): void {
+  const { report } = useForm();
+
+  useEffect(() => {
+    if (problem === null) {
+      report(path, null);
+      return;
+    }
+
+    report(path, hidden ? `${problem} It is not on the page you are looking at.` : problem);
+  }, [report, path, hidden, problem]);
+}
+
 function useBound(descriptor: FieldDescriptor, fallback?: unknown) {
   const form = useForm();
 
@@ -89,7 +112,15 @@ export function Toggle(props: Common & { defaultValue?: boolean }): ReactElement
 }
 
 export function Text(
-  props: Common & { minLength?: number; maxLength?: number; defaultValue?: string },
+  props: Common & {
+    minLength?: number;
+    maxLength?: number;
+    defaultValue?: string;
+
+    // For a constraint a length cannot express — the ticket name pattern has to carry {number} or
+    // {user}, and without this the whole tickets save was rejected for it at the API.
+    validate?: (value: string) => string | null;
+  },
 ): ReactElement {
   const descriptor = useMemo<FieldDescriptor>(
     () => ({
@@ -101,13 +132,24 @@ export function Text(
     [props],
   );
 
-  return (
-    <StringFieldInput
-      {...useBound(descriptor, props.defaultValue ?? '')}
-      hidden={props.hidden}
-      param={props.param}
-    />
+  const bound = useBound(descriptor, props.defaultValue ?? '');
+  const held = typeof bound.value === 'string' ? bound.value : '';
+
+  const tooShort =
+    props.minLength !== undefined && held.length > 0 && held.length < props.minLength;
+  const missing = !props.optional && held === '';
+
+  useFieldGate(
+    props.path,
+    props.hidden,
+    missing
+      ? `“${props.label}” needs a value.`
+      : tooShort
+        ? `“${props.label}” needs at least ${props.minLength} characters.`
+        : (props.validate?.(held) ?? null),
   );
+
+  return <StringFieldInput {...bound} hidden={props.hidden} param={props.param} />;
 }
 
 export function Num(
@@ -123,13 +165,25 @@ export function Num(
     [props],
   );
 
-  return (
-    <NumberFieldInput
-      {...useBound(descriptor, props.defaultValue)}
-      hidden={props.hidden}
-      param={props.param}
-    />
+  const bound = useBound(descriptor, props.defaultValue);
+  const held = bound.value;
+
+  const outOfRange =
+    typeof held === 'number' &&
+    ((props.min !== undefined && held < props.min) ||
+      (props.max !== undefined && held > props.max));
+
+  useFieldGate(
+    props.path,
+    props.hidden,
+    held === undefined && !props.optional
+      ? `“${props.label}” needs a number.`
+      : outOfRange
+        ? `“${props.label}” must be between ${props.min ?? 0} and ${props.max ?? '∞'}.`
+        : null,
   );
+
+  return <NumberFieldInput {...bound} hidden={props.hidden} param={props.param} />;
 }
 
 export function Seconds(
@@ -145,13 +199,25 @@ export function Seconds(
     [props],
   );
 
-  return (
-    <SecondsFieldInput
-      {...useBound(descriptor, props.defaultValue)}
-      hidden={props.hidden}
-      param={props.param}
-    />
+  const bound = useBound(descriptor, props.defaultValue);
+  const held = bound.value;
+
+  const outOfRange =
+    typeof held === 'number' &&
+    ((props.min !== undefined && held < props.min) ||
+      (props.max !== undefined && held > props.max));
+
+  useFieldGate(
+    props.path,
+    props.hidden,
+    held === undefined && !props.optional
+      ? `“${props.label}” needs a number.`
+      : outOfRange
+        ? `“${props.label}” must be between ${props.min ?? 0} and ${props.max ?? '∞'}.`
+        : null,
   );
+
+  return <SecondsFieldInput {...bound} hidden={props.hidden} param={props.param} />;
 }
 
 export function Choice(
@@ -246,6 +312,9 @@ export function Duration(props: Common & { defaultValue?: string }): ReactElemen
   const { report } = form;
   const { label, path, hidden } = props;
 
+  // No unmount cleanup, for the reason usePanelSchema gives below: leaving the area this field
+  // lives on does not drop the unreadable value from `edits`, so dropping the gate with it let
+  // Save go out and be rejected for a duration on a page the reader had left.
   useEffect(() => {
     if (!unreadable) {
       report(path, null);
@@ -254,8 +323,6 @@ export function Duration(props: Common & { defaultValue?: string }): ReactElemen
 
     const opening = `“${label}” is not a duration yet`;
     report(path, hidden ? `${opening}, and this page is not showing it right now.` : `${opening}.`);
-
-    return () => report(path, null);
   }, [report, path, label, hidden, unreadable]);
 
   return <DurationFieldInput {...bound} hidden={hidden} param={props.param} />;
@@ -267,6 +334,10 @@ export function Tokens(
     options?: readonly string[];
     optionLabels?: Record<string, string>;
     maxItems?: number;
+
+    // Forwarded for kind 'channel-id'. ArrayFieldInput has always read it off the descriptor;
+    // without a way to pass it, every multi-channel field in the product listed categories.
+    channelTypes?: readonly number[];
   },
 ): ReactElement {
   const descriptor = useMemo<FieldDescriptor>(
@@ -278,6 +349,9 @@ export function Tokens(
         ...(props.maxItems === undefined ? {} : { maxItems: props.maxItems }),
         ...(props.kind === 'enum' ? { options: [...(props.options ?? [])] } : {}),
         ...(props.optionLabels === undefined ? {} : { optionLabels: props.optionLabels }),
+        ...(props.kind === 'channel-id' && props.channelTypes !== undefined
+          ? { channelTypes: [...props.channelTypes] }
+          : {}),
       }) as FieldDescriptor,
     [props],
   );
@@ -360,13 +434,12 @@ export function usePanelSchema(
   const { report } = useForm();
   const invalid = !schema.safeParse(value).success;
 
+  // Deliberately no unmount cleanup. The gate is up because the config is invalid, not because the
+  // editor is on screen, and dropping it when the panel unmounted let a switch to another area of
+  // the same module re-enable Save over the half-filled value still sitting in `edits` — which the
+  // API then rejected, naming a field on a page the reader was no longer looking at. Reset and a
+  // successful save are what clear it.
   useEffect(() => {
-    if (!invalid) {
-      report(key, null);
-      return;
-    }
-
-    report(key, `“${title}” is not filled in yet.`);
-    return () => report(key, null);
+    report(key, invalid ? `“${title}” is not filled in yet.` : null);
   }, [report, key, title, invalid]);
 }

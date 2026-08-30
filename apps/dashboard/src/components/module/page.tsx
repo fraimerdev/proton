@@ -150,34 +150,55 @@ export function savedLine(
   ).toLowerCase()}.`;
 }
 
+/**
+ * Keyed on the router's hash, not read once on mount. ModuleSettings stays mounted across an area
+ * change and across a hash-only navigation, so a palette jump made from inside the same module
+ * changed the address bar and moved nothing — no scroll, no flash, no focus. It only ever appeared
+ * to work when arriving from the hub or another module, which is when this happened to remount.
+ */
 function useHashJump(): void {
+  // Stripped, because the two sources spell it differently: the router hands back the fragment
+  // bare, `window.location.hash` keeps the '#', and a stray one matches no data-path at all.
+  const hash = useRouterState({ select: (state) => state.location.hash }).replace(/^#/, '');
+
   useEffect(() => {
-    const hash = window.location.hash.slice(1);
     if (!hash) return;
 
-    const target = [...document.querySelectorAll('[data-path]')].find(
-      (element) => element.getAttribute('data-path') === hash,
-    );
-    if (!target) return;
+    let waiting: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let attempts = 0;
 
-    // A link into a section this user has collapsed would otherwise scroll to nothing at all.
-    const body = target.closest('.form-section-body');
-    if (body instanceof HTMLElement && body.hidden) {
-      body.parentElement?.querySelector<HTMLButtonElement>('.form-section-toggle')?.click();
-    }
+    function jump(): void {
+      const target = [...document.querySelectorAll('[data-path]')].find(
+        (element) => element.getAttribute('data-path') === hash,
+      );
 
-    // Everything else between the target and the page that renders hidden rather than unmounting:
-    // a field the current mode does not show, a section none of whose fields are shown. Scrolling
-    // to a display:none element moves nothing and looks like a dead link.
-    for (
-      let node = target instanceof HTMLElement ? target : null;
-      node !== null;
-      node = node.parentElement
-    ) {
-      if (node.hidden && !node.classList.contains('form-section-body')) node.hidden = false;
-    }
+      // A jump into another area of this module arrives before that area does — the settings body
+      // is a spinner until its config resolves, so nothing is there to scroll to yet. Polled on a
+      // timer rather than a frame, because a background or throttled tab stops serving frames and
+      // the jump then never happened at all. Three seconds, then given up on.
+      if (!target) {
+        if (attempts++ < 60) waiting = setTimeout(jump, 50);
+        return;
+      }
 
-    const frame = requestAnimationFrame(() => {
+      // A link into a section this user has collapsed would otherwise scroll to nothing at all.
+      const body = target.closest('.form-section-body');
+      if (body instanceof HTMLElement && body.hidden) {
+        body.parentElement?.querySelector<HTMLButtonElement>('.form-section-toggle')?.click();
+      }
+
+      // Everything else between the target and the page that renders hidden rather than unmounting:
+      // a field the current mode does not show, a section none of whose fields are shown. Scrolling
+      // to a display:none element moves nothing and looks like a dead link.
+      for (
+        let node = target instanceof HTMLElement ? target : null;
+        node !== null;
+        node = node.parentElement
+      ) {
+        if (node.hidden && !node.classList.contains('form-section-body')) node.hidden = false;
+      }
+
       target.scrollIntoView({ block: 'center' });
       target.classList.add('field-flash');
 
@@ -186,14 +207,17 @@ function useHashJump(): void {
       target
         .querySelector<HTMLElement>('input, select, textarea, .picker-trigger, .token-add')
         ?.focus({ preventScroll: true });
-    });
 
-    const timer = setTimeout(() => target.classList.remove('field-flash'), 1600);
+      timer = setTimeout(() => target.classList.remove('field-flash'), 1600);
+    }
+
+    jump();
+
     return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(timer);
+      if (waiting !== undefined) clearTimeout(waiting);
+      if (timer !== undefined) clearTimeout(timer);
     };
-  }, []);
+  }, [hash]);
 }
 
 export function EmptyModule({

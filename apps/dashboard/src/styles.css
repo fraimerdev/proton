@@ -1999,6 +1999,13 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   color: var(--text);
 }
 
+/* Not pointer-events:none — the row still has to take the hover that moves the active descendant,
+   or arrowing past it would look like the list had stopped responding. */
+.picker-option[data-blocked] {
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+
 .picker-option-label {
   flex: 1;
   min-width: 0;
@@ -2119,7 +2126,10 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   cursor: not-allowed;
 }
 
-.token-entry {
+/* Scoped through .token-list to outrank the global `input[type="text"]` rule, which is more
+   specific than a bare class and was giving this input back the 36px box and border it exists to
+   drop. */
+.token-list .token-entry {
   flex: 1;
   min-width: 12ch;
   height: 28px;
@@ -2131,7 +2141,7 @@ input[type="checkbox"]:not([role="switch"]):checked::after,
   font: 400 var(--t-base) / 1 var(--font);
 }
 
-.token-entry:focus {
+.token-list .token-entry:focus {
   border-color: var(--control-line);
   background: var(--sunken);
   outline: none;

@@ -7,6 +7,7 @@ import {
   Choice,
   Duration,
   Num,
+  POSTABLE_CHANNEL_TYPES,
   RoleField,
 } from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
@@ -33,7 +34,12 @@ function AntiraidPage(): ReactElement {
 
       <ModuleSettings form={form}>
         <SectionCard id="antiraid:general" title="General">
-          <ChannelField path="alertChannelId" label="Alert channel" optional />
+          <ChannelField
+            path="alertChannelId"
+            label="Alert channel"
+            channelTypes={POSTABLE_CHANNEL_TYPES}
+            optional
+          />
         </SectionCard>
 
         <SectionCard id="antiraid:detection" title="Detection">

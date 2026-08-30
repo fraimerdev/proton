@@ -2,7 +2,12 @@ import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { SectionCard } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
-import { Duration, Toggle, Tokens } from '../../../components/module/inputs.tsx';
+import {
+  Duration,
+  POSTABLE_CHANNEL_TYPES,
+  Toggle,
+  Tokens,
+} from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
@@ -36,7 +41,13 @@ function LoggingPage(): ReactElement {
         </SectionCard>
 
         <SectionCard id="logging:privacy" title="Privacy">
-          <Tokens path="ignoredChannels" kind="channel-id" label="Ignored channels" maxItems={50} />
+          <Tokens
+            path="ignoredChannels"
+            kind="channel-id"
+            label="Ignored channels"
+            channelTypes={POSTABLE_CHANNEL_TYPES}
+            maxItems={50}
+          />
         </SectionCard>
       </ModuleSettings>
     </>
