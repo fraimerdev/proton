@@ -90,7 +90,10 @@ export const verificationConfigSchema = z.object({
       label: 'Send the captcha',
       description: 'A member with DMs closed is always answered in the channel instead',
 
-      optionLabels: { channel: 'Only they can see it, in the channel', dm: 'By direct message' },
+      optionLabels: {
+        channel: 'In the channel, where only they can see it',
+        dm: 'By direct message',
+      },
       showWhen: captchaOnly,
     }),
 

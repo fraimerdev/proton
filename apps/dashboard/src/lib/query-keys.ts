@@ -7,9 +7,6 @@ export const queryKeys = {
   moduleConfig: (guildId: string, moduleId: string) =>
     ['guild', guildId, 'module', moduleId] as const,
 
-  // Outside the guild namespace on purpose: a module's field descriptors come from the deployed
-  // registry, so every guild an admin opens shares one cache entry and one request.
-  moduleDescriptors: (moduleId: string) => ['module', moduleId, 'descriptors'] as const,
   channels: (guildId: string) => ['guild', guildId, 'channels'] as const,
   roles: (guildId: string) => ['guild', guildId, 'roles'] as const,
   view: (guildId: string, viewId: string, search: unknown) =>
@@ -23,9 +20,6 @@ export const STALE = {
   modules: 30_000,
   moduleConfig: 30_000,
   guildShape: 5 * 60_000,
-
-  // Only a redeploy changes these.
-  descriptors: 60 * 60_000,
   browse: 15_000,
 } as const;
 

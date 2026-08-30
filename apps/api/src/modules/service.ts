@@ -108,7 +108,7 @@ export class ModuleConfigService {
   #manifest(moduleId: string) {
     const manifest = this.#registry.get(moduleId);
     if (!manifest) {
-      throw new ModuleConfigError('unknown_module', `No module '${moduleId}' is loaded.`);
+      throw new ModuleConfigError('unknown_module', `Proton has no module called '${moduleId}'.`);
     }
     return manifest;
   }
@@ -162,7 +162,7 @@ export class ModuleConfigService {
     if (!parsed.success) {
       throw new ModuleConfigError(
         'invalid_stored_config',
-        `Stored config for '${moduleId}' in guild ${guildId} does not satisfy its schema: ${parsed.error.issues
+        `Proton could not read this server's ${manifest.name} settings: ${parsed.error.issues
           .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
           .join('; ')}`,
       );
@@ -200,7 +200,7 @@ export class ModuleConfigService {
     if (!parsed.success) {
       throw new ModuleConfigError(
         'invalid_config',
-        `Invalid config for '${input.moduleId}': ${parsed.error.issues
+        `Those ${manifest.name} settings were not saved: ${parsed.error.issues
           .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
           .join('; ')}`,
       );
@@ -212,7 +212,7 @@ export class ModuleConfigService {
     if (exceeded) {
       throw new ModuleConfigError(
         'over_limit',
-        `Those ${input.moduleId} settings were not saved: ${exceeded}`,
+        `Those ${manifest.name} settings were not saved: ${exceeded}`,
       );
     }
 

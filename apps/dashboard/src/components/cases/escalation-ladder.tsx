@@ -12,6 +12,12 @@ export interface EscalationLadderEditorProps {
   onChange: (rungs: EscalationRung[]) => void;
 }
 
+const ACTION_LABELS: Record<EscalationAction, string> = {
+  timeout: 'Timeout',
+  kick: 'Kick',
+  ban: 'Ban',
+};
+
 export function EscalationLadderEditor({
   rungs,
   onChange,
@@ -73,7 +79,7 @@ export function EscalationLadderEditor({
             >
               {ESCALATION_ACTIONS.map((action) => (
                 <option key={action} value={action}>
-                  {action}
+                  {ACTION_LABELS[action]}
                 </option>
               ))}
             </select>

@@ -20,7 +20,7 @@ const CATEGORIES = [
   '**Engagement** — leveling with role rewards, giveaways, a starboard, suggestions, role menus ' +
     'and welcome messages.',
   '**Utility** — tickets, tags, reminders, polls, temporary voice channels, counter channels, ' +
-    'join roles, and which roles may run each command.',
+    'join roles, how Proton looks in this server, and which roles may run each command.',
   '**Logging** — Discord’s own audit events routed to the channels you pick, and opt-in message ' +
     'logs kept for 30 days.',
 ].join('\n');
@@ -31,7 +31,7 @@ const WHERE =
   'not from chat. A change is live here within seconds of being saved.';
 
 const NO_LINK =
-  " I can't link you straight there: this Proton deployment hasn't been given its dashboard " +
+  " I can't link you straight there, because Proton hasn't been told its own dashboard " +
   'address. A server admin will know where it lives.';
 
 const COMMANDS =

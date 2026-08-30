@@ -41,11 +41,11 @@ const bindingKeySchema = z
   .max(BINDING_KEY_MAX)
   .refine((key) => !key.includes(CUSTOM_ID_SEPARATOR), {
     message:
-      `must not contain '${CUSTOM_ID_SEPARATOR}' — it separates the segments of a custom_id, ` +
-      'and a key containing one would resolve to the wrong choice',
+      `must not contain '${CUSTOM_ID_SEPARATOR}' — Proton reserves it to tell choices apart, ` +
+      'and a key containing one would resolve to the wrong role',
   })
   .refine((key) => key !== SELECT_BINDING_KEY, {
-    message: `'${SELECT_BINDING_KEY}' is reserved for a dropdown's own custom_id`,
+    message: `'${SELECT_BINDING_KEY}' is reserved — Proton uses it for the dropdown itself`,
   });
 
 export const rolemenuBindingSchema = z.object({
@@ -86,8 +86,8 @@ export const rolemenuMenuSchema = z
           path: ['bindings', index, 'key'],
           message:
             `menu id '${menu.id}' and key '${binding.key}' need ${encoded.length} characters ` +
-            `together with Proton's prefix, and Discord allows a custom_id of ` +
-            `${MAX_CUSTOM_ID_LENGTH}. Shorten the menu id or the key.`,
+            `together with Proton's prefix, and Discord only allows ` +
+            `${MAX_CUSTOM_ID_LENGTH} behind a button. Shorten the menu id or the key.`,
         });
       }
     }

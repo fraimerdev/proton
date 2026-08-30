@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { Permissions, zodToDescriptors } from '@proton/core';
-import { pingConfigSchema } from '@proton/module-ping';
-import { getAtPath, setAtPath, toConfig, toFormValues } from '../src/lib/config-paths.ts';
+import { Permissions } from '@proton/core';
+import { getAtPath, setAtPath } from '../src/lib/config-paths.ts';
 import {
   accessGrants,
   administrableGuilds,
@@ -131,32 +130,6 @@ describe('accessGrants', () => {
 });
 
 describe('config path mapping', () => {
-  const descriptors = zodToDescriptors(pingConfigSchema);
-
-  test('round-trips a config through flat form values unchanged', () => {
-    const config = { enabled: true, response: 'Pong!', restrictToChannel: null };
-
-    expect(toConfig(descriptors, toFormValues(descriptors, config))).toEqual(config);
-  });
-
-  test('falls back to declared defaults for absent values', () => {
-    const values = toFormValues(descriptors, {});
-
-    expect(values.response).toBe('Pong!');
-    expect(values.enabled).toBe(true);
-  });
-
-  test('drops values whose field is no longer in the schema', () => {
-    const result = toConfig(descriptors, {
-      enabled: true,
-      response: 'Pong!',
-      restrictToChannel: null,
-      removedLastRelease: 'stale',
-    });
-
-    expect(result).not.toHaveProperty('removedLastRelease');
-  });
-
   test('handles one level of nesting via dotted paths', () => {
     const target: Record<string, unknown> = {};
     setAtPath(target, 'limits.strict', true);

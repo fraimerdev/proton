@@ -17,22 +17,21 @@ export const Route = createFileRoute('/dashboard/$guildId')({
     // revalidates through prefetchQuery, which swallows the rejection — so a revoked admin would
     // keep rendering the shell instead of reaching the redirect below.
     try {
-      await Promise.all([
-        context.queryClient.fetchQuery(sessionQuery()),
-        context.queryClient.fetchQuery(modulesQuery(params.guildId)),
-      ]);
-    } catch (error) {
-      if (isAccessError(error)) throw redirect({ to: '/dashboard' });
+      const session = await context.queryClient.fetchQuery(sessionQuery());
+      const guild = session.guilds.find((candidate) => candidate.id === params.guildId);
 
-      // Proton having never joined is the ordinary way in here, and the API can only report that it
-      // holds no record — which reads as data loss. The session already knows which is which.
-      const session = context.queryClient.getQueryData(sessionQuery().queryKey);
-      const guild = session?.guilds.find((candidate) => candidate.id === params.guildId);
-
-      if (guild && !guild.present)
+      // Ahead of the modules load rather than in its catch: for a server Proton has left the api
+      // answers with an empty module list instead of an error, so this shell would otherwise
+      // render intact and every switch on it would save into a guild nothing is listening in.
+      // Only a checked absence blocks — an unreachable presence lookup must not close the page.
+      if (session.presenceKnown && guild && !guild.present)
         throw new Error(
           `Proton is not in ${guild.name}, so there is nothing to configure yet. Invite it to that server and open this page again.`,
         );
+
+      await context.queryClient.fetchQuery(modulesQuery(params.guildId));
+    } catch (error) {
+      if (isAccessError(error)) throw redirect({ to: '/dashboard' });
 
       throw error;
     }
@@ -58,7 +57,7 @@ function flip(
 
 function GuildShell(): ReactElement {
   const { guildId } = Route.useParams();
-  const { guilds, user } = useSuspenseQuery(sessionQuery()).data;
+  const { guilds, user, presenceKnown } = useSuspenseQuery(sessionQuery()).data;
   const { modules } = useSuspenseQuery(modulesQuery(guildId)).data;
 
   const queryClient = useQueryClient();
@@ -116,7 +115,13 @@ function GuildShell(): ReactElement {
 
   return (
     <ModuleToggleProvider value={onToggleModule}>
-      <AppShell guildId={guildId} guilds={guilds} user={user} modules={modules}>
+      <AppShell
+        guildId={guildId}
+        guilds={guilds}
+        presenceKnown={presenceKnown}
+        user={user}
+        modules={modules}
+      >
         <div aria-live="assertive" ref={banner}>
           {failure ? (
             <div className="alert-banner">

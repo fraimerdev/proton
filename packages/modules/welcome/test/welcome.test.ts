@@ -216,7 +216,7 @@ describe('what a greeting refuses', () => {
     });
 
     expect(refused.success).toBe(false);
-    expect(refused.error?.issues[0]?.message).toContain('no interaction listener');
+    expect(refused.error?.issues[0]?.message).toContain('link buttons and nothing else');
   });
 
   test('a dropdown, for the same reason', () => {

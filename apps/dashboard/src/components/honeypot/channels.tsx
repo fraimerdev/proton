@@ -1,12 +1,9 @@
 import type { EntitlementTier } from '@proton/core';
 import {
-  DELETE_SECONDS_MAX,
   describeWindow,
-  HONEYPOT_ACTIONS,
   type HoneypotAction,
   type HoneypotChannel,
   honeypotChannelsSchema,
-  SECONDS_PER_DAY,
 } from '@proton/module-honeypot/config';
 import { type ReactElement, useEffect, useId, useRef, useState } from 'react';
 import { ceilingNote, listCeiling } from '../../lib/limits.ts';
@@ -17,21 +14,15 @@ export interface HoneypotChannelsEditorProps {
   honeypots: readonly Partial<HoneypotChannel>[];
   channels: readonly DiscordChannel[];
   tier: EntitlementTier;
+
+  // The module-wide punishment, so the arming confirmation can say what it will actually do.
+  action: HoneypotAction;
+  deleteMessageSeconds: number;
+
   onChange: (honeypots: HoneypotChannel[]) => void;
 }
 
 const TEXT_CHANNEL_TYPES = [0, 5];
-
-const MAX_DAYS = DELETE_SECONDS_MAX / SECONDS_PER_DAY;
-
-const ACTION_LABELS: Record<HoneypotAction, string> = {
-  softban: 'Softban — remove them and delete their messages',
-  ban: 'Ban',
-  kick: 'Kick',
-  timeout: 'Timeout',
-  warn: 'Warn',
-  none: 'Log it and do nothing else',
-};
 
 const CONSEQUENCES: Record<HoneypotAction, string> = {
   softban: 'be removed from the server and let straight back in',
@@ -43,21 +34,11 @@ const CONSEQUENCES: Record<HoneypotAction, string> = {
 };
 
 function blank(): HoneypotChannel {
-  return {
-    channelId: '',
-    enabled: true,
-    action: 'softban',
-    deleteMessageSeconds: DELETE_SECONDS_MAX,
-    timeoutDuration: '1h',
-  };
+  return { channelId: '', enabled: true };
 }
 
 function complete(honeypot: Partial<HoneypotChannel>): HoneypotChannel {
   return { ...blank(), ...honeypot, channelId: honeypot.channelId ?? '' };
-}
-
-function purges(action: HoneypotAction): boolean {
-  return action === 'softban' || action === 'ban';
 }
 
 function nameOf(channels: readonly DiscordChannel[], channelId: string): string {
@@ -66,28 +47,16 @@ function nameOf(channels: readonly DiscordChannel[], channelId: string): string 
   return `#${channels.find((channel) => channel.id === channelId)?.name ?? channelId}`;
 }
 
-function secondsFromDays(value: number): number {
-  if (!Number.isFinite(value)) return 0;
+function consequence(action: HoneypotAction, deleteMessageSeconds: number, where: string): string {
+  const purges = action === 'softban' || action === 'ban';
 
-  return Math.min(DELETE_SECONDS_MAX, Math.max(0, Math.round(value * SECONDS_PER_DAY)));
-}
-
-function windowHint(honeypot: HoneypotChannel): string {
-  if (!purges(honeypot.action))
-    return 'Only a softban or a ban can delete what they already posted.';
-  if (honeypot.deleteMessageSeconds === 0) return 'Nothing they already posted is deleted.';
-
-  return `Proton deletes everything they posted in ${describeWindow(honeypot.deleteMessageSeconds)}.`;
-}
-
-function consequence(honeypot: HoneypotChannel, where: string): string {
   const purge =
-    purges(honeypot.action) && honeypot.deleteMessageSeconds > 0
-      ? ` Everything they posted in ${describeWindow(honeypot.deleteMessageSeconds)} goes with them.`
+    purges && deleteMessageSeconds > 0
+      ? ` Everything they posted in ${describeWindow(deleteMessageSeconds)} goes with them.`
       : '';
 
   return (
-    `Any message anybody posts in ${where} will ${CONSEQUENCES[honeypot.action]}.${purge} ` +
+    `Anybody who posts in ${where} will ${CONSEQUENCES[action]}.${purge} ` +
     'Nobody is warned first unless you post the notice.'
   );
 }
@@ -142,6 +111,8 @@ export function HoneypotChannelsEditor({
   honeypots: stored,
   channels,
   tier,
+  action,
+  deleteMessageSeconds,
   onChange,
 }: HoneypotChannelsEditorProps): ReactElement {
   const fieldId = useId();
@@ -206,53 +177,6 @@ export function HoneypotChannelsEditor({
               />
             </div>
 
-            <label className="filter">
-              <span>What happens to them</span>
-              <select
-                value={honeypot.action}
-                onChange={(e) =>
-                  update(index, { action: e.target.value as HoneypotChannel['action'] })
-                }
-              >
-                {HONEYPOT_ACTIONS.map((action) => (
-                  <option key={action} value={action}>
-                    {ACTION_LABELS[action]}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="filter">
-              <span>Delete their messages from the last (days)</span>
-              <input
-                type="number"
-                min={0}
-                max={MAX_DAYS}
-                step={1}
-                disabled={!purges(honeypot.action)}
-                value={honeypot.deleteMessageSeconds / SECONDS_PER_DAY}
-                onChange={(e) =>
-                  update(index, {
-                    deleteMessageSeconds: secondsFromDays(
-                      e.target.value === '' ? 0 : e.target.valueAsNumber,
-                    ),
-                  })
-                }
-              />
-              <small className="honeypot-hint">{windowHint(honeypot)}</small>
-            </label>
-
-            {honeypot.action === 'timeout' ? (
-              <label className="filter">
-                <span>Timed out for</span>
-                <input
-                  type="text"
-                  value={honeypot.timeoutDuration}
-                  onChange={(e) => update(index, { timeoutDuration: e.target.value })}
-                />
-              </label>
-            ) : null}
-
             <label className="filter honeypot-switch">
               <span>Armed</span>
               <input
@@ -283,7 +207,7 @@ export function HoneypotChannelsEditor({
 
             {arming?.kind === 'enable' && arming.index === index ? (
               <ArmConfirm
-                sentence={`Arming ${where}. ${consequence(honeypot, 'it')}`}
+                sentence={`Arming ${where}. ${consequence(action, deleteMessageSeconds, 'it')}`}
                 onCancel={() => setArming(null)}
                 onArm={arm}
               />
@@ -301,7 +225,8 @@ export function HoneypotChannelsEditor({
       {arming?.kind === 'add' ? (
         <ArmConfirm
           sentence={`A new honeypot is armed as soon as you save it. ${consequence(
-            blank(),
+            action,
+            deleteMessageSeconds,
             'the channel you pick',
           )}`}
           onCancel={() => setArming(null)}

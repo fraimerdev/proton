@@ -28,7 +28,7 @@ const CONFIG_CHANGED = {
   auditId: 'audit-1',
   guildId: GUILD,
   moduleId: 'joinroles',
-  moduleName: 'Join Roles',
+  moduleName: 'Join roles',
   actorId: ACTOR,
   source: 'dashboard' as const,
   enabledBefore: true,
@@ -45,7 +45,7 @@ describe('config changes', () => {
       context(executor),
     );
 
-    expect(executor.titles()).toEqual(['Join Roles settings changed']);
+    expect(executor.titles()).toEqual(['Join roles settings changed']);
 
     const description = String(executor.embeds()[0]?.description);
     expect(description).toContain('joinroles');
@@ -82,7 +82,7 @@ describe('config changes', () => {
       context(executor),
     );
 
-    expect(executor.titles()).toEqual(['Join Roles switched on']);
+    expect(executor.titles()).toEqual(['Join roles switched on']);
   });
 
   test('a save that toggled and changed settings logs both', async () => {
@@ -94,8 +94,8 @@ describe('config changes', () => {
     );
 
     expect(executor.titles().sort()).toEqual([
-      'Join Roles settings changed',
-      'Join Roles switched on',
+      'Join roles settings changed',
+      'Join roles switched on',
     ]);
   });
 });

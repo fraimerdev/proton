@@ -1,17 +1,22 @@
-import { ALL_PERMISSIONS, RedisStreamsEventBus } from '@proton/core';
+import { ALL_PERMISSIONS, createRedisClient, RedisStreamsEventBus } from '@proton/core';
 import { createDb, DrizzleGuildRuleStore } from '@proton/db';
+import { DrizzleAppealStore } from '@proton/module-appeals';
+import { DrizzleBrandingAssetStore } from '@proton/module-branding/store';
 import { DrizzleCaseHistoryStore } from '@proton/module-cases/store';
 import { DrizzleGiveawayStore } from '@proton/module-giveaways';
 import { levelForXp } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
 import { createModuleRegistry } from '@proton/modules';
-import Redis from 'ioredis';
 import { createApiApp } from './app.ts';
+import { AppealsService } from './appeals/service.ts';
+import { BrandingAssetService } from './branding/service.ts';
 import { CardPreviewService } from './cards/preview.ts';
 import { CaseQueryService } from './cases/service.ts';
 import { loadEnv } from './env.ts';
+import { BotGuildDirectory } from './guilds/directory.ts';
 import { GuildService } from './guilds/service.ts';
 import { LeaderboardService } from './leveling/service.ts';
+import { BlockedMemberService } from './moderation/blocked-members.ts';
 import { ModuleConfigService } from './modules/service.ts';
 import { TagSearchService } from './tags/service.ts';
 import { TicketSearchService } from './tickets/service.ts';
@@ -29,29 +34,40 @@ const registry = createModuleRegistry({
   giveaways: { store: new DrizzleGiveawayStore(handle) },
 });
 
-const busRedis = env.REDIS_URL ? new Redis(env.REDIS_URL, { db: env.REDIS_DB_BUS }) : null;
+const busRedis = env.REDIS_URL
+  ? createRedisClient(env.REDIS_URL, { db: env.REDIS_DB_BUS, label: 'api/bus' })
+  : null;
 const bus = busRedis ? new RedisStreamsEventBus(busRedis) : undefined;
 
 if (!bus) {
   console.warn(
     'REDIS_URL is not set for the api, so module config changes will not be published and ' +
-      'Server Logs will show nothing under its Proton category. Everything else works.',
+      'Server logs will show nothing under its Proton category. Everything else works.',
   );
 }
 
+const modules = new ModuleConfigService(handle, registry, {
+  rules: new DrizzleGuildRuleStore(handle),
+  ...(bus ? { bus } : {}),
+  logger: console,
+  onRecompileFailed: (guildId, moduleId, detail) =>
+    console.error(
+      `${moduleId}'s config was saved for guild ${guildId} but its rules could not be ` +
+        `recompiled, so the old ones are still in force: ${detail}`,
+    ),
+});
+
 const app = createApiApp({
-  guilds: new GuildService(handle),
-  modules: new ModuleConfigService(handle, registry, {
-    rules: new DrizzleGuildRuleStore(handle),
-    ...(bus ? { bus } : {}),
-    logger: console,
-    onRecompileFailed: (guildId, moduleId, detail) =>
-      console.error(
-        `${moduleId}'s config was saved for guild ${guildId} but its rules could not be ` +
-          `recompiled, so the old ones are still in force: ${detail}`,
-      ),
-  }),
+  guilds: new GuildService(handle, new BotGuildDirectory(env.REST_PROXY_URL)),
+  modules,
+  branding: new BrandingAssetService(new DrizzleBrandingAssetStore(handle), modules),
   verification: new VerificationService({ ...(bus ? { bus } : {}) }),
+  blocked: new BlockedMemberService(handle),
+  appeals: new AppealsService({
+    modules,
+    store: new DrizzleAppealStore(handle),
+    ...(bus ? { bus } : {}),
+  }),
   cards: new CardPreviewService(),
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),

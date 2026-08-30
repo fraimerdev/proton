@@ -221,7 +221,9 @@ describe('refusals', () => {
     });
 
     expect(isRestoreRefusal(result)).toBe(true);
-    expect(isRestoreRefusal(result) && result.refusal).toContain('REST channel list');
+    expect(isRestoreRefusal(result) && result.refusal).toContain(
+      'leaves out every channel I cannot see',
+    );
   });
 
   test('a snapshot from another server', () => {

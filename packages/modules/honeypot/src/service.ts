@@ -1,10 +1,9 @@
-import {
-  type ActionResult,
-  type EventListener,
-  type EventType,
-  MESSAGE_FLAG_IS_COMPONENTS_V2,
-  type ModuleContext,
-  type ProtonEvent,
+import type {
+  ActionResult,
+  EventListener,
+  EventType,
+  ModuleContext,
+  ProtonEvent,
 } from '@proton/core';
 import { HONEYPOT_ACTOR, type HoneypotChannel, type HoneypotConfig, MODULE_ID } from './config.ts';
 import { describeUnbound, type HoneypotDeps } from './deps.ts';
@@ -72,7 +71,8 @@ export async function reconcileNotices(
 
   // The module-level switch is not in the config schema, so a module that was just turned off can
   // only learn it from the event that announced the change.
-  const live = field(event.payload, 'enabledAfter') !== false && ctx.config.enabled;
+  const live =
+    field(event.payload, 'enabledAfter') !== false && ctx.config.enabled && ctx.config.postNotice;
 
   const wanted = new Map<string, HoneypotChannel>(
     live ? ctx.config.channels.filter((c) => c.enabled).map((c) => [c.channelId, c]) : [],
@@ -138,7 +138,7 @@ async function ensure(
   known: { messageId: string; postedAt: number } | undefined,
   caught: number,
 ): Promise<EnsureResult> {
-  const built = buildNoticeComponents(channel, caught);
+  const built = buildNoticeComponents(ctx.config, channel.channelId, caught, ctx.tier);
   if (!built.ok) {
     ctx.logger.error(`honeypot could not build its notice: ${built.humanReason}`, {
       guildId: ctx.guildId,
@@ -176,7 +176,7 @@ async function ensure(
     ctx,
     {
       kind: 'send',
-      payload: { ...message, allowedMentions: { parse: [] }, flags: MESSAGE_FLAG_IS_COMPONENTS_V2 },
+      payload: { ...message, allowedMentions: { parse: [] }, flags: built.flags },
       idempotencyKey: `${MODULE_ID}:${event.id}:notice-post:${channel.channelId}`,
     },
     `post the notice in ${channel.channelId}`,
@@ -252,7 +252,12 @@ export async function refreshNoticeCount(
 
   if (!(await stats.claimRefresh(ctx.guildId, channelId, NOTICE_REFRESH_MS))) return 'debounced';
 
-  const built = buildNoticeComponents(channel, await stats.total(ctx.guildId, channelId));
+  const built = buildNoticeComponents(
+    ctx.config,
+    channelId,
+    await stats.total(ctx.guildId, channelId),
+    ctx.tier,
+  );
   if (!built.ok) return 'skipped';
 
   await run(

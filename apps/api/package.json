@@ -18,6 +18,7 @@
     "@proton/core": "workspace:*",
     "@proton/db": "workspace:*",
     "@proton/gateway": "workspace:*",
+    "@proton/module-appeals": "workspace:*",
     "@proton/module-cases": "workspace:*",
     "@proton/module-giveaways": "workspace:*",
     "@proton/module-leveling": "workspace:*",
@@ -28,6 +29,7 @@
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.2",
     "ioredis": "^6.0.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@proton/module-branding": "workspace:*"
   }
 }

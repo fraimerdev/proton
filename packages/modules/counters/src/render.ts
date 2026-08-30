@@ -17,7 +17,13 @@ export interface CounterEdit {
   to: string;
 }
 
+export interface CounterCreation {
+  counterId: string;
+  name: string;
+}
+
 export interface CounterPlan {
+  creations: CounterCreation[];
   edits: CounterEdit[];
 
   unchanged: string[];
@@ -49,19 +55,29 @@ export interface CounterFailure {
   humanReason: string;
 }
 
+export interface CreationFailure {
+  name: string;
+  humanReason: string;
+}
+
 export interface RefreshOutcome {
   total: number;
 
+  created: number;
   updated: number;
   unchanged: number;
   unavailable: number;
 
+  // Channels Proton made but could not stop members joining, which needs Manage Roles.
+  unlocked: string[];
+
   failures: CounterFailure[];
+  creationFailures: CreationFailure[];
 }
 
 export const NO_COUNTERS =
   'No counter channels are set up in this server yet. Add them in the Proton dashboard, under ' +
-  'Counters, and each one will start refreshing every 10 minutes.';
+  'Counter channels, and each one will start refreshing every 10 minutes.';
 
 function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
@@ -71,10 +87,25 @@ export function renderReport(outcome: RefreshOutcome): string {
   if (outcome.total === 0) return NO_COUNTERS;
 
   const parts = [`${outcome.updated} renamed`, `${outcome.unchanged} already correct`];
+  if (outcome.created > 0) parts.unshift(`${outcome.created} created`);
   if (outcome.unavailable > 0) parts.push(`${outcome.unavailable} skipped`);
-  if (outcome.failures.length > 0) parts.push(`${outcome.failures.length} refused`);
+
+  const refused = outcome.failures.length + outcome.creationFailures.length;
+  if (refused > 0) parts.push(`${refused} refused`);
 
   const lines = [`Checked ${plural(outcome.total, 'counter channel')} — ${parts.join(', ')}.`];
+
+  for (const channelId of outcome.unlocked) {
+    lines.push(
+      `I made <#${channelId}> but could not stop members joining it — that needs the Manage ` +
+        'Roles permission. Deny Connect on it yourself, or grant Proton Manage Roles and remove ' +
+        'and re-add the counter.',
+    );
+  }
+
+  for (const failure of outcome.creationFailures) {
+    lines.push(`I could not make the channel for “${failure.name}”: ${failure.humanReason}`);
+  }
 
   if (outcome.unavailable > 0) {
     lines.push(
@@ -91,30 +122,44 @@ export function renderReport(outcome: RefreshOutcome): string {
   return lines.join('\n');
 }
 
-export function plan(config: CountersConfig, state: GuildState): CounterPlan {
+export function plan(
+  config: CountersConfig,
+  state: GuildState,
+  owned: ReadonlyMap<string, string> = new Map(),
+): CounterPlan {
+  const creations: CounterCreation[] = [];
   const edits: CounterEdit[] = [];
   const unchanged: string[] = [];
   const unavailable: string[] = [];
 
   for (const counter of config.counters) {
+    const channelId = counter.channelId ?? owned.get(counter.id);
+
     const count = countFor(counter.source, state);
     if (count === null) {
-      unavailable.push(counter.channelId);
+      // Counted before created, so a counter Proton owns is never born showing the wrong number.
+      unavailable.push(channelId ?? counter.id);
       continue;
     }
 
     const to = renderName(counter.template, count);
-    // A channel this snapshot has never seen has no name to compare against, so it is renamed
-    // rather than assumed correct: one wasted edit beats a counter frozen at a stale number.
-    const from = state.channels.get(counter.channelId)?.name ?? null;
 
-    if (from === to) {
-      unchanged.push(counter.channelId);
+    if (channelId === undefined) {
+      creations.push({ counterId: counter.id, name: to });
       continue;
     }
 
-    edits.push({ channelId: counter.channelId, from, to });
+    // A channel this snapshot has never seen has no name to compare against, so it is renamed
+    // rather than assumed correct: one wasted edit beats a counter frozen at a stale number.
+    const from = state.channels.get(channelId)?.name ?? null;
+
+    if (from === to) {
+      unchanged.push(channelId);
+      continue;
+    }
+
+    edits.push({ channelId, from, to });
   }
 
-  return { edits, unchanged, unavailable };
+  return { creations, edits, unchanged, unavailable };
 }

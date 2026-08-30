@@ -168,8 +168,8 @@ export const templatesSchema = z
             code: 'custom',
             path: [index, 'components'],
             message:
-              `the name '${message.name}' and the component key '${componentKey}' need ${length} ` +
-              `characters together with Proton's prefix, and Discord allows a custom_id of ` +
+              `the name '${message.name}' and the component key '${componentKey}' come to ` +
+              `${length} characters once Proton adds its own prefix, and Discord allows ` +
               `${MAX_CUSTOM_ID_LENGTH}. Shorten the message name or the key.`,
           });
         }

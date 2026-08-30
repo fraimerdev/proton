@@ -25,10 +25,20 @@ function collecting(): { bus: EventBus; published: ProtonEvent[] } {
   return { bus, published };
 }
 
+// Present, because this route is a guild-scoped write and now sits behind the presence gate. What
+// it answers for a server Proton has left is guild-write-presence.test.ts's subject.
+const HERE = {
+  presence: (ids: readonly string[]) => Promise.resolve({ present: [...ids], known: true }),
+};
+
 function appWith(bus?: EventBus) {
   const verification = new VerificationService({ ...(bus ? { bus } : {}), now: () => NOW });
 
-  return createApiApp({ verification, sharedSecret: SECRET } as unknown as ApiDeps);
+  return createApiApp({
+    verification,
+    guilds: HERE,
+    sharedSecret: SECRET,
+  } as unknown as ApiDeps);
 }
 
 const NO_SECRET = Symbol('no secret');

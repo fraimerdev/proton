@@ -7,8 +7,8 @@ import { MODULE_ID } from './listener.ts';
 import type { BlocklistStats } from './store.ts';
 
 const NOT_WIRED =
-  "I can't tell you the state of the phishing blocklist because Proton isn't fully wired up " +
-  'in this deployment. The Proton logs name the exact missing piece.';
+  'I can’t tell you the state of the phishing blocklist, and no links are being checked in ' +
+  'this server. This is a fault on my side, not a setting in this server.';
 
 export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefinition<PhishingConfig> {
   return {
@@ -84,7 +84,7 @@ async function describeStats(
 
     return (
       'I could not read the phishing blocklist, so I cannot tell you whether this server is ' +
-      'protected right now. Link checking may still be running. This is a Proton-side problem, ' +
+      'protected right now. Link checking may still be running. This is a fault on my side, ' +
       'not a setting in this server.'
     );
   }
@@ -94,20 +94,20 @@ async function describeStats(
   if (stats.size === 0) {
     lines.push(
       '**No blocklist is loaded, so no links are being checked.** Every feed failed, or the ' +
-        'cached list expired before a refresh succeeded. This is a Proton-side problem, not ' +
+        'cached list expired before a refresh succeeded. This is a fault on my side, not ' +
         'a setting in this server.',
     );
   } else {
-    lines.push(`**${stats.size.toLocaleString('en')} domains** are being checked against.`);
+    lines.push(`Links are checked against **${stats.size.toLocaleString('en')} domains**.`);
   }
 
   if (stats.refreshedAt === null) {
-    lines.push('The list has never been refreshed since this Proton instance started.');
+    lines.push('There is no record of when this list was last refreshed.');
   } else {
     const age = Date.now() - stats.refreshedAt.getTime();
     lines.push(
       `Last refreshed ${formatDuration(Math.max(age, 1000))} ago from ` +
-        `${stats.feeds.length} feed(s).`,
+        `${stats.feeds.length} feed${stats.feeds.length === 1 ? '' : 's'}.`,
     );
   }
 
@@ -122,8 +122,9 @@ async function describeStats(
       `On a match: **${config.action}**${
         config.action === 'timeout' ? ` (${config.timeoutDuration})` : ''
       }. ` +
-        `${config.blockDomains.length} extra blocked domain(s), ` +
-        `${config.allowDomains.length} never blocked.`,
+        `${config.blockDomains.length} extra blocked domain${
+          config.blockDomains.length === 1 ? '' : 's'
+        }, ${config.allowDomains.length} never blocked.`,
     );
   }
 

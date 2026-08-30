@@ -1,6 +1,7 @@
 export * from './audit-trail.ts';
 export * from './auth.ts';
 export * from './backups.ts';
+export * from './blocked-members.ts';
 export * from './cases.ts';
 export * from './entitlements.ts';
 export * from './guild-modules.ts';

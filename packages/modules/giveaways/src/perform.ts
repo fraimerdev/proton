@@ -22,8 +22,8 @@ export { MODULE_ID } from './config.ts';
 export const MENTIONS_OFF: AllowedMentions = { parse: [] };
 
 export const NOT_WIRED =
-  "I can't reach this server's giveaways because Proton isn't fully wired up in this " +
-  'deployment. Nothing was changed. The Proton logs name the exact missing piece.';
+  'I can’t reach this server’s giveaways. Nothing was changed. This is a fault on my side, not ' +
+  'a setting in this server.';
 
 export type Ctx = ModuleContext<GiveawaysConfig>;
 

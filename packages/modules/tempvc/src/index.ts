@@ -180,7 +180,7 @@ export function createTempVcModule(
 ): ModuleManifest<typeof tempVcConfigSchema> {
   return {
     id: 'tempvc',
-    name: 'Temporary Voice Channels',
+    name: 'Temporary voice channels',
     category: 'utility',
     configSchema: tempVcConfigSchema,
     formSchema: tempVcFormSchema,

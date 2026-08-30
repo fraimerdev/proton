@@ -190,7 +190,7 @@ export function ScheduleEditor({
           type="checkbox"
         />
         <small className="field-description">
-          Switching it off takes the booking down straight away. The template stays, and{' '}
+          Switching it off stops the schedule straight away. The template stays, and{' '}
           <code>/message post</code> still posts it on request.
         </small>
       </div>

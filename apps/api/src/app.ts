@@ -1,4 +1,7 @@
 import {
+  appealLinkClaimsSchema,
+  BLOCK_REASON_MAX,
+  blockedMemberQuerySchema,
   caseQuerySchema,
   type EventBus,
   leaderboardQuerySchema,
@@ -7,14 +10,18 @@ import {
   type RegistryEnvironment,
   snowflakeSchema,
 } from '@proton/core';
+import { isAssetKind } from '@proton/module-branding/kinds';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { ticketQuerySchema, ticketStatsQuerySchema } from '@proton/module-tickets/query';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { AppealsError, type AppealsService } from './appeals/service.ts';
+import { BrandingAssetError, type BrandingAssetService } from './branding/service.ts';
 import { type CardPreviewService, cardPreviewQuerySchema } from './cards/preview.ts';
 import type { CaseQueryService } from './cases/service.ts';
 import type { GuildService } from './guilds/service.ts';
 import type { LeaderboardService } from './leveling/service.ts';
+import { BlockedMemberError, type BlockedMemberService } from './moderation/blocked-members.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 import type { TagSearchService } from './tags/service.ts';
 import type { TicketSearchService } from './tickets/service.ts';
@@ -34,6 +41,16 @@ const presenceBodySchema = z.object({
   ids: z.array(z.string().min(1)).max(200),
 });
 
+// Names Discord as the source on purpose: the other way this check can end is an unreachable
+// Discord, and that one lets the write through, so an admin who sees this has been told the
+// question was actually asked and answered.
+const ABSENT = {
+  error: 'bot_absent',
+  message:
+    'Discord says Proton is not in this server, so nothing was saved — a setting stored here ' +
+    'would never reach Discord. Invite Proton back to the server and try again.',
+} as const;
+
 const ensureGuildBodySchema = z.object({
   name: z.string().min(1),
   locale: z.string().optional(),
@@ -43,6 +60,20 @@ const ensureGuildBodySchema = z.object({
 const passedBodySchema = z.object({
   userId: snowflakeSchema,
   jti: z.string().min(1).max(64),
+});
+
+const appealFormBodySchema = z.object({ claims: appealLinkClaimsSchema });
+
+const appealSubmitBodySchema = z.object({
+  claims: appealLinkClaimsSchema,
+  answers: z.record(z.string(), z.string()),
+});
+
+const liftBlockBodySchema = z.object({
+  actorId: snowflakeSchema,
+  source: z.string().min(1).max(32),
+  liftReason: z.string().trim().min(1).max(BLOCK_REASON_MAX),
+  ipHash: z.string().min(1).max(128).optional(),
 });
 
 export function moduleIndex(
@@ -82,11 +113,15 @@ export interface ApiDeps {
   tickets: TicketSearchService;
   guilds: GuildService;
   verification: VerificationService;
+  blocked: BlockedMemberService;
+  appeals: AppealsService;
+  branding: BrandingAssetService;
   registry: ModuleRegistry;
   bus?: EventBus;
   // What the bot actually has, for `registry.evaluate`. A function because intents come from the
   // gateway's identify and permissions from the guild, neither of which is known at construction.
   environment?: () => RegistryEnvironment;
+  logger?: Pick<Console, 'warn'>;
   sharedSecret: string;
 }
 
@@ -119,6 +154,7 @@ function invalidQuery(error: z.ZodError): { error: string; message: string } {
 
 export function createApiApp(deps: ApiDeps): Hono {
   const app = new Hono();
+  const logger = deps.logger ?? console;
 
   app.get('/healthz', (c) => c.json({ ok: true }));
 
@@ -163,15 +199,47 @@ export function createApiApp(deps: ApiDeps): Hono {
     return next();
   });
 
-  // Which of the caller's servers Proton is actually in. One round trip for the whole list: the
-  // picker renders every server the user administers, and Discord's own guild object cannot say.
+  // The dashboard's check asks whether the signed-in user administers the guild, never whether
+  // Proton is still in it, so a stale guilds row — which satisfies guild_modules' foreign key —
+  // let every save succeed into a server the bot had been kicked from. Writes only: the page for
+  // that server still has to load far enough to say so.
+  app.use('/guilds/*', async (c, next) => {
+    if (c.req.method === 'GET') return next();
+
+    // Split rather than `/guilds/:guildId/*`, whose trailing wildcard also matches the empty rest
+    // and so reads `/guilds/presence` — the question itself — as a guild named "presence".
+    const [, , guildId, nested] = c.req.path.split('/');
+    if (!guildId || !nested) return next();
+
+    const { present, known } = await deps.guilds.presence([guildId]);
+
+    // Allowed, deliberately: `known:false` outlives the directory's ten-minute grace window, so it
+    // is a sustained outage, and refusing would make every server's settings read-only for its
+    // duration to stop a row that is inert until the bot is back. Only a checked absence refuses,
+    // which is the call the guild route loader already makes.
+    if (!known) {
+      logger.warn(
+        `Proton could not check whether it is still in ${guildId}, so a ${c.req.method} on ` +
+          `${c.req.path} was allowed through unverified.`,
+      );
+      return next();
+    }
+
+    if (!present.includes(guildId)) return c.json(ABSENT, 409);
+
+    return next();
+  });
+
+  // Which of the caller's servers Proton is actually in, answered from Discord's own list of the
+  // bot's guilds. One round trip for the whole list: the picker renders every server the user
+  // administers, and the user-scoped guild object Discord hands the dashboard cannot say.
   app.post('/guilds/presence', async (c) => {
     const parsed = presenceBodySchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
     }
 
-    return c.json({ present: await deps.guilds.presentIds(parsed.data.ids) });
+    return c.json(await deps.guilds.presence(parsed.data.ids));
   });
 
   // Proton's own row, not Discord's: the dashboard already has the Discord guild object from the
@@ -238,15 +306,6 @@ export function createApiApp(deps: ApiDeps): Hono {
     return c.json(await deps.tickets.stats(c.req.param('guildId'), parsed.data));
   });
 
-  // Guild-independent — the descriptors come from the deployed registry, not from this guild's
-  // row — but mounted under /guilds so it inherits the shared-secret guard above.
-  app.get('/guilds/:guildId/modules/:moduleId/descriptors', (c) => {
-    const moduleId = c.req.param('moduleId');
-    if (!deps.registry.get(moduleId)) return c.json({ error: 'unknown_module' }, 404);
-
-    return c.json({ moduleId, descriptors: deps.registry.descriptors(moduleId) });
-  });
-
   // The picker the in-Discord builder and the dashboard both read: a provider whose owning
   // module is switched off in this guild is not offered, so nothing can be configured that could
   // never be evaluated.
@@ -279,8 +338,9 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
   });
 
-  // Rendered here rather than in the dashboard because the renderer is a native addon: this is the
-  // same code path that draws the real card, so a preview cannot drift from what Discord receives.
+  // The dashboard draws its own live preview from the same component, but only satori and resvg
+  // turn that component into the PNG Discord actually receives, and neither runs in a browser.
+  // This route is where a caller can ask for the bytes rather than a rendering of them.
   app.get('/guilds/:guildId/cards/preview', async (c) => {
     const parsed = cardPreviewQuerySchema.safeParse(c.req.query());
     if (!parsed.success) {
@@ -347,6 +407,123 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
   });
 
+  app.get('/guilds/:guildId/blocked-members', async (c) => {
+    const parsed = blockedMemberQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    try {
+      return c.json(await deps.blocked.list(c.req.param('guildId'), parsed.data));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/blocked-members/:userId/lift', async (c) => {
+    const parsed = liftBlockBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(
+        await deps.blocked.lift({
+          guildId: c.req.param('guildId'),
+          userId: c.req.param('userId'),
+          ...parsed.data,
+        }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  // The claims arrive already verified: only the dashboard holds VERIFY_LINK_SECRET, and it
+  // reaches this route over the shared secret the same way a config write does.
+  app.post('/guilds/:guildId/appeals/form', async (c) => {
+    const parsed = appealFormBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(await deps.appeals.form(parsed.data.claims));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/appeals/submit', async (c) => {
+    const parsed = appealSubmitBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(await deps.appeals.submit(parsed.data.claims, parsed.data.answers));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/branding/:kind', async (c) => {
+    const kind = c.req.param('kind');
+    if (!isAssetKind(kind)) return c.json({ error: 'unknown_asset' }, 404);
+
+    try {
+      const asset = await deps.branding.read(c.req.param('guildId'), kind);
+      return new Response(asset.bytes, {
+        headers: {
+          'content-type': asset.contentType,
+          'cache-control': 'no-store',
+          'content-length': String(asset.bytes.byteLength),
+        },
+      });
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  // Raw bytes on the wire, not base64 in JSON: the dashboard already holds a File, and base64 would
+  // inflate a 2 MB banner by a third on every hop for nothing.
+  app.put('/guilds/:guildId/branding/:kind', async (c) => {
+    const kind = c.req.param('kind');
+    if (!isAssetKind(kind)) return c.json({ error: 'unknown_asset' }, 404);
+
+    const actorId = c.req.header('x-proton-actor');
+    if (!actorId) return c.json({ error: 'invalid_body', message: 'no actor was named' }, 400);
+
+    try {
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      return c.json(
+        await deps.branding.upload({ guildId: c.req.param('guildId'), kind, bytes, actorId }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.delete('/guilds/:guildId/branding/:kind', async (c) => {
+    const kind = c.req.param('kind');
+    if (!isAssetKind(kind)) return c.json({ error: 'unknown_asset' }, 404);
+
+    const actorId = c.req.header('x-proton-actor');
+    if (!actorId) return c.json({ error: 'invalid_body', message: 'no actor was named' }, 400);
+
+    try {
+      await deps.branding.clear(c.req.param('guildId'), kind, actorId);
+      return c.json({ ok: true });
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
   return app;
 }
 
@@ -357,6 +534,27 @@ function toErrorResponse(error: unknown): {
   if (error instanceof ModuleConfigError) {
     return {
       status: error.code === 'unknown_module' ? 404 : 400,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  if (error instanceof BrandingAssetError) {
+    return {
+      status: error.code === 'unknown_asset' ? 404 : 400,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  if (error instanceof AppealsError) {
+    return {
+      status: error.code === 'bus_unavailable' ? 503 : 400,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  if (error instanceof BlockedMemberError) {
+    return {
+      status: error.code === 'not_blocked' ? 404 : 400,
       body: { error: error.code, message: error.message },
     };
   }

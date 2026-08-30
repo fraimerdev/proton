@@ -337,8 +337,8 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     return {
       status: 'refused',
       humanReason:
-        `Your channel is open — <#${channelId}> — but Proton lost track of it while opening it, ` +
-        'so `/ticket close` will not work there. Ask a moderator to close it for you.',
+        `Your channel is open — <#${channelId}> — but I lost track of it while opening it, so ` +
+        '`/ticket close` will not work there. Ask a moderator to close it for you.',
     };
   }
 

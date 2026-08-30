@@ -81,7 +81,7 @@ describe('/antinuke maintenance', () => {
 
     await h.runCommand(subcommand('maintenance', [stringOption('duration', '20m')]));
 
-    expect(h.replyContent()).toContain('RedisMaintenanceStore');
+    expect(h.replyContent()).toContain('nowhere to record a window');
   });
 });
 

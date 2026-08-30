@@ -153,7 +153,7 @@ function entryRows(input: CardInput, live: boolean): ComponentsResult {
     detail.push(button(BUTTON_SECONDARY, 'Requirements', '\u{1F4CB}', ids.requirements.customId));
   }
   if (input.multipliers.length > 0) {
-    detail.push(button(BUTTON_SECONDARY, 'Multipliers', '✨', ids.multipliers.customId));
+    detail.push(button(BUTTON_SECONDARY, 'Bonus entries', '✨', ids.multipliers.customId));
   }
 
   if (detail.length > 0) rows.push({ type: COMPONENT_ACTION_ROW, components: detail });
@@ -340,7 +340,7 @@ export function buildNoWinners(input: CardInput): ComponentsResult {
 
   body.push(
     text(
-      '\u{1F614} **Nobody won.**\nEither nobody entered, or everybody who did stopped meeting ' +
+      '\u{1F614} **Nobody won**\nEither nobody entered, or everybody who did stopped meeting ' +
         'the requirements before it was drawn.',
     ),
     text(`\u{1F3AB} ${plural(input.entrantCount, 'entry')} · hosted by <@${input.view.hostId}>`),

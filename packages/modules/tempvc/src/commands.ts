@@ -24,15 +24,15 @@ import type { TempVoiceChannelRow } from './table.ts';
 type Command = CommandDefinition<TempVcConfig>;
 
 const NOT_WIRED =
-  "I can't reach the temporary-channel records because Proton isn't fully wired up in this " +
-  'deployment. Nothing was changed. The Proton logs name the exact missing piece.';
+  'I can’t manage temporary voice channels right now. Nothing was changed. This is a fault on ' +
+  'my side, not a setting in this server.';
 
 const OFF =
   'This server has turned off member control of temporary channels. Ask a moderator to change ' +
   'the channel for you, or ask an admin to switch “Let owners manage their own channel” back on.';
 
 const NOT_IN_ONE =
-  'Run this from inside a temporary voice channel Proton made. This command only changes the ' +
+  'Run this from inside a temporary voice channel I made. This command only changes the ' +
   'channel you are sitting in.';
 
 const NOT_YOURS =
@@ -81,8 +81,8 @@ async function held(
   if (!hub) {
     await reply(
       ctx,
-      'The creator channel this was made from has been removed from the settings, so Proton no ' +
-        'longer knows what it is allowed to do here.',
+      'The creator channel this was made from has been removed from the settings, so I no ' +
+        'longer know what I’m allowed to do here.',
     );
     return null;
   }
@@ -226,7 +226,10 @@ export function voiceCommand(deps: TempVcDeps): Command {
           }
 
           const ok = await context.service.rename(ctx, context.row, name);
-          return reply(ctx, ok ? `Renamed your channel to **${name}**.` : refused('rename'));
+          return reply(
+            ctx,
+            ok ? `Renamed your channel to **${name}**.` : refused('rename your channel'),
+          );
         }
 
         case 'limit': {
@@ -242,7 +245,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
               ? limit === 0
                 ? 'Removed the member limit.'
                 : `Your channel now holds ${limit} member${limit === 1 ? '' : 's'}.`
-              : refused('limit'),
+              : refused('set that member limit'),
           );
         }
 
@@ -253,7 +256,10 @@ export function voiceCommand(deps: TempVcDeps): Command {
           const mode = (ctx.options.getString('mode') ?? 'public') as PrivacyMode;
           const ok = await context.service.applyAccess(ctx, context.row, mode);
 
-          return reply(ctx, ok ? `Your channel is now **${mode}**.` : refused('privacy'));
+          return reply(
+            ctx,
+            ok ? `Your channel is now **${mode}**.` : refused('change who may join'),
+          );
         }
 
         case 'trust':
@@ -280,7 +286,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
             context.hub.privacy,
           );
 
-          return reply(ctx, ok ? said(sub, target) : refused(sub));
+          return reply(ctx, ok ? said(sub, target) : refused(`${sub} that member`));
         }
 
         case 'kick': {
@@ -314,7 +320,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
           return reply(
             ctx,
             `<@${target}> can now join <#${context.row.channelId}>. Send them the channel — ` +
-              'Proton does not message members who have not asked to hear from it.',
+              'I don’t message members who haven’t asked to hear from me.',
           );
         }
 
@@ -327,7 +333,10 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (target === ctx.userId) return reply(ctx, 'You already own this channel.');
 
           const ok = await context.service.transfer(ctx, context.row, target, context.hub.privacy);
-          return reply(ctx, ok ? `<@${target}> owns this channel now.` : refused('transfer'));
+          return reply(
+            ctx,
+            ok ? `<@${target}> owns this channel now.` : refused('hand over your channel'),
+          );
         }
 
         case 'region': {
@@ -352,7 +361,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const ok = await context.service.destroy(ctx, context.row, 'deleted by its owner');
-          return reply(ctx, ok ? 'Channel deleted.' : refused('delete'));
+          return reply(ctx, ok ? 'Channel deleted.' : refused('delete your channel'));
         }
 
         default:
@@ -392,7 +401,7 @@ function said(sub: string, target: string): string {
 }
 
 function refused(what: string): string {
-  return `I could not ${what} your channel. Proton may be missing a permission on it — the server log names which.`;
+  return `I could not ${what}. I may be missing a permission in this channel — ask an admin to check.`;
 }
 
 export function tempVcCommands(deps: TempVcDeps): Command[] {

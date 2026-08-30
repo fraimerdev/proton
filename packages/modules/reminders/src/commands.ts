@@ -27,13 +27,12 @@ const DISABLED =
   'the Reminders module on from the Proton dashboard.';
 
 const NOT_WIRED =
-  "I can't reach this server's reminders because Proton isn't fully wired up in this " +
-  'deployment. Nothing was changed. The Proton logs name the exact missing piece.';
+  'I can’t run reminders right now. Nothing was changed. This is a fault on my side, not a ' +
+  'setting in this server.';
 
 const NO_SCHEDULER =
-  "I can't set that reminder: this Proton deployment has no scheduler wired in, so nothing " +
-  'would ever fire. Nothing was saved. Whoever runs this bot needs to start the worker with a ' +
-  'scheduled-action store before reminders work.';
+  'I can’t set that reminder — I have no way to come back at that time, so it would never be ' +
+  'posted. Nothing was saved. This is a fault on my side, not a setting in this server.';
 
 const DURATION_HINT = 'I need to know how far ahead, for example `30m`, `12h` or `7d`.';
 
@@ -77,11 +76,11 @@ async function book(ctx: Ctx, reminder: Reminder): Promise<string | null> {
 export function remindCommand(deps: RemindersDeps): Command {
   return {
     name: 'remind',
-    description: 'Have Proton remind you about something later, in this channel.',
+    description: 'Remind yourself about something later, in this channel.',
 
     data: new SlashCommandBuilder()
       .setName('remind')
-      .setDescription('Have Proton remind you about something later, in this channel.')
+      .setDescription('Remind yourself about something later, in this channel.')
       .setContexts(InteractionContextType.Guild)
       .addStringOption((option) =>
         option
@@ -173,8 +172,8 @@ export function remindCommand(deps: RemindersDeps): Command {
 
         await reply(
           ctx,
-          "I couldn't book that reminder, so I threw it away rather than leave you one that " +
-            'never fires. Try again in a moment — if it keeps happening, the Proton logs say why.',
+          'I couldn’t save that reminder, so I threw it away rather than leave you one that ' +
+            'never fires. Try again in a moment.',
         );
         return;
       }

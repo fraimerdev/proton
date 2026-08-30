@@ -1,12 +1,14 @@
 import { REST } from '@discordjs/rest';
 import { WebSocketManager, WebSocketShardEvents } from '@discordjs/ws';
 import type { EventBus } from '@proton/core';
+import type { GatewayPresenceUpdateData } from 'discord-api-types/v10';
 import { normalise, type RawDispatch } from './normaliser.ts';
 import type { RedisSessionStore } from './session-store.ts';
 
 export interface GatewayManagerOptions {
   token: string;
   intents: number;
+  presence: GatewayPresenceUpdateData;
   restProxyUrl: string;
   store: RedisSessionStore;
   bus: EventBus;
@@ -20,6 +22,7 @@ export function createGatewayManager(options: GatewayManagerOptions): WebSocketM
   const manager = new WebSocketManager({
     token: options.token,
     intents: options.intents,
+    initialPresence: options.presence,
     rest,
     retrieveSessionInfo: options.store.retrieveSessionInfo,
     updateSessionInfo: options.store.updateSessionInfo,

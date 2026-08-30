@@ -1,8 +1,10 @@
 import { type ModuleManifest, ModuleRegistry, type ModuleRegistryOptions } from '@proton/core';
 import { type AntinukeDeps, createAntinukeModule } from '@proton/module-antinuke';
 import { type AntiraidDeps, createAntiraidModule } from '@proton/module-antiraid';
+import { type AppealsDeps, createAppealsModule } from '@proton/module-appeals';
 import { type AutomodDeps, createAutomodModule } from '@proton/module-automod';
 import { type BackupDeps, createBackupModule } from '@proton/module-backup';
+import { type BrandingDeps, createBrandingModule } from '@proton/module-branding';
 import { type CasesDeps, createCasesModule } from '@proton/module-cases';
 import { type CountersDeps, createCountersModule } from '@proton/module-counters';
 import { createGiveawaysModule, type GiveawaysDeps } from '@proton/module-giveaways';
@@ -31,6 +33,7 @@ import { createWelcomeModule, type WelcomeDeps } from '@proton/module-welcome';
 export interface ModuleBindings {
   help?: HelpDeps;
   cases?: CasesDeps;
+  appeals?: AppealsDeps;
 
   antinuke?: AntinukeDeps;
   antiraid?: AntiraidDeps;
@@ -57,6 +60,7 @@ export interface ModuleBindings {
   giveaways?: GiveawaysDeps;
   counters?: CountersDeps;
   suggestions?: SuggestionsDeps;
+  branding?: BrandingDeps;
 }
 
 export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
@@ -65,6 +69,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
     pingModule as ModuleManifest,
     createCasesModule(bindings.cases ?? {}) as ModuleManifest,
     moderationModule as ModuleManifest,
+    createAppealsModule(bindings.appeals ?? {}) as ModuleManifest,
     createLoggingModule(bindings.logging ?? {}) as ModuleManifest,
     createServerlogModule(bindings.serverlog ?? {}) as ModuleManifest,
     permissionsModule as ModuleManifest,
@@ -92,6 +97,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
     createGiveawaysModule(bindings.giveaways ?? {}) as ModuleManifest,
     createCountersModule(bindings.counters ?? {}) as ModuleManifest,
     createSuggestionsModule(bindings.suggestions ?? {}) as ModuleManifest,
+    createBrandingModule(bindings.branding ?? {}) as ModuleManifest,
   ];
 }
 

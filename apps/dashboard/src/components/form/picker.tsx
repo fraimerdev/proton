@@ -341,7 +341,7 @@ export function SinglePicker({
         // announced itself as whatever channel it happened to be set to.
         aria-label={
           missing
-            ? `${label}: ${value}, which no longer exists in this server`
+            ? `${label}: ${value}, which Proton cannot find in this server`
             : `${label}: ${chosen ? chosen.label : emptyLabel}`
         }
         data-unknown={missing || undefined}

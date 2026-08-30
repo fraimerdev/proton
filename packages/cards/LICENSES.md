@@ -1,17 +1,18 @@
 # Third-party licences — `@proton/cards`
 
-This package checks four font binaries into the repository and draws with them on every
+This package checks six font binaries into the repository and draws with them on every
 rendered card. They are redistributed under the terms below. OFL 1.1 §2 requires the
 licence to travel with the font files, which is what this file is for.
 
 ## Manrope
 
-- Files: `assets/Manrope-latin-400.woff2`, `assets/Manrope-latin-700.woff2`
+- Files: `assets/Manrope-latin-400.woff`, `assets/Manrope-latin-600.woff`,
+  `assets/Manrope-latin-700.woff`, `assets/Manrope-latin-800.woff`
 - Upstream: https://github.com/sharanda/manrope
-- Obtained from: the `@fontsource/manrope` npm package (`manrope-latin-400-normal.woff2`
-  and `manrope-latin-700-normal.woff2`), renamed and otherwise byte-identical. WOFF2 is
-  checked in rather than TTF because `@napi-rs/canvas` registers WOFF2 directly, so
-  there is nothing to convert.
+- Obtained from: the `@fontsource/manrope` npm package (`manrope-latin-{400,600,700,800}-normal.woff`),
+  renamed and otherwise byte-identical. WOFF rather than WOFF2 because satori cannot decode
+  WOFF2's Brotli tables, and `@napi-rs/canvas` reads WOFF with identical metrics — so one set
+  of files serves both renderers rather than two sets drifting apart.
 - Licence: SIL Open Font License, Version 1.1
 - Copyright 2019 The Manrope Project Authors (https://github.com/sharanda/manrope)
 
@@ -32,9 +33,13 @@ OFL 1.1 permits bundling and redistribution inside a commercial product, includi
 hosted service, provided the fonts are not sold on their own and the licence and
 copyright notice are included. Both hold here.
 
-Static weights rather than one variable file: the renderer picks a face by weight at
-`ctx.font` time, so the two it can choose between are the two that are checked in. That is
-a rendering decision, not a licensing one.
+Static weights rather than one variable file: satori does no synthetic bolding and picks a
+face by nearest declared weight, so the four Manrope weights the design uses are the four
+that are checked in. That is a rendering decision, not a licensing one.
+
+The dashboard's live card preview fetches Manrope and Inter from Google Fonts instead of
+these files — same faces, same subsets, no redistribution by Proton, so nothing here
+governs that copy.
 
 ---
 

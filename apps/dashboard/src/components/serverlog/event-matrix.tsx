@@ -226,9 +226,7 @@ export function LogEventMatrix({
         );
       })}
 
-      {LOG_EVENT_KEYS.length === 0 ? (
-        <p className="field-empty">No logs are available in this build.</p>
-      ) : null}
+      {LOG_EVENT_KEYS.length === 0 ? <p className="field-empty">No logs to configure.</p> : null}
     </div>
   );
 }

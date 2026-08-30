@@ -110,7 +110,7 @@ async function authorise(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    return { refused: 'Proton is not fully wired up in this deployment, so nothing was changed.' };
+    return { refused: 'Part of Proton is not running here, so nothing was changed.' };
   }
 
   if (!ctx.config.ownerCommands) {
@@ -119,15 +119,15 @@ async function authorise(
 
   const row = await bound.repository.byId(tempChannelId);
   if (!row || row.guildId !== ctx.guildId || row.channelId === null) {
-    return { refused: 'That channel is gone. This panel is left over from one Proton removed.' };
+    return { refused: 'That channel is gone, so this panel no longer controls anything.' };
   }
 
   const hub = ctx.config.hubs.find((entry) => entry.channelId === row.hubChannelId);
   if (!hub) {
     return {
       refused:
-        'The creator channel this was made from has been removed from the settings, so Proton no ' +
-        'longer knows what it is allowed to do here.',
+        'The creator channel this was made from has been removed from the settings, so I no ' +
+        'longer know what I’m allowed to do here.',
     };
   }
 
@@ -324,13 +324,17 @@ async function applyToMember(
   say: (content: string) => Promise<void>,
 ): Promise<Outcome> {
   if (target === actorId) {
-    await say('That one only makes sense for somebody else.');
+    await say('Pick somebody other than yourself.');
     return { action: 'refused', reason: 'self' };
   }
 
   if (control === 'kick') {
     const ok = await held.service.disconnect(ctx, held.row, target);
-    await say(ok ? `Disconnected <@${target}>.` : `<@${target}> may have already left.`);
+    await say(
+      ok
+        ? `Disconnected <@${target}>.`
+        : `I could not disconnect <@${target}> — they may have already left.`,
+    );
 
     return { action: 'done', what: 'kick' };
   }
@@ -447,7 +451,7 @@ async function refuse(say: (content: string) => Promise<void>, reason: string): 
 }
 
 function couldNot(what: string): string {
-  return `I could not ${what}. Proton may be missing a permission on this channel.`;
+  return `I could not ${what}. I may be missing a permission on this channel.`;
 }
 
 export function createTempVcInteractionListener(deps: TempVcDeps): EventListener<TempVcConfig> {

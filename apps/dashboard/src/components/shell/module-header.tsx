@@ -1,22 +1,22 @@
 import type { ModuleSummary } from '@proton/core';
 import { Link } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import type { AreaEntry } from '../panels/areas.ts';
+import type { AreaEntry } from '../module/areas.ts';
 import { PageHead } from './app-shell.tsx';
 import { Icon } from './icon.tsx';
 import {
   CATEGORY_LABELS,
   isCategory,
+  isServerLevel,
   moduleBlurb,
   moduleState,
-  SWITCH_NOTE,
   shortReason,
+  switchNote,
   whereToFix,
 } from './module-meta.ts';
 import { useToggleModule } from './module-toggle.tsx';
 
 export interface ModuleHeaderProps {
-  guildId: string;
   summary: ModuleSummary;
   area: AreaEntry | undefined;
 
@@ -24,12 +24,7 @@ export interface ModuleHeaderProps {
   showLede: boolean;
 }
 
-export function ModuleHeader({
-  guildId,
-  summary,
-  area,
-  showLede,
-}: ModuleHeaderProps): ReactElement {
+export function ModuleHeader({ summary, area, showLede }: ModuleHeaderProps): ReactElement {
   const toggle = useToggleModule();
 
   const state = moduleState(summary);
@@ -42,13 +37,13 @@ export function ModuleHeader({
         title={area ? area.title : summary.name}
         trail={
           area ? (
-            <Link
-              to="/dashboard/$guildId/$moduleId"
-              params={{ guildId, moduleId: summary.id }}
-              search={{}}
-            >
+            <Link to="." search={{}}>
               {summary.name}
             </Link>
+          ) : isServerLevel(summary.id) ? (
+            // No category crumb: filing this under Utility is what made it read as a feature
+            // module rather than as how Proton itself is set up here.
+            'This server'
           ) : isCategory(summary.category) ? (
             CATEGORY_LABELS[summary.category]
           ) : null
@@ -74,7 +69,7 @@ export function ModuleHeader({
               <span className={`master-switch-state state-${state}`}>{shortReason(code)}</span>
             ) : null}
           </span>
-          <span className="master-switch-note">{SWITCH_NOTE}</span>
+          <span className="master-switch-note">{switchNote(summary.id)}</span>
         </span>
         <input
           type="checkbox"

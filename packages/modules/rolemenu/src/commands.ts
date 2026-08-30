@@ -152,8 +152,8 @@ async function seedReactions(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   if (manual.length > 0) {
     lines.push(
       `${manual.length} custom emoji need adding by hand — I only have their ids ` +
-        `(${manual.join(', ')}), not their names, and Discord's reaction endpoint needs the ` +
-        'name. React to the message once with each and members can use them normally.',
+        `(${manual.join(', ')}), not their names, and Discord needs an emoji's name to react ` +
+        'with it. React to the message once with each and members can use them normally.',
     );
   }
   if (failures.length > 0) lines.push(`I couldn't add: ${failures.join(' | ')}`);

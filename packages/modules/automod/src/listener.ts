@@ -95,7 +95,7 @@ export function createAutomodListener(deps: AutomodDeps): EventListener<AutomodC
       if (!alertChannelId) return;
 
       const lines = [
-        `Automod acted on <@${facts.authorId}> in <#${facts.channelId}>.`,
+        `Automod matched a message from <@${facts.authorId}> in <#${facts.channelId}>.`,
         describe(verdict.hit, verdict.also),
         outcome.deleted ? 'The message was deleted.' : 'The message was left up.',
         (outcome.action ? WHAT_THEY_GOT[outcome.action] : null) ??

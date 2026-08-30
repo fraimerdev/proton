@@ -1,6 +1,6 @@
 // /presets, not the barrel: the barrel reaches @napi-rs/canvas, a native addon that the
 // dashboard's bundler cannot load. Config is read in the browser.
-import { CARD_PRESETS } from '@proton/cards/presets';
+import { CARD_PRESETS, DEFAULT_CARD_ACCENT } from '@proton/cards/presets';
 import {
   interactiveKeys,
   liftLegacyMessage,
@@ -19,13 +19,13 @@ export const WELCOME_PLACEHOLDERS = ['{user}', '{username}', '{server}', '{membe
 export type WelcomePlaceholder = (typeof WELCOME_PLACEHOLDERS)[number];
 
 export const DEFAULT_WELCOME_MESSAGE =
-  'Welcome to {server}, {user}! You are member #{memberCount}.';
+  'Welcome to {server}, {user}. You are member #{memberCount}.';
 export const DEFAULT_GOODBYE_MESSAGE = '{username} has left {server}.';
 
 const ONLY_LINK_BUTTONS =
-  'a welcome or goodbye message can carry link buttons and nothing else: the welcome module has ' +
-  'no interaction listener, so a press on anything else would go unanswered. Make this a link ' +
-  'button, or post the interactive message with the Embeds module instead.';
+  'a welcome or goodbye message can carry link buttons and nothing else: Proton does not watch ' +
+  'for presses on a greeting, so any other button would do nothing when a member pressed it. ' +
+  'Make this a link button, or post the interactive message with the Embeds module instead.';
 
 export function liftLegacyGreeting(value: unknown): unknown {
   // A greeting stored before it could hold embeds is a bare string, and z.object would strip it to
@@ -115,7 +115,7 @@ const welcomeShape = {
     .int()
     .min(0)
     .max(0xffffff)
-    .default(0x5865f2)
+    .default(DEFAULT_CARD_ACCENT)
     .register(protonFields, { field: 'colour', label: 'Accent colour' }),
 
   cardBackgroundUrl: z

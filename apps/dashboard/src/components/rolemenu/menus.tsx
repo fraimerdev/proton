@@ -278,7 +278,11 @@ export function RolemenuEditor({
         );
       })}
 
-      {menus.length === 0 ? <p className="field-empty">No role menus.</p> : null}
+      {menus.length === 0 ? (
+        <p className="field-empty">
+          No role menus. Members have no way to pick their own roles until there is one.
+        </p>
+      ) : null}
 
       <button
         type="button"

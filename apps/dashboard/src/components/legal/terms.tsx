@@ -59,7 +59,7 @@ export function Terms(): ReactElement {
       <h2>Your responsibilities as a server admin</h2>
       <ul>
         <li>
-          <strong>Tell your members what you switched on.</strong> Message logging and Server Logs
+          <strong>Tell your members what you switched on.</strong> Message logging and Server logs
           process your members&rsquo; personal data. A server that enables them is processing that
           data as a controller and is responsible for telling its members. See the{' '}
           <a href="/privacy">privacy policy</a> for exactly what each stores and for how long.
@@ -99,6 +99,13 @@ export function Terms(): ReactElement {
         </li>
         <li>
           reverse engineer, resell, sublicense or re-host Proton, or present it as your own service;
+        </li>
+        <li>
+          set Proton’s name, avatar, banner or bio in your server so that it impersonates Discord,
+          Discord staff, another application, or a real person, or so that it carries sexual,
+          hateful or unlawful imagery. Proton wears what you give it, in front of everyone in your
+          server, and there is no age gate on a profile picture. We may revert branding and switch
+          the feature off for a server at our discretion;
         </li>
         <li>
           use Proton to store or distribute unlawful content, or to process personal data unlawfully

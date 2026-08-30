@@ -64,8 +64,8 @@ export class DefaultActionExecutor implements ActionExecutor {
     if (request.expiresAt && !this.#deps.scheduleReversal) {
       return this.#precheckFailure(
         'unsupported_expiry',
-        "I can't set that to lift on its own — this Proton deployment has nothing to schedule " +
-          'the reversal with. Nothing was changed.',
+        "I can't set that to lift on its own — Proton can't schedule the reversal here. " +
+          'Nothing was changed.',
         'the request carried an expiry but no reversal scheduler is bound',
         request,
       );

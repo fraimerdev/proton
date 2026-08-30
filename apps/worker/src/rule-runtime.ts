@@ -14,6 +14,7 @@ import type { GuildRuleStore } from '@proton/db';
 import { type ConnectionOptions, type Job, Queue, Worker } from 'bullmq';
 import { z } from 'zod';
 import { ConfigUnavailableError } from './config-provider.ts';
+import { logQueueConnectionErrors } from './job-errors.ts';
 import { factsFor } from './rule-facts.ts';
 import type { ConfigProvider } from './runtime.ts';
 
@@ -385,6 +386,8 @@ export class RuleCronScheduler implements RuleCronRegistrar {
         stack: error.stack,
       });
     });
+
+    logQueueConnectionErrors('cron rules', deps.logger, this.#queue, this.#worker);
   }
 
   async register(guildId: string): Promise<number> {

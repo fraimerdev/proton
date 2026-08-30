@@ -269,9 +269,9 @@ export function describeCapture(report: CaptureReport): string[] {
 
   if (report.source === 'rest') {
     lines.push(
-      'Warning: this snapshot was taken from Discord’s REST channel list, which omits hidden ' +
-        'channels entirely rather than marking them. The count above may therefore be missing ' +
-        'channels nobody can see are missing. Treat it as incomplete.',
+      'Warning: the channel list this snapshot came from leaves hidden channels out entirely ' +
+        'rather than marking them. The count above may therefore be missing channels, and ' +
+        'nothing in the snapshot can tell you which. Treat it as incomplete.',
     );
   }
 

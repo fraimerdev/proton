@@ -76,8 +76,8 @@ export function planRestore(input: RestoreInput): RestoreResult {
     return {
       refusal:
         `That snapshot is in format version ${snapshot.schemaVersion} and this build of Proton ` +
-        `reads version ${SNAPSHOT_VERSION}. Restoring it would mean guessing what its fields ` +
-        'mean, so Proton will not touch the server. Upgrade Proton, or take a fresh backup.',
+        `reads version ${SNAPSHOT_VERSION}. Restoring it would mean guessing what it holds, so ` +
+        'I have not touched this server. Upgrade Proton, or take a fresh backup.',
     };
   }
 
@@ -85,19 +85,18 @@ export function planRestore(input: RestoreInput): RestoreResult {
     return {
       refusal:
         `That snapshot was taken in server ${snapshot.guildId}, not this one ` +
-        `(${present.guildId}). Restoring another server's layout here would create its channels ` +
-        'and roles in your server, so Proton refuses.',
+        `(${present.guildId}). Restoring another server’s layout here would create its channels ` +
+        'and roles in your server, so I stopped.',
     };
   }
 
   if (present.source === 'rest') {
     return {
       refusal:
-        'Proton will not plan a restore from Discord’s REST channel list: it omits channels the ' +
-        'bot cannot view instead of marking them, so every hidden channel would look missing and ' +
-        'be recreated next to the one that already exists. The gateway’s view of the server is ' +
-        'the only one that can see them. This is a Proton deployment problem — whoever runs the ' +
-        'bot needs to bind readLayout to the gateway-derived guild layout.',
+        'I won’t plan this restore. The channel list I have for this server leaves out every ' +
+        'channel I cannot see instead of marking it, so any hidden channel would look deleted ' +
+        'and I would recreate it beside the one that is already there. Nothing has been ' +
+        'changed. This is a fault on my side, not a setting in this server.',
     };
   }
 

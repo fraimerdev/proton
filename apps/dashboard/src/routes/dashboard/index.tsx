@@ -69,14 +69,20 @@ function GuildPickerError({ error }: { error: Error }): ReactElement {
 function GuildCard({
   guild,
   invite,
+  presenceKnown,
 }: {
   guild: SessionGuild;
   invite: BotInvite | null;
+  presenceKnown: boolean;
 }): ReactElement {
   const icon = guildIconUrl(guild, 256);
 
+  // Only a checked absence earns the grey treatment and the words that go with it. When Discord
+  // could not be asked, the card stays ordinary and the banner above the grid carries the doubt.
+  const absent = presenceKnown && !guild.present;
+
   return (
-    <li className="server-card" data-present={guild.present ? undefined : 'false'}>
+    <li className="server-card" data-present={absent ? 'false' : undefined}>
       {/* The card's colour is the server's own icon, blown up and blurred under the whole of it.
           Two <img> for one src: the browser decodes it once and the second costs only a paint, and
           the alternative — one element blurred through ::before — cannot blur a background-image. */}
@@ -121,14 +127,20 @@ function GuildCard({
             href={botInviteUrl(invite, guild.id)}
             target="_blank"
             rel="noreferrer noopener"
-            aria-label={`Proton is not in this server — invite it to ${guild.name}`}
+            aria-label={
+              absent
+                ? `Proton is not in this server — invite it to ${guild.name}`
+                : `Invite Proton to ${guild.name}`
+            }
           >
             Invite
           </a>
         ) : (
           // The api could not say which permissions to ask Discord for. A button that builds the
           // wrong invite is worse than a card that says why there is no button.
-          <span className="server-unavailable">Proton is not in this server</span>
+          <span className="server-unavailable">
+            {absent ? 'Proton is not in this server' : 'Proton could not check this server'}
+          </span>
         )}
       </span>
     </li>
@@ -136,7 +148,7 @@ function GuildCard({
 }
 
 function GuildPicker(): ReactElement {
-  const { guilds, invite } = useSuspenseQuery(sessionQuery()).data;
+  const { guilds, invite, presenceKnown } = useSuspenseQuery(sessionQuery()).data;
 
   return (
     <div className="picker-page">
@@ -152,6 +164,16 @@ function GuildPicker(): ReactElement {
             Pick a server to configure, or invite Proton to one it is not in yet.
           </p>
         </div>
+
+        {presenceKnown ? null : (
+          <div className="alert-banner" role="status">
+            <Icon name="warning-circle" weight="fill" />
+            <span className="alert-banner-text">
+              Proton could not check which of these servers it is in, so none of them offer Manage.
+              Reload the page to try again.
+            </span>
+          </div>
+        )}
 
         {guilds.length === 0 ? (
           <div className="card">
@@ -169,7 +191,12 @@ function GuildPicker(): ReactElement {
         ) : (
           <ul className="server-grid">
             {guilds.map((guild) => (
-              <GuildCard key={guild.id} guild={guild} invite={invite} />
+              <GuildCard
+                key={guild.id}
+                guild={guild}
+                invite={invite}
+                presenceKnown={presenceKnown}
+              />
             ))}
           </ul>
         )}

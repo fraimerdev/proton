@@ -31,6 +31,7 @@ import { type CountersConfig, countersDefaultConfig } from '../src/config.ts';
 import type { CountersDeps } from '../src/deps.ts';
 import { reconcileSchedule } from '../src/listener.ts';
 import { createRefreshHandler } from '../src/refresh.ts';
+import type { CounterChannelStore, OwnedChannel } from '../src/store.ts';
 
 export const GUILD = '900000000000000001';
 export const OWNER = '200000000000000001';
@@ -39,6 +40,7 @@ export const ADMIN = '100000000000000001';
 export const CHANNEL = '500000000000000001';
 export const COUNTER_A = '500000000000000002';
 export const COUNTER_B = '500000000000000003';
+export const CREATED = '500000000000000004';
 export const INTERACTION = '600000000000000001';
 
 export const EVERYONE_ROLE = GUILD;
@@ -116,9 +118,52 @@ class FakeRest implements RestProxyClient {
   readonly calls: RestRequestOptions[] = [];
   response: RestResponse = { status: 200, body: {} };
 
+  createResponse: RestResponse = { status: 201, body: { id: CREATED } };
+  overwriteResponse: RestResponse | null = null;
+
   async request(options: RestRequestOptions): Promise<RestResponse> {
     this.calls.push(options);
+
+    if (options.method === 'POST' && options.path.endsWith('/channels')) return this.createResponse;
+
+    if (options.method === 'PUT' && options.path.includes('/permissions/')) {
+      return this.overwriteResponse ?? this.response;
+    }
+
     return this.response;
+  }
+}
+
+export class MemoryCounterChannelStore implements CounterChannelStore {
+  readonly rows = new Map<string, string>();
+  failOn: 'list' | 'attach' | null = null;
+
+  async list(_guildId: string): Promise<OwnedChannel[]> {
+    if (this.failOn === 'list') throw new Error('the counter channel table is unreachable');
+
+    return [...this.rows].map(([counterId, channelId]) => ({ counterId, channelId }));
+  }
+
+  async attach(_guildId: string, counterId: string, channelId: string): Promise<void> {
+    if (this.failOn === 'attach') throw new Error('the counter channel table is unreachable');
+
+    this.rows.set(counterId, channelId);
+  }
+
+  async forgetAllBut(_guildId: string, counterIds: readonly string[]): Promise<OwnedChannel[]> {
+    if (this.failOn === 'list') throw new Error('the counter channel table is unreachable');
+
+    const keep = new Set(counterIds);
+    const dropped: OwnedChannel[] = [];
+
+    for (const [counterId, channelId] of this.rows) {
+      if (keep.has(counterId)) continue;
+
+      dropped.push({ counterId, channelId });
+      this.rows.delete(counterId);
+    }
+
+    return dropped;
   }
 }
 
@@ -174,10 +219,14 @@ export interface Harness {
   state: GuildState;
   recorder: MemoryRecorder;
   scheduler: FakeScheduler;
+  owned: MemoryCounterChannelStore;
+  stateStore: GuildStateStore;
   logs: Array<{ level: string; message: string }>;
 
   calls(): RestRequestOptions[];
   patches(): RestRequestOptions[];
+  creates(): RestRequestOptions[];
+  overwrites(): RestRequestOptions[];
   replyContent(): string | null;
 
   run(options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
@@ -189,6 +238,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   const state = guildState(options.botPermissions ?? BOT_PERMISSIONS);
 
   const rest = new FakeRest();
+  const owned = new MemoryCounterChannelStore();
   const recorder = new MemoryRecorder();
   const dedupe = new MemoryDedupe();
   const scheduler = new FakeScheduler();
@@ -230,7 +280,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   });
 
   const depsOf = (overrides: Partial<RunOverrides>): CountersDeps =>
-    overrides.deps ?? options.deps ?? { guildState: store };
+    overrides.deps ?? options.deps ?? { guildState: store, channels: owned };
 
   const configOf = (overrides: Partial<RunOverrides>): CountersConfig => ({
     ...countersDefaultConfig,
@@ -246,12 +296,20 @@ export function harness(options: HarnessOptions = {}): Harness {
     state,
     recorder,
     scheduler,
+    owned,
+    stateStore: store,
     logs,
 
     calls: () => rest.calls,
 
     patches: () =>
       rest.calls.filter((call) => call.method === 'PATCH' && call.path.startsWith('/channels/')),
+
+    creates: () =>
+      rest.calls.filter((call) => call.method === 'POST' && call.path.endsWith('/channels')),
+
+    overwrites: () =>
+      rest.calls.filter((call) => call.method === 'PUT' && call.path.includes('/permissions/')),
 
     replyContent: () => {
       const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));

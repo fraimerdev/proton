@@ -3,13 +3,20 @@ import { type CountersConfig, MODULE_ID } from './config.ts';
 import type { CounterEdit } from './render.ts';
 
 export const NOT_WIRED =
-  "I can't refresh this server's counter channels because Proton isn't fully wired up in this " +
-  'deployment. Nothing was renamed. The Proton logs name the exact missing piece.';
+  'I can’t refresh this server’s counter channels, so the member, role and channel counts have ' +
+  'nowhere to come from. Nothing was renamed. This is a fault on my side, not a setting in this ' +
+  'server.';
 
 export const NO_STATE =
   "I don't have this server's channel list cached yet, so I can't tell which counters are " +
   'already showing the right number. Nothing was renamed — this clears itself the moment ' +
   'Proton finishes connecting to Discord.';
+
+export const NO_STORE =
+  'I can’t make counter channels in this server: this deployment has nowhere to record which ' +
+  'channel belongs to which counter, and making one I could never find again would leave a ' +
+  'stray channel behind every ten minutes. Counters pointed at a channel you made yourself ' +
+  'still refresh. This is a fault on my side, not a setting in this server.';
 
 export async function reply(
   ctx: CommandContext<CountersConfig>,

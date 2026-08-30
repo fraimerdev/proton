@@ -31,13 +31,12 @@ const AUTOCOMPLETED_SUBCOMMAND = 'post';
 const FOCUSED_OPTION = 'name';
 
 const SWITCHED_OFF =
-  'The embed builder is switched off in this server, so nothing was posted. An admin can turn ' +
+  'The Messages module is switched off in this server, so nothing was posted. An admin can turn ' +
   'it back on from the Proton dashboard.';
 
 const NOT_WIRED =
-  "I can't finish that: this Proton deployment isn't fully set up, so I have no way to tell you " +
-  'whether your embed went out. Nothing was posted. A server admin should check the Proton ' +
-  'logs — the exact missing piece is named there.';
+  'I can’t finish that: I would have no way to tell you whether your embed went out. Nothing ' +
+  'was posted. This is a fault on my side, not a setting in this server.';
 
 export type ModalOutcome =
   | { action: 'ignored'; reason: string }

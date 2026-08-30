@@ -1,21 +1,26 @@
 import type {
+  AppealLinkClaims,
+  BlockedMemberList,
+  BlockedMemberQuery,
   CaseQuery,
   CaseSearchResult,
   GuildOverview,
+  GuildPresence,
   LeaderboardQuery,
   LeaderboardResult,
+  LiftBlockResult,
   ModuleConfigView,
-  ModuleDescriptors,
   ModuleIndex,
   ModuleUpdateResult,
   VerificationRequestResult,
 } from '@proton/core';
 import {
+  blockedMemberListSchema,
   botInviteSchema,
   guildOverviewSchema,
   guildPresenceSchema,
+  liftBlockResultSchema,
   moduleConfigViewSchema,
-  moduleDescriptorsSchema,
   moduleIndexSchema,
   moduleUpdateResultSchema,
   verificationRequestResultSchema,
@@ -98,13 +103,11 @@ export class ApiClient {
     return permissions;
   }
 
-  async guildPresence(guildIds: readonly string[]): Promise<string[]> {
-    const { present } = await this.#parsed('/guilds/presence', guildPresenceSchema, {
+  guildPresence(guildIds: readonly string[]): Promise<GuildPresence> {
+    return this.#parsed('/guilds/presence', guildPresenceSchema, {
       method: 'POST',
       body: JSON.stringify({ ids: guildIds }),
     });
-
-    return present;
   }
 
   listModules(guildId: string): Promise<ModuleIndex> {
@@ -113,13 +116,6 @@ export class ApiClient {
 
   getModule(guildId: string, moduleId: string): Promise<ModuleConfigView> {
     return this.#parsed(`/guilds/${guildId}/modules/${moduleId}`, moduleConfigViewSchema);
-  }
-
-  getModuleDescriptors(guildId: string, moduleId: string): Promise<ModuleDescriptors> {
-    return this.#parsed(
-      `/guilds/${guildId}/modules/${moduleId}/descriptors`,
-      moduleDescriptorsSchema,
-    );
   }
 
   recordVerificationPass(
@@ -134,6 +130,42 @@ export class ApiClient {
 
   searchCases(guildId: string, query: CaseQuery): Promise<CaseSearchResult> {
     return this.#request(`/guilds/${guildId}/cases?${queryString(query)}`);
+  }
+
+  getAppealForm(claims: AppealLinkClaims): Promise<{ guildId: string; view: unknown }> {
+    return this.#request(`/guilds/${claims.guildId}/appeals/form`, {
+      method: 'POST',
+      body: JSON.stringify({ claims }),
+    });
+  }
+
+  submitAppeal(
+    claims: AppealLinkClaims,
+    answers: Record<string, string>,
+  ): Promise<{ number: number; requestId: string }> {
+    return this.#request(`/guilds/${claims.guildId}/appeals/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ claims, answers }),
+    });
+  }
+
+  searchBlockedMembers(guildId: string, query: BlockedMemberQuery): Promise<BlockedMemberList> {
+    return this.#parsed(
+      `/guilds/${guildId}/blocked-members?${queryString(query)}`,
+      blockedMemberListSchema,
+    );
+  }
+
+  liftBlockedMember(
+    guildId: string,
+    userId: string,
+    body: { actorId: string; source: string; liftReason: string; ipHash?: string | undefined },
+  ): Promise<LiftBlockResult> {
+    return this.#parsed(
+      `/guilds/${guildId}/blocked-members/${userId}/lift`,
+      liftBlockResultSchema,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
   }
 
   searchTags(guildId: string, query: TagQuery): Promise<TagSearchResult> {
@@ -153,6 +185,36 @@ export class ApiClient {
   cardPreview(guildId: string, query: Record<string, unknown>): Promise<Response> {
     return fetch(`${this.#baseUrl}/guilds/${guildId}/cards/preview?${queryString(query)}`, {
       headers: { 'x-proton-secret': this.#secret },
+    });
+  }
+
+  brandingAsset(guildId: string, kind: string): Promise<Response> {
+    return fetch(`${this.#baseUrl}/guilds/${guildId}/branding/${kind}`, {
+      headers: { 'x-proton-secret': this.#secret },
+    });
+  }
+
+  uploadBrandingAsset(
+    guildId: string,
+    kind: string,
+    bytes: ArrayBuffer,
+    actorId: string,
+  ): Promise<Response> {
+    return fetch(`${this.#baseUrl}/guilds/${guildId}/branding/${kind}`, {
+      method: 'PUT',
+      headers: {
+        'x-proton-secret': this.#secret,
+        'x-proton-actor': actorId,
+        'content-type': 'application/octet-stream',
+      },
+      body: bytes,
+    });
+  }
+
+  clearBrandingAsset(guildId: string, kind: string, actorId: string): Promise<Response> {
+    return fetch(`${this.#baseUrl}/guilds/${guildId}/branding/${kind}`, {
+      method: 'DELETE',
+      headers: { 'x-proton-secret': this.#secret, 'x-proton-actor': actorId },
     });
   }
 

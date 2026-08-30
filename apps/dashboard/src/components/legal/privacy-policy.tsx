@@ -26,11 +26,24 @@ export function PrivacyPolicy(): ReactElement {
           on, and their configuration. Kept while Proton is in the server.
         </li>
         <li>
+          <strong>Branding images</strong> — where a server sets Proton’s avatar or banner for that
+          server, Proton stores the image file an admin uploaded, its type and size, and which admin
+          uploaded it. Kept until the image is replaced, cleared, or Proton leaves the server, and
+          used for one purpose: sending it to Discord as Proton’s profile picture in that server.
+        </li>
+        <li>
           <strong>Moderation cases</strong> — one record per action Proton takes: the action, the
           moderator’s user id, the target’s user id, the reason typed by the moderator, and when it
           happened. This is the moderation history the <code>Cases</code> page shows. It is kept
           while Proton is in the server, because a moderation log that expires is not a moderation
           log.
+        </li>
+        <li>
+          <strong>Blocked members</strong> — when a security module is set to add an account to a
+          server’s blocked list, Proton stores that account’s user id, the reason, which module
+          added it, and the ids of the channel and message that caused it. Never the message text.
+          It is kept until a moderator lifts it or Proton leaves the server, and is read for one
+          purpose: refusing that account at the verification gate.
         </li>
         <li>
           <strong>Dashboard audit trail</strong> — every settings change made here, with who made
@@ -69,8 +82,9 @@ export function PrivacyPolicy(): ReactElement {
         <li>when it happened.</li>
       </ul>
       <p>
-        Attachments, images and voice are never stored. Channels listed as ignored in the module’s
-        settings are never recorded at all.
+        Attachments, images and voice from logged messages are never stored — the only images Proton
+        keeps are the branding pictures an admin uploads for it, described above. Channels listed as
+        ignored in the module’s settings are never recorded at all.
       </p>
       <p>
         <strong>These records are deleted after {MESSAGE_LOG_RETENTION_DAYS} days.</strong> They are
@@ -101,7 +115,7 @@ export function PrivacyPolicy(): ReactElement {
 
       <h2>Server logs posted into Discord</h2>
       <p>
-        Server Logs is a separate module, also{' '}
+        Server logs is a separate module, also{' '}
         <strong>off unless a server admin turns it on</strong>. When it is on, Proton writes an
         embed into a log channel that the admin chooses. Those embeds can contain personal data —
         message text, nicknames, user ids, and the name of whoever performed an action.
@@ -118,7 +132,11 @@ export function PrivacyPolicy(): ReactElement {
       <h2>What Proton never does</h2>
       <ul>
         <li>No advertising, profiling, or selling of data.</li>
-        <li>No message content is stored unless message logging is switched on for that server.</li>
+        <li>
+          No message content is stored unless a server switches it on — either message logging, or
+          the Honeypot module’s “Quote the message”, which copies the one message that sprang a trap
+          into that server’s own incident log. Both are off by default.
+        </li>
         <li>
           The browser never talks to Discord on your behalf — every Discord call is made by Proton’s
           own services, so a page you visit cannot act as you.
@@ -135,7 +153,11 @@ export function PrivacyPolicy(): ReactElement {
         for it.
       </p>
 
-      <p>Requests go to the operator of this Proton instance.</p>
+      <p>
+        Requests go to the operator of this Proton instance, at{' '}
+        <a href="mailto:hello@fraimer.dev">hello@fraimer.dev</a>, and are answered within 30 days.
+        Include your Discord user id, and the server’s id where the request concerns one server.
+      </p>
 
       <p>
         <a href="/">Back to Proton</a>

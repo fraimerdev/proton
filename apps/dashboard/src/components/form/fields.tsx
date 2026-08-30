@@ -191,6 +191,25 @@ export function StringFieldInput({
   const id = useId();
   const controlId = `${id}-control`;
 
+  const held = typeof value === 'string' ? value : '';
+
+  const control = (
+    <input
+      id={controlId}
+      type="text"
+      value={held}
+      minLength={field.minLength}
+      maxLength={field.maxLength}
+      required={!field.optional}
+      aria-describedby={describedBy(field, id)}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+
+  // Wrapped only when there is a counter to carry: .field is a two-column grid, so an unconditional
+  // wrapper would move every string field in the product into a box it did not have before.
+  const counted = field.maxLength !== undefined && param === undefined;
+
   return (
     <Shell
       descriptor={field}
@@ -200,16 +219,19 @@ export function StringFieldInput({
       className="field-string"
       hidden={hidden}
     >
-      <input
-        id={controlId}
-        type="text"
-        value={typeof value === 'string' ? value : ''}
-        minLength={field.minLength}
-        maxLength={field.maxLength}
-        required={!field.optional}
-        aria-describedby={describedBy(field, id)}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      {counted ? (
+        <span className="field-counted">
+          {control}
+          {/* Counted in UTF-16 units, matching both maxLength above and Zod's .max(), because
+              Discord documents "32 characters" without saying which unit it counts — and the
+              stricter reading is the one that never earns a 400. */}
+          <span className="field-counter" aria-hidden="true">
+            {held.length}/{field.maxLength}
+          </span>
+        </span>
+      ) : (
+        control
+      )}
     </Shell>
   );
 }
@@ -587,5 +609,88 @@ export function UnsupportedFieldInput({ descriptor, hidden }: FieldProps): React
       Cannot render “{descriptor.label}”: unsupported field type “
       {(descriptor as { kind: string }).kind}”. This is a bug in Proton, not in your configuration.
     </div>
+  );
+}
+
+const SECONDS_PARTS = [
+  { key: 'days', label: 'days', per: 86_400 },
+  { key: 'hours', label: 'hrs', per: 3_600 },
+  { key: 'minutes', label: 'min', per: 60 },
+  { key: 'seconds', label: 'sec', per: 1 },
+] as const;
+
+function splitSeconds(total: number): Record<string, number> {
+  let left = Math.max(0, Math.trunc(total));
+
+  const parts: Record<string, number> = {};
+  for (const part of SECONDS_PARTS) {
+    parts[part.key] = Math.floor(left / part.per);
+    left -= (parts[part.key] as number) * part.per;
+  }
+
+  return parts;
+}
+
+export function SecondsFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+}: FieldProps): ReactElement {
+  const field = descriptor as NumberField;
+  const id = useId();
+  const errorId = `${id}-error`;
+
+  const total = typeof value === 'number' ? value : 0;
+  const parts = splitSeconds(total);
+
+  const max = field.max ?? Number.MAX_SAFE_INTEGER;
+  const outOfRange = total > max || total < (field.min ?? 0);
+
+  const set = (key: string, next: number): void => {
+    const rebuilt = SECONDS_PARTS.reduce(
+      (sum, part) => sum + (part.key === key ? next : (parts[part.key] as number)) * part.per,
+      0,
+    );
+
+    onChange(Math.min(max, Math.max(field.min ?? 0, rebuilt)));
+  };
+
+  return (
+    <Shell
+      descriptor={field}
+      param={param}
+      describedBy={id}
+      className="field-seconds"
+      hidden={hidden}
+    >
+      <span className="field-control">
+        {/* One grouped control rather than four labelled rows: the spinners are one setting, and
+            each carries the field's name so it is not announced as a bare number. */}
+        <fieldset className="seconds">
+          <legend className="sr-only">{field.label}</legend>
+          {SECONDS_PARTS.map((part) => (
+            <span className="seconds-part" key={part.key}>
+              <input
+                type="number"
+                min={0}
+                aria-label={`${field.label}, ${part.label}`}
+                aria-invalid={outOfRange}
+                value={String(parts[part.key] ?? 0)}
+                onChange={(e) => set(part.key, e.target.value === '' ? 0 : e.target.valueAsNumber)}
+              />
+              <span className="seconds-unit">{part.label}</span>
+            </span>
+          ))}
+        </fieldset>
+
+        {outOfRange ? (
+          <span className="field-error" id={errorId} role="alert">
+            That comes to {total} seconds, and this setting allows at most {max}.
+          </span>
+        ) : null}
+      </span>
+    </Shell>
   );
 }

@@ -1,118 +1,193 @@
-import { type ReactElement, useEffect, useState } from 'react';
+import {
+  CARD_HEIGHT,
+  CARD_PRESETS,
+  CARD_WIDTH,
+  Card,
+  type CardDescriptorInput,
+  type CardImages,
+  type CardPreset,
+  cardDescriptorSchema,
+  cardImageHostAllowed,
+  PREVIEW_SAMPLE,
+  toHexColour,
+} from '@proton/cards/design';
+import { useQuery } from '@tanstack/react-query';
+import { type ReactElement, type RefObject, useEffect, useRef, useState } from 'react';
+import { sessionQuery } from '../../lib/queries.ts';
 
-export type PreviewKind = 'rank' | 'welcome' | 'goodbye';
+// The card is authored at its real 1100x370 and scaled down to whatever the settings column gives
+// it, rather than re-laid-out at panel width: this is the same component the bot renders through
+// satori, so anything responsive here would be a picture of a card Discord never receives.
+const SSR_SCALE = 0.5;
 
-export interface CardPreviewProps {
-  kind: PreviewKind;
-  config: Record<string, unknown>;
-  guildId: string;
-
-  presetKey: string;
-
-  toggles: Readonly<Record<string, string>>;
-}
-
-// Long enough that dragging a colour picker does not queue a render per pixel, short enough that
-// the picture still feels attached to the control that changed it.
-const DEBOUNCE_MS = 400;
-
-function flag(value: unknown): string | null {
-  return typeof value === 'boolean' ? String(value) : null;
-}
-
-function queryFor(props: CardPreviewProps): string {
-  const params = new URLSearchParams({ kind: props.kind });
-
-  const preset = props.config[props.presetKey];
-  if (typeof preset === 'string') params.set('preset', preset);
-
-  const accent = props.config.cardAccent;
-  if (typeof accent === 'number') params.set('accent', String(accent));
-
-  const background = props.config.cardBackgroundUrl;
-  if (typeof background === 'string' && background.length > 0) params.set('background', background);
-
-  for (const [configKey, param] of Object.entries(props.toggles)) {
-    const value = flag(props.config[configKey]);
-    if (value !== null) params.set(param, value);
-  }
-
-  return params.toString();
-}
-
-export function CardPreview(props: CardPreviewProps): ReactElement {
-  const guildId = props.guildId;
-  const query = queryFor(props);
-
-  const [src, setSrc] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+function useFittedScale(): [RefObject<HTMLDivElement | null>, number] {
+  const frame = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(SSR_SCALE);
 
   useEffect(() => {
-    if (!guildId) return;
+    const node = frame.current;
+    if (!node) return;
 
-    const abort = new AbortController();
-    let objectUrl: string | null = null;
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      if (width > 0) setScale(width / CARD_WIDTH);
+    });
 
-    const timer = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/guilds/${guildId}/card-preview?${query}`, {
-          signal: abort.signal,
-        });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
-        if (!response.ok) {
-          const body = (await response.text()).trim();
-          setSrc(null);
+  return [frame, scale];
+}
 
-          // Only the route's own sentences are copy. Anything else — a proxy's HTML error page, an
-          // empty body — is a machine string, and printing it under the preview says nothing.
-          setFailure(
-            body.length > 0 && body.length < 300 && !body.startsWith('<')
-              ? body
-              : 'Proton could not render this card. The settings above are saved either way.',
-          );
-          return;
-        }
+// The bot fetches card images through HttpImageFetcher and hands satori a data: URI, so a host it
+// refuses or a dead URL reaches the renderer as "no image" and the card falls back. A browser would
+// instead paint a broken <img> and, worse, the scrim and lifted ink that come with having a
+// background at all — so the preview applies the same host rule and waits for the load. It still
+// cannot see the byte cap or the content-type allowlist: an image too big or in the wrong format
+// shows here and is dropped from the PNG.
+function useLoadedImage(url: string | undefined): string | undefined {
+  const [loaded, setLoaded] = useState<string | undefined>(undefined);
+  const allowed = url !== undefined && cardImageHostAllowed(url) ? url : undefined;
 
-        objectUrl = URL.createObjectURL(await response.blob());
-        setFailure(null);
-        setSrc(objectUrl);
-      } catch {
-        if (abort.signal.aborted) return;
-        setSrc(null);
-        setFailure(
-          'Proton could not reach the preview renderer. The settings above are saved either way.',
-        );
-      }
-    }, DEBOUNCE_MS);
+  useEffect(() => {
+    setLoaded(undefined);
+    if (allowed === undefined) return;
+
+    const probe = new Image();
+    probe.onload = () => setLoaded(allowed);
+    probe.src = allowed;
 
     return () => {
-      clearTimeout(timer);
-      abort.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      probe.onload = null;
     };
-  }, [guildId, query]);
+  }, [allowed]);
+
+  return loaded;
+}
+
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function flag(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
+}
+
+function presetOf(value: unknown): CardPreset | undefined {
+  return CARD_PRESETS.find((preset) => preset === value);
+}
+
+function useCardImages(config: Record<string, unknown>, avatarUrl: string | undefined): CardImages {
+  const avatarSrc = useLoadedImage(avatarUrl);
+  const backgroundSrc = useLoadedImage(text(config.cardBackgroundUrl));
+
+  return {
+    ...(avatarSrc === undefined ? {} : { avatarSrc }),
+    ...(backgroundSrc === undefined ? {} : { backgroundSrc }),
+  };
+}
+
+function shared(config: Record<string, unknown>, presetKey: string) {
+  const preset = presetOf(config[presetKey]);
+  const accent = config.cardAccent;
+  const background = text(config.cardBackgroundUrl);
+
+  return {
+    ...(preset ? { preset } : {}),
+    ...(typeof accent === 'number' ? { accent: toHexColour(accent) } : {}),
+    ...(background ? { backgroundUrl: background } : {}),
+  };
+}
+
+function rankDescriptor(config: Record<string, unknown>, displayName: string): CardDescriptorInput {
+  return {
+    kind: 'rank',
+    displayName,
+    ...shared(config, 'cardPreset'),
+    level: PREVIEW_SAMPLE.level,
+    rank: PREVIEW_SAMPLE.rank,
+    totalXp: PREVIEW_SAMPLE.totalXp,
+    xpIntoLevel: PREVIEW_SAMPLE.xpIntoLevel,
+    xpForNextLevel: PREVIEW_SAMPLE.xpForNextLevel,
+    showRank: flag(config.cardShowRank, true),
+    showPercent: flag(config.cardShowPercent, true),
+    showTotalXp: flag(config.cardShowTotalXp, true),
+  };
+}
+
+function greetingDescriptor(
+  kind: 'welcome' | 'goodbye',
+  config: Record<string, unknown>,
+  displayName: string,
+  guildName: string,
+): CardDescriptorInput {
+  return {
+    kind,
+    displayName,
+    guildName,
+    ...shared(config, 'preset'),
+    memberCount: PREVIEW_SAMPLE.memberCount,
+    showMemberCount: flag(config.cardShowMemberCount, true),
+  };
+}
+
+interface CardPreviewProps {
+  descriptor: CardDescriptorInput;
+  images?: CardImages;
+}
+
+function CardPreview({ descriptor, images }: CardPreviewProps): ReactElement {
+  const [frame, scale] = useFittedScale();
+  const parsed = cardDescriptorSchema.safeParse(descriptor);
 
   return (
     <div className="card-preview">
-      {/* A failed render is not a render still in progress. Both failure paths leave src null, so
-          the pending frame used to sit under the coral line forever, saying the opposite of it. */}
-      {failure !== null ? (
-        <div className="card-preview-frame card-preview-failed">No preview</div>
-      ) : src === null ? (
-        <div className="card-preview-frame card-preview-pending">Rendering…</div>
-      ) : (
-        <img alt="Preview of the card Proton will send" className="card-preview-image" src={src} />
-      )}
+      <div
+        className={parsed.success ? 'card-preview-frame' : 'card-preview-frame card-preview-failed'}
+        ref={frame}
+        style={{ height: Math.round(CARD_HEIGHT * scale) }}
+      >
+        {parsed.success ? (
+          <div className="card-preview-card" style={{ transform: `scale(${scale})` }}>
+            <Card card={parsed.data} {...(images ? { images } : {})} />
+          </div>
+        ) : (
+          'No preview'
+        )}
+      </div>
 
-      {failure === null ? (
+      {parsed.success ? (
         <p className="card-preview-note">
-          Rendered by Proton itself, with your own name and avatar as the sample.
+          The card itself, redrawn as you change these settings — the same component Proton
+          rasterises for Discord, with your own name and avatar standing in.
         </p>
       ) : (
-        <p className="card-preview-error">{failure}</p>
+        <p className="card-preview-error">
+          These settings do not describe a card Proton can draw. They are saved either way.
+        </p>
       )}
     </div>
   );
+}
+
+// The signed-in member stands in for whoever the card is really about, so the preview is a picture
+// of this server rather than of placeholder data. The avatar loads straight from Discord's CDN,
+// the same way the app shell already draws it.
+function useViewer(guildId: string): {
+  avatarUrl: string | undefined;
+  name: string;
+  guildName: string;
+} {
+  const session = useQuery(sessionQuery());
+  const user = session.data?.user;
+  const guild = session.data?.guilds.find((candidate) => candidate.id === guildId);
+
+  return {
+    avatarUrl: user?.image ?? undefined,
+    name: user?.name ?? 'Member',
+    guildName: guild?.name ?? PREVIEW_SAMPLE.guildName,
+  };
 }
 
 export function GreetingCardPreview({
@@ -122,7 +197,9 @@ export function GreetingCardPreview({
   config: Record<string, unknown>;
   guildId: string;
 }): ReactElement {
-  const [kind, setKind] = useState<PreviewKind>('welcome');
+  const [kind, setKind] = useState<'welcome' | 'goodbye'>('welcome');
+  const viewer = useViewer(guildId);
+  const images = useCardImages(config, viewer.avatarUrl);
 
   return (
     <div className="card-preview-switcher">
@@ -142,12 +219,22 @@ export function GreetingCardPreview({
       </fieldset>
 
       <CardPreview
-        config={config}
-        guildId={guildId}
-        kind={kind}
-        presetKey="preset"
-        toggles={{ cardShowMemberCount: 'showMemberCount' }}
+        descriptor={greetingDescriptor(kind, config, viewer.name, viewer.guildName)}
+        images={images}
       />
     </div>
   );
+}
+
+export function RankCardPreview({
+  config,
+  guildId,
+}: {
+  config: Record<string, unknown>;
+  guildId: string;
+}): ReactElement {
+  const viewer = useViewer(guildId);
+  const images = useCardImages(config, viewer.avatarUrl);
+
+  return <CardPreview descriptor={rankDescriptor(config, viewer.name)} images={images} />;
 }

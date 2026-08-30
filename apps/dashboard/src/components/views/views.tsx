@@ -1,5 +1,6 @@
 import {
   ACTION_KINDS,
+  type BlockedMember,
   CASE_PAGE_SIZE_MAX,
   type CaseQuery,
   type CaseQueryInput,
@@ -16,6 +17,7 @@ import type {
   TicketSortField,
   TicketSummary,
 } from '@proton/module-tickets/query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   type InputHTMLAttributes,
   type ReactElement,
@@ -24,15 +26,17 @@ import {
   useRef,
   useState,
 } from 'react';
+import { ConfirmDialog } from '../shell/confirm.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { actionLook, toneClass } from '../shell/module-meta.ts';
 import { DataTable, dataColumnHelper, lastPageOf, Pager } from '../table/data-table.tsx';
 import type {
+  BlockedMembersProps,
   CaseBrowserProps,
   LeaderboardProps,
   TagBrowserProps,
   TicketBrowserProps,
-} from './registry.ts';
+} from './props.ts';
 
 type DebouncedProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> & {
   label: string;
@@ -166,7 +170,7 @@ const caseColumns = caseColumn.columns([
     header: 'State',
 
     cell: ({ row }) => {
-      if (row.original.dryRun) return <span className="chip chip-warn">Rehearsal</span>;
+      if (row.original.dryRun) return <span className="chip chip-warn">rehearsal</span>;
       if (row.original.revertedAt)
         return (
           <span className="chip chip-ok">
@@ -186,8 +190,8 @@ const caseColumns = caseColumn.columns([
 ]);
 
 // The column prints actionLook(kind).verb; the filter that searches it offered add_role and
-// delete_message. Same source, sorted by what the admin reads, minus the three kinds the ledger
-// never records — offering a filter that can only ever return nothing is worse than omitting it.
+// delete_message. Same source, sorted by what the admin reads, minus the kinds the ledger never
+// records — offering a filter that can only ever return nothing is worse than omitting it.
 const ACTION_OPTIONS: readonly { kind: string; label: string }[] = ACTION_KINDS.filter(
   (kind) => !NEVER_RECORDED_KINDS.has(kind),
 )
@@ -897,6 +901,175 @@ export function TicketBrowserView({
         page={search.page}
         lastPage={lastPage}
         onPage={(page) => setFilters({ page })}
+      >
+        <span className="status">
+          Page {search.page} of {lastPage}
+        </span>
+      </Pager>
+    </div>
+  );
+}
+
+// The mutation lives beside the row rather than on the page: the table is what knows which member
+// a press belongs to, and hoisting it would mean threading a callback through every column.
+function useLiftBlockedMember(guildId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { userId: string }) =>
+      // Imported lazily: server/modules.ts opens better-auth's database at module scope.
+      (await import('../../server/modules.ts')).liftBlockedMember({
+        data: { guildId, userId: input.userId, liftReason: 'Lifted from the dashboard.' },
+      }),
+
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['guild', guildId, 'view', 'blocked'] }),
+  });
+}
+
+const blockedColumn = dataColumnHelper<BlockedMember>();
+
+function LiftCell({ row }: { row: BlockedMember }): ReactElement {
+  const [asking, setAsking] = useState(false);
+  const lift = useLiftBlockedMember(row.guildId);
+
+  if (row.liftedAt !== null) {
+    return (
+      <span className="chip" title={row.liftReason ?? undefined}>
+        Lifted
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="button button-quiet"
+        onClick={() => setAsking(true)}
+        disabled={lift.isPending}
+      >
+        Lift
+      </button>
+
+      {asking ? (
+        <ConfirmDialog
+          title="Lift this block?"
+          cancelLabel="Leave it in place"
+          confirmLabel="Lift the block"
+          tone="quiet"
+          onCancel={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            lift.mutate({ userId: row.userId });
+          }}
+        >
+          {row.userId} will be able to verify in this server again. This does not unban them — if
+          they were also banned, that is a separate lift in Discord.
+        </ConfirmDialog>
+      ) : null}
+    </>
+  );
+}
+
+const blockedColumns = blockedColumn.columns([
+  blockedColumn.accessor('userId', {
+    id: 'userId',
+    header: 'Member',
+    cell: (c) => <span className="id">{c.getValue()}</span>,
+  }),
+  blockedColumn.accessor('reason', {
+    id: 'reason',
+    header: 'Why',
+    cell: (c) => {
+      const reason = c.getValue();
+      return (
+        <span className="blocklist-reason" title={reason}>
+          {reason.length > 90 ? `${reason.slice(0, 90)}…` : reason}
+        </span>
+      );
+    },
+  }),
+  blockedColumn.accessor('moduleId', { id: 'moduleId', header: 'Added by' }),
+  blockedColumn.accessor('createdAt', {
+    id: 'createdAt',
+    header: 'When',
+    cell: (c) => <span className="mono">{formatInstant(c.getValue())}</span>,
+  }),
+  blockedColumn.display({
+    id: 'actions',
+    header: '',
+    cell: (c) => <LiftCell row={c.row.original} />,
+  }),
+]);
+
+export function BlockedMembersView({
+  search,
+  data: result,
+  onSearch,
+}: BlockedMembersProps): ReactElement {
+  const lastPage = lastPageOf(result.total, search.pageSize);
+
+  return (
+    <div className="panel-wide">
+      <div className="filters">
+        <DebouncedFilter
+          label="Member id"
+          type="search"
+          inputMode="numeric"
+          value={search.userId ?? ''}
+          onCommit={(next) => onSearch({ userId: next || undefined, page: 1 })}
+        />
+
+        <label className="filter">
+          <span>Showing</span>
+          <select
+            value={search.state}
+            onChange={(e) => onSearch({ state: e.target.value as typeof search.state, page: 1 })}
+          >
+            <option value="live">Still blocked</option>
+            <option value="lifted">Lifted</option>
+            <option value="all">Both</option>
+          </select>
+        </label>
+
+        <DebouncedFilter
+          label="Added by"
+          type="search"
+          value={search.moduleId ?? ''}
+          onCommit={(next) => onSearch({ moduleId: next || undefined, page: 1 })}
+        />
+      </div>
+
+      <div className="table-card">
+        <DataTable
+          className="table blocklist-table"
+          columns={blockedColumns}
+          data={result.rows}
+          empty={
+            <div className="empty-state">
+              <span className="tile">
+                <Icon name="shield-slash" />
+              </span>
+              <span className="empty-state-title">
+                {search.state === 'lifted'
+                  ? 'No block has been lifted in this server.'
+                  : 'Nobody is on this server’s blocked list.'}
+              </span>
+              <p className="status">
+                Proton adds an account here when a security module is configured to, and a blocked
+                account cannot pass verification until somebody lifts it.
+              </p>
+            </div>
+          }
+        />
+      </div>
+
+      <Pager
+        className="pagination"
+        page={search.page}
+        lastPage={lastPage}
+        onPage={(page) => onSearch({ page })}
       >
         <span className="status">
           Page {search.page} of {lastPage}

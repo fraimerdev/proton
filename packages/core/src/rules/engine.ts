@@ -136,6 +136,7 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     // fact can supply either.
     case 'create_channel':
     case 'create_role':
+    case 'edit_role':
     case 'automod_rule_create':
     case 'automod_rule_update':
     case 'automod_rule_delete':
@@ -144,6 +145,14 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
 
     case 'create_dm':
       return facts.actorId ? { userId: facts.actorId } : {};
+
+    // The target is Proton itself and the desired face is module config, so there is no fact a
+    // rule could supply. Reachable only because ActionKind is one closed union.
+    case 'set_bot_nickname':
+    case 'set_bot_profile':
+    case 'add_bot_role':
+    case 'remove_bot_role':
+      return {};
   }
 }
 

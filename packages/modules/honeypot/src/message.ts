@@ -8,6 +8,14 @@ export interface TrapMessage {
 
   isBot: boolean;
   isWebhook: boolean;
+
+  // Read, never branched on. The trap is still that a message exists at all; this is only ever
+  // quoted back to a moderator, and only when the guild asked for that.
+  content: string;
+
+  // null, never []. An empty array would make every exemption check pass straight through and
+  // act on a staff member Proton simply could not read.
+  roleIds: string[] | null;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -40,7 +48,17 @@ export function readMessage(event: ProtonEvent): TrapMessage | null {
     // have to be read as presence, never as the negation of an absent field.
     isBot: author.bot === true,
     isWebhook: typeof d.webhook_id === 'string',
+
+    content: typeof d.content === 'string' ? d.content : '',
+    roleIds: roleIdsOf(d),
   };
+}
+
+function roleIdsOf(d: Record<string, unknown>): string[] | null {
+  const roles = record(d.member)?.roles;
+  if (!Array.isArray(roles)) return null;
+
+  return roles.filter((role): role is string => typeof role === 'string');
 }
 
 export type IgnoreReason = 'self' | 'bot' | 'webhook' | 'system_message';

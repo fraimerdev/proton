@@ -56,6 +56,9 @@ describe('migrations', () => {
       'audit_trail',
       'backups',
       'entitlements',
+      'blocked_members',
+      'appeals',
+      'appeal_answers',
     ]) {
       expect(tables).toContain(expected);
     }
@@ -121,5 +124,31 @@ describe('cases indexes', () => {
 
     expect(found).toHaveLength(1);
     expect(found[0]?.indexdef).toContain('created_at DESC');
+  });
+});
+
+describe('blocked_members indexes', () => {
+  test('the idempotency index is NOT partial, so a redelivery cannot re-block a lifted member', async () => {
+    const found = await rows<{ indexdef: string }>(handle.client`
+      select indexdef from pg_indexes
+      where tablename = 'blocked_members' and indexname = 'blocked_members_idempotency_key_uq'
+    `);
+
+    expect(found).toHaveLength(1);
+    expect(found[0]?.indexdef).not.toContain('WHERE');
+  });
+
+  test('the live index is partial, so a member can be blocked again after a lift', async () => {
+    const found = await rows<{ indexdef: string }>(handle.client`
+      select indexdef from pg_indexes
+      where tablename = 'blocked_members' and indexname = 'blocked_members_live_uq'
+    `);
+
+    expect(found).toHaveLength(1);
+
+    const def = found[0]?.indexdef ?? '';
+
+    expect(def).toContain('WHERE');
+    expect(def).toContain('lifted_at IS NULL');
   });
 });

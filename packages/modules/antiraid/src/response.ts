@@ -47,9 +47,8 @@ export function responseUnconfigured(config: AntiraidConfig): string | null {
   if (setting === null || responseRoleId(config) !== undefined) return null;
 
   return (
-    `The ${config.response} response has no role configured, so Proton cannot act on the ` +
-    `accounts it flags. Set ${setting} on ${DASHBOARD}, or change the response to one that ` +
-    'needs no role.'
+    `The ${config.response} response has no role configured, so I cannot act on the accounts ` +
+    `I flag. Set ${setting} on ${DASHBOARD}, or change the response to one that needs no role.`
   );
 }
 

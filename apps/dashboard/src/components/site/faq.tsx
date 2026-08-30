@@ -204,7 +204,7 @@ export const FAQ: readonly QuestionGroup[] = [
       },
       {
         id: 'logs',
-        q: 'How much does Server Logs actually cover?',
+        q: 'How much does Server logs actually cover?',
         a: (
           <p>
             {LOG_EVENT_COUNT} events across {LOG_CATEGORY_COUNT} categories — server, channels,
@@ -276,7 +276,7 @@ export const FAQ: readonly QuestionGroup[] = [
             Proton is operated by whoever deployed it, and that operator is the data controller for
             everything described in the <a href="/privacy">privacy policy</a> and the{' '}
             <a href="/terms">Terms of Service</a>. Discord is a separate controller for the platform
-            Questions, bug reports and deletion requests go to the{' '}
+            itself. Questions, bug reports and deletion requests go to the{' '}
             <a href={SUPPORT_INVITE} rel="noreferrer noopener" target="_blank">
               support server
             </a>

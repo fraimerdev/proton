@@ -183,7 +183,8 @@ export const tempVcHubsSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'channelId'],
-          message: 'two hubs cannot watch the same channel — the second one would never be used.',
+          message:
+            'each creator channel can only be listed once — the second entry would never be used.',
         });
       }
       seen.add(hub.channelId);
@@ -206,14 +207,15 @@ const settings = {
 
   ownerCommands: z.boolean().default(true).register(protonFields, {
     label: 'Let owners manage their own channel',
-    description: 'Turns off /voice and the control panel everywhere, whatever each hub allows',
+    description:
+      'Turns off /voice and the control panel everywhere, whatever each creator channel allows',
   }),
 
   // Server-wide, not per hub: it exists to keep Proton under Discord's channel-creation rate
   // limit, which is a property of the guild rather than of any one creator channel.
   serverCreationLimit: z.number().int().min(1).max(200).default(30).register(protonFields, {
     label: 'New channels per minute',
-    description: 'Discord rate-limits channel creation per guild; past this Proton waits',
+    description: 'Discord rate-limits channel creation per server; past this Proton waits',
   }),
 };
 

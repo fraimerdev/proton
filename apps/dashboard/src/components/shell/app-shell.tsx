@@ -13,7 +13,8 @@ import {
   useState,
 } from 'react';
 import type { DiscordUserGuild, SessionGuild } from '../../lib/guild-access.ts';
-import { areaForField, areasFor } from '../panels/areas.ts';
+import { areaForField, areasFor } from '../module/area-index.ts';
+import { modulePath } from '../module/paths.ts';
 import { useDismiss, useFocusTrap } from './dismiss.ts';
 import { Icon } from './icon.tsx';
 import type { IconName } from './icon-set.gen.ts';
@@ -25,6 +26,7 @@ import {
   CATEGORY_ORDER,
   configurableDescriptors,
   isCategory,
+  isServerLevel,
   moduleIcon,
   moduleState,
 } from './module-meta.ts';
@@ -104,6 +106,7 @@ function searchString(search: unknown, key: string): string | undefined {
 export interface AppShellProps {
   guildId: string;
   guilds: readonly SessionGuild[];
+  presenceKnown: boolean;
   user: ShellUser;
   modules: readonly ModuleSummary[];
   children: ReactNode;
@@ -112,6 +115,7 @@ export interface AppShellProps {
 export function AppShell({
   guildId,
   guilds,
+  presenceKnown,
   user,
   modules,
   children,
@@ -226,6 +230,7 @@ export function AppShell({
 
           {guilds.map((candidate) => {
             const url = guildIconUrl(candidate);
+            const absent = presenceKnown && !candidate.present;
 
             return (
               <Link
@@ -234,16 +239,10 @@ export function AppShell({
                 params={{ guildId: candidate.id }}
                 search={{}}
                 className="rail-guild"
-                data-present={candidate.present ? undefined : 'false'}
-                title={
-                  candidate.present
-                    ? candidate.name
-                    : `${candidate.name} — Proton is not in this server`
-                }
+                data-present={absent ? 'false' : undefined}
+                title={absent ? `${candidate.name} — Proton is not in this server` : candidate.name}
                 aria-label={
-                  candidate.present
-                    ? candidate.name
-                    : `${candidate.name}, Proton is not in this server`
+                  absent ? `${candidate.name}, Proton is not in this server` : candidate.name
                 }
                 aria-current={candidate.id === guildId ? 'page' : undefined}
               >
@@ -339,6 +338,31 @@ export function AppShell({
               >
                 <NavInner icon="sliders-horizontal" label="Modules" current={onGeneral} />
               </Link>
+
+              {modules
+                .filter((module) => isServerLevel(module.id))
+                .map((module) => {
+                  const current = pathname === `${base}/${module.id}` && view === undefined;
+                  const to = modulePath(module.id);
+                  if (!to) return null;
+
+                  return (
+                    <Link
+                      key={module.id}
+                      to={to}
+                      params={{ guildId }}
+                      search={{}}
+                      className="nav-item"
+                      aria-current={current ? 'page' : undefined}
+                    >
+                      <NavInner
+                        icon={moduleIcon(module.dashboard?.icon)}
+                        label={module.name}
+                        current={current}
+                      />
+                    </Link>
+                  );
+                })}
             </div>
 
             {browsable.length > 0 ? (
@@ -351,12 +375,14 @@ export function AppShell({
                 </span>
                 {browsable.map((entry) => {
                   const current = pathname === `${base}/${entry.moduleId}` && view === entry.viewId;
+                  const to = modulePath(entry.moduleId);
+                  if (!to) return null;
 
                   return (
                     <Link
                       key={entry.viewId}
-                      to="/dashboard/$guildId/$moduleId"
-                      params={{ guildId, moduleId: entry.moduleId }}
+                      to={to}
+                      params={{ guildId }}
                       search={{ view: entry.viewId }}
                       className="nav-item"
                       aria-current={current ? 'page' : undefined}
@@ -369,7 +395,9 @@ export function AppShell({
             ) : null}
 
             {CATEGORY_ORDER.map((category) => {
-              const owned = modules.filter((module) => module.category === category);
+              const owned = modules.filter(
+                (module) => module.category === category && !isServerLevel(module.id),
+              );
               if (owned.length === 0) return null;
 
               return (
@@ -427,13 +455,15 @@ function ModuleNavItem({
   guildId: string;
   module: ModuleSummary;
   open: boolean;
-}): ReactElement {
+}): ReactElement | null {
   const state = moduleState(module);
+  const to = modulePath(module.id);
+  if (!to) return null;
 
   return (
     <Link
-      to="/dashboard/$guildId/$moduleId"
-      params={{ guildId, moduleId: module.id }}
+      to={to}
+      params={{ guildId }}
       search={{}}
       className="nav-item"
       data-state={state}
@@ -539,7 +569,7 @@ function UserMenu({
         </Link>
         <Link to="/faq" className="menu-item" role="menuitem" onClick={onClose}>
           <Icon name="question" />
-          FAQ
+          Questions
         </Link>
       </div>
 
@@ -625,7 +655,7 @@ export function paletteIndex(modules: readonly ModuleSummary[]): PaletteEntry[] 
     }
 
     for (const field of configurableDescriptors(module.fields)) {
-      const area = areaForField(module.id, field.path, module.dashboard?.sections);
+      const area = areaForField(module.id, field.path);
       const fieldTrail = `${module.name} / ${area ? area.title : 'settings'}`;
 
       entries.push({
@@ -695,9 +725,12 @@ function CommandPalette({
   function activate(entry: PaletteEntry): void {
     onClose();
 
+    const to = modulePath(entry.moduleId);
+    if (!to) return;
+
     void navigate({
-      to: '/dashboard/$guildId/$moduleId',
-      params: { guildId, moduleId: entry.moduleId },
+      to,
+      params: { guildId },
       search:
         entry.view !== undefined
           ? { view: entry.view }

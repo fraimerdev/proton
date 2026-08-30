@@ -29,24 +29,24 @@ const DISABLED =
   'the Proton dashboard.';
 
 const NO_LAYOUT =
-  'Proton does not have this server’s channel and role list yet, so there is nothing to snapshot. ' +
-  'That list arrives when the gateway connects to the server — try again in a moment. Nothing ' +
-  'has been saved.';
+  'I don’t have this server’s channel and role list yet, so there is nothing to snapshot. It ' +
+  'arrives once Proton finishes connecting to Discord — try again in a moment. Nothing has ' +
+  'been saved.';
 
 const PREVIEW_ONLY =
-  'Nothing was changed. Run the same command with `confirm: true` to carry this out.';
+  'Run the same command with `confirm: true` to create those roles and channels in this server.';
 
 const NOT_WIRED =
-  "I can't reach this server's backups because Proton isn't fully wired up in this deployment. " +
-  'Nothing was saved. The Proton logs name the exact missing piece.';
+  'I can’t reach this server’s backups. Nothing was saved or changed. This is a fault on my ' +
+  'side, not a setting in this server.';
 
 const STORE_UNREADABLE =
-  "I couldn't read this server's snapshots, so I don't know which ones it has. Nothing was " +
-  'changed. The Proton logs name what went wrong.';
+  'I couldn’t read this server’s snapshots, so I don’t know which ones it has. Nothing was ' +
+  'changed. This is a fault on my side, not a setting in this server.';
 
 const STORE_UNWRITABLE =
-  'The snapshot could not be saved, so this server has NO new backup. Nothing else was changed, ' +
-  'and the Proton logs name what went wrong. Try again in a moment.';
+  'The snapshot could not be saved, so this server has NO new backup. Nothing else was changed. ' +
+  'Try again in a moment.';
 
 const WRONG_SERVER =
   "I read another server's structure while snapshotting this one, so I stopped rather than save " +
@@ -86,7 +86,9 @@ export function createBackupCommands(deps: BackupDeps): CommandDefinition<Backup
             .addBooleanOption((option) =>
               option
                 .setName('confirm')
-                .setDescription('Actually carry it out. Leave off to preview the plan first.'),
+                .setDescription(
+                  'Create the missing channels and roles for real. Leave off to preview first.',
+                ),
             ),
         )
         .toJSON(),

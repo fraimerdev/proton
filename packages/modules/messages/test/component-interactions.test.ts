@@ -367,7 +367,7 @@ describe('embeds component presses', () => {
     expect(outcome).toEqual({ action: 'refused', reason: "no saved message 'gone'" });
     expect(h.roleCalls()).toHaveLength(0);
     expect(h.lastSaid()).toContain("'gone'");
-    expect(h.lastSaid()).toContain('Modules → Embeds');
+    expect(h.lastSaid()).toContain('Modules → Messages');
   });
 
   test('a press on a key the message no longer carries says which key is gone', async () => {
@@ -380,7 +380,7 @@ describe('embeds component presses', () => {
     expect(outcome).toEqual({ action: 'refused', reason: "no component 'green' on 'roles'" });
     expect(h.roleCalls()).toHaveLength(0);
     expect(h.lastSaid()).toContain("'green'");
-    expect(h.lastSaid()).toContain('Modules → Embeds');
+    expect(h.lastSaid()).toContain('Modules → Messages');
   });
 
   test('a press while the module is switched off says so instead of failing silently', async () => {

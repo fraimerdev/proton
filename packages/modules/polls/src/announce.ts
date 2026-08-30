@@ -21,7 +21,7 @@ export function renderAnnouncement(record: PollRecord): string {
   return (
     `**Poll closed** — “${record.question}”\n` +
     `${pollLink(record.guildId, record.channelId, record.messageId)}\n` +
-    'Discord keeps the final tally on the poll itself and Proton cannot read it back, so open ' +
+    'Discord keeps the final tally on the poll itself and I cannot read it back, so open ' +
     'the poll above for the counts.'
   );
 }

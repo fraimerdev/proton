@@ -11,6 +11,8 @@ export const envSchema = z.object({
 
   API_SHARED_SECRET: z.string().min(16),
 
+  REST_PROXY_URL: z.string().min(1).default('http://localhost:3001'),
+
   // Optional: without it the API still boots and serves, it simply publishes no config-change
   // events, so Server Logs shows nothing under Proton. Degradation, not failure.
   REDIS_URL: z.string().min(1).optional(),

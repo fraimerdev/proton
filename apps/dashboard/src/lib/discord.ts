@@ -30,7 +30,9 @@ async function requestUserGuilds(
   });
 
   if (!response.ok) {
-    throw new Error(`could not load your Discord servers (${response.status})`);
+    throw new Error(
+      `Discord answered ${response.status} when Proton asked which servers you administer.`,
+    );
   }
 
   return (await response.json()) as DiscordUserGuild[];

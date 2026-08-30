@@ -143,7 +143,7 @@ function describe(plan: ActionPlan, result: ActionResult): string {
 
     case 'failed_precheck':
     case 'failed_api':
-      return result.failure?.humanReason ?? 'The action failed, but no reason was reported.';
+      return result.failure?.humanReason ?? "That didn't go through, and I wasn't told why.";
   }
 }
 

@@ -191,7 +191,7 @@ async function grant(
       kind: 'add_role',
       actorId: JOINROLES_ACTOR,
       targetId: member.userId,
-      reason: member.isBot ? 'Join Roles: bot added' : 'Join Roles: member joined',
+      reason: member.isBot ? 'Join roles: bot added' : 'Join roles: member joined',
 
       idempotencyKey: joinrolesKey(ctx.guildId, member.userId, member.joinedAt, 'grant', roleId),
       dryRun: false,

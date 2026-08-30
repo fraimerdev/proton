@@ -53,7 +53,9 @@ describe('a message the honeypot must not act on', () => {
   test('the honeypot row is switched off', async () => {
     const h = harness();
 
-    const outcome = await h.trip({ config: armed({ enabled: false }) });
+    const outcome = await h.trip({
+      config: { enabled: true, channels: [trap({ enabled: false })] },
+    });
 
     expect(outcome).toEqual({ action: 'ignored', reason: 'not a honeypot channel' });
     expect(quiet(h)).toEqual(NOTHING);

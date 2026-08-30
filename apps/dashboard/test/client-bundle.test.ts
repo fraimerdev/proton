@@ -69,7 +69,13 @@ const WORKSPACE = join(import.meta.dir, '..', '..', '..', 'packages');
  * binary as UTF-8 and fails the dev server with an error that names the binary, not the import
  * that reached it — so the reachability is worth asserting here rather than rediscovering.
  */
-const NATIVE_DEPS = ['@napi-rs/canvas', 'zlib-sync', 'bufferutil', 'utf-8-validate'];
+const NATIVE_DEPS = [
+  '@napi-rs/canvas',
+  '@resvg/resvg-js',
+  'zlib-sync',
+  'bufferutil',
+  'utf-8-validate',
+];
 
 interface PackageManifest {
   name: string;
@@ -192,6 +198,37 @@ describe('native addons stay out of the dashboard', () => {
     expect(importsOf(join(cards?.dir ?? '', 'src', 'presets.ts'))).toEqual([]);
   });
 
+  /**
+   * The card is one component drawn twice: satori rasterises it for Discord, react-dom renders it
+   * live in the settings preview. Only the second half may be reachable from the browser, and the
+   * subpath is the whole of that boundary — resolveSpecifier walks the file it names, so a stray
+   * import of ../fonts.ts or ../render.tsx is what would put a rasteriser in the bundle.
+   */
+  test('@proton/cards/design is a plain string export the walker can follow', () => {
+    const cards = packages.get('@proton/cards');
+    const design = cards?.manifest.exports?.['./design'];
+
+    expect(design).toBe('./src/design/index.ts');
+    expect(resolveSpecifier('@proton/cards/design', packages)).toBe(
+      join(cards?.dir ?? '', 'src', 'design', 'index.ts'),
+    );
+  });
+
+  test('the design half never reaches the rasterising half', () => {
+    const { files, edges } = reachableFromDashboard(packages);
+    const forbidden = ['satori', '@resvg/resvg-js', '@napi-rs/canvas'];
+    const offenders: string[] = [];
+
+    for (const file of files) {
+      for (const specifier of importsOf(file)) {
+        if (!forbidden.includes(specifier)) continue;
+        offenders.push(`${edges.get(file) ?? file} → ${specifier}`);
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   test('no file the dashboard can reach imports a package carrying a native addon', () => {
     const { files, edges } = reachableFromDashboard(packages);
     const offenders: string[] = [];
@@ -214,7 +251,15 @@ describe('native addons stay out of the dashboard', () => {
  * guard above waves them through — which is how two constants imported from a module barrel put
  * drizzle-orm in the browser bundle unnoticed.
  */
-const SERVER_ONLY = ['drizzle-orm', '@proton/db', 'better-auth', '@better-auth/drizzle-adapter'];
+const SERVER_ONLY = [
+  'drizzle-orm',
+  '@proton/db',
+  'better-auth',
+  '@better-auth/drizzle-adapter',
+  // Pure JS, so NATIVE_DEPS cannot catch it, and a megabyte of layout engine and font parsing that
+  // the browser has no use for: it draws the card the bot sends, not the one the page shows.
+  'satori',
+];
 
 /**
  * TanStack Start swaps a server function's body for an RPC stub in the client build, so a route
@@ -245,6 +290,7 @@ describe('the server half of the dashboard stays on the server', () => {
       'src/lib/discord-token.ts',
       'src/lib/env.ts',
       'src/middleware/guild-access.ts',
+      'src/server/appeals.ts',
       'src/server/audit.ts',
       'src/server/modules.ts',
       'src/server/verification.ts',

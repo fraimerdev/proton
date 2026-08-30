@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { FONT_STACK } from '@proton/cards/design';
 import { callbackFor, DEFAULT_CALLBACK } from '../src/lib/callback-url.ts';
 
 const SRC = join(import.meta.dir, '..', 'src');
@@ -107,8 +108,14 @@ describe('the head loads the faces the stylesheet asks for', () => {
     }
   });
 
+  // The card preview is the same component the bot rasterises, so it names its faces inline rather
+  // than through a --token. Fetching them is the only way the live preview matches the PNG.
   test('nothing is fetched that no declaration names', () => {
-    const named = new Set([...familiesOf('font'), ...familiesOf('mono')]);
+    const named = new Set([
+      ...familiesOf('font'),
+      ...familiesOf('mono'),
+      ...FONT_STACK.split(',').map((name) => name.trim()),
+    ]);
 
     for (const match of root.matchAll(/family=([A-Za-z+]+):/g)) {
       const family = (match[1] ?? '').replaceAll('+', ' ');

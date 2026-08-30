@@ -36,9 +36,8 @@ export type ComponentOutcome =
   | { action: 'refused'; reason: string };
 
 const NOT_WIRED =
-  "I can't finish that: this Proton deployment isn't fully set up, so I have no way to tell you " +
-  'what happened afterwards. A server admin should check the Proton logs — the exact missing ' +
-  'piece is named there.';
+  'I can’t change your roles right now: I would have no way to tell you whether it worked. ' +
+  'Nothing was changed. This is a fault on my side, not a setting in this server.';
 
 export async function handleComponent(
   event: ProtonEvent,
@@ -149,7 +148,7 @@ export async function handleComponent(
   if (unknownKeys.length > 0) {
     lines.push(
       `${unknownKeys.length === 1 ? 'One option is' : `${unknownKeys.length} options are`} no ` +
-        'longer part of this menu, so I skipped it. Ask an admin to re-post the menu.',
+        'longer part of this menu and had no effect. Ask an admin to re-post the menu.',
     );
   }
 

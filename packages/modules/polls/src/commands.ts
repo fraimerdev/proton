@@ -36,8 +36,8 @@ const MESSAGE_ID_PATTERN = /^\d{17,20}$/;
 const MESSAGE_GONE = 'discord_404';
 
 const NOT_WIRED =
-  "I can't run polls in this server because Proton isn't fully wired up in this deployment. " +
-  'Nothing was changed. The Proton logs name the exact missing piece.';
+  'I can’t run polls right now. Nothing was changed. This is a fault on my side, not a setting ' +
+  'in this server.';
 
 function preview(question: string): string {
   return question.length > QUESTION_PREVIEW_MAX

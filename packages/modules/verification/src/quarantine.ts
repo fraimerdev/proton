@@ -46,8 +46,8 @@ async function prepare(
     ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
     await reply(
       ctx,
-      `I couldn't ${verb} that member because Proton isn't fully wired up in this deployment. ` +
-        'Nothing was changed. The Proton logs name the exact missing piece.',
+      `I couldn’t ${verb} that member. Nothing was changed. This is a fault on my side, not a ` +
+        'setting in this server.',
     );
     return null;
   }
@@ -90,7 +90,7 @@ export async function runQuarantine(
     await reply(
       ctx,
       `<@${input.targetId}> is already quarantined — <@${existing.quarantinedBy}> did it on ` +
-        `${new Date(existing.quarantinedAt).toISOString()}, and Proton is holding ` +
+        `${new Date(existing.quarantinedAt).toISOString()}, and I'm holding ` +
         `${existing.priorRoleIds.length} role${existing.priorRoleIds.length === 1 ? '' : 's'} ` +
         'to give back. Run /unquarantine to restore them.',
     );
@@ -143,7 +143,7 @@ export async function runQuarantine(
     plan.priorRoleIds.length === 0
       ? 'They held no roles beyond @everyone, so there was nothing to take away — /unquarantine ' +
         'will simply lift the quarantine role.'
-      : `Proton is holding ${plan.priorRoleIds.length} role` +
+      : `I'm holding ${plan.priorRoleIds.length} role` +
         `${plan.priorRoleIds.length === 1 ? '' : 's'} to give back: ` +
         `${plan.priorRoleIds.map((id) => `<@&${id}>`).join(', ')}. Run /unquarantine to restore them ` +
         'exactly.';
@@ -172,10 +172,9 @@ export async function runRelease(
   if (!record) {
     await reply(
       ctx,
-      `Proton has no quarantine record for <@${input.targetId}>, so it does not know what they ` +
-        'had before. If they are still holding the quarantine role, take it off by hand and ' +
-        'restore their roles from the Discord audit log — guessing here would be Proton ' +
-        'rewriting their access.',
+      `I have no quarantine record for <@${input.targetId}>, so I don't know what they had ` +
+        'before. If they are still holding the quarantine role, take it off by hand and restore ' +
+        "their roles from the Discord audit log — I won't guess at someone's access.",
     );
     return;
   }

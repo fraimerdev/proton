@@ -1,10 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { ModuleRegistry, Permissions } from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
-import { honeypotConfigSchema, honeypotDefaultConfig, honeypotFormSchema } from '../src/config.ts';
+import {
+  HONEYPOT_PANEL_KEYS,
+  honeypotConfigSchema,
+  honeypotDefaultConfig,
+  honeypotFormSchema,
+} from '../src/config.ts';
 import { honeypotModule } from '../src/index.ts';
 
-const GRANTED_INTENTS = GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages;
+const GRANTED_INTENTS =
+  GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages | GatewayIntentBits.MessageContent;
 
 function registry(): ModuleRegistry {
   const registered = new ModuleRegistry();
@@ -18,7 +24,7 @@ describe('the manifest', () => {
       .descriptors('honeypot')
       .map((descriptor) => descriptor.path);
 
-    expect(paths).toEqual(['enabled', 'logChannelId', 'includeThreads']);
+    expect(new Set(paths)).toEqual(new Set(Object.keys(honeypotFormSchema.shape)));
     expect(paths).toHaveLength(Object.keys(honeypotFormSchema.shape).length);
   });
 
@@ -27,8 +33,10 @@ describe('the manifest', () => {
       .descriptors('honeypot')
       .map((descriptor) => descriptor.path);
 
-    expect(paths).not.toContain('channels');
-    expect(Object.keys(honeypotConfigSchema.shape)).toContain('channels');
+    for (const key of HONEYPOT_PANEL_KEYS) {
+      expect(paths).not.toContain(key);
+      expect(Object.keys(honeypotConfigSchema.shape)).toContain(key);
+    }
   });
 
   test('offers the incident log as a channel picker', () => {
@@ -49,15 +57,29 @@ describe('the manifest', () => {
     expect(honeypotModule.requiredPermissions).toEqual([Permissions.BanMembers]);
   });
 
-  test('never asks for Message Content — it reads that a message exists, not what it says', () => {
-    expect(honeypotModule.requiredIntents).not.toContain(GatewayIntentBits.MessageContent);
+  // This used to assert the opposite. "Quote the message" retired that property deliberately:
+  // reading the body without declaring the intent would make the manifest a promise Proton was
+  // not keeping, so the declaration is the honest half of the trade.
+  test('asks for Message Content, because it can be told to quote what was posted', () => {
     expect(honeypotModule.requiredIntents).toEqual([
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
     ]);
   });
 
-  test('runs on the unprivileged pair alone', () => {
+  test('quoting is off until a server turns it on', () => {
+    expect(honeypotDefaultConfig.quoteMessage).toBe(false);
+  });
+
+  // On by default: the whole point of the message is telling somebody whose account was taken over
+  // that it was, and an admin who has not thought about it should not have that silently off.
+  test('the direct message is sent by default', () => {
+    expect(honeypotDefaultConfig.sendDirectMessage).toBe(true);
+    expect(honeypotDefaultConfig.offerWayBackIn).toBe(false);
+  });
+
+  test('runs on the three intents it declares', () => {
     const status = registry().evaluate('honeypot', {
       grantedIntents: GRANTED_INTENTS,
       botPermissions: Permissions.BanMembers,
@@ -101,18 +123,40 @@ describe('the manifest', () => {
         'delete_message',
         'send',
         'edit_message',
+        'edit_channel',
         'interaction_reply',
       ]),
     );
   });
 
-  test('listens for messages, for the save that reconciles its notices, and for its button', () => {
-    // Without the third, the notice renders a button nothing in Proton is listening for.
+  test('listens for everything it has to, and nothing it does not', () => {
+    // The button one is load-bearing: without it the notice renders a button nothing in Proton is
+    // listening for. The member.left pair is what stops a punishment booked behind a wait from
+    // lifting a ban a moderator placed during it.
     expect(honeypotModule.listeners?.map((listener) => listener.types)).toEqual([
       ['message.created'],
       ['proton.config_changed'],
       ['interaction.component'],
+      ['member.left', 'entity.ban_added'],
+      ['guild.available', 'proton.config_changed'],
     ]);
+  });
+
+  test('declares both scheduled jobs, and a handler for each', () => {
+    // Registration checks this in both directions, so a declared job with no handler and a
+    // handler for no declared job both fail boot rather than dying in the field days later.
+    expect(honeypotModule.schedules).toEqual(['punish', 'camouflage']);
+    expect(Object.keys(honeypotModule.scheduledHandlers ?? {}).sort()).toEqual([
+      'camouflage',
+      'punish',
+    ]);
+  });
+
+  test('the daily rename reaches the bot invite without gating the whole module on it', () => {
+    expect(honeypotModule.requiredPermissions).not.toContain(Permissions.ManageChannels);
+    expect(registry().invitePermissions() & Permissions.ManageChannels).toBe(
+      Permissions.ManageChannels,
+    );
   });
 
   test('is configured from the dashboard alone — no slash commands', () => {
@@ -129,6 +173,9 @@ describe('the manifest', () => {
 
     expect(claimed.length).toBeGreaterThan(0);
     for (const field of claimed) expect(keys.has(field)).toBe(true);
-    expect(new Set(claimed).size).toBe(keys.size - 1);
+
+    // Every key is either on the page or owned by a bespoke panel. Counting instead would keep
+    // passing the day a fifth panel key nobody renders is added.
+    expect(new Set([...claimed, ...HONEYPOT_PANEL_KEYS])).toEqual(keys);
   });
 });

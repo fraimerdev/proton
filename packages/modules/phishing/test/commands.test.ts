@@ -74,7 +74,8 @@ describe('/phishing', () => {
   test('says it cannot answer when nothing is bound, without naming Proton internals', async () => {
     const content = await run({});
 
-    expect(content).toContain("isn't fully wired up");
+    expect(content).toContain('a fault on my side');
+    expect(content).toContain('no links are being checked');
     expect(content).not.toContain('RedisBlocklistStore');
     expect(content).not.toContain('createPhishingModule');
   });

@@ -8,10 +8,14 @@ const JOINED = '900000000000000001';
 const LEFT = '900000000000000002';
 const NEVER = '900000000000000003';
 
-function appWith(present: readonly string[]) {
+const EMPTY = { present: [] as string[], known: false };
+
+function appWith(present: readonly string[], known = true) {
   const guilds = {
-    presentIds: (ids: readonly string[]) =>
-      Promise.resolve(ids.filter((id) => present.includes(id))),
+    presence: (ids: readonly string[]) =>
+      Promise.resolve(
+        known ? { present: ids.filter((id) => present.includes(id)), known: true } : EMPTY,
+      ),
   } as unknown as GuildService;
 
   return createApiApp({ guilds, sharedSecret: SECRET } as unknown as ApiDeps);
@@ -33,13 +37,22 @@ describe('POST /guilds/presence', () => {
     const response = await post(appWith([JOINED]), { ids: [JOINED, LEFT, NEVER] }, SECRET);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ present: [JOINED] });
+    expect(await response.json()).toEqual({ present: [JOINED], known: true });
   });
 
   test('an empty list is an empty answer, not every guild', async () => {
     const response = await post(appWith([JOINED]), { ids: [] }, SECRET);
 
-    expect(await response.json()).toEqual({ present: [] });
+    expect(await response.json()).toEqual({ present: [], known: true });
+  });
+
+  // An empty list and an unanswerable question look identical without this flag, and the picker
+  // renders them differently: one greys every card, the other says it could not check.
+  test('says when Discord could not be asked, rather than answering none', async () => {
+    const response = await post(appWith([JOINED], false), { ids: [JOINED, LEFT] }, SECRET);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ present: [], known: false });
   });
 
   // The picker greys out everything this endpoint omits, so a 200 with a silently truncated list

@@ -32,7 +32,7 @@ export const starboardConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Source channels',
-      description: 'Empty watches every channel the bot can see',
+      description: 'Empty watches every channel Proton can see',
       channelTypes: [0, 5, 11, 12],
     }),
 

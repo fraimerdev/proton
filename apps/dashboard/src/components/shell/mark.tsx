@@ -6,7 +6,7 @@ export function ProtonMark({ size = 28 }: { size?: number }): ReactElement {
   return (
     <img
       src="/proton-mark.png"
-      alt="Proton"
+      alt=""
       width={size}
       height={size}
       decoding="async"

@@ -39,9 +39,29 @@ describe('the privacy policy says what the code does', () => {
     }
   });
 
+  test('discloses the branding images an admin uploads, and what they are used for', () => {
+    expect(html).toContain('Branding images');
+    expect(html).toContain('uploaded');
+    expect(html).toContain('until the image is replaced, cleared, or Proton leaves the server');
+  });
+
+  test('does not claim images are never stored now that branding stores them', () => {
+    // The old sentence was scoped to message logging but read as a flat denial, and branding makes
+    // it false to anyone who reads it that way.
+    expect(html).not.toContain('Attachments, images and voice are never stored.');
+    expect(html).toContain('the only images');
+  });
+
   test('explains the one erasure limit rather than promising deletion it will not do', () => {
     expect(html).toContain('may be retained against');
     expect(html).toContain('legitimate interest');
+  });
+
+  // The privileged-intent application tells Discord this address; a policy that stops naming it
+  // makes that answer false at the one link a reviewer opens.
+  test('names the address a deletion request goes to', () => {
+    expect(html).toContain('mailto:hello@fraimer.dev');
+    expect(html).toContain('30 days');
   });
 });
 

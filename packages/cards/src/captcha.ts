@@ -1,6 +1,7 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
 import { z } from 'zod';
-import { FALLBACK_FONT_FAMILY, FONT_FAMILY, registerFonts } from './fonts.ts';
+import { FALLBACK_FONT_FAMILY, FONT_FAMILY } from './design/tokens.ts';
+import { registerFonts } from './fonts.ts';
 
 export const CAPTCHA_ALPHABET = 'ABCDEFGHJKMNPQRTUVWXY346789';
 

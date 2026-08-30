@@ -203,11 +203,10 @@ export async function publishResult(
         ctx,
         ctx.config.logChannelId,
         giveaway.hostId,
-        `<@${giveaway.hostId}> — the reward role for **${giveaway.title}** could not be given ` +
+        `<@${giveaway.hostId}> — I could not give the reward role for **${giveaway.title}** ` +
           `to ${refusals.length === 1 ? 'a winner' : 'some winners'}:\n` +
           refusals.map((line) => `• ${line}`).join('\n') +
-          '\nProton needs Manage Roles, and its own highest role has to sit above the reward ' +
-          'role.',
+          '\nI need Manage Roles, and my own highest role has to sit above the reward role.',
         `giveaways:${root}:reward-failed`,
       );
     }

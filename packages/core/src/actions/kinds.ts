@@ -29,6 +29,7 @@ export const ACTION_KINDS = [
   'unlock',
   'create_channel',
   'create_role',
+  'edit_role',
   'delete_channel',
   'edit_channel',
   'set_channel_overwrite',
@@ -42,6 +43,10 @@ export const ACTION_KINDS = [
   'automod_rule_delete',
   'giveaway_draw',
   'create_dm',
+  'set_bot_nickname',
+  'set_bot_profile',
+  'add_bot_role',
+  'remove_bot_role',
 ] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -82,6 +87,7 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
 
   create_channel: Permissions.ManageChannels,
   create_role: Permissions.ManageRoles,
+  edit_role: Permissions.ManageRoles,
   delete_channel: Permissions.ManageChannels,
   edit_channel: Permissions.ManageChannels,
 
@@ -105,6 +111,15 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
   giveaway_draw: 0n,
   // A DM needs no guild permission — the recipient's privacy settings are the only gate.
   create_dm: 0n,
+
+  // Split from set_bot_profile only because of this line: Modify Current Member gates `nick` on
+  // ChangeNickname and lists nothing against `avatar`, `banner` or `bio`, so a guild that has
+  // stripped the bit still gets its images and its bio.
+  set_bot_nickname: Permissions.ChangeNickname,
+  set_bot_profile: 0n,
+
+  add_bot_role: Permissions.ManageRoles,
+  remove_bot_role: Permissions.ManageRoles,
 };
 
 export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
@@ -133,6 +148,7 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
 
   create_channel: false,
   create_role: false,
+  edit_role: false,
   delete_channel: false,
   edit_channel: false,
   set_channel_overwrite: false,
@@ -151,6 +167,14 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   // Not a member action: a DM has no role hierarchy, and flagging it would refuse to message a
   // winner who outranks the bot.
   create_dm: false,
+
+  // The target is Proton itself. True here would send these through the self-target and hierarchy
+  // prechecks, which exist to stop Proton acting on somebody it outranks, and refuse every push —
+  // which is exactly what add_role does when the member it is handed is the bot.
+  set_bot_nickname: false,
+  set_bot_profile: false,
+  add_bot_role: false,
+  remove_bot_role: false,
 };
 
 export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
@@ -180,6 +204,7 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
 
   create_channel: false,
   create_role: false,
+  edit_role: false,
   delete_channel: true,
   edit_channel: true,
   set_channel_overwrite: true,
@@ -198,6 +223,10 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
   automod_rule_delete: false,
   giveaway_draw: false,
   create_dm: false,
+  set_bot_nickname: false,
+  set_bot_profile: false,
+  add_bot_role: false,
+  remove_bot_role: false,
 };
 
 export function isChannelScoped(kind: ActionKind): boolean {
@@ -330,6 +359,12 @@ export const NEVER_RECORDED_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>
   // Opening a DM channel is a lookup, not a state change — the message sent into it is the
   // action, and that is recorded on its own.
   'create_dm',
+  // A branding push carries a data URI that can run to hundreds of kilobytes, and cases.payload is
+  // jsonb. Recording these would write the whole image into the ledger on every reconnect.
+  'set_bot_nickname',
+  'set_bot_profile',
+  'add_bot_role',
+  'remove_bot_role',
 ]);
 
 export function isNeverRecorded(kind: ActionKind): boolean {

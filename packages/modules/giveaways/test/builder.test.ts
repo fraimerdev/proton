@@ -264,7 +264,7 @@ describe('the builder screen', () => {
     // Core conditions are always there, so the requirement picker is live; the multiplier one is
     // the disabled-but-explained case.
     const disabled = selects.find((select) => select.disabled === true);
-    expect(String(disabled?.placeholder)).toContain('No bonus-entry rules');
+    expect(String(disabled?.placeholder)).toContain('switch on a module that provides them');
 
     // Discord rejects a select with no options, so even the disabled one has to carry a filler.
     const filler = (disabled?.options ?? []) as unknown[];

@@ -7,6 +7,7 @@ import {
   type ServerlogDeps,
 } from '@proton/module-serverlog';
 import { type ConnectionOptions, Queue, Worker } from 'bullmq';
+import { logQueueConnectionErrors } from './job-errors.ts';
 
 export const LOG_FLUSH_QUEUE = 'proton-log-flush';
 export const LOG_FLUSH_JOB = 'flush';
@@ -48,6 +49,8 @@ export function startServerlogFlush(deps: ServerlogFlushDeps): ServerlogFlushJob
       stack: error.stack,
     });
   });
+
+  logQueueConnectionErrors('the server-log flush', deps.logger, queue, worker);
 
   return {
     queue,

@@ -1,4 +1,5 @@
 export { type ApiDeps, createApiApp, moduleIndex } from './app.ts';
+export { type AppealFormView, AppealsError, AppealsService } from './appeals/service.ts';
 export {
   type CardPreviewDeps,
   type CardPreviewQuery,
@@ -9,6 +10,11 @@ export {
 export { CaseQueryService } from './cases/service.ts';
 export { loadEnv } from './env.ts';
 export { LeaderboardService } from './leveling/service.ts';
+export {
+  BlockedMemberError,
+  BlockedMemberService,
+  type LiftInput,
+} from './moderation/blocked-members.ts';
 export {
   ModuleConfigError,
   ModuleConfigService,

@@ -4,21 +4,10 @@ import {
   HttpImageFetcher,
   type ImageFetcher,
   renderCard,
+  PREVIEW_SAMPLE as SAMPLE,
   toHexColour,
 } from '@proton/cards';
 import { z } from 'zod';
-
-// Sample data, not the caller's real standing: a preview is a picture of the settings, and asking
-// the leaderboard for a number the viewer may not have yet would make it a picture of nothing.
-const SAMPLE = {
-  level: 12,
-  rank: 3,
-  totalXp: 48_210,
-  xpIntoLevel: 1_240,
-  xpForNextLevel: 2_000,
-  guildName: 'Your server',
-  memberCount: 1_204,
-};
 
 const booleanish = z
   .enum(['true', 'false'])

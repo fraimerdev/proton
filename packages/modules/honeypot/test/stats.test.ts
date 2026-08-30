@@ -297,7 +297,9 @@ describe('a notice Discord will not let go of', () => {
     const h = harness({ botPermissions: BOT_PERMISSIONS & ~Permissions.ManageMessages });
 
     await h.saved({ config: armed() });
-    const outcome = await h.saved({ config: armed({ enabled: false }) });
+    const outcome = await h.saved({
+      config: { enabled: true, channels: [trap({ enabled: false })] },
+    });
 
     expect(outcome).toEqual({
       action: 'reconciled',

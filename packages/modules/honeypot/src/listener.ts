@@ -19,16 +19,33 @@ import {
   describeUnbound,
   type HoneypotDeps,
 } from './deps.ts';
-import { buildIncidentEmbed, type Incident } from './embed.ts';
+import { appealUrlFor, DM_RESULT_LABEL, type DmOutcome, sendDirectMessage } from './dm.ts';
+import { buildIncidentEmbed, type Incident, quoteForLog } from './embed.ts';
+import { EXEMPT_LABEL, exemptReason, type HoneypotExemptReason } from './exempt.ts';
 import { ignoreReason, readMessage, type TrapMessage } from './message.ts';
-import { planTrap, type TrapPlan } from './plan.ts';
+import { type Punishment, planTrap, type TrapPlan } from './plan.ts';
+import { schedulePunishment } from './punish.ts';
+import type { DmFacts } from './render.ts';
 import { refreshNoticeCount } from './service.ts';
 import { HONEYPOT_LOCK_TTL_MS } from './store.ts';
 
 export const HONEYPOT_EVENT_TYPES: EventType[] = ['message.created'];
 
+export function punishmentOf(config: HoneypotConfig): Punishment {
+  return {
+    action: config.action,
+    deleteMessageSeconds: config.deleteMessageSeconds,
+    timeoutDuration: config.timeoutDuration,
+    timeoutFirst: config.timeoutFirst,
+    timeoutFirstDuration: config.timeoutFirstDuration,
+    deleteTriggerMessage: config.deleteTriggerMessage,
+  };
+}
+
 export type TrapOutcome =
   | { action: 'ignored'; reason: string }
+  | { action: 'exempt'; reason: HoneypotExemptReason }
+  | { action: 'waiting'; runAt: number }
   | { action: 'held'; reason: string }
   | { action: 'refused'; reason: string }
   | { action: 'sprung'; kind: string }
@@ -73,10 +90,10 @@ export async function handleMessage(
     return { action: 'refused', reason: 'the honeypot ports are unbound' };
   }
 
-  const parentId = rawDeps.guildState
-    ? ((await rawDeps.guildState.get(ctx.guildId))?.channels.get(message.channelId)?.parentId ??
-      null)
-    : null;
+  // One read, feeding both the thread's parent and the exemption check. Two would be two round
+  // trips for one message.
+  const state = rawDeps.guildState ? await rawDeps.guildState.get(ctx.guildId) : null;
+  const parentId = state?.channels.get(message.channelId)?.parentId ?? null;
 
   const channel = channelFor(ctx.config, message.channelId, parentId);
   if (!channel) return { action: 'ignored', reason: 'not a honeypot channel' };
@@ -91,24 +108,91 @@ export async function handleMessage(
     return { action: 'held', reason: 'this member already tripped a honeypot moments ago' };
   }
 
+  // After the lock, so a burst of three from one exempt admin is one log line rather than three.
+  const exempt = exemptReason({
+    config: ctx.config,
+    userId: message.authorId,
+    roleIds: message.roleIds,
+    state,
+  });
+
+  if (exempt) return excuse(ctx, bound.deps, rawDeps, channel, message, exempt);
+
+  if (ctx.config.waitBeforeActingSeconds > 0) {
+    const waited = await schedulePunishment(
+      ctx,
+      {
+        channelId: message.channelId,
+        messageId: message.messageId,
+        userId: message.authorId,
+        content: message.content,
+        caughtAt: bound.deps.now(),
+        punishment: punishmentOf(ctx.config),
+      },
+      ctx.config.waitBeforeActingSeconds,
+    );
+
+    // A deployment with no scheduler must still act rather than silently do nothing at all.
+    if (waited.action === 'waiting') return waited;
+  }
+
   return spring(ctx, bound.deps, rawDeps, channel, message);
 }
 
-async function spring(
+/**
+ * A catch Proton logs and counts but does nothing about. Deliberately not routed through spring():
+ * nothing here reaches the executor, so reporting it as a refusal would put an amber "could not be
+ * carried out" against an action that was never attempted.
+ */
+async function excuse(
   ctx: ModuleContext<HoneypotConfig>,
   deps: BoundHoneypotDeps,
   rawDeps: HoneypotDeps,
   channel: HoneypotChannel,
   message: TrapMessage,
+  reason: HoneypotExemptReason,
 ): Promise<TrapOutcome> {
-  const planned = planTrap(channel, message.authorId, deps.now());
+  ctx.logger.info(
+    `${message.authorId} posted in honeypot channel ${message.channelId} and was left alone: ` +
+      `${EXEMPT_LABEL[reason]}.`,
+    {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      channelId: message.channelId,
+      userId: message.authorId,
+    },
+  );
+
+  await report(
+    ctx,
+    deps,
+    incidentOf(ctx, message, 'Nothing — they are exempt', 'exempt', EXEMPT_LABEL[reason]),
+  );
+
+  await count(ctx, rawDeps, channel, message, deps.now(), 'exempt');
+
+  return { action: 'exempt', reason };
+}
+
+export async function spring(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: BoundHoneypotDeps,
+  rawDeps: HoneypotDeps,
+  channel: HoneypotChannel,
+  message: TrapMessage,
+
+  // Passed in rather than read from config, so a punishment booked behind a wait runs under the
+  // settings it was booked with rather than whatever the guild has saved by the time it fires.
+  punishment: Punishment = punishmentOf(ctx.config),
+): Promise<TrapOutcome> {
+  const planned = planTrap(punishment, message.authorId, deps.now());
 
   if ('unconfigured' in planned) {
     ctx.logger.error(planned.unconfigured, { guildId: ctx.guildId, moduleId: MODULE_ID });
     await report(
       ctx,
       deps,
-      incidentOf(ctx, channel, message, 'Misconfigured', 'refused', planned.unconfigured),
+      incidentOf(ctx, message, 'Misconfigured', 'refused', planned.unconfigured),
     );
     return { action: 'refused', reason: planned.unconfigured };
   }
@@ -127,6 +211,30 @@ async function spring(
     },
   );
 
+  // Before the first step, not after. A ban leaves no shared server to send a direct message
+  // through, so telling them afterwards is telling nobody.
+  const told = await sendDirectMessage(
+    ctx,
+    rawDeps,
+    message.authorId,
+    root,
+    {
+      ...(await dmFacts(ctx, rawDeps)),
+
+      // A real ban only. A softban bans and lifts it in the same breath, so an appeal button there
+      // invites somebody to argue about something that is not stopping them.
+      appealUrl: await appealUrlFor(
+        ctx,
+        rawDeps,
+        message.authorId,
+        root,
+        deps.now(),
+        punishment.action === 'ban',
+      ),
+    },
+    ctx.tier,
+  );
+
   let banned = false;
   let failure: string | null = null;
 
@@ -142,7 +250,7 @@ async function spring(
       kind: step.kind,
       actorId: HONEYPOT_ACTOR,
       targetId: message.authorId,
-      reason: `Honeypot: posted in #${message.channelId}.`,
+      reason: ctx.config.auditLogReason,
       payload: step.payload,
       dryRun: false,
 
@@ -182,7 +290,7 @@ async function spring(
         { guildId: ctx.guildId, moduleId: MODULE_ID, userId: message.authorId },
       );
 
-      await report(ctx, deps, incidentOf(ctx, channel, message, plan.describe, 'ban_stuck', stuck));
+      await report(ctx, deps, incidentOf(ctx, message, plan.describe, 'ban_stuck', stuck));
       await publish(ctx, message, plan, 'ban_stuck');
 
       return { action: 'ban_stuck', userId: message.authorId };
@@ -191,21 +299,22 @@ async function spring(
     break;
   }
 
-  await deleteTrigger(ctx, plan, message, root, failure !== null);
+  await deleteTrigger(ctx, plan, message, root, failure !== null, punishment);
 
   const outcome = failure === null ? 'done' : 'refused';
 
-  await report(ctx, deps, incidentOf(ctx, channel, message, plan.describe, outcome, failure));
+  await report(ctx, deps, incidentOf(ctx, message, plan.describe, outcome, failure, told));
   await publish(ctx, message, plan, outcome);
 
   // Last, and after the audit trail rather than before it. A number on a button is cosmetic; a
   // throw out of Redis here used to take the incident log and the security event down with it.
   if (failure === null && !replayed) {
     await count(ctx, rawDeps, channel, message, deps.now());
+    await blacklist(ctx, rawDeps, message, root);
   }
 
   return failure === null
-    ? { action: 'sprung', kind: channel.action }
+    ? { action: 'sprung', kind: ctx.config.action }
     : { action: 'refused', reason: failure };
 }
 
@@ -236,7 +345,10 @@ async function deleteTrigger(
   message: TrapMessage,
   root: string,
   banFailed: boolean,
+  punishment: Punishment,
 ): Promise<void> {
+  if (!punishment.deleteTriggerMessage) return;
+
   // A ban that landed took the message with it, and a second delete would race that purge — but a
   // ban that was refused purged nothing, so the message baiting the trap is still sitting there.
   if (plan.deletesMessages && !banFailed) return;
@@ -263,14 +375,20 @@ async function deleteTrigger(
   }
 }
 
+async function dmFacts(ctx: ModuleContext<HoneypotConfig>, deps: HoneypotDeps): Promise<DmFacts> {
+  return { guildName: (await deps.guildName?.(ctx.guildId)) ?? 'this server' };
+}
+
 function incidentOf(
   ctx: ModuleContext<HoneypotConfig>,
-  channel: HoneypotChannel,
   message: TrapMessage,
   action: string,
   outcome: Incident['outcome'],
   detail: string | null,
+  told?: DmOutcome,
 ): Incident {
+  const quote = ctx.config.quoteMessage ? quoteForLog(message.content) : undefined;
+
   return {
     guildId: ctx.guildId,
     userId: message.authorId,
@@ -278,11 +396,13 @@ function incidentOf(
     messageId: message.messageId,
     action,
     window:
-      channel.action === 'softban' || channel.action === 'ban'
-        ? describeWindow(channel.deleteMessageSeconds)
+      ctx.config.action === 'softban' || ctx.config.action === 'ban'
+        ? describeWindow(ctx.config.deleteMessageSeconds)
         : null,
     outcome,
     ...(detail ? { detail } : {}),
+    ...(quote ? { quote } : {}),
+    ...(told && told !== 'skipped' ? { dm: DM_RESULT_LABEL[told] } : {}),
   };
 }
 
@@ -339,18 +459,57 @@ async function publish(
   });
 }
 
+async function blacklist(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+  message: TrapMessage,
+  root: string,
+): Promise<void> {
+  if (!ctx.config.addToBlacklist) return;
+
+  if (!deps.blocked) {
+    ctx.logger.error(
+      describeUnbound(`${message.authorId} was NOT added to the blocked list`, ['blocked']),
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId: message.authorId },
+    );
+    return;
+  }
+
+  try {
+    await deps.blocked.block({
+      guildId: ctx.guildId,
+      userId: message.authorId,
+      moduleId: MODULE_ID,
+      blockedBy: HONEYPOT_ACTOR,
+      reason: ctx.config.auditLogReason,
+      evidence: { channelId: message.channelId, messageId: message.messageId },
+
+      // The trap root, so a redelivered message cannot block the same member twice.
+      idempotencyKey: `${root}:block`,
+    });
+  } catch (error) {
+    ctx.logger.error(
+      `honeypot removed ${message.authorId} but could not add them to the blocked list: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId: message.authorId },
+    );
+  }
+}
+
 async function count(
   ctx: ModuleContext<HoneypotConfig>,
   deps: HoneypotDeps,
   channel: HoneypotChannel,
   message: TrapMessage,
   at: number,
+  action: string = ctx.config.action,
 ): Promise<void> {
   try {
     await deps.stats?.record(ctx.guildId, channel.channelId, {
       messageId: message.messageId,
       userId: message.authorId,
-      action: channel.action,
+      action,
       at,
     });
 
