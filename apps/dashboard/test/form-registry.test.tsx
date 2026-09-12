@@ -211,7 +211,8 @@ describe('rendering each supported field type', () => {
       escalationWindow: '30d',
     });
 
-    expect(html).toContain('value="30d"');
+    expect(html).toContain('value="30"');
+    expect(html).toContain('<option value="d" selected="">days</option>');
     expect(html).not.toContain('is not a duration');
   });
 

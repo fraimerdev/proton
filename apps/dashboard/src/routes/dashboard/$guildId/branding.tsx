@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { BrandingDiscordPreview } from '../../../components/branding/discord-preview.tsx';
 import { BrandingMedia } from '../../../components/branding/media.tsx';
 import { BrandingPreview } from '../../../components/branding/preview.tsx';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { FieldRow, SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { Choice, Colour, Text, Toggle } from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
@@ -52,77 +52,78 @@ function BrandingPage(): ReactElement {
       <ModuleChrome guildId={guildId} summary={form.summary} area={undefined} tabs={[]} />
 
       <ModuleSettings form={form}>
-        <SectionCard id="branding:general" title="General">
-          <Toggle
-            path="restoreOnDisable"
-            label="Undo when switched off"
-            help="Clears the nickname, avatar, banner and bio in this server when this module is turned off"
-            defaultValue={true}
-          />
-        </SectionCard>
-
-        <SectionCard id="branding:identity" title="Identity">
-          <Text
-            path="nickname"
-            label="Server nickname"
-            help="What Proton is called in this server. Up to 32 characters; leave it empty to use its own name."
-            minLength={1}
-            maxLength={32}
-            optional
-          />
-          <Text
-            path="bio"
-            label="Server bio"
-            help={`The "About me" on Proton's profile in this server. Up to 190 characters.`}
-            maxLength={190}
-            optional
-          />
-        </SectionCard>
-
-        <SectionCard id="branding:style" title="Display name style">
-          <Choice
-            path="typeface"
-            label="Typeface"
-            help="Discord has no font setting a bot can use, so a styled name is spelled in Unicode letters that look like one. Mentions still work; searching the member list for the plain name stops finding it, and screen readers read the letters out one at a time."
-            options={TYPEFACES}
-            optionLabels={TYPEFACE_LABELS_WITH_SAMPLE}
-            defaultValue="none"
-          />
-          <Choice
-            path="nameEffect"
-            label="Effect"
-            help="Colours Proton’s name through a role it holds here. Gradient and holographic need this server to have Discord’s Enhanced Role Colours feature."
-            options={EFFECTS}
-            optionLabels={EFFECT_LABELS}
-            defaultValue="none"
-          />
-          <Colour path="primaryColor" label="First colour" />
-          <Colour path="secondaryColor" label="Second colour" />
-        </SectionCard>
-
-        <SectionCard id="branding:panel:media" title="Profile media">
-          <div className="branding-media-set">
-            <BrandingMedia
-              guildId={guildId}
-              kind="avatar"
-              hash={hash(form.live, 'avatarHash')}
-              onChanged={changed}
+        <SettingsGrid>
+          <SectionCard id="branding:identity" title="Identity">
+            <Text
+              path="nickname"
+              label="Server nickname"
+              help="What Proton is called in this server. Leave it empty to use its own name."
+              minLength={1}
+              maxLength={32}
+              optional
             />
-            <BrandingMedia
-              guildId={guildId}
-              kind="banner"
-              hash={hash(form.live, 'bannerHash')}
-              onChanged={changed}
+            <Text
+              path="bio"
+              label="Server bio"
+              help={`The "About me" on Proton's profile in this server.`}
+              maxLength={190}
+              optional
             />
-          </div>
-        </SectionCard>
+            <Toggle
+              path="restoreOnDisable"
+              label="Undo when switched off"
+              help="Clears the nickname, avatar, banner and bio in this server when this module is turned off."
+              defaultValue={true}
+            />
+          </SectionCard>
 
-        <SectionCard id="branding:panel:preview" title="Preview">
-          <div className="branding-previews">
-            <BrandingDiscordPreview config={form.live} guildId={guildId} />
-            <BrandingPreview config={form.live} guildId={guildId} />
-          </div>
-        </SectionCard>
+          <SectionCard id="branding:panel:media" title="Profile media">
+            <div className="branding-media-set">
+              <BrandingMedia
+                guildId={guildId}
+                kind="avatar"
+                hash={hash(form.live, 'avatarHash')}
+                onChanged={changed}
+              />
+              <BrandingMedia
+                guildId={guildId}
+                kind="banner"
+                hash={hash(form.live, 'bannerHash')}
+                onChanged={changed}
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard id="branding:style" title="Display name style">
+            <Choice
+              path="typeface"
+              label="Typeface"
+              help="Discord has no font setting a bot can use, so a styled name is spelled in Unicode letters that look like one. Mentions still work; searching the member list for the plain name stops finding it, and screen readers read the letters out one at a time."
+              options={TYPEFACES}
+              optionLabels={TYPEFACE_LABELS_WITH_SAMPLE}
+              defaultValue="none"
+            />
+            <Choice
+              path="nameEffect"
+              label="Effect"
+              help="Colours Proton’s name through a role it holds here. Gradient and holographic need this server to have Discord’s Enhanced Role Colours feature."
+              options={EFFECTS}
+              optionLabels={EFFECT_LABELS}
+              defaultValue="none"
+            />
+            <FieldRow>
+              <Colour path="primaryColor" label="First colour" />
+              <Colour path="secondaryColor" label="Second colour" />
+            </FieldRow>
+          </SectionCard>
+
+          <SectionCard id="branding:panel:preview" title="Preview" span="full">
+            <div className="branding-previews">
+              <BrandingDiscordPreview config={form.live} guildId={guildId} />
+              <BrandingPreview config={form.live} guildId={guildId} />
+            </div>
+          </SectionCard>
+        </SettingsGrid>
       </ModuleSettings>
     </>
   );

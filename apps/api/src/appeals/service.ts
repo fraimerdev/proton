@@ -9,6 +9,7 @@ import {
   appealView,
   checkAnswers,
 } from '@proton/module-appeals';
+
 import type { ModuleConfigService } from '../modules/service.ts';
 
 export class AppealsError extends Error {
@@ -20,10 +21,6 @@ export class AppealsError extends Error {
     this.name = 'AppealsError';
   }
 }
-
-const NO_BUS =
-  'Proton cannot reach its event bus, so your appeal was saved but the moderators have not been ' +
-  'shown it yet. Open this link again in a few minutes.';
 
 export interface AppealsServiceOptions {
   modules: ModuleConfigService;
@@ -111,8 +108,6 @@ export class AppealsService {
     const checked = checkAnswers(view.panel, answers);
     if (!checked.ok) throw new AppealsError('invalid_answers', checked.humanReason);
 
-    // Written first, published second. If the bus is down the row survives, and re-opening the
-    // link republishes because file() is idempotent on (guild, origin, jti).
     const { appeal } = await this.#options.store.file({
       guildId: claims.guildId,
       userId: claims.userId,
@@ -123,7 +118,12 @@ export class AppealsService {
     });
 
     const bus = this.#options.bus;
-    if (!bus) throw new AppealsError('bus_unavailable', NO_BUS);
+
+    if (!bus)
+      throw new AppealsError(
+        'bus_unavailable',
+        'Proton cannot reach its event bus, so your appeal was saved but the moderators have not been shown it yet. Open this link again in a few minutes.',
+      );
 
     const payload = appealSubmittedSchema.parse({
       guildId: claims.guildId,

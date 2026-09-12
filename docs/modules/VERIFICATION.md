@@ -41,7 +41,7 @@ Plus a **failure action** — what Proton does to a member who exhausts their ca
 | Web verification depth | Discord OAuth sign-in only. Proton confirms the session's Discord id equals the id the link was minted for. No browser captcha, no account-age heuristics. |
 | Reaching Discord from the web | The dashboard and api **never** call Discord (PLAN.md I1). The web flow publishes a bus event; the worker's verification listener is what grants the role. |
 | Failure action | `none` \| `kick` \| `ban` \| `timeout` \| `quarantine`, fired once when the last attempt is spent. `quarantine` reuses `quarantineRoleId`. |
-| Existing behaviour | The join gate, `/verify`, `/quarantine` and `/unquarantine` keep working exactly as they do today. `mode` does not change what `/verify` does. |
+| Existing behaviour | The join gate, `/verify`, `/quarantine add` and `/quarantine remove` keep working exactly as they do today. `mode` does not change what `/verify` does. |
 
 ---
 

@@ -72,7 +72,7 @@ export async function reconcilePanel(
     return { action: 'refused', reason: built.humanReason };
   }
 
-  const message = { content: built.content, components: built.components };
+  const { ok: _ok, ...message } = built;
 
   if (existing && existing.channelId === wanted) {
     const edited = await run(

@@ -28,6 +28,7 @@
     "@proton/module-leveling": "workspace:*",
     "@proton/module-logging": "workspace:*",
     "@proton/module-messages": "workspace:*",
+    "@proton/module-moderation": "workspace:*",
     "@proton/module-permissions": "workspace:*",
     "@proton/module-phishing": "workspace:*",
     "@proton/module-ping": "workspace:*",

@@ -92,7 +92,7 @@ export async function runQuarantine(
       `<@${input.targetId}> is already quarantined — <@${existing.quarantinedBy}> did it on ` +
         `${new Date(existing.quarantinedAt).toISOString()}, and I'm holding ` +
         `${existing.priorRoleIds.length} role${existing.priorRoleIds.length === 1 ? '' : 's'} ` +
-        'to give back. Run /unquarantine to restore them.',
+        'to give back. Run /quarantine remove to restore them.',
     );
     return;
   }
@@ -141,11 +141,11 @@ export async function runQuarantine(
 
   const held =
     plan.priorRoleIds.length === 0
-      ? 'They held no roles beyond @everyone, so there was nothing to take away — /unquarantine ' +
+      ? 'They held no roles beyond @everyone, so there was nothing to take away — /quarantine remove ' +
         'will simply lift the quarantine role.'
       : `I'm holding ${plan.priorRoleIds.length} role` +
         `${plan.priorRoleIds.length === 1 ? '' : 's'} to give back: ` +
-        `${plan.priorRoleIds.map((id) => `<@&${id}>`).join(', ')}. Run /unquarantine to restore them ` +
+        `${plan.priorRoleIds.map((id) => `<@&${id}>`).join(', ')}. Run /quarantine remove to restore them ` +
         'exactly.';
 
   await reply(
@@ -153,7 +153,7 @@ export async function runQuarantine(
     report.failures.length === 0
       ? `Quarantined <@${input.targetId}>. ${held}`
       : `Quarantined <@${input.targetId}>, but not cleanly. ${held}\n\nWhat did NOT work — ` +
-          `${report.failures.join(' | ')}\n\nThe record is saved either way, so /unquarantine still ` +
+          `${report.failures.join(' | ')}\n\nThe record is saved either way, so /quarantine remove still ` +
           'knows what they had.',
   );
 }
@@ -239,7 +239,7 @@ function describeRelease(
         `${plan.ungrantableRoleIds.length === 1 ? '' : 's'} now sit above Proton's own role, so ` +
         `I am not allowed to grant ${plan.ungrantableRoleIds.length === 1 ? 'it' : 'them'}: ` +
         `${plan.ungrantableRoleIds.map((id) => `<@&${id}>`).join(', ')}. Move Proton's role ` +
-        'higher in Server Settings → Roles and run /unquarantine again, or add them by hand.',
+        'higher in Server Settings → Roles and run /quarantine remove again, or add them by hand.',
     );
   }
 
@@ -249,7 +249,7 @@ function describeRelease(
     clean
       ? 'The quarantine record has been cleared.'
       : 'The quarantine record has been KEPT so nothing is lost — fix the above and run ' +
-          '/unquarantine again; the roles that already went back will be skipped.',
+          '/quarantine remove again; the roles that already went back will be skipped.',
   );
 
   return lines.join('\n\n');

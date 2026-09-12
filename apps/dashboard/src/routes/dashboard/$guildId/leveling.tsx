@@ -1,4 +1,9 @@
-import { EMPTY_MESSAGE, type LeaderboardResult, leaderboardQuerySchema } from '@proton/core';
+import {
+  EMPTY_MESSAGE,
+  type LeaderboardResult,
+  leaderboardQuerySchema,
+  type ModuleSummary,
+} from '@proton/core';
 import {
   levelUpMessageSchema,
   type RoleReward,
@@ -7,8 +12,10 @@ import {
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, lazyRouteComponent, useNavigate } from '@tanstack/react-router';
 import { type ReactElement, useEffect } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { FieldRow, SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
+import { CardShow, CardShows } from '../../../components/leveling/card-shows.tsx';
 import { RoleRewardsEditor } from '../../../components/leveling/role-rewards.tsx';
+import { XpCurve } from '../../../components/leveling/xp-curve.tsx';
 import { LEVELING_AREAS as AREAS } from '../../../components/module/area-index.ts';
 import type { AreaEntry } from '../../../components/module/areas.ts';
 import { activeArea } from '../../../components/module/areas.ts';
@@ -28,7 +35,6 @@ import {
 } from '../../../components/module/inputs.tsx';
 import {
   ActiveView,
-  AreaHub,
   ModuleChrome,
   ModuleSettings,
   tabsFor,
@@ -36,6 +42,9 @@ import {
 import { moduleRoute } from '../../../components/module/route.tsx';
 import type { ModuleView, ViewEntry } from '../../../components/module/views.ts';
 import { viewSearchUpdate } from '../../../components/module/views.ts';
+import { Icon } from '../../../components/shell/icon.tsx';
+import { moduleState } from '../../../components/shell/module-meta.ts';
+import { useToggleModule } from '../../../components/shell/module-toggle.tsx';
 import { modulesQuery } from '../../../lib/queries.ts';
 import { LIVE, queryKeys, STALE } from '../../../lib/query-keys.ts';
 
@@ -101,7 +110,7 @@ function LevelingPage(): ReactElement {
           guildId={guildId}
           summary={summary}
           area={entry ? undefined : area}
-          tabs={tabsFor(VIEWS, search.view, area?.id)}
+          tabs={tabsFor(VIEWS, search.view, area?.id, AREAS)}
         />
       ) : null}
 
@@ -138,21 +147,65 @@ function Settings({
 }): ReactElement {
   const form = useModuleForm(guildId, 'leveling', true);
 
-  if (area === undefined) return <AreaHub areas={AREAS} config={form.config} />;
-
   return (
     <ModuleSettings form={form}>
-      {area.id === 'earning' ? <EarningArea form={form} /> : null}
-      {area.id === 'levelup' ? <LevelUpArea form={form} /> : null}
-      {area.id === 'rewards' ? <RewardsArea form={form} /> : null}
-      {area.id === 'card' ? <CardArea form={form} /> : null}
+      <OffBand summary={form.summary} />
+
+      {area?.id === 'earning' ? <EarningArea form={form} /> : null}
+      {area?.id === 'levelup' ? <LevelUpArea form={form} /> : null}
+      {area?.id === 'rewards' ? <RewardsArea form={form} /> : null}
+      {area?.id === 'card' ? <CardArea form={form} /> : null}
     </ModuleSettings>
+  );
+}
+
+function OffBand({ summary }: { summary: ModuleSummary }): ReactElement | null {
+  const toggle = useToggleModule();
+  if (moduleState(summary) !== 'off') return null;
+
+  return (
+    <div className="module-off">
+      <Icon name="lightning-slash" />
+      <p className="module-off-text">
+        {summary.name} is switched off. These settings are saved, and nothing runs in this server
+        until you switch it on.
+      </p>
+      <button type="button" className="button button-quiet" onClick={() => toggle(summary, true)}>
+        Switch {summary.name} on
+      </button>
+    </div>
+  );
+}
+
+function num(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function Curve({ form }: { form: ModuleForm }): ReactElement {
+  return (
+    <XpCurve
+      rewards={form.value('roleRewards', []) as RoleReward[]}
+      roles={form.roles}
+      xpMin={num(form.value('xpPerMessageMin', 15), 15)}
+      xpMax={num(form.value('xpPerMessageMax', 25), 25)}
+    />
   );
 }
 
 function EarningArea({ form }: { form: ModuleForm }): ReactElement {
   return (
-    <>
+    <SettingsGrid>
+      {/* First, and full width: a level is a number nobody can read out of a pair of XP bounds,
+          and the rewards are what make the shape of it matter. */}
+      <SectionCard
+        id="leveling:curve"
+        title="The curve"
+        hint="What each level costs, and where this server’s rewards land on it."
+        span="full"
+      >
+        <Curve form={form} />
+      </SectionCard>
+
       <SectionCard id="leveling:message" title="Message XP">
         <XpRange form={form} />
         <Duration path="messageCooldown" label="Message cooldown" defaultValue="60s" />
@@ -167,10 +220,21 @@ function EarningArea({ form }: { form: ModuleForm }): ReactElement {
           max={100}
           defaultValue={5}
         />
-        <ChannelField path="afkChannelId" label="AFK channel" channelTypes={[2, 13]} optional />
+        <ChannelField
+          path="afkChannelId"
+          label="AFK channel"
+          help="Minutes spent in this channel earn nothing"
+          channelTypes={[2, 13]}
+          optional
+        />
       </SectionCard>
 
-      <SectionCard id="leveling:exclusions" title="Exclusions">
+      <SectionCard
+        id="leveling:exclusions"
+        title="Exclusions"
+        hint="Messages in these channels, and members holding these roles, earn no XP."
+        span="full"
+      >
         <Tokens
           path="excludedChannelIds"
           kind="channel-id"
@@ -180,7 +244,7 @@ function EarningArea({ form }: { form: ModuleForm }): ReactElement {
         />
         <Tokens path="excludedRoleIds" kind="role-id" label="Excluded roles" maxItems={50} />
       </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }
 
@@ -209,7 +273,7 @@ function XpRange({ form }: { form: ModuleForm }): ReactElement {
   }, [report, inverted, max]);
 
   return (
-    <>
+    <FieldRow>
       <Num
         path="xpPerMessageMin"
         label="XP per message (minimum)"
@@ -224,7 +288,7 @@ function XpRange({ form }: { form: ModuleForm }): ReactElement {
         max={1000}
         defaultValue={25}
       />
-    </>
+    </FieldRow>
   );
 }
 
@@ -237,8 +301,8 @@ function LevelUpArea({ form }: { form: ModuleForm }): ReactElement {
   usePanelSchema('levelUpMessage', 'Level-up message', levelUpMessageSchema, levelUpMessage);
 
   return (
-    <>
-      <SectionCard id="leveling:announce" title="Level-up announcement">
+    <SettingsGrid>
+      <SectionCard id="leveling:panel:levelUpMessage" title="Level-up announcement" span="full">
         <ChannelField
           path="levelUpChannelId"
           label="Level-up channel"
@@ -246,9 +310,6 @@ function LevelUpArea({ form }: { form: ModuleForm }): ReactElement {
           channelTypes={ANNOUNCE_CHANNEL_TYPES}
           optional
         />
-      </SectionCard>
-
-      <SectionCard id="leveling:panel:levelUpMessage" title="Level-up message">
         <LevelUpMessageEditor
           message={levelUpMessage}
           onChange={(next) => form.set('levelUpMessage', next)}
@@ -256,7 +317,7 @@ function LevelUpArea({ form }: { form: ModuleForm }): ReactElement {
           roles={form.roles}
         />
       </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }
 
@@ -265,43 +326,43 @@ function RewardsArea({ form }: { form: ModuleForm }): ReactElement {
   usePanelSchema('roleRewards', 'Role rewards', roleRewardsSchema, rewards);
 
   return (
-    <>
-      <SectionCard id="leveling:rewards" title="Role rewards">
+    <SettingsGrid>
+      {/* The plot and the editor are one region: a level typed below moves its flag above, which is
+          the only way to see that level 5 and level 50 are not the same distance apart. */}
+      <SectionCard id="leveling:panel:roleRewards" title="Role rewards" span="full">
+        <Curve form={form} />
         <Choice
           path="rewardMode"
           label="Reward mode"
           options={['stack', 'replace']}
           defaultValue="stack"
         />
-      </SectionCard>
-
-      <SectionCard id="leveling:panel:roleRewards" title={null}>
         <RoleRewardsEditor
           rewards={rewards}
           roles={form.roles}
           onChange={(next) => form.set('roleRewards', next)}
         />
       </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }
 
 function CardArea({ form }: { form: ModuleForm }): ReactElement {
   return (
-    <>
-      <SectionCard id="leveling:card" title="Rank card">
-        <Toggle path="rankCard" label="Rank card" defaultValue={false} />
+    <SettingsGrid>
+      <SectionCard
+        id="leveling:card"
+        title="Rank card"
+        hint="Whether /rank draws an image at all, and how it looks."
+      >
+        <Toggle path="rankCard" label="Draw a card for /rank" defaultValue={false} />
         <Choice
           path="cardPreset"
           label="Card style"
           options={['midnight', 'aurora', 'parchment']}
           defaultValue="midnight"
         />
-        <Colour
-          path="cardAccent"
-          label="Accent colour"
-          help="Colours the progress bar, the rank number and the avatar ring"
-        />
+        <Colour path="cardAccent" label="Accent colour" />
         <Text
           path="cardBackgroundUrl"
           label="Background image"
@@ -309,14 +370,22 @@ function CardArea({ form }: { form: ModuleForm }): ReactElement {
           maxLength={2048}
           optional
         />
-        <Toggle path="cardShowRank" label="Show the rank number" defaultValue={true} />
-        <Toggle path="cardShowPercent" label="Show progress percentage" defaultValue={true} />
-        <Toggle path="cardShowTotalXp" label="Show total XP" defaultValue={true} />
+
+        {/* One decision with three parts, on the row with the rest of the card's look, rather than a
+            card of its own holding three switches. */}
+        <CardShows label="What the card shows">
+          <CardShow path="cardShowRank" label="Rank number" />
+          <CardShow path="cardShowPercent" label="Progress percentage" />
+          <CardShow path="cardShowTotalXp" label="Total XP" />
+        </CardShows>
       </SectionCard>
 
+      {/* Second, so it lands beside the settings that redraw it rather than under them. Every
+          control in the card beside this one changes what this picture is, and a preview at the foot
+          of the page is one the admin has to scroll away from to use. */}
       <SectionCard id="leveling:panel:preview" title="Rank card preview">
         <RankCardPreview config={form.live} guildId={form.guildId} />
       </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }

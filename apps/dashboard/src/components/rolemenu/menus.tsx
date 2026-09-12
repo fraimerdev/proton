@@ -11,6 +11,7 @@ import {
 } from '@proton/module-rolemenu/config';
 import type { ReactElement } from 'react';
 import { useId } from 'react';
+import { EmojiInput } from '../emoji/picker.tsx';
 import {
   channelOptions,
   type DiscordChannel,
@@ -19,6 +20,7 @@ import {
   roleOptions,
   SinglePicker,
 } from '../form/picker.tsx';
+import { PostPanel } from '../module/post-panel.tsx';
 
 export interface RolemenuEditorProps {
   menus: readonly RolemenuMenu[];
@@ -107,8 +109,8 @@ export function RolemenuEditor({
   return (
     <div className="ladder" data-path="menus">
       <p className="field-description">
-        Each menu is one message members interact with. Run <code>/rolemenu post</code> after saving
-        to publish or refresh it.
+        Each menu is one message members interact with. Save, then post it — or run{' '}
+        <code>/rolemenu post</code> in Discord if you would rather.
       </p>
 
       {menus.map((menu, menuIndex) => {
@@ -144,6 +146,8 @@ export function RolemenuEditor({
                 invalid={menu.channelId === ''}
               />
             </div>
+
+            <PostPanel panelId={menu.id} label="Post this menu" />
 
             <label className="filter">
               <span>Kind</span>
@@ -201,16 +205,30 @@ export function RolemenuEditor({
                   // biome-ignore lint/suspicious/noArrayIndexKey: the key field is the edited value
                   key={`${menu.id}-${bindingIndex}`}
                 >
-                  <label className="filter">
-                    <span>{menu.kind === 'reaction' ? 'Emoji' : 'Key'}</span>
-                    <input
-                      type="text"
-                      value={binding.key}
-                      onChange={(e) =>
-                        updateBinding(menuIndex, bindingIndex, { key: e.target.value })
-                      }
-                    />
-                  </label>
+                  {/* Only a reaction menu's key is an emoji — a button or dropdown menu keys its
+                      bindings by an identifier, which a picker of 1900 glyphs cannot supply. */}
+                  {menu.kind === 'reaction' ? (
+                    <div className="filter">
+                      <span>Emoji</span>
+                      <EmojiInput
+                        value={binding.key}
+                        clearable={false}
+                        name="Reaction emoji"
+                        onChange={(value) => updateBinding(menuIndex, bindingIndex, { key: value })}
+                      />
+                    </div>
+                  ) : (
+                    <label className="filter">
+                      <span>Key</span>
+                      <input
+                        type="text"
+                        value={binding.key}
+                        onChange={(e) =>
+                          updateBinding(menuIndex, bindingIndex, { key: e.target.value })
+                        }
+                      />
+                    </label>
+                  )}
 
                   <div className="filter">
                     <span>

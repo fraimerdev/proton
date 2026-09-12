@@ -211,11 +211,14 @@ describe('/kick', () => {
   });
 });
 
-describe('/timeout and /untimeout', () => {
+describe('/timeout add and /timeout remove', () => {
   test('times a member out until a point in the future', async () => {
     const h = harness();
 
-    await h.run('timeout', [userOption('user', MEMBER), stringOption('duration', '30m')]);
+    await h.run(
+      'timeout',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '30m')]),
+    );
 
     const [call] = h.discordCalls();
     expect(call?.method).toBe('PATCH');
@@ -231,7 +234,7 @@ describe('/timeout and /untimeout', () => {
   test('falls back to the configured default duration', async () => {
     const h = harness();
 
-    await h.run('timeout', [userOption('user', MEMBER)], {
+    await h.run('timeout', subcommand('add', [userOption('user', MEMBER)]), {
       config: { defaultTimeoutDuration: '15m' },
     });
 
@@ -241,16 +244,19 @@ describe('/timeout and /untimeout', () => {
   test('refuses a timeout past the 28 day cap, naming the cap', async () => {
     const h = harness();
 
-    await h.run('timeout', [userOption('user', MEMBER), stringOption('duration', '30d')]);
+    await h.run(
+      'timeout',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '30d')]),
+    );
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.replyContent()).toContain('28 days');
   });
 
-  test('untimeout clears the timeout', async () => {
+  test('remove clears the timeout', async () => {
     const h = harness();
 
-    await h.run('untimeout', [userOption('user', MEMBER)]);
+    await h.run('timeout', subcommand('remove', [userOption('user', MEMBER)]));
 
     expect(h.discordCalls()[0]?.body).toEqual({ communication_disabled_until: null });
     expect(h.replyContent()).toContain('can talk again');
@@ -327,11 +333,11 @@ describe('/slowmode', () => {
   });
 });
 
-describe('/lockdown and /unlock', () => {
+describe('/lockdown add and /lockdown remove', () => {
   test('denies SendMessages to everyone in the invoking channel', async () => {
     const h = harness();
 
-    await h.run('lockdown', []);
+    await h.run('lockdown', subcommand('add', []));
 
     const call = h.discordCalls()[0];
     expect(call?.method).toBe('PUT');
@@ -343,17 +349,17 @@ describe('/lockdown and /unlock', () => {
   test('a duration schedules the unlock', async () => {
     const h = harness();
 
-    await h.run('lockdown', [stringOption('duration', '30m')]);
+    await h.run('lockdown', subcommand('add', [stringOption('duration', '30m')]));
 
     expect(h.scheduled).toHaveLength(1);
     expect(h.scheduled[0]?.request.kind).toBe('lockdown');
     expect(h.replyContent()).toContain('30m');
   });
 
-  test('unlock clears the overwrite', async () => {
+  test('remove clears the overwrite', async () => {
     const h = harness();
 
-    await h.run('unlock', []);
+    await h.run('lockdown', subcommand('remove', []));
 
     expect(h.discordCalls()[0]?.body).toEqual({ type: 0, allow: '0', deny: '0' });
     expect(h.replyContent()).toContain('Unlocked');
@@ -362,7 +368,7 @@ describe('/lockdown and /unlock', () => {
   test('names ManageRoles when it is missing', async () => {
     const h = harness();
 
-    await h.run('lockdown', [], {
+    await h.run('lockdown', subcommand('add', []), {
       appPermissions: BOT_PERMISSIONS & ~Permissions.ManageRoles,
     });
 
@@ -399,7 +405,7 @@ describe('module policy', () => {
 
   test('replies are ephemeral unless the guild asks for announcements', async () => {
     const quiet = harness();
-    await quiet.run('unlock', []);
+    await quiet.run('lockdown', subcommand('remove', []));
     expect(
       (
         quiet.rest.calls.find((c) => c.path.startsWith('/interactions/'))?.body as
@@ -409,7 +415,7 @@ describe('module policy', () => {
     ).toBe(64);
 
     const loud = harness();
-    await loud.run('unlock', [], { config: { publicReplies: true } });
+    await loud.run('lockdown', subcommand('remove', []), { config: { publicReplies: true } });
     expect(
       (
         loud.rest.calls.find((c) => c.path.startsWith('/interactions/'))?.body as
@@ -424,11 +430,12 @@ describe('module policy', () => {
       ['ban', subcommand('add', [userOption('user', ABOVE_BOT)])],
       ['ban', subcommand('remove', [stringOption('user_id', MEMBER)])],
       ['kick', [userOption('user', MEMBER)]],
-      ['timeout', [userOption('user', MEMBER)]],
-      ['untimeout', [userOption('user', MEMBER)]],
+      ['timeout', subcommand('add', [userOption('user', MEMBER)])],
+      ['timeout', subcommand('remove', [userOption('user', MEMBER)])],
+      ['warn', subcommand('add', [userOption('user', MEMBER)])],
       ['slowmode', [stringOption('duration', '5s')]],
-      ['lockdown', []],
-      ['unlock', []],
+      ['lockdown', subcommand('add', [])],
+      ['lockdown', subcommand('remove', [])],
     ] as const) {
       const h = harness();
 

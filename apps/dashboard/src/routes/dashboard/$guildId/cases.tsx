@@ -4,7 +4,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, lazyRouteComponent, useNavigate } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { EscalationLadderEditor } from '../../../components/cases/escalation-ladder.tsx';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { FieldRow, SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { Duration, Num, usePanelSchema } from '../../../components/module/inputs.tsx';
@@ -23,7 +23,7 @@ import { LIVE, queryKeys, STALE } from '../../../lib/query-keys.ts';
 const VIEWS: readonly ModuleView[] = [
   {
     id: 'cases',
-    title: 'Cases',
+    title: 'Case log',
     searchSchema: caseQuerySchema,
 
     query: ({ guildId, search }) => ({
@@ -92,23 +92,28 @@ function Settings({ guildId }: { guildId: string }): ReactElement {
 
   return (
     <ModuleSettings form={form}>
-      <SectionCard id="cases:general" title="General">
-        <Num
-          path="historyLimit"
-          label="Cases shown in /history"
-          min={1}
-          max={25}
-          defaultValue={10}
-        />
-      </SectionCard>
-
-      <SectionCard id="cases:escalation" title="Warn escalation">
-        <Duration path="escalationWindow" label="Escalation window" defaultValue="30d" />
-      </SectionCard>
-
-      <SectionCard id="cases:panel:escalationLadder" title={null}>
-        <Ladder form={form} />
-      </SectionCard>
+      <SettingsGrid>
+        {/* The window stays beside the ladder: it is the timeframe the rungs count warnings in, and
+            a card away the ladder read as a list of consequences with no timeframe. */}
+        <SectionCard
+          id="cases:history"
+          title="Case history"
+          hint="How much of a member’s record is read, and what a run of warnings triggers."
+          span="full"
+        >
+          <FieldRow>
+            <Num
+              path="historyLimit"
+              label="Cases shown in /history"
+              min={1}
+              max={25}
+              defaultValue={10}
+            />
+            <Duration path="escalationWindow" label="Escalation window" defaultValue="30d" />
+          </FieldRow>
+          <Ladder form={form} />
+        </SectionCard>
+      </SettingsGrid>
     </ModuleSettings>
   );
 }

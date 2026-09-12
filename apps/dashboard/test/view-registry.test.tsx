@@ -11,6 +11,7 @@ import {
 } from '@proton/core';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { ticketQuerySchema } from '@proton/module-tickets/query';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -309,11 +310,11 @@ describe('the views the module routes declare', () => {
     );
 
     expect(declared).toEqual({
-      cases: [['cases', 'Cases']],
+      cases: [['cases', 'Case log']],
       moderation: [['blocked', 'Blocked members']],
       leveling: [['leaderboard', 'Leaderboard']],
-      tags: [['tags', 'Tags']],
-      tickets: [['tickets', 'Tickets']],
+      tags: [['tags', 'Tag library']],
+      tickets: [['tickets', 'Ticket queue']],
     });
   });
 
@@ -429,8 +430,13 @@ describe('the views the module routes declare', () => {
       const fixture = FIXTURES[`${moduleId}/${entry.id}`];
       if (!fixture) throw new Error(`no fixture for ${moduleId}/${entry.id}`);
 
+      // Wrapped because the views resolve member names through react-query now. There is no
+      // window here, so the lookup is disabled and every account renders as the id it falls
+      // back to — which is what the fixtures below assert.
       const html = renderToStaticMarkup(
-        <entry.View search={fixture.search} data={fixture.data} onSearch={() => undefined} />,
+        <QueryClientProvider client={new QueryClient()}>
+          <entry.View search={fixture.search} data={fixture.data} onSearch={() => undefined} />
+        </QueryClientProvider>,
       );
 
       expect(html).toContain('<table');
@@ -446,7 +452,7 @@ describe('which tab the address bar selects', () => {
   });
 
   test('the view parameter selects that view, so the tab is shareable', () => {
-    expect(resolveView('cases', viewsOf('cases'), 'cases')?.title).toBe('Cases');
+    expect(resolveView('cases', viewsOf('cases'), 'cases')?.title).toBe('Case log');
     expect(resolveView('leveling', viewsOf('leveling'), 'leaderboard')?.title).toBe('Leaderboard');
   });
 
@@ -476,9 +482,64 @@ describe('which tab the address bar selects', () => {
 
   test('the tab strip leads with settings and then every view the module declares', () => {
     expect(tabsFor(viewsOf('cases'), 'cases')).toEqual([
-      { key: SETTINGS_TAB, title: 'Settings', search: {}, current: false },
-      { key: 'view:cases', title: 'Cases', search: { view: 'cases' }, current: true },
+      { key: SETTINGS_TAB, title: 'Settings', search: {}, current: false, kind: 'area' },
+      {
+        key: 'view:cases',
+        title: 'Case log',
+        search: { view: 'cases' },
+        current: true,
+        kind: 'view',
+      },
     ]);
+  });
+
+  test('a module with areas spends the same strip on them, and keeps its views after them', () => {
+    const areas = [
+      { id: 'earning', title: 'Earning XP' },
+      { id: 'rewards', title: 'Role rewards' },
+    ];
+
+    expect(tabsFor(viewsOf('leveling'), undefined, 'rewards', areas)).toEqual([
+      {
+        key: 'area:earning',
+        title: 'Earning XP',
+        search: { area: 'earning' },
+        current: false,
+        kind: 'area',
+      },
+      {
+        key: 'area:rewards',
+        title: 'Role rewards',
+        search: { area: 'rewards' },
+        current: true,
+        kind: 'area',
+      },
+      {
+        key: 'view:leaderboard',
+        title: 'Leaderboard',
+        search: { view: 'leaderboard' },
+        current: false,
+        kind: 'view',
+      },
+    ]);
+  });
+
+  // The bare url resolves ?area= to the first area, so the first tab has to read as current there
+  // or the strip claims the admin is nowhere.
+  test('with no area in the url the first one is the current tab', () => {
+    const areas = [
+      { id: 'earning', title: 'Earning XP' },
+      { id: 'rewards', title: 'Role rewards' },
+    ];
+
+    expect(tabsFor([], undefined, undefined, areas).map((tab) => tab.current)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  test('a module with neither areas nor views draws no strip at all', () => {
+    expect(tabsFor([], undefined)).toEqual([]);
   });
 });
 
@@ -493,12 +554,13 @@ describe('a view may legally be called settings', () => {
 
   test('it reaches its own tab and leaves the settings form its own, sharing no id namespace', () => {
     expect(tabsFor([SETTINGS_NAMED], SETTINGS_TAB)).toEqual([
-      { key: SETTINGS_TAB, title: 'Settings', search: {}, current: false },
+      { key: SETTINGS_TAB, title: 'Settings', search: {}, current: false, kind: 'area' },
       {
         key: 'view:settings',
         title: 'Settings history',
         search: { view: SETTINGS_TAB },
         current: true,
+        kind: 'view',
       },
     ]);
   });

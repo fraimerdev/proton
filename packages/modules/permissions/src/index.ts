@@ -1,6 +1,7 @@
 import { type ModuleManifest, Permissions } from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
 import {
+  liftStoredConfig,
   PERMISSIONS_SCHEMA_VERSION,
   permissionsConfigSchema,
   permissionsDefaultConfig,
@@ -11,10 +12,12 @@ export {
   type CommandOverrides,
   commandOverridesFormSchema,
   commandOverridesSchema,
+  liftStoredConfig,
   PERMISSIONS_SCHEMA_VERSION,
   type PermissionsConfig,
   permissionsConfigSchema,
   permissionsDefaultConfig,
+  RETIRED_COMMAND_ALIASES,
 } from './config.ts';
 export {
   type CommandGateDecision,
@@ -39,6 +42,7 @@ export const permissionsModule: ModuleManifest<typeof permissionsConfigSchema> =
   requiredPermissions: [Permissions.ViewChannel],
   // No module code executes: the worker's own command refusals run under this module's id.
   actionKinds: ['interaction_reply'],
+  liftStoredConfig,
   dashboard: {
     icon: 'lock',
     sections: [

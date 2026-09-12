@@ -1,13 +1,15 @@
 import type { FieldDescriptor, FieldKind, ShowWhen } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
 import { createContext, type ReactElement, useContext, useEffect, useMemo } from 'react';
-import type { FieldSlot } from '../form/fields.tsx';
+import type { DurationBounds, FieldSlot } from '../form/fields.tsx';
 import {
   ArrayFieldInput,
   BooleanFieldInput,
+  BooleanGroupFieldInput,
   ChannelIdFieldInput,
   ColourFieldInput,
   DurationFieldInput,
+  EmojiFieldInput,
   EnumFieldInput,
   NumberFieldInput,
   RoleIdFieldInput,
@@ -43,6 +45,10 @@ interface Common {
   help?: string;
   optional?: boolean;
 
+  // The long caveat, behind the ⓘ. `help` prints on the row now, so this is what the tooltip is
+  // for: the paragraph that does not belong on a settings row but has to be somewhere.
+  detail?: string;
+
   // Hidden, not unmounted. A field held off the page by a mode switch still carries a value the
   // save will write, so unmounting it would hide the one thing explaining why Save is refusing.
   hidden?: boolean;
@@ -50,6 +56,14 @@ interface Common {
 
   // Set when the field is one cell of a rule row rather than a row of its own.
   param?: FieldSlot;
+}
+
+function passed(props: Common): {
+  hidden: boolean | undefined;
+  detail: string | undefined;
+  param: FieldSlot | undefined;
+} {
+  return { hidden: props.hidden, detail: props.detail, param: props.param };
 }
 
 function base(props: Common, defaultValue?: unknown): Omit<FieldDescriptor, 'kind'> {
@@ -103,10 +117,50 @@ export function Toggle(props: Common & { defaultValue?: boolean }): ReactElement
   );
 
   return (
-    <BooleanFieldInput
-      {...useBound(descriptor, props.defaultValue ?? false)}
-      hidden={props.hidden}
-      param={props.param}
+    <BooleanFieldInput {...useBound(descriptor, props.defaultValue ?? false)} {...passed(props)} />
+  );
+}
+
+export interface ToggleSpec {
+  path: string;
+  label: string;
+  defaultValue?: boolean;
+}
+
+/**
+ * One decision with several parts. Three related booleans — leveling's "what the card shows",
+ * starboard's scope, honeypot's notice — were three rows of their own, each 44px of page carrying a
+ * 23px switch, and reading them as three separate settings is what the layout was teaching.
+ *
+ * Every toggle keeps its own data-path, so the command palette and a #path link still land on one.
+ */
+export function Toggles({
+  label,
+  help,
+  detail,
+  hidden,
+  toggles,
+}: {
+  label: string;
+  help?: string;
+  detail?: string;
+  hidden?: boolean;
+  toggles: readonly ToggleSpec[];
+}): ReactElement {
+  const form = useForm();
+
+  return (
+    <BooleanGroupFieldInput
+      label={label}
+      description={help}
+      detail={detail}
+      hidden={hidden}
+      toggles={toggles.map((toggle) => ({
+        path: toggle.path,
+        label: toggle.label,
+        value: form.value(toggle.path, toggle.defaultValue ?? false) === true,
+        onChange: (next: boolean) => form.set(toggle.path, next),
+      }))}
     />
   );
 }
@@ -149,7 +203,7 @@ export function Text(
         : (props.validate?.(held) ?? null),
   );
 
-  return <StringFieldInput {...bound} hidden={props.hidden} param={props.param} />;
+  return <StringFieldInput {...bound} {...passed(props)} />;
 }
 
 export function Num(
@@ -183,7 +237,7 @@ export function Num(
         : null,
   );
 
-  return <NumberFieldInput {...bound} hidden={props.hidden} param={props.param} />;
+  return <NumberFieldInput {...bound} {...passed(props)} />;
 }
 
 export function Seconds(
@@ -217,7 +271,7 @@ export function Seconds(
         : null,
   );
 
-  return <SecondsFieldInput {...bound} hidden={props.hidden} param={props.param} />;
+  return <SecondsFieldInput {...bound} {...passed(props)} />;
 }
 
 export function Choice(
@@ -237,13 +291,7 @@ export function Choice(
     [props],
   );
 
-  return (
-    <EnumFieldInput
-      {...useBound(descriptor, props.defaultValue)}
-      hidden={props.hidden}
-      param={props.param}
-    />
-  );
+  return <EnumFieldInput {...useBound(descriptor, props.defaultValue)} {...passed(props)} />;
 }
 
 export function Colour(props: Common & { defaultValue?: string }): ReactElement {
@@ -252,13 +300,17 @@ export function Colour(props: Common & { defaultValue?: string }): ReactElement 
     [props],
   );
 
-  return (
-    <ColourFieldInput
-      {...useBound(descriptor, props.defaultValue)}
-      hidden={props.hidden}
-      param={props.param}
-    />
+  return <ColourFieldInput {...useBound(descriptor, props.defaultValue)} {...passed(props)} />;
+}
+
+export function Emoji(props: Common & { defaultValue?: string }): ReactElement {
+  const descriptor = useMemo<FieldDescriptor>(
+    // 'string' is what it is in the config and in the module's Zod schema; only the control differs.
+    () => ({ ...base(props, props.defaultValue), kind: 'string' }),
+    [props],
   );
+
+  return <EmojiFieldInput {...useBound(descriptor, props.defaultValue)} {...passed(props)} />;
 }
 
 export function ChannelField(
@@ -273,13 +325,7 @@ export function ChannelField(
     [props],
   );
 
-  return (
-    <ChannelIdFieldInput
-      {...useBound(descriptor, props.defaultValue)}
-      hidden={props.hidden}
-      param={props.param}
-    />
-  );
+  return <ChannelIdFieldInput {...useBound(descriptor, props.defaultValue)} {...passed(props)} />;
 }
 
 export function RoleField(props: Common & { defaultValue?: string }): ReactElement {
@@ -288,16 +334,18 @@ export function RoleField(props: Common & { defaultValue?: string }): ReactEleme
     [props],
   );
 
-  return (
-    <RoleIdFieldInput
-      {...useBound(descriptor, props.defaultValue)}
-      hidden={props.hidden}
-      param={props.param}
-    />
-  );
+  return <RoleIdFieldInput {...useBound(descriptor, props.defaultValue)} {...passed(props)} />;
 }
 
-export function Duration(props: Common & { defaultValue?: string }): ReactElement {
+export function Duration(
+  props: Common & {
+    defaultValue?: string;
+
+    // Carried to the control, so a Discord timeout refuses 29 days where it is typed rather than
+    // accepting it and explaining itself in an error underneath.
+    bounds?: DurationBounds;
+  },
+): ReactElement {
   const form = useForm();
 
   const descriptor = useMemo<FieldDescriptor>(
@@ -325,7 +373,7 @@ export function Duration(props: Common & { defaultValue?: string }): ReactElemen
     report(path, hidden ? `${opening}, and this page is not showing it right now.` : `${opening}.`);
   }, [report, path, label, hidden, unreadable]);
 
-  return <DurationFieldInput {...bound} hidden={hidden} param={props.param} />;
+  return <DurationFieldInput {...bound} {...passed(props)} bounds={props.bounds} />;
 }
 
 export function Tokens(
@@ -356,9 +404,7 @@ export function Tokens(
     [props],
   );
 
-  return (
-    <ArrayFieldInput {...useBound(descriptor, [])} hidden={props.hidden} param={props.param} />
-  );
+  return <ArrayFieldInput {...useBound(descriptor, [])} {...passed(props)} />;
 }
 
 export const SEVERITY = ['off', 'low', 'medium', 'high'] as const;
@@ -377,6 +423,7 @@ export function Rule({
   defaultValue = 'off',
   offValue = 'off',
   help,
+  detail,
   children,
   stacked,
 }: {
@@ -387,6 +434,7 @@ export function Rule({
   defaultValue?: string;
   offValue?: string;
   help?: string;
+  detail?: string;
   children?: React.ReactNode;
   stacked?: React.ReactNode;
 }): ReactElement {
@@ -406,6 +454,7 @@ export function Rule({
             defaultValue={defaultValue}
             param={{ label: undefined }}
             {...(help === undefined ? {} : { help })}
+            {...(detail === undefined ? {} : { detail })}
           />
         </div>
       </div>

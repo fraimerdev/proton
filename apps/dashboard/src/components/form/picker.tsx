@@ -3,6 +3,8 @@ import {
   Fragment,
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useId,
@@ -10,6 +12,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { optionLabel } from '../../lib/enum-labels.ts';
 import { useDismiss } from '../shell/dismiss.ts';
 import { Icon } from '../shell/icon.tsx';
@@ -27,6 +30,12 @@ export interface DiscordRole {
   name: string;
   position: number;
   color?: number;
+
+  // Carried from fetchGuildRoles. Absent where a caller builds a role by hand, and absence claims
+  // nothing: a role is offered unless Proton knows it cannot be given out.
+  managed?: boolean;
+  premiumSubscriber?: boolean;
+  assignable?: boolean;
 }
 
 const CHANNEL_ICON_FALLBACK: IconName = 'hash';
@@ -36,6 +45,8 @@ const CHANNEL_ICONS: Record<number, IconName> = {
   2: 'speaker-high',
   4: 'folder',
   5: 'megaphone',
+  11: 'chat-teardrop-text',
+  12: 'lock-key',
   13: 'microphone-stage',
   15: 'chats-circle',
   16: 'chats-circle',
@@ -75,9 +86,15 @@ export interface PickerOption {
   // Stamped by channelOptions alone, so every channel list — generated form and hand-built panel
   // both — carries the note explaining why a channel somebody expected is not in it.
   kind?: 'channel' | undefined;
+
+  // Listed, named and refused. A row Proton cannot act on is still shown, because the admin is
+  // looking for it and a silently absent role reads as a broken picker.
+  blocked?: { why: string } | undefined;
 }
 
 export const CHANNEL_NOTE = 'Channels Proton cannot see are not listed.';
+
+export const ROLE_NOTE = 'Roles Proton cannot give out are listed with the reason beside them.';
 
 /**
  * Channels Proton can post a durable message into: text, announcement, and the two thread kinds.
@@ -87,8 +104,29 @@ export const CHANNEL_NOTE = 'Channels Proton cannot see are not listed.';
  */
 export const POSTABLE_CHANNEL_TYPES = [0, 5, 11, 12] as const;
 
+/**
+ * Why a bot cannot grant a role. Discord answers 403 forever for all three, and the picker offered
+ * every one of them with nothing said — the same failure POSTABLE_CHANNEL_TYPES was written to end.
+ */
+export function roleRefusal(role: DiscordRole): { why: string } | undefined {
+  if (role.premiumSubscriber === true) return { why: 'the Booster role' };
+  if (role.managed === true) return { why: 'managed by an integration' };
+  if (role.assignable === false) return { why: 'above Proton’s own role' };
+
+  return undefined;
+}
+
 export function roleOptions(roles: readonly DiscordRole[]): PickerOption[] {
-  return roles.map((role) => ({ id: role.id, label: role.name, colour: role.color }));
+  return roles.map((role) => {
+    const blocked = roleRefusal(role);
+
+    return {
+      id: role.id,
+      label: role.name,
+      colour: role.color,
+      ...(blocked ? { blocked } : {}),
+    };
+  });
 }
 
 export function channelOptions(
@@ -111,6 +149,127 @@ export function enumOptions(
   labels?: Record<string, string> | undefined,
 ): PickerOption[] {
   return values.map((value) => ({ id: value, label: optionLabel(value, labels) }));
+}
+
+const POP_GAP = 6;
+const POP_EDGE = 8;
+
+// Below this a list is a slot too small to browse. The overlay stops shrinking and takes the better
+// side of the trigger instead, which is what the emoji panel already does.
+const POP_MIN_HEIGHT = 160;
+
+export interface PopoverPlacement {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+  drop: 'up' | 'down';
+}
+
+/**
+ * Where an overlay goes, generalised from the emoji panel's own placement: the better side of the
+ * trigger, shrunk to the room there is, and pulled back inside the viewport rather than hung off
+ * its edge. A settings row's control column is most of the way across the window, so a
+ * left-anchored overlay of any width runs off the right.
+ */
+export function placePopover(
+  box: DOMRect,
+  viewport: { width: number; height: number },
+  want: { width: number; height: number },
+): PopoverPlacement {
+  const below = viewport.height - box.bottom - POP_GAP - POP_EDGE;
+  const above = box.top - POP_GAP - POP_EDGE;
+  const drop = below >= above ? 'down' : 'up';
+
+  const maxHeight = Math.min(want.height, Math.max(POP_MIN_HEIGHT, Math.max(below, above)));
+  const width = Math.max(box.width, Math.min(want.width, viewport.width - POP_EDGE * 2));
+  const left = Math.max(POP_EDGE, Math.min(box.left, viewport.width - width - POP_EDGE));
+
+  return {
+    top: drop === 'down' ? box.bottom + POP_GAP : Math.max(POP_EDGE, box.top - POP_GAP - maxHeight),
+    left,
+    width,
+    maxHeight,
+    drop,
+  };
+}
+
+export interface PopoverProps {
+  anchor: RefObject<HTMLElement | null>;
+  popRef: RefObject<HTMLDivElement | null>;
+  className: string;
+  want: { width: number; height: number };
+  role?: string | undefined;
+  id?: string | undefined;
+  children: ReactNode;
+}
+
+/**
+ * The one portalled overlay. Every picker in the product used to be `position: absolute` inside its
+ * own row, so a picker in the lower half of a ticket type or a messages template was clipped by
+ * `.saved-item { overflow: hidden }` and by `.main`'s own scroll — the option list was simply cut
+ * off. Nothing an ancestor does to overflow can reach an overlay parented to the body.
+ */
+export function Popover({
+  anchor,
+  popRef,
+  className,
+  want,
+  role,
+  id,
+  children,
+}: PopoverProps): ReactElement | null {
+  const [placement, setPlacement] = useState<PopoverPlacement | null>(null);
+
+  // The server has no viewport to measure and react-dom's server renderer has no portal, so the
+  // overlay exists only once the browser has it — which is also the only place it can be opened.
+  useEffect(() => {
+    function measure(): void {
+      const box = anchor.current?.getBoundingClientRect();
+      if (!box) return;
+
+      setPlacement(
+        placePopover(box, { width: window.innerWidth, height: window.innerHeight }, want),
+      );
+    }
+
+    measure();
+
+    // Fixed to the viewport, so a scroll anywhere — the page, or a card with its own overflow —
+    // moves the trigger out from under it. Capture, because a scrolling ancestor does not bubble.
+    window.addEventListener('resize', measure);
+    document.addEventListener('scroll', measure, { capture: true, passive: true });
+
+    return () => {
+      window.removeEventListener('resize', measure);
+      document.removeEventListener('scroll', measure, { capture: true });
+    };
+  }, [anchor, want]);
+
+  if (placement === null) return null;
+
+  return createPortal(
+    <div
+      ref={popRef}
+      className={className}
+      data-drop={placement.drop}
+      role={role}
+      id={id}
+      style={
+        {
+          position: 'fixed',
+          top: `${placement.top}px`,
+          left: `${placement.left}px`,
+          width: `${placement.width}px`,
+          maxHeight: `${placement.maxHeight}px`,
+          '--pop-max-h': `${placement.maxHeight}px`,
+        } as CSSProperties
+      }
+    >
+      {children}
+    </div>,
+    document.body,
+  );
 }
 
 function Mark({ option }: { option: PickerOption }): ReactElement {
@@ -139,11 +298,15 @@ function grouped(options: readonly PickerOption[]): Group[] {
   return out;
 }
 
-interface PopoverProps {
+const PICKER_WANT = { width: 300, height: 420 };
+
+interface PickerPopProps {
   options: readonly PickerOption[];
   selected: readonly string[];
   multiple: boolean;
   label: string;
+  anchor: RefObject<HTMLElement | null>;
+  popRef: RefObject<HTMLDivElement | null>;
   onPick: (id: string) => void;
   onClose: () => void;
 
@@ -152,15 +315,17 @@ interface PopoverProps {
   full?: boolean | undefined;
 }
 
-function Popover({
+function PickerPop({
   options,
   selected,
   multiple,
   label,
+  anchor,
+  popRef,
   onPick,
   onClose,
   full,
-}: PopoverProps): ReactElement {
+}: PickerPopProps): ReactElement {
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -183,8 +348,8 @@ function Popover({
   useEffect(() => inputRef.current?.focus(), []);
 
   // Focus never leaves the search box, so nothing scrolls the list on its own: a guild with more
-  // channels than the 244px box shows would move aria-activedescendant onto a row the user cannot
-  // see, and arrowing down would look like it had stopped working.
+  // channels than the box shows would move aria-activedescendant onto a row the user cannot see,
+  // and arrowing down would look like it had stopped working.
   const activeId = current ? `${listId}-${current.id}` : undefined;
   useEffect(() => {
     if (!activeId) return;
@@ -199,14 +364,16 @@ function Popover({
     setActive((matches.length + index + step) % matches.length);
   }
 
-  function blocked(id: string): boolean {
-    return full === true && !selected.includes(id);
+  function refused(option: PickerOption): boolean {
+    if (selected.includes(option.id)) return false;
+
+    return option.blocked !== undefined || full === true;
   }
 
-  function pick(id: string): void {
-    if (blocked(id)) return;
+  function pick(option: PickerOption): void {
+    if (refused(option)) return;
 
-    onPick(id);
+    onPick(option.id);
     if (!multiple) onClose();
   }
 
@@ -219,7 +386,7 @@ function Popover({
       move(-1);
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (current) pick(current.id);
+      if (current) pick(current);
     }
   }
 
@@ -236,27 +403,36 @@ function Popover({
         aria-selected={chosen}
         // A row that does nothing when clicked reads as a broken list, which is the whole
         // complaint. At capacity the unchosen rows say so instead of quietly ignoring the click.
-        aria-disabled={blocked(option.id) || undefined}
-        data-blocked={blocked(option.id) || undefined}
+        aria-disabled={refused(option) || undefined}
+        data-blocked={refused(option) || undefined}
         data-active={current?.id === option.id || undefined}
         onMouseEnter={() => setActive(matches.indexOf(option))}
         // Down rather than click, so the search box keeps focus and picking a second role needs no
         // second trip to the keyboard.
         onMouseDown={(event) => {
           event.preventDefault();
-          pick(option.id);
+          pick(option);
         }}
         onKeyDown={() => undefined}
       >
         <Mark option={option} />
         <span className="picker-option-label">{option.label}</span>
+        {option.blocked ? <span className="picker-option-why">{option.blocked.why}</span> : null}
         {chosen ? <Icon name="check-circle" weight="fill" className="picker-tick" /> : null}
       </div>
     );
   }
 
+  const note = full
+    ? 'This field is full. Remove one to add another.'
+    : options.some((option) => option.kind === 'channel')
+      ? CHANNEL_NOTE
+      : options.some((option) => option.blocked !== undefined)
+        ? ROLE_NOTE
+        : null;
+
   return (
-    <div className="picker-pop">
+    <Popover anchor={anchor} popRef={popRef} className="popover picker-pop" want={PICKER_WANT}>
       <div className="picker-search">
         <Icon name="magnifying-glass" />
         <input
@@ -300,12 +476,8 @@ function Popover({
         {matches.length === 0 ? <p className="picker-empty">Nothing matches that.</p> : null}
       </div>
 
-      {full ? (
-        <p className="picker-note">This field is full. Remove one to add another.</p>
-      ) : options.some((option) => option.kind === 'channel') ? (
-        <p className="picker-note">{CHANNEL_NOTE}</p>
-      ) : null}
-    </div>
+      {note === null ? null : <p className="picker-note">{note}</p>}
+    </Popover>
   );
 }
 
@@ -318,6 +490,7 @@ export interface SinglePickerProps {
   emptyLabel: string;
   clearable: boolean;
   invalid?: boolean | undefined;
+  disabled?: boolean | undefined;
   describedBy?: string | undefined;
 }
 
@@ -330,14 +503,18 @@ export function SinglePicker({
   emptyLabel,
   clearable,
   invalid,
+  disabled,
   describedBy,
 }: SinglePickerProps): ReactElement {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLSpanElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
 
-  useDismiss(open, close, wrap, trigger);
+  // The overlay is parented to the body, so it is no longer inside the wrapper: the popover is what
+  // counts as inside, and the trigger is the second region plus where Escape returns focus.
+  useDismiss(open, close, pop, trigger);
 
   const known = options.find((option) => option.id === value);
 
@@ -363,6 +540,7 @@ export function SinglePicker({
         aria-expanded={open}
         aria-invalid={invalid}
         aria-describedby={describedBy}
+        disabled={disabled}
         // A <label for> does not name a button, so without this every picker in the product
         // announced itself as whatever channel it happened to be set to.
         aria-label={
@@ -381,11 +559,13 @@ export function SinglePicker({
       </button>
 
       {open ? (
-        <Popover
+        <PickerPop
           options={offered}
           selected={value === null ? [] : [value]}
           multiple={false}
           label={label}
+          anchor={trigger}
+          popRef={pop}
           onPick={(picked) => onChange(picked === '' ? null : picked)}
           onClose={() => {
             setOpen(false);
@@ -409,13 +589,16 @@ function Token({
   onRemove: () => void;
 }): ReactElement {
   return (
-    <span className="token" data-unknown={unknown || undefined}>
+    <span className="token" data-unknown={unknown || undefined} title={option.label}>
       {marked ? <Mark option={option} /> : null}
       <span className="token-label">{option.label}</span>
       <button
         type="button"
         className="token-remove"
         aria-label={`Remove ${option.label}`}
+        // The popover is parented to the body now, so useDismiss counts everything else as outside
+        // and a removal while it was open closed the list the admin was still picking from.
+        onPointerDown={(event) => event.stopPropagation()}
         onClick={onRemove}
       >
         <Icon name="x" />
@@ -444,9 +627,10 @@ export function TokenPicker({
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
 
-  useDismiss(open, close, wrap, trigger);
+  useDismiss(open, close, pop, trigger);
 
   const byId = useMemo(() => new Map(options.map((option) => [option.id, option])), [options]);
   const atCapacity = max !== undefined && values.length >= max;
@@ -505,11 +689,13 @@ export function TokenPicker({
       {atCapacity ? <span className="token-note">Limit of {max} reached</span> : null}
 
       {open ? (
-        <Popover
+        <PickerPop
           options={options}
           selected={values}
           multiple
           label={label}
+          anchor={trigger}
+          popRef={pop}
           onPick={toggle}
           full={atCapacity}
           onClose={() => {
@@ -522,6 +708,8 @@ export function TokenPicker({
   );
 }
 
+export type TokenCommit = 'enter' | 'enter-or-comma';
+
 export interface TokenInputProps {
   id: string;
   label: string;
@@ -530,6 +718,10 @@ export interface TokenInputProps {
   numeric: boolean;
   max?: number | undefined;
   describedBy?: string | undefined;
+
+  // 'enter' for anything a comma can appear inside. A regex quantifier — a{2,5} — was split into
+  // two chips, neither of them a pattern, with nothing on the page saying so.
+  commitOn?: TokenCommit | undefined;
 }
 
 export function TokenInput({
@@ -540,6 +732,7 @@ export function TokenInput({
   numeric,
   max,
   describedBy,
+  commitOn = 'enter-or-comma',
 }: TokenInputProps): ReactElement {
   const [draft, setDraft] = useState('');
   const atCapacity = max !== undefined && values.length >= max;
@@ -558,7 +751,7 @@ export function TokenInput({
   }
 
   function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
-    if (event.key === 'Enter' || event.key === ',') {
+    if (event.key === 'Enter' || (event.key === ',' && commitOn === 'enter-or-comma')) {
       event.preventDefault();
       add();
     } else if (event.key === 'Backspace' && draft === '' && values.length > 0) {

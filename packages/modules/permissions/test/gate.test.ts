@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { permissionsConfigSchema } from '../src/config.ts';
-import { evaluateCommandGate, MAX_LISTED_ROLES } from '../src/gate.ts';
+import { liftStoredConfig, permissionsConfigSchema } from '../src/config.ts';
+import { evaluateCommandGate, MAX_LISTED_ROLES, requiredRolesFor } from '../src/gate.ts';
 
 const MOD_ROLE = '410000000000000009';
 const HELPER_ROLE = '410000000000000007';
@@ -111,5 +111,62 @@ describe('command overrides', () => {
     });
 
     expect(decision.allowed).toBe(false);
+  });
+});
+
+describe('overrides left on a command that is now a subcommand', () => {
+  test('gate the command that absorbed it, so retiring /untimeout drops no gate', () => {
+    const decision = evaluateCommandGate({
+      commandName: 'timeout',
+      memberRoleIds: [MEMBER_ROLE],
+      config: config({ untimeout: [MOD_ROLE] }),
+    });
+
+    expect(decision.allowed).toBe(false);
+  });
+
+  test.each([
+    ['untimeout', 'timeout'],
+    ['unquarantine', 'quarantine'],
+    ['unlock', 'lockdown'],
+  ])('%s is read as %s', (retired, survivor) => {
+    expect(requiredRolesFor(config({ [retired]: [MOD_ROLE] }), survivor)).toEqual([MOD_ROLE]);
+  });
+
+  // One list has to win — the gate only ever sees the top-level name. The survivor's wins, so the
+  // lift widens and the punishment does not. Pinned because it is a decision, not an oversight.
+  test('the survivor’s own roles win where both are set, widening only the lift', () => {
+    const both = config({ timeout: [MOD_ROLE], untimeout: [HELPER_ROLE] });
+
+    expect(requiredRolesFor(both, 'timeout')).toEqual([MOD_ROLE]);
+
+    expect(
+      evaluateCommandGate({ commandName: 'timeout', memberRoleIds: [HELPER_ROLE], config: both })
+        .allowed,
+    ).toBe(false);
+  });
+
+  test('lifting the stored config folds the retired key away for good', () => {
+    expect(liftStoredConfig({ enabled: true, overrides: { untimeout: [MOD_ROLE] } })).toEqual({
+      enabled: true,
+      overrides: { timeout: [MOD_ROLE] },
+    });
+  });
+
+  test('lifting keeps the survivor’s own roles and still drops the dead key', () => {
+    expect(
+      liftStoredConfig({
+        enabled: true,
+        overrides: { timeout: [MOD_ROLE], untimeout: [HELPER_ROLE], ban: [MOD_ROLE] },
+      }),
+    ).toEqual({ enabled: true, overrides: { timeout: [MOD_ROLE], ban: [MOD_ROLE] } });
+  });
+
+  test('lifting leaves a config with nothing to fold exactly as it was', () => {
+    const stored = { enabled: true, overrides: { ban: [MOD_ROLE] } };
+
+    expect(liftStoredConfig(stored)).toBe(stored);
+    expect(liftStoredConfig(null)).toBeNull();
+    expect(liftStoredConfig('nonsense')).toBe('nonsense');
   });
 });

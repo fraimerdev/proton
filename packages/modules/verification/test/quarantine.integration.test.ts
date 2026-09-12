@@ -11,6 +11,7 @@ import {
   QUARANTINE_ROLE,
   QUARANTINED,
   stringOption,
+  subcommand,
   userOption,
 } from './harness.ts';
 
@@ -18,15 +19,19 @@ function sorted(ids: string[]): string[] {
   return [...ids].sort();
 }
 
-describe('/quarantine and /unquarantine', () => {
+describe('/quarantine add and /quarantine remove', () => {
   test('records the prior roles and restores them exactly', async () => {
     const h = harness();
     const before = sorted(h.rolesOf(MEMBER));
     expect(before).toEqual(sorted([EVERYONE_ROLE, LOW_ROLE, MID_ROLE]));
 
-    await h.run('quarantine', [userOption('user', MEMBER), stringOption('reason', 'ban evasion')], {
-      config: QUARANTINED,
-    });
+    await h.run(
+      'quarantine',
+      subcommand('add', [userOption('user', MEMBER), stringOption('reason', 'ban evasion')]),
+      {
+        config: QUARANTINED,
+      },
+    );
 
     expect(sorted(h.rolesOf(MEMBER))).toEqual(sorted([EVERYONE_ROLE, QUARANTINE_ROLE]));
 
@@ -36,7 +41,9 @@ describe('/quarantine and /unquarantine', () => {
     expect(record?.quarantinedBy).toBe(MODERATOR);
     expect(record?.reason).toBe('ban evasion');
 
-    await h.run('unquarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('remove', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     expect(sorted(h.rolesOf(MEMBER))).toEqual(before);
 
@@ -55,7 +62,9 @@ describe('/quarantine and /unquarantine', () => {
       return realRequest(options);
     };
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     expect(observed[0]).toEqual([MID_ROLE, LOW_ROLE]);
   });
@@ -63,7 +72,9 @@ describe('/quarantine and /unquarantine', () => {
   test('every removal carries the full prior-role set into the case ledger', async () => {
     const h = harness();
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     const removals = h.cases().filter((c) => c.kind === 'remove_role');
     expect(removals).toHaveLength(2);
@@ -79,7 +90,9 @@ describe('/quarantine and /unquarantine', () => {
     const h = harness();
     expect(sorted(h.rolesOf(BARE))).toEqual([EVERYONE_ROLE]);
 
-    await h.run('quarantine', [userOption('user', BARE)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', BARE)]), {
+      config: QUARANTINED,
+    });
 
     expect(sorted(h.rolesOf(BARE))).toEqual(sorted([EVERYONE_ROLE, QUARANTINE_ROLE]));
 
@@ -90,7 +103,9 @@ describe('/quarantine and /unquarantine', () => {
     expect(h.discordCalls().map((c) => c.method)).toEqual(['PUT']);
     expect(h.replyContent()).toContain('no roles beyond @everyone');
 
-    await h.run('unquarantine', [userOption('user', BARE)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('remove', [userOption('user', BARE)]), {
+      config: QUARANTINED,
+    });
 
     expect(sorted(h.rolesOf(BARE))).toEqual([EVERYONE_ROLE]);
     expect(await h.quarantine.get(GUILD, BARE)).toBeNull();
@@ -100,20 +115,26 @@ describe('/quarantine and /unquarantine', () => {
   test('refuses to quarantine somebody already quarantined, so the record survives', async () => {
     const h = harness();
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
     const first = await h.quarantine.get(GUILD, MEMBER);
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     expect(await h.quarantine.get(GUILD, MEMBER)).toEqual(first);
     expect(h.replyContent()).toContain('already quarantined');
-    expect(h.replyContent()).toContain('/unquarantine');
+    expect(h.replyContent()).toContain('/quarantine remove');
   });
 
   test('refuses to release somebody with no record rather than guessing', async () => {
     const h = harness();
 
-    await h.run('unquarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('remove', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     expect(h.discordCalls()).toEqual([]);
     expect(sorted(h.rolesOf(MEMBER))).toEqual(sorted([EVERYONE_ROLE, LOW_ROLE, MID_ROLE]));
@@ -123,11 +144,15 @@ describe('/quarantine and /unquarantine', () => {
   test('keeps the record when a recorded role can no longer be restored', async () => {
     const h = harness();
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     h.positions.delete(MID_ROLE);
 
-    await h.run('unquarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('remove', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     expect(sorted(h.rolesOf(MEMBER))).toEqual(sorted([EVERYONE_ROLE, LOW_ROLE]));
 
@@ -141,7 +166,9 @@ describe('/quarantine and /unquarantine', () => {
     const h = harness();
     h.positions.set(QUARANTINE_ROLE, 9);
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: QUARANTINED });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
 
     expect(h.discordCalls()).toEqual([]);
     expect(await h.quarantine.get(GUILD, MEMBER)).toBeNull();
@@ -152,7 +179,9 @@ describe('/quarantine and /unquarantine', () => {
   test('says which role is missing when no quarantine role is configured', async () => {
     const h = harness();
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: { enabled: true } });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: { enabled: true },
+    });
 
     expect(h.discordCalls()).toEqual([]);
     expect(h.replyContent()).toContain('No quarantine role is set');
@@ -161,7 +190,9 @@ describe('/quarantine and /unquarantine', () => {
   test('answers even when the module is switched off', async () => {
     const h = harness();
 
-    await h.run('quarantine', [userOption('user', MEMBER)], { config: { enabled: false } });
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: { enabled: false },
+    });
 
     expect(h.replyContent()).toContain('switched off');
   });

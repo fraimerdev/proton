@@ -1,4 +1,5 @@
-import type { EntitlementTier } from '@proton/core';
+import type { ContainerChild, EntitlementTier, V2Component } from '@proton/core';
+import { EMPTY_MESSAGE, parseComponentEmoji } from '@proton/core';
 import {
   blankPanel,
   PANEL_ID_MAX,
@@ -14,16 +15,20 @@ import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import {
   channelOptions,
   type DiscordChannel,
+  type DiscordRole,
   type PickerOption,
   SinglePicker,
   TokenPicker,
 } from '../form/picker.tsx';
+import { MessagePreview } from '../message/preview.tsx';
+import { PostPanel } from '../module/post-panel.tsx';
 import { Icon } from '../shell/icon.tsx';
 
 export interface TicketPanelsEditorProps {
   panels: readonly Partial<TicketPanel>[];
   types: readonly Partial<TicketType>[];
   channels: readonly DiscordChannel[];
+  roles: readonly DiscordRole[];
   tier: EntitlementTier;
   onChange: (panels: TicketPanel[]) => void;
 }
@@ -62,13 +67,93 @@ function describeIssuePath(path: readonly PropertyKey[]): string {
   return typeof path[0] === 'number' ? `Panel ${path[0] + 1}: ` : '';
 }
 
-function summarise(panel: TicketPanel, missing: readonly string[]): string {
+function summarise(
+  panel: TicketPanel,
+  missing: readonly string[],
+  channels: readonly DiscordChannel[],
+): string {
   if (missing.length > 0) return `${missing.length} missing type${missing.length === 1 ? '' : 's'}`;
 
   const count = panel.typeIds.length;
   const kinds = count === 0 ? 'no types' : `${count} type${count === 1 ? '' : 's'}`;
+  const found = channels.find((channel) => channel.id === panel.channelId);
+  const where = found ? `#${found.name}` : 'no channel yet';
 
-  return `${panel.style === 'select' ? 'dropdown' : 'buttons'} · ${kinds}`;
+  return `${where} · ${panel.style === 'select' ? 'dropdown' : 'buttons'} · ${kinds}`;
+}
+
+// The posted panel as interface.ts composes it: one container, the author line, the heading, the
+// text, then the buttons or the dropdown members press.
+function panelMessage(panel: TicketPanel, offered: readonly Partial<TicketType>[]): V2Component[] {
+  const children: ContainerChild[] = [];
+
+  if (panel.authorName) children.push({ kind: 'text', content: `-# ${panel.authorName}` });
+
+  const heading = `## ${panel.title ?? (panel.name || 'Untitled panel')}`;
+  const body = panel.panelText.trim() === '' ? '…' : panel.panelText;
+
+  children.push({ kind: 'text', content: heading });
+
+  if (panel.thumbnailUrl) {
+    children.push({
+      kind: 'section',
+      text: [body],
+      accessory: { kind: 'thumbnail', url: panel.thumbnailUrl },
+    });
+  } else {
+    children.push({ kind: 'text', content: body });
+  }
+
+  if (panel.imageUrl) children.push({ kind: 'gallery', items: [{ url: panel.imageUrl }] });
+
+  children.push({ kind: 'separator', divider: false, spacing: 'small' });
+
+  if (panel.style === 'select') {
+    // No options: Discord shows the placeholder until the dropdown is opened, and listing them
+    // inside the closed control would be a preview of something members never see.
+    children.push({
+      kind: 'row',
+      row: {
+        kind: 'select',
+        select: {
+          key: 'open',
+          placeholder: panel.selectPlaceholder ?? 'Choose what you need help with…',
+          options: [],
+        },
+      },
+    });
+  } else {
+    const shown = offered.slice(0, 15);
+
+    for (let index = 0; index < shown.length; index += 5) {
+      children.push({
+        kind: 'row',
+        row: {
+          kind: 'buttons',
+          buttons: shown.slice(index, index + 5).map((type, at) => {
+            const emoji = parseComponentEmoji(type.emoji);
+
+            return {
+              key: `open-${index + at}`,
+              style: 'primary' as const,
+              label: type.name ?? type.id ?? 'Unnamed',
+              ...(emoji ? { emoji } : {}),
+            };
+          }),
+        },
+      });
+    }
+  }
+
+  if (panel.footerText) {
+    children.push(
+      { kind: 'separator', divider: true, spacing: 'small' },
+      { kind: 'text', content: `-# ${panel.footerText}` },
+    );
+  }
+
+  // 0x3874f3 is TICKET_ACCENT in the module's interface.ts, which is not a published entry point.
+  return [{ kind: 'container', accentColor: panel.colour ?? 0x3874f3, children }];
 }
 
 interface ColourInputProps {
@@ -211,6 +296,8 @@ function PanelDetail({
           invalid={panel.channelId === ''}
         />
       </div>
+
+      <PostPanel panelId={panel.id} label="Post this panel" />
 
       <label className="filter">
         <span>Members choose with</span>
@@ -362,6 +449,7 @@ export function TicketPanelsEditor({
   panels: stored,
   types,
   channels,
+  roles,
   tier,
   onChange,
 }: TicketPanelsEditorProps): ReactElement {
@@ -389,14 +477,21 @@ export function TicketPanelsEditor({
     <div className="ladder" data-path="panels">
       <p className="field-description">
         A panel is one message members open tickets from. It offers the ticket types you attach to
-        it, as buttons or as a dropdown. Post it, or refresh it after a change, with{' '}
-        <code>/ticket panel</code>.
+        it, as buttons or as a dropdown. Save, then post it — or run <code>/ticket panel</code> in
+        Discord if you would rather.
       </p>
 
       <ul className="saved-list">
         {panels.map((panel, index) => {
           const open = openIndex === index;
           const missing = panel.typeIds.filter((typeId) => !known.has(typeId));
+
+          // In the panel's own order, not the type list's: that is the order the buttons are posted
+          // in, and a preview in a different order is a preview of a different panel.
+          const offered = panel.typeIds.flatMap((typeId) => {
+            const found = types.find((type) => type.id === typeId);
+            return found ? [found] : [];
+          });
 
           return (
             <li
@@ -413,7 +508,7 @@ export function TicketPanelsEditor({
                 >
                   <Icon name={open ? 'caret-up' : 'caret-down'} />
                   <span className="saved-name">{panel.name || 'Unnamed'}</span>
-                  <span className="saved-summary">{summarise(panel, missing)}</span>
+                  <span className="saved-summary">{summarise(panel, missing, channels)}</span>
                 </button>
 
                 <button
@@ -430,14 +525,34 @@ export function TicketPanelsEditor({
               </div>
 
               {open ? (
-                <PanelDetail
-                  panel={panel}
-                  invalid={(field) => failed.has(`${index}.${field}`)}
-                  missing={missing}
-                  textChoices={textChoices}
-                  typeChoices={typeChoices}
-                  onChange={(patch) => update(index, patch)}
-                />
+                <div className="saved-body">
+                  <PanelDetail
+                    panel={panel}
+                    invalid={(field) => failed.has(`${index}.${field}`)}
+                    missing={missing}
+                    textChoices={textChoices}
+                    typeChoices={typeChoices}
+                    onChange={(patch) => update(index, patch)}
+                  />
+
+                  <div className="saved-preview">
+                    <MessagePreview
+                      channels={channels}
+                      roles={roles}
+                      message={{ ...EMPTY_MESSAGE, v2: panelMessage(panel, offered) }}
+                    />
+
+                    {panel.style === 'select' ? (
+                      <p className="picker-note">
+                        {offered.length === 0
+                          ? 'The dropdown has nothing in it until a ticket type is attached.'
+                          : `The dropdown opens onto: ${offered
+                              .map((type) => type.name ?? type.id)
+                              .join(', ')}.`}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
             </li>
           );

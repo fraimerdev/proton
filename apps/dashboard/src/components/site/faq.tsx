@@ -1,5 +1,5 @@
 import { MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging/config';
-import type { ReactElement, ReactNode } from 'react';
+import { type ReactElement, type ReactNode, useEffect } from 'react';
 import { SUPPORT_INVITE } from '../../lib/site-meta.ts';
 import { Icon } from '../shell/icon.tsx';
 import { LOG_CATEGORY_COUNT, LOG_EVENT_COUNT, MODULE_COUNT } from './catalogue.ts';
@@ -69,11 +69,11 @@ export const FAQ: readonly QuestionGroup[] = [
         q: 'Does Proton start doing things the moment it joins?',
         a: (
           <p>
-            Some modules are on when Proton joins — the ones that only act when a moderator runs a
-            command, or that protect the server without configuration. Everything that needs a
-            channel, a role or a message from you is off until you set it up.{' '}
-            <strong>Message logs, the only module that stores message text, is off</strong> and
-            stays off until a server admin turns it on.
+            No. Every module is off when Proton joins and stays off until a server admin switches it
+            on, so a fresh install takes no action of its own. A module you have switched on still
+            needs whatever it depends on — a channel, a role, a panel — before it will do anything.{' '}
+            <strong>Message logs, the only module that stores message text, is off</strong> like the
+            rest, and stays off until someone turns it on and picks a channel.
           </p>
         ),
       },
@@ -289,14 +289,30 @@ export const FAQ: readonly QuestionGroup[] = [
 ];
 
 export function QuestionList({ questions }: { questions: readonly Question[] }): ReactElement {
+  // A <details> is the hash target itself, so the browser scrolls to it and leaves it shut — a
+  // link to one answer lands on a closed row with the answer hidden.
+  useEffect(() => {
+    function open(): void {
+      const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+
+      if (target instanceof HTMLDetailsElement) target.open = true;
+    }
+
+    open();
+    window.addEventListener('hashchange', open);
+
+    return () => window.removeEventListener('hashchange', open);
+  }, []);
+
   return (
     <div className="faq-list">
       {questions.map((question) => (
         <details className="faq-item" key={question.id} id={question.id}>
           <summary>
             <span className="faq-q">{question.q}</span>
-            <Icon name="caret-down" className="faq-mark faq-mark-shut" />
-            <Icon name="caret-up" className="faq-mark faq-mark-open" />
+            <span className="faq-mark" aria-hidden="true">
+              <Icon name="plus" />
+            </span>
           </summary>
           <div className="faq-a">{question.a}</div>
         </details>

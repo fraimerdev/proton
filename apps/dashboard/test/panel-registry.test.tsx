@@ -33,6 +33,11 @@ import {
   ticketsConfigSchema,
   ticketTypesSchema,
 } from '@proton/module-tickets/config';
+import {
+  DEFAULT_PANEL,
+  verificationConfigSchema,
+  verificationPanelSchema,
+} from '@proton/module-verification/config';
 import { greetingMessageSchema, welcomeConfigSchema } from '@proton/module-welcome/config';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
@@ -41,6 +46,8 @@ import type { z } from 'zod';
 import { EscalationLadderEditor } from '../src/components/cases/escalation-ladder.tsx';
 import { HoneypotChannelsEditor } from '../src/components/honeypot/channels.tsx';
 import { RoleRewardsEditor } from '../src/components/leveling/role-rewards.tsx';
+import type { ModuleForm } from '../src/components/module/form.ts';
+import { ModuleFormProvider } from '../src/components/module/inputs.tsx';
 import { MODULE_ROUTE_IDS } from '../src/components/module/paths.ts';
 import { RolemenuEditor } from '../src/components/rolemenu/menus.tsx';
 import { GreetingEditor } from '../src/components/welcome/greeting.tsx';
@@ -121,6 +128,7 @@ function fallbacks(source: string): Fallback[] {
     else if (literal === 'EMPTY_MESSAGE') found.push({ key, literal, value: EMPTY_MESSAGE });
     else if (literal === 'DEFAULT_NOTICE_MESSAGE')
       found.push({ key, literal, value: DEFAULT_NOTICE_MESSAGE });
+    else if (literal === 'DEFAULT_PANEL') found.push({ key, literal, value: DEFAULT_PANEL });
     else if (literal === 'DEFAULT_DM_MESSAGE')
       found.push({ key, literal, value: DEFAULT_DM_MESSAGE });
     // Numeric separators included: 604_800 is a fallback like any other, and skipping it here
@@ -156,6 +164,7 @@ const CONFIG_SCHEMAS: Record<string, z.ZodObject> = {
   serverlog: serverlogConfigSchema,
   tempvc: tempVcConfigSchema,
   tickets: ticketsConfigSchema,
+  verification: verificationConfigSchema,
   welcome: welcomeConfigSchema,
 };
 
@@ -171,6 +180,7 @@ const GATE_SCHEMAS: Record<string, { safeParse: (value: unknown) => { success: b
   honeypotChannelsSchema,
   honeypotLayoutSchema,
   roleRewardsSchema,
+  verificationPanelSchema,
   rolemenuMenusSchema,
   tempVcHubsSchema,
   ticketTypesSchema,
@@ -466,22 +476,64 @@ describe('what each editor does with the props its route hands it', () => {
     expect(html).toContain('pick-dot');
   });
 
+  // The only editor here that renders PostPanel, which reads the page's form the way a field does.
+  function formStub(): ModuleForm {
+    return {
+      guildId: '100000000000000001',
+      moduleId: 'rolemenu',
+      summary: {
+        id: 'rolemenu',
+        name: 'Role menus',
+        category: 'engagement',
+        fields: [],
+        commands: [],
+        enabled: true,
+        dashboard: null,
+        status: null,
+      },
+      guildName: 'Test guild',
+      guildIcon: null,
+      channels: CHANNELS,
+      roles: ROLES,
+      emojis: [],
+      postables: [],
+      tier: 'free',
+      config: {},
+      live: {},
+      value: () => undefined,
+      set: () => undefined,
+      report: () => undefined,
+      dirty: false,
+      problem: null,
+      settled: false,
+      saving: false,
+      error: null,
+      save: () => undefined,
+      reset: () => undefined,
+      blocked: false,
+      stay: () => undefined,
+      leave: () => undefined,
+    };
+  }
+
   test('role menus is handed both the roles and the channels', () => {
     const html = render(
-      <RolemenuEditor
-        menus={[
-          {
-            id: 'colours',
-            channelId: '500000000000000001',
-            kind: 'button',
-            mode: 'toggle',
-            bindings: [{ key: 'choice-1', roleId: '600000000000000001' }],
-          },
-        ]}
-        roles={ROLES}
-        channels={CHANNELS}
-        onChange={() => undefined}
-      />,
+      <ModuleFormProvider form={formStub()}>
+        <RolemenuEditor
+          menus={[
+            {
+              id: 'colours',
+              channelId: '500000000000000001',
+              kind: 'button',
+              mode: 'toggle',
+              bindings: [{ key: 'choice-1', roleId: '600000000000000001' }],
+            },
+          ]}
+          roles={ROLES}
+          channels={CHANNELS}
+          onChange={() => undefined}
+        />
+      </ModuleFormProvider>,
     );
 
     expect(html).toContain('data-icon="hash"');

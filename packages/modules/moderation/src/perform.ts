@@ -3,6 +3,7 @@ import {
   type ActionRequest,
   type ActionResult,
   type CommandContext,
+  isScopedActionExecutor,
   parseDuration,
 } from '@proton/core';
 import type { ModerationConfig } from './config.ts';
@@ -32,6 +33,15 @@ export interface ActionPlan {
   successWithoutReversal?: string;
 
   onRecorded?(): Promise<void>;
+
+  // What to say instead when onRecorded threw. Without one the throw is only logged, which is
+  // right for a follow-up event nobody typed a command to get and wrong for a follow-up that is
+  // the point of the command — a withdrawal that never landed must not be reported as one.
+  successWithoutFollowUp?: string;
+
+  // The target's roles, when the handler already had to read them. Handed to the executor so its
+  // hierarchy precheck ranks them from this rather than fetching the same member a second time.
+  targetRoleIds?: string[];
 }
 
 export type PlanResult = ActionPlan | Refusal;
@@ -46,6 +56,19 @@ export function readSpan(raw: string): { ms: number } | Refusal {
   } catch (error) {
     return { refusal: error instanceof Error ? error.message : `'${raw}' is not a duration.` };
   }
+}
+
+const REASON_REQUIRED =
+  'This server requires a reason for moderation actions. Run the command again with ' +
+  'the `reason` option filled in.';
+
+// Exported for the paths that do not go through perform — a mass role run is a scheduled job, not
+// one action with one reply, so it has to fail this gate for itself.
+export function reasonRefusal(
+  ctx: CommandContext<ModerationConfig>,
+  reason: string | null | undefined,
+): Refusal | null {
+  return ctx.config.requireReason && !reason ? { refusal: REASON_REQUIRED } : null;
 }
 
 export function readDuration(raw: string, label: string): { ms: number } | Refusal {
@@ -68,12 +91,9 @@ export async function perform(
     return;
   }
 
-  if (ctx.config.requireReason && !plan.reason) {
-    await reply(
-      ctx,
-      'This server requires a reason for moderation actions. Run the command again with ' +
-        'the `reason` option filled in.',
-    );
+  const missingReason = reasonRefusal(ctx, plan.reason);
+  if (missingReason) {
+    await reply(ctx, missingReason.refusal);
     return;
   }
 
@@ -91,7 +111,12 @@ export async function perform(
     idempotencyKey: `${ctx.idempotencyKey}:${plan.kind}`,
   };
 
-  const result = await ctx.executor.execute(request);
+  const executor =
+    plan.targetRoleIds && isScopedActionExecutor(ctx.executor)
+      ? ctx.executor.scoped({ targetRoleIds: plan.targetRoleIds })
+      : ctx.executor;
+
+  const result = await executor.execute(request);
 
   if (result.status === 'failed_precheck' || result.status === 'failed_api') {
     ctx.logger.warn(`${plan.kind} refused: ${result.failure?.humanReason ?? 'unknown reason'}`, {
@@ -102,13 +127,16 @@ export async function perform(
     });
   }
 
+  let followUpFailed = false;
+
   if (result.status === 'executed' && plan.onRecorded) {
     try {
       await plan.onRecorded();
     } catch (error) {
+      followUpFailed = true;
       ctx.logger.error(
-        `${plan.kind} was recorded, but the follow-up event could not be published, so any ` +
-          `rule triggered on it will not fire for this action: ${
+        `${plan.kind} was recorded, but its follow-up did not run, so any rule triggered on it ` +
+          `will not fire for this action: ${
             error instanceof Error ? error.message : String(error)
           }`,
         { guildId: ctx.guildId, moduleId: MODULE_ID, kind: plan.kind },
@@ -116,16 +144,20 @@ export async function perform(
     }
   }
 
-  await reply(ctx, describe(plan, result));
+  await reply(ctx, describe(plan, result, followUpFailed));
 }
 
 function stamped(text: string, result: ActionResult): string {
   return result.caseId ? `${text}\n-# Case \`${result.caseId}\`` : text;
 }
 
-function describe(plan: ActionPlan, result: ActionResult): string {
+function describe(plan: ActionPlan, result: ActionResult, followUpFailed = false): string {
   switch (result.status) {
     case 'executed': {
+      if (followUpFailed && plan.successWithoutFollowUp) {
+        return stamped(plan.successWithoutFollowUp, result);
+      }
+
       if (!result.failure) return stamped(plan.success, result);
 
       const landed = plan.successWithoutReversal ?? plan.success;
@@ -147,7 +179,7 @@ function describe(plan: ActionPlan, result: ActionResult): string {
   }
 }
 
-async function reply(ctx: CommandContext<ModerationConfig>, content: string): Promise<void> {
+export async function reply(ctx: CommandContext<ModerationConfig>, content: string): Promise<void> {
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -161,6 +193,11 @@ async function reply(ctx: CommandContext<ModerationConfig>, content: string): Pr
 
       content: content.slice(0, 2000),
       ephemeral: !ctx.config.publicReplies,
+
+      // Rendered, but notifying nobody. These replies name the member acted on and the role
+      // handed out, and under publicReplies they are ordinary channel messages — /role add
+      // announcing a mentionable role would otherwise ping everybody already in it.
+      allowedMentions: { parse: [] },
     },
   });
 

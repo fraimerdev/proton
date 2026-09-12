@@ -20,6 +20,7 @@ const REMOVES: ReadonlySet<ActionKind> = new Set<ActionKind>([
 const ADDS: ReadonlySet<ActionKind> = new Set<ActionKind>([
   'unban',
   'untimeout',
+  'unwarn',
   'unlock',
   'add_role',
 ]);

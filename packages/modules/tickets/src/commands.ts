@@ -1,7 +1,6 @@
 import {
   type CommandContext,
   type CommandDefinition,
-  checkListLimit,
   formatDuration,
   parseDuration,
   TICKET_PRIORITIES,
@@ -23,7 +22,6 @@ import {
   type TicketsConfig,
   TYPE_ID_MAX,
   typeFor,
-  typesOf,
 } from './config.ts';
 import {
   addParticipant,
@@ -47,7 +45,7 @@ import {
   type TicketView,
 } from './interface.ts';
 import { closeTicket, deleteTicket, openTicket, reopenTicket } from './lifecycle.ts';
-import { buildPanelMessage } from './panel.ts';
+import { sendPanel } from './post.ts';
 import type { Ticket, TicketStore } from './store.ts';
 import { buildTranscript } from './transcript-delivery.ts';
 
@@ -508,42 +506,13 @@ async function postPanel(ctx: CommandContext<TicketsConfig>): Promise<void> {
     return;
   }
 
-  // Enforced here as well as at save time: an admin who added panels while on plus and then let
-  // the tier lapse must not be able to keep posting the ones over the limit.
-  const allowed = checkListLimit(ctx.tier ?? 'free', 'ticketPanels', ctx.config.panels.length);
-  if (!allowed.ok) {
-    await reply(ctx, `I did not post that panel: ${allowed.humanReason}`);
-    return;
-  }
-
-  const message = buildPanelMessage(found, typesOf(ctx.config, found));
-  if (!message.ok) {
-    await reply(ctx, message.humanReason);
-    return;
-  }
-
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'send',
+  const posted = await sendPanel(ctx, found, {
     actorId: ctx.userId,
-    idempotencyKey: `${ctx.idempotencyKey}:panel`,
-    dryRun: false,
-    record: false,
-    payload: {
-      channelId: found.channelId,
-      components: message.components,
-      flags: 32768,
-      allowedMentions: { parse: [] },
-    },
+    idempotencyKey: ctx.idempotencyKey,
   });
 
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    await reply(
-      ctx,
-      `I couldn't post that panel: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      'refused',
-    );
+  if (!posted.ok) {
+    await reply(ctx, `I couldn't post that panel: ${posted.humanReason}`, 'refused');
     return;
   }
 

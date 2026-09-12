@@ -25,7 +25,6 @@ function FaqPage(): ReactElement {
     <SitePage>
       <div className="doc-page doc-page-wide">
         <header className="doc-head">
-          <span className="site-label">Questions</span>
           <h1 className="doc-title">What Proton does, and what it will not do.</h1>
           <p className="doc-lede">
             Answers to the things worth knowing before you add a bot to a server other people are in
@@ -35,7 +34,7 @@ function FaqPage(): ReactElement {
 
         <div className="doc-split">
           <nav className="doc-nav" aria-label="Sections">
-            <span className="site-label">On this page</span>
+            <span className="doc-nav-title">On this page</span>
             <ul>
               {FAQ.map((group) => (
                 <li key={group.id}>

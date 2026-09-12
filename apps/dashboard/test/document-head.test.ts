@@ -97,6 +97,7 @@ describe('the head loads the faces the stylesheet asks for', () => {
 
   // Archivo and IBM Plex Mono were fetched here for months while --font named Onest and --mono
   // named Spline Sans Mono, so the whole documented type ramp rendered in Segoe UI and Consolas.
+  // The UI runs on one family now: --display is gone, and with it Space Grotesk.
   test('the first family of --font and --mono is each requested from Google Fonts', () => {
     for (const declaration of ['font', 'mono']) {
       const wanted = familiesOf(declaration)[0] ?? '';

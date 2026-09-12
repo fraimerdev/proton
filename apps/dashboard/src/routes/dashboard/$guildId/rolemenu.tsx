@@ -1,7 +1,7 @@
 import { type RolemenuMenu, rolemenuMenusSchema } from '@proton/module-rolemenu/config';
 import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { usePanelSchema } from '../../../components/module/inputs.tsx';
@@ -27,9 +27,11 @@ function RolemenuPage(): ReactElement {
       <ModuleChrome guildId={guildId} summary={form.summary} area={undefined} tabs={[]} />
 
       <ModuleSettings form={form}>
-        <SectionCard id="rolemenu:panel:menus" title="Role menus">
-          <Menus form={form} />
-        </SectionCard>
+        <SettingsGrid>
+          <SectionCard id="rolemenu:panel:menus" title="Role menus" span="full">
+            <Menus form={form} />
+          </SectionCard>
+        </SettingsGrid>
       </ModuleSettings>
     </>
   );

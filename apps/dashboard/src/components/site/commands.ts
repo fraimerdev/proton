@@ -19,6 +19,30 @@ export interface CommandGroup {
   commands: readonly CommandEntry[];
 }
 
+// The ten the landing page prints in full, one per module it can show off. Named rather than
+// sliced, so the rows stay the ten somebody chose; catalogue.test.ts fails when one is renamed
+// out from under it.
+export const LANDING_COMMANDS: readonly string[] = [
+  '/ban add',
+  '/timeout add',
+  '/warn add',
+  '/lockdown add',
+  '/verify',
+  '/ticket panel',
+  '/giveaway start',
+  '/poll create',
+  '/rank',
+  '/backup restore',
+];
+
+export function landingCommands(): CommandEntry[] {
+  return LANDING_COMMANDS.flatMap((usage) => {
+    const found = COMMAND_SET.find((command) => command.usage === usage);
+
+    return found ? [found] : [];
+  });
+}
+
 // Lower-cased once per command rather than once per keystroke: the whole set is filtered on every
 // character typed, and every command carries a usage line, a description and a module name.
 const HAYSTACK = new Map(

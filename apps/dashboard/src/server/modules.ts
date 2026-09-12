@@ -10,7 +10,15 @@ import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
 import { ApiClient } from '../lib/api-client.ts';
-import { fetchGuildChannels, fetchGuildRoles, fetchUserGuilds } from '../lib/discord.ts';
+import { auth } from '../lib/auth.ts';
+import type { GuildMember } from '../lib/discord.ts';
+import {
+  fetchGuildChannels,
+  fetchGuildEmojis,
+  fetchGuildMembers,
+  fetchGuildRoles,
+  fetchUserGuilds,
+} from '../lib/discord.ts';
 import { getDiscordAccessToken } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { administrableGuilds, type DiscordUserGuild, withPresence } from '../lib/guild-access.ts';
@@ -75,6 +83,12 @@ export const listGuilds = createServerFn({ method: 'GET' })
     };
   });
 
+export const getViewer = createServerFn({ method: 'GET' }).handler(async () => {
+  const session = await auth.api.getSession({ headers: getRequest().headers });
+
+  return { signedIn: Boolean(session?.user) };
+});
+
 export const getGuildOverview = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(z.object({ guildId: z.string().min(1) }))
@@ -98,7 +112,78 @@ export const getGuildChannels = createServerFn({ method: 'GET' })
 export const getGuildRoles = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(z.object({ guildId: z.string().min(1) }))
-  .handler(({ data }) => fetchGuildRoles(env.REST_PROXY_URL, data.guildId));
+  // The client id is Proton's own user id, which is what turns "above Proton's own role" into
+  // something the picker can say before the save instead of a 403 discovered days later.
+  .handler(({ data }) => fetchGuildRoles(env.REST_PROXY_URL, data.guildId, env.DISCORD_CLIENT_ID));
+
+export const getGuildEmojis = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(z.object({ guildId: z.string().min(1) }))
+  .handler(({ data }) => fetchGuildEmojis(env.REST_PROXY_URL, data.guildId));
+
+// Discord has no batch member endpoint, so fetchGuildMembers is one upstream call per id. A 50-row
+// case page carries up to 100 distinct ids and the next page carries most of the same ones, so the
+// cache is what stops the same hundred reads going out again a navigation later. A miss is cached
+// too: a member who has left would otherwise be re-asked for on every page they appear on.
+const MEMBER_CACHE_MS = 60_000;
+const MEMBER_CACHE_MAX = 2_000;
+
+const memberCache = new Map<string, { member: GuildMember | null; at: number }>();
+
+function cachedMembers(guildId: string, userIds: readonly string[]) {
+  const now = Date.now();
+  const found: GuildMember[] = [];
+  const missing: string[] = [];
+
+  for (const id of userIds) {
+    const held = memberCache.get(`${guildId}:${id}`);
+
+    if (held === undefined || now - held.at > MEMBER_CACHE_MS) missing.push(id);
+    else if (held.member !== null) found.push(held.member);
+  }
+
+  return { found, missing };
+}
+
+function rememberMembers(guildId: string, asked: readonly string[], answered: GuildMember[]): void {
+  const now = Date.now();
+  const byId = new Map(answered.map((member) => [member.id, member]));
+
+  // Oldest first, because Map keeps insertion order and the cap is the only thing stopping a
+  // long-lived process from holding every member of every guild an admin has ever paged through.
+  for (const key of memberCache.keys()) {
+    if (memberCache.size + asked.length <= MEMBER_CACHE_MAX) break;
+    memberCache.delete(key);
+  }
+
+  for (const id of asked) {
+    memberCache.set(`${guildId}:${id}`, { member: byId.get(id) ?? null, at: now });
+  }
+}
+
+// The same hundred membersQuery slices to in lib/queries.ts, which cannot be imported here: that
+// module imports this one.
+const MEMBER_IDS_MAX = 100;
+
+export const getGuildMembers = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(
+    z.object({
+      guildId: z.string().min(1),
+      userIds: z.array(z.string().min(1)).max(MEMBER_IDS_MAX),
+    }),
+  )
+  .handler(async ({ data }): Promise<GuildMember[]> => {
+    const wanted = [...new Set(data.userIds)];
+    const { found, missing } = cachedMembers(data.guildId, wanted);
+
+    if (missing.length === 0) return found;
+
+    const answered = await fetchGuildMembers(env.REST_PROXY_URL, data.guildId, missing);
+    rememberMembers(data.guildId, missing, answered);
+
+    return [...found, ...answered];
+  });
 
 export const searchCases = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
@@ -177,5 +262,24 @@ export const updateModuleConfig = createServerFn({ method: 'POST' })
         config: data.config,
         ...stamp,
       }),
+    ),
+  );
+
+/**
+ * "Post it now" from the settings page. requireManageGuild, not requireGuildAccess: this puts a
+ * message in a channel, which is a change to the server rather than a read of it.
+ */
+export const postModulePanel = createServerFn({ method: 'POST' })
+  .middleware([requireManageGuild])
+  .validator(
+    z.object({
+      guildId: z.string().min(1),
+      moduleId: z.string().min(1),
+      panelId: z.string().min(1),
+    }),
+  )
+  .handler(({ data, context }) =>
+    withAudit(context.session.user.id, (stamp) =>
+      api.postPanel(data.guildId, data.moduleId, data.panelId, stamp),
     ),
   );

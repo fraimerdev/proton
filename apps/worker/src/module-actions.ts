@@ -1,4 +1,10 @@
-import type { ActionExecutor, ActionKind, ModuleRegistry } from '@proton/core';
+import {
+  type ActionExecutor,
+  type ActionKind,
+  isScopedActionExecutor,
+  type ModuleRegistry,
+  type ScopedActionExecutor,
+} from '@proton/core';
 
 export class UndeclaredActionError extends Error {
   constructor(moduleId: string, kind: ActionKind) {
@@ -17,12 +23,21 @@ export function moduleExecutor(
   moduleId: string,
   executor: ActionExecutor,
 ): ActionExecutor {
-  return {
+  const guarded: ScopedActionExecutor = {
     execute(request) {
       if (!registry.mayExecute(moduleId, request.kind)) {
         throw new UndeclaredActionError(moduleId, request.kind);
       }
       return executor.execute(request);
     },
+
+    // Forwarded, not dropped: a module that hands the executor hints to save a per-target fetch
+    // paid for them anyway while this wrapper answered every isScopedActionExecutor check false.
+    scoped(hints) {
+      if (!isScopedActionExecutor(executor)) return guarded;
+      return moduleExecutor(registry, moduleId, executor.scoped(hints));
+    },
   };
+
+  return guarded;
 }

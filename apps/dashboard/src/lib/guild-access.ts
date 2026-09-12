@@ -13,6 +13,15 @@ export interface SessionGuild extends DiscordUserGuild {
   present: boolean;
 }
 
+// Discord only serves powers of two, and asks for the nearest one up rather than resampling: 64
+// is right for the switcher's 22px crest and the emoji picker's 20px one, and blurs into mush
+// behind the server picker's 72px crest.
+export function guildIconUrl(guild: DiscordUserGuild, size: 64 | 256 = 64): string | null {
+  return guild.icon
+    ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=${size}`
+    : null;
+}
+
 export interface GuildAccess {
   guildId: string;
   via: 'owner' | 'manage_guild';

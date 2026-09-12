@@ -10,7 +10,7 @@ import type { ReactElement } from 'react';
 export function PrivacyPolicy(): ReactElement {
   return (
     <section className="prose">
-      <h1>Privacy</h1>
+      <h1>Privacy policy</h1>
 
       <p>
         Proton is a Discord bot and dashboard for server moderation. The operator of this Proton

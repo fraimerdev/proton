@@ -17,20 +17,30 @@ import type {
   TicketSortField,
   TicketSummary,
 } from '@proton/module-tickets/query';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   type InputHTMLAttributes,
   type ReactElement,
+  type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
-import { saveFailure } from '../../lib/errors.ts';
+import { failureDetail, readFailure, saveFailure } from '../../lib/errors.ts';
+import { MEMBER_LOOKUP_MAX, membersQuery } from '../../lib/queries.ts';
 import { ConfirmDialog } from '../shell/confirm.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { actionLook, toneClass } from '../shell/module-meta.ts';
-import { DataTable, dataColumnHelper, lastPageOf, Pager } from '../table/data-table.tsx';
+import { type ChipMember, memberIndex, UserChip } from '../shell/user-chip.tsx';
+import {
+  DATA_ROW_HEIGHT,
+  DataTable,
+  dataColumnHelper,
+  lastPageOf,
+  Pager,
+} from '../table/data-table.tsx';
 import type {
   BlockedMembersProps,
   CaseBrowserProps,
@@ -92,11 +102,190 @@ export function pageSizeOf(raw: string): number | undefined {
   return Math.min(CASE_PAGE_SIZE_MAX, Math.max(1, Math.trunc(parsed)));
 }
 
-const caseColumn = dataColumnHelper<CaseRecord>();
+const GUILD_IN_PATH = /^\/dashboard\/(\d{17,20})(?:\/|$)/;
 
-function formatInstant(iso: string): string {
-  return iso.replace('T', ' ').slice(0, 16);
+// These five views are rendered by a lazy route component and also on their own, outside any
+// router, so a router hook here throws rather than degrading. The open server is in the path.
+function openGuildId(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  return GUILD_IN_PATH.exec(window.location.pathname)?.[1] ?? null;
 }
+
+interface Directory {
+  of: (id: string | null | undefined) => ChipMember | null;
+
+  // Asked for and not answered. A member who has left the server is the ordinary reason, and no
+  // name is invented for them — the chip falls back to the id, which is then the whole answer.
+  unresolved: number;
+  overCap: number;
+  failure: string | null;
+  detail: string | undefined;
+  retry: () => void;
+}
+
+/**
+ * The people behind a page of snowflakes. Every surface here used to print the raw id and then
+ * apologise for it in a lede — "Targets and moderators are listed by ID, not by name" — which is
+ * the interface telling you it knows it is wrong.
+ */
+function useMembers(ids: readonly (string | null)[]): Directory {
+  const guildId = openGuildId();
+  const wanted = useMemo(() => [...new Set(ids.filter((id): id is string => !!id))], [ids]);
+
+  const answer = useQuery({
+    ...membersQuery(guildId ?? '', wanted),
+    enabled: guildId !== null && wanted.length > 0,
+  });
+
+  const index = useMemo(() => memberIndex(answer.data ?? []), [answer.data]);
+  const { data, error, refetch } = answer;
+
+  return useMemo(() => {
+    // Sorted before slicing because membersQuery sorts before slicing: the hundred actually asked
+    // for are not the first hundred in page order, and counting the other set reports the wrong
+    // number of accounts as missing.
+    const asked = [...wanted].sort().slice(0, MEMBER_LOOKUP_MAX);
+
+    return {
+      of: (id) => (id ? (index.get(id) ?? null) : null),
+      unresolved: data === undefined ? 0 : asked.filter((id) => !index.has(id)).length,
+      overCap: wanted.length - asked.length,
+      failure: error === null ? null : readFailure(error, 'this server’s members'),
+      detail: failureDetail(error),
+      retry: () => void refetch(),
+    };
+  }, [wanted, index, data, error, refetch]);
+}
+
+function MemberNotice({ directory }: { directory: Directory }): ReactElement | null {
+  if (directory.failure !== null) {
+    return (
+      <p className="view-notice" role="alert" title={directory.detail}>
+        <Icon name="warning-circle" weight="fill" />
+        <span>
+          {directory.failure} Every account below is listed by its id.
+          <button type="button" className="button button-quiet" onClick={directory.retry}>
+            Try again
+          </button>
+        </span>
+      </p>
+    );
+  }
+
+  if (directory.overCap > 0) {
+    return (
+      <p className="view-notice">
+        <span>
+          Names are looked up for the first {MEMBER_LOOKUP_MAX} accounts on a page, and this one
+          shows {directory.overCap} more. Those are listed by id; a smaller page size resolves them.
+        </span>
+      </p>
+    );
+  }
+
+  if (directory.unresolved > 0) {
+    return (
+      <p className="view-notice">
+        <span>
+          {directory.unresolved === 1
+            ? 'One account here could not be looked up'
+            : `${directory.unresolved} accounts here could not be looked up`}{' '}
+          — a member who has left the server is the usual reason. They keep their id.
+        </span>
+      </p>
+    );
+  }
+
+  return null;
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+function relativeTime(iso: string, now: number): string {
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return iso;
+
+  const delta = now - at;
+  const away = Math.abs(delta);
+
+  if (away >= DAY_MS) return iso.slice(0, 10);
+  if (away < MINUTE_MS) return 'just now';
+
+  const amount =
+    away < HOUR_MS ? `${Math.floor(away / MINUTE_MS)}m` : `${Math.floor(away / HOUR_MS)}h`;
+
+  return delta >= 0 ? `${amount} ago` : `in ${amount}`;
+}
+
+function absoluteUtc(iso: string): string {
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
+
+// suppressHydrationWarning because the text is a function of the clock: the server renders "4m ago"
+// and the browser re-renders it a second later, which is the one mismatch React cannot patch
+// quietly. The absolute instant on the title is identical in both.
+function Stamp({ iso }: { iso: string }): ReactElement {
+  return (
+    <time className="stamp" dateTime={iso} title={absoluteUtc(iso)} suppressHydrationWarning>
+      {relativeTime(iso, Date.now())}
+    </time>
+  );
+}
+
+interface FilterBarProps {
+  applied: number;
+  onClear: () => void;
+  children: ReactNode;
+  more?: { applied: number; children: ReactNode } | undefined;
+}
+
+/**
+ * Four controls and the way out of them. Seven filters could be applied here and only cleared one
+ * at a time, because the only reset in the product lived inside the empty state — so the moment the
+ * filters returned rows, which is the normal case, the reset disappeared.
+ */
+function FilterBar({ applied, onClear, children, more }: FilterBarProps): ReactElement {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="filters">
+      <div className="filter-row">
+        {children}
+
+        <div className="filter-actions">
+          {more ? (
+            <button
+              type="button"
+              className="button button-ghost"
+              aria-expanded={open}
+              onClick={() => setOpen((was) => !was)}
+            >
+              {more.applied > 0 ? `More filters (${more.applied})` : 'More filters'}
+              <Icon name={open ? 'caret-up' : 'caret-down'} />
+            </button>
+          ) : null}
+
+          {applied > 0 ? (
+            <button type="button" className="button button-quiet" onClick={onClear}>
+              Clear all ({applied})
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {more && open ? <div className="filter-row filter-row-more">{more.children}</div> : null}
+    </div>
+  );
+}
+
+function countSet(values: readonly unknown[]): number {
+  return values.filter((value) => value !== undefined && value !== '').length;
+}
+
+const caseColumn = dataColumnHelper<CaseRecord>();
 
 function ActionCell({ kind }: { kind: string }): ReactElement {
   const look = actionLook(kind);
@@ -111,84 +300,204 @@ function ActionCell({ kind }: { kind: string }): ReactElement {
   );
 }
 
-const caseColumns = caseColumn.columns([
-  caseColumn.accessor('caseNumber', {
-    id: 'caseNumber',
-    // "#" alone is a glyph, and this header is a sort button whose whole name it becomes.
-    header: 'Case',
-    cell: (c) => `#${c.getValue()}`,
-  }),
-  caseColumn.accessor('id', {
-    id: 'id',
-    header: 'Case ID',
-    cell: (c) => <span className="id">{c.getValue()}</span>,
-  }),
-  caseColumn.accessor('type', {
-    id: 'type',
-    header: 'Action',
-    cell: (c) => <ActionCell kind={c.getValue()} />,
-  }),
-  caseColumn.accessor('targetId', {
-    id: 'targetId',
-    header: 'Target',
-    cell: (c) => {
-      const id = c.getValue();
-      return id ? <span className="id">{id}</span> : '—';
-    },
-  }),
-  caseColumn.accessor('actorId', {
-    id: 'actorId',
-    header: 'Moderator',
-    cell: (c) => {
-      const id = c.getValue();
-      return id ? (
-        <span className="id">{id}</span>
-      ) : (
-        <span className="chip chip-system">
-          <Icon name="lightning" weight="fill" />
-          Proton
+function caseColumnsFor(directory: Directory, onTarget: (targetId: string) => void) {
+  return caseColumn.columns([
+    caseColumn.accessor('caseNumber', {
+      id: 'caseNumber',
+      // "#" alone is a glyph, and this header is a sort button whose whole name it becomes.
+      header: 'Case',
+      // The opaque case id had a column of its own that nobody reads and that Reason needed the
+      // width of. It stays on the row, where a moderator quoting it into /case can still find it.
+      cell: (c) => (
+        <span className="case-number" title={`Case id ${c.row.original.id}`}>
+          #{c.getValue()}
         </span>
-      );
-    },
-  }),
-  caseColumn.accessor('reason', {
-    id: 'reason',
-    // The column ellipsises, and a reason is the one field of a case a moderator wrote by hand —
-    // without the title there was nowhere in the product to read the rest of it.
-    cell: (c) => {
-      const reason = c.getValue();
-      return reason ? <span title={reason}>{reason}</span> : '—';
-    },
-    header: 'Reason',
-  }),
-  caseColumn.accessor('createdAt', {
-    id: 'createdAt',
-    header: 'When (UTC)',
-    cell: (c) => <span className="stamp">{formatInstant(c.getValue())}</span>,
-  }),
-  caseColumn.display({
-    id: 'state',
-    header: 'State',
-
-    cell: ({ row }) => {
-      if (row.original.dryRun) return <span className="chip chip-warn">rehearsal</span>;
-      if (row.original.revertedAt)
-        return (
-          <span className="chip chip-ok">
-            reverted <span className="mono">{formatInstant(row.original.revertedAt)}</span>
+      ),
+    }),
+    caseColumn.accessor('type', {
+      id: 'type',
+      header: 'Action',
+      cell: (c) => <ActionCell kind={c.getValue()} />,
+    }),
+    caseColumn.accessor('targetId', {
+      id: 'targetId',
+      header: 'Target',
+      cell: (c) => {
+        const id = c.getValue();
+        return id ? <UserChip id={id} member={directory.of(id)} as="target" /> : '—';
+      },
+    }),
+    caseColumn.accessor('actorId', {
+      id: 'actorId',
+      header: 'Moderator',
+      cell: (c) => {
+        const id = c.getValue();
+        return id ? (
+          <UserChip id={id} member={directory.of(id)} as="moderator" />
+        ) : (
+          <span className="chip chip-system">
+            <Icon name="lightning" weight="fill" />
+            Proton
           </span>
         );
-      if (row.original.expiresAt)
-        return (
-          <span className="chip">
-            expires <span className="mono">{formatInstant(row.original.expiresAt)}</span>
-          </span>
-        );
+      },
+    }),
+    caseColumn.accessor('reason', {
+      id: 'reason',
+      // The column ellipsises, and a reason is the one field of a case a moderator wrote by hand —
+      // without the title there was nowhere in the product to read the rest of it.
+      cell: (c) => {
+        const reason = c.getValue();
+        return reason ? <span title={reason}>{reason}</span> : '—';
+      },
+      header: 'Reason',
+    }),
+    caseColumn.accessor('createdAt', {
+      id: 'createdAt',
+      header: 'When',
+      cell: (c) => <Stamp iso={c.getValue()} />,
+    }),
+    caseColumn.display({
+      id: 'state',
+      header: 'State',
 
-      return <span className="chip">active</span>;
-    },
-  }),
-]);
+      cell: ({ row }) => {
+        if (row.original.dryRun) return <span className="chip chip-warn">rehearsal</span>;
+        if (row.original.revertedAt)
+          return (
+            <span className="chip chip-ok">
+              reverted <Stamp iso={row.original.revertedAt} />
+            </span>
+          );
+        if (row.original.expiresAt)
+          return (
+            <span className="chip">
+              expires <Stamp iso={row.original.expiresAt} />
+            </span>
+          );
+
+        return <span className="chip">active</span>;
+      },
+    }),
+    caseColumn.display({
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => {
+        const id = row.original.targetId;
+        if (id === null) return null;
+
+        return (
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={`Show every case against ${directory.of(id)?.displayName ?? id}`}
+            onClick={() => onTarget(id)}
+          >
+            <Icon name="magnifying-glass" />
+          </button>
+        );
+      },
+    }),
+  ]);
+}
+
+interface TargetGroup {
+  targetId: string;
+  cases: number;
+  kinds: string[];
+  first: string;
+  last: string;
+  open: number;
+}
+
+// Grouped over the page, because that is the honest extent of it: the ledger is paged and the
+// dashboard cannot ask for every case an account has ever collected in one answer. Filtering to the
+// account is what does that, and the row's own button is the way there.
+function groupByTarget(cases: readonly CaseRecord[]): TargetGroup[] {
+  const groups = new Map<string, TargetGroup>();
+
+  for (const record of cases) {
+    if (record.targetId === null) continue;
+
+    const held = groups.get(record.targetId);
+    const group =
+      held ??
+      ({
+        targetId: record.targetId,
+        cases: 0,
+        kinds: [],
+        first: record.createdAt,
+        last: record.createdAt,
+        open: 0,
+      } satisfies TargetGroup);
+
+    group.cases += 1;
+    if (!group.kinds.includes(record.type)) group.kinds.push(record.type);
+    if (record.createdAt < group.first) group.first = record.createdAt;
+    if (record.createdAt > group.last) group.last = record.createdAt;
+    if (record.revertedAt === null && !record.dryRun) group.open += 1;
+
+    groups.set(record.targetId, group);
+  }
+
+  return [...groups.values()].sort((a, b) => b.cases - a.cases || b.last.localeCompare(a.last));
+}
+
+const groupColumn = dataColumnHelper<TargetGroup>();
+
+function groupColumnsFor(directory: Directory, onTarget: (targetId: string) => void) {
+  return groupColumn.columns([
+    groupColumn.accessor('targetId', {
+      id: 'targetId',
+      header: 'Account',
+      cell: (c) => <UserChip id={c.getValue()} member={directory.of(c.getValue())} as="target" />,
+    }),
+    groupColumn.accessor('cases', {
+      id: 'cases',
+      header: 'Cases',
+      cell: (c) => <span className="num mono">{c.getValue()}</span>,
+    }),
+    groupColumn.accessor('open', {
+      id: 'open',
+      header: 'Not reverted',
+      cell: (c) => <span className="num mono">{c.getValue()}</span>,
+    }),
+    groupColumn.accessor('kinds', {
+      id: 'kinds',
+      header: 'What was done',
+      cell: (c) => (
+        <span className="group-kinds">
+          {c.getValue().map((kind) => (
+            <ActionCell key={kind} kind={kind} />
+          ))}
+        </span>
+      ),
+    }),
+    groupColumn.accessor('first', {
+      id: 'first',
+      header: 'First',
+      cell: (c) => <Stamp iso={c.getValue()} />,
+    }),
+    groupColumn.accessor('last', {
+      id: 'last',
+      header: 'Latest',
+      cell: (c) => <Stamp iso={c.getValue()} />,
+    }),
+    groupColumn.display({
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <button
+          type="button"
+          className="button button-quiet"
+          onClick={() => onTarget(row.original.targetId)}
+        >
+          Only this account
+        </button>
+      ),
+    }),
+  ]);
+}
 
 // The column prints actionLook(kind).verb; the filter that searches it offered add_role and
 // delete_message. Same source, sorted by what the admin reads, minus the kinds the ledger never
@@ -199,11 +508,18 @@ const ACTION_OPTIONS: readonly { kind: string; label: string }[] = ACTION_KINDS.
   .map((kind) => ({ kind, label: actionLook(kind).verb }))
   .sort((a, b) => a.label.localeCompare(b.label));
 
-const ROW_HEIGHT = 56;
-
 const SORTABLE: Record<string, CaseSortField> = {
   createdAt: 'createdAt',
   caseNumber: 'caseNumber',
+};
+
+const NO_CASE_FILTERS: Partial<CaseQueryInput> = {
+  type: undefined,
+  caseId: undefined,
+  moderatorId: undefined,
+  targetId: undefined,
+  from: undefined,
+  to: undefined,
 };
 
 export function CaseBrowserView({
@@ -211,6 +527,8 @@ export function CaseBrowserView({
   data: result,
   onSearch,
 }: CaseBrowserProps): ReactElement {
+  const [grouped, setGrouped] = useState(false);
+
   function setFilters(patch: Partial<CaseQueryInput>): void {
     onSearch({ ...patch, page: patch.page ?? 1 });
   }
@@ -218,11 +536,53 @@ export function CaseBrowserView({
   const lastPage = lastPageOf(result.total, result.pageSize);
   const firstShown = result.total === 0 ? 0 : (result.page - 1) * result.pageSize + 1;
 
+  const ids = useMemo(
+    () => result.cases.flatMap((record) => [record.targetId, record.actorId]),
+    [result.cases],
+  );
+  const directory = useMembers(ids);
+
+  // Through a ref: the route hands a fresh onSearch down on every render, and a callback that
+  // changed with it would rebuild the column definitions — and with them the whole virtualised
+  // table model — once per keystroke in a filter box.
+  const navigate = useRef(onSearch);
+  navigate.current = onSearch;
+
+  const onTarget = useCallback((targetId: string): void => {
+    setGrouped(false);
+    navigate.current({ targetId, page: 1 });
+  }, []);
+
+  const columns = useMemo(() => caseColumnsFor(directory, onTarget), [directory, onTarget]);
+  const groups = useMemo(() => groupByTarget(result.cases), [result.cases]);
+  const groupColumns = useMemo(() => groupColumnsFor(directory, onTarget), [directory, onTarget]);
+
+  const applied = countSet([
+    search.type,
+    search.caseId,
+    search.moderatorId,
+    search.targetId,
+    search.from,
+    search.to,
+  ]);
+
   return (
     <div className="panel-wide">
-      <p className="page-lede">Targets and moderators are listed by ID, not by name.</p>
-
-      <div className="filters">
+      <FilterBar
+        applied={applied}
+        onClear={() => setFilters(NO_CASE_FILTERS)}
+        more={{
+          applied: countSet([search.caseId]),
+          children: (
+            <IdFilter
+              label="Case ID"
+              inputMode="text"
+              value={search.caseId}
+              onCommit={(caseId) => setFilters({ caseId })}
+            />
+          ),
+        }}
+      >
         <label className="filter">
           <span>Action</span>
           <select
@@ -243,116 +603,151 @@ export function CaseBrowserView({
         </label>
 
         <IdFilter
-          label="Case ID"
-          inputMode="text"
-          value={search.caseId}
-          onCommit={(caseId) => setFilters({ caseId })}
+          label="Target ID"
+          value={search.targetId}
+          onCommit={(targetId) => setFilters({ targetId })}
         />
         <IdFilter
           label="Moderator ID"
           value={search.moderatorId}
           onCommit={(moderatorId) => setFilters({ moderatorId })}
         />
-        <IdFilter
-          label="Target ID"
-          value={search.targetId}
-          onCommit={(targetId) => setFilters({ targetId })}
-        />
 
-        <label className="filter">
-          <span>From</span>
-          <input
-            type="date"
-            value={search.from ?? ''}
-            onChange={(e) =>
-              setFilters({ from: e.target.value === '' ? undefined : e.target.value })
+        {/* One filter, two ends. Two separate rows read as two independent narrowings, and the
+            schema refuses them as a pair anyway — a reversed range is one error, not two. */}
+        <span className="filter filter-range">
+          <span className="filter-range-label">Between</span>
+          <span className="filter-range-pair">
+            <input
+              type="date"
+              aria-label="Earliest date"
+              value={search.from ?? ''}
+              onChange={(e) =>
+                setFilters({ from: e.target.value === '' ? undefined : e.target.value })
+              }
+            />
+            <span aria-hidden="true">–</span>
+            <input
+              type="date"
+              aria-label="Latest date"
+              value={search.to ?? ''}
+              onChange={(e) =>
+                setFilters({ to: e.target.value === '' ? undefined : e.target.value })
+              }
+            />
+          </span>
+        </span>
+      </FilterBar>
+
+      <fieldset className="view-switch">
+        <legend className="sr-only">How the ledger is grouped</legend>
+        <button
+          type="button"
+          className="view-switch-button"
+          aria-pressed={!grouped}
+          onClick={() => setGrouped(false)}
+        >
+          By case
+        </button>
+        <button
+          type="button"
+          className="view-switch-button"
+          aria-pressed={grouped}
+          onClick={() => setGrouped(true)}
+        >
+          By account
+        </button>
+      </fieldset>
+
+      <MemberNotice directory={directory} />
+
+      {grouped ? (
+        <>
+          <p className="view-notice">
+            <span>
+              {groups.length === 1 ? '1 account' : `${groups.length} accounts`} across the{' '}
+              {result.cases.length} cases on this page. Proton cannot group a whole ledger in one
+              answer, so “Only this account” is what reads the rest of an account’s record.
+            </span>
+          </p>
+
+          <div className="table-card">
+            <DataTable
+              className="table groups-table"
+              columns={groupColumns}
+              data={groups}
+              rowAttributes={(row) => ({ 'data-target-id': row.targetId })}
+              empty={
+                <div className="empty-state">
+                  <span className="tile">
+                    <Icon name="funnel-x" />
+                  </span>
+                  <span className="empty-state-title">No case on this page names an account.</span>
+                  <p className="status">
+                    A case Proton recorded against the server itself — a channel deletion, a role
+                    change — has no target to group under.
+                  </p>
+                </div>
+              }
+            />
+          </div>
+        </>
+      ) : (
+        <div className="table-card">
+          <DataTable
+            className="cases-table"
+            columns={columns}
+            data={result.cases}
+            virtual={{ rowHeight: DATA_ROW_HEIGHT }}
+            rowAttributes={(row) => ({ 'data-case-number': row.caseNumber })}
+            sort={{
+              fields: SORTABLE,
+              field: search.sort,
+              direction: search.direction,
+              onSort: setFilters,
+            }}
+            empty={
+              result.total === 0 ? (
+                <div className="empty-state">
+                  <span className="tile">
+                    <Icon name="funnel-x" />
+                  </span>
+                  <span className="empty-state-title">No cases match these filters.</span>
+                  <p className="status">
+                    Proton records a case for every action it takes, so an empty list here means
+                    nothing matched — not that moderation is not being logged.
+                  </p>
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    onClick={() => setFilters(NO_CASE_FILTERS)}
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <span className="tile">
+                    <Icon name="arrow-u-down-left" />
+                  </span>
+                  <span className="empty-state-title">There is no page {result.page}.</span>
+                  <p className="status">
+                    {result.total} {result.total === 1 ? 'case matches' : 'cases match'} these
+                    filters, which is fewer than this page would need.
+                  </p>
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    onClick={() => setFilters({ page: lastPage })}
+                  >
+                    Go to the last page
+                  </button>
+                </div>
+              )
             }
           />
-        </label>
-        <label className="filter">
-          <span>To</span>
-          <input
-            type="date"
-            value={search.to ?? ''}
-            onChange={(e) => setFilters({ to: e.target.value === '' ? undefined : e.target.value })}
-          />
-        </label>
-
-        <DebouncedFilter
-          label="Per page"
-          type="number"
-          min={1}
-          max={CASE_PAGE_SIZE_MAX}
-          value={String(search.pageSize)}
-          // Clamped here, not left to the search schema: an out-of-range number fails validateSearch
-          // in the loader, and typing 500 in a filter box replaced the ledger with an error card.
-          onCommit={(next) => setFilters({ pageSize: pageSizeOf(next) })}
-        />
-      </div>
-
-      <div className="table-card">
-        <DataTable
-          className="cases-table"
-          columns={caseColumns}
-          data={result.cases}
-          virtual={{ rowHeight: ROW_HEIGHT }}
-          rowAttributes={(row) => ({ 'data-case-number': row.caseNumber })}
-          sort={{
-            fields: SORTABLE,
-            field: search.sort,
-            direction: search.direction,
-            onSort: setFilters,
-          }}
-          empty={
-            result.total === 0 ? (
-              <div className="empty-state">
-                <span className="tile">
-                  <Icon name="funnel-x" />
-                </span>
-                <span className="empty-state-title">No cases match these filters.</span>
-                <p className="status">
-                  Proton records a case for every action it takes, so an empty list here means
-                  nothing matched — not that moderation is not being logged.
-                </p>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  onClick={() =>
-                    setFilters({
-                      type: undefined,
-                      caseId: undefined,
-                      moderatorId: undefined,
-                      targetId: undefined,
-                      from: undefined,
-                      to: undefined,
-                    })
-                  }
-                >
-                  Clear filters
-                </button>
-              </div>
-            ) : (
-              <div className="empty-state">
-                <span className="tile">
-                  <Icon name="arrow-u-down-left" />
-                </span>
-                <span className="empty-state-title">There is no page {result.page}.</span>
-                <p className="status">
-                  {result.total} {result.total === 1 ? 'case matches' : 'cases match'} these
-                  filters, which is fewer than this page would need.
-                </p>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  onClick={() => setFilters({ page: lastPage })}
-                >
-                  Go to the last page
-                </button>
-              </div>
-            )
-          }
-        />
-      </div>
+        </div>
+      )}
 
       <Pager
         className="pager"
@@ -364,6 +759,19 @@ export function CaseBrowserView({
           {firstShown}–{firstShown + Math.max(result.cases.length - 1, 0)} of {result.total}
         </span>
       </Pager>
+
+      <div className="pager-size">
+        <DebouncedFilter
+          label="Rows per page"
+          type="number"
+          min={1}
+          max={CASE_PAGE_SIZE_MAX}
+          value={String(search.pageSize)}
+          // Clamped here, not left to the search schema: an out-of-range number fails validateSearch
+          // in the loader, and typing 500 in a filter box replaced the ledger with an error card.
+          onCommit={(next) => setFilters({ pageSize: pageSizeOf(next) })}
+        />
+      </div>
     </div>
   );
 }
@@ -416,11 +824,12 @@ function IdFilter({
 
 const levelColumn = dataColumnHelper<LeaderboardRow>();
 
-// The widest XP on the page, not the all-time top: a later page would otherwise draw every bar as
-// a hairline and say nothing about the members standing on it.
-function leaderboardColumnsFor(entries: readonly LeaderboardRow[]) {
-  const top = entries.reduce((max, entry) => Math.max(max, entry.xp), 1);
-
+/**
+ * No bar. It was 6px of gradient scaled to the top score on the current page, so page two's bars
+ * were drawn against page two's leader and meant something different from page one's — and no
+ * guild-wide maximum is available to scale them against instead. The numbers are the answer.
+ */
+function leaderboardColumnsFor(directory: Directory) {
   return levelColumn.columns([
     levelColumn.accessor('rank', {
       id: 'rank',
@@ -431,27 +840,10 @@ function leaderboardColumnsFor(entries: readonly LeaderboardRow[]) {
         </span>
       ),
     }),
-    // Snowflakes and counts take the same mono the case ledger gives them: a column of ids set in
-    // the prose face is a column nobody can scan down.
     levelColumn.accessor('userId', {
       id: 'userId',
       header: 'Member',
-      cell: (c) => <span className="id">{c.getValue()}</span>,
-    }),
-    levelColumn.accessor('xp', {
-      id: 'share',
-      header: 'Share of the top score',
-      cell: (c) => {
-        const share = Math.round((c.getValue() / top) * 100);
-
-        // The bar is the whole cell, so without a text alternative the column reads as empty.
-        return (
-          <span className="xp-bar" title={`${share}% of the top score on this page`}>
-            <span className="xp-bar-fill" style={{ width: `${Math.max(2, share)}%` }} />
-            <span className="sr-only">{share}% of the top score on this page</span>
-          </span>
-        );
-      },
+      cell: (c) => <UserChip id={c.getValue()} member={directory.of(c.getValue())} />,
     }),
     levelColumn.accessor('level', {
       id: 'level',
@@ -472,15 +864,19 @@ export function LeaderboardView({
   onSearch,
 }: LeaderboardProps): ReactElement {
   const lastPage = lastPageOf(result.total, result.pageSize);
-  const leaderboardColumns = useMemo(() => leaderboardColumnsFor(result.entries), [result.entries]);
+
+  const ids = useMemo(() => result.entries.map((entry) => entry.userId), [result.entries]);
+  const directory = useMembers(ids);
+
+  const leaderboardColumns = useMemo(() => leaderboardColumnsFor(directory), [directory]);
 
   return (
     <div className="panel-wide">
-      <p className="page-lede">Members are listed by ID, not by name.</p>
+      <MemberNotice directory={directory} />
 
       <div className="table-card">
         <DataTable
-          className="table"
+          className="table leaderboard-table"
           columns={leaderboardColumns}
           data={result.entries}
           empty={
@@ -533,38 +929,58 @@ export function LeaderboardView({
 
 const tagColumn = dataColumnHelper<TagSummary>();
 
-const tagColumns = tagColumn.columns([
-  tagColumn.accessor('name', { id: 'name', header: 'Tag' }),
-  tagColumn.accessor('content', {
-    id: 'content',
-    header: 'Posts',
-    // Cut with an ellipsis and the whole thing on the title, rather than stopping mid-word with no
-    // sign there was more and no way to see it.
-    cell: (c) => {
-      const content = c.getValue();
-      return (
-        <span title={content}>{content.length > 80 ? `${content.slice(0, 80)}…` : content}</span>
-      );
-    },
-  }),
-  tagColumn.accessor('uses', {
-    id: 'uses',
-    header: 'Used',
-    cell: (c) => <span className="num mono">{c.getValue().toLocaleString()}</span>,
-  }),
-  tagColumn.accessor('createdBy', {
-    id: 'createdBy',
-    header: 'Written by',
-    cell: (c) => <span className="id">{c.getValue()}</span>,
-  }),
-]);
+function tagColumnsFor(directory: Directory) {
+  return tagColumn.columns([
+    tagColumn.accessor('name', {
+      id: 'name',
+      header: 'Tag',
+      cell: (c) => <span className="tag-name">/{c.getValue()}</span>,
+    }),
+    // The body, not an 80-character stub of it. A tag is the thing it posts, and the list existed
+    // to answer "what does this one say" — which an ellipsis at column three cannot.
+    tagColumn.accessor('content', {
+      id: 'content',
+      header: 'What it posts',
+      cell: (c) => (
+        <span className="tag-body" title={c.getValue()}>
+          {c.getValue()}
+        </span>
+      ),
+    }),
+    tagColumn.accessor('uses', {
+      id: 'uses',
+      header: 'Used',
+      cell: (c) => <span className="num mono">{c.getValue().toLocaleString()}</span>,
+    }),
+    tagColumn.accessor('createdBy', {
+      id: 'createdBy',
+      header: 'Written by',
+      cell: (c) => <UserChip id={c.getValue()} member={directory.of(c.getValue())} />,
+    }),
+    tagColumn.accessor('updatedAt', {
+      id: 'updatedAt',
+      header: 'Changed',
+      cell: (c) => <Stamp iso={c.getValue()} />,
+    }),
+  ]);
+}
 
 export function TagBrowserView({ search, data: result, onSearch }: TagBrowserProps): ReactElement {
   const lastPage = lastPageOf(result.total, result.pageSize);
 
+  const ids = useMemo(
+    () => result.tags.flatMap((tag) => [tag.createdBy, tag.updatedBy]),
+    [result.tags],
+  );
+  const directory = useMembers(ids);
+  const tagColumns = useMemo(() => tagColumnsFor(directory), [directory]);
+
   return (
     <div className="panel-wide">
-      <div className="filters">
+      <FilterBar
+        applied={countSet([search.search])}
+        onClear={() => onSearch({ search: undefined, page: 1 })}
+      >
         <DebouncedFilter
           label="Name contains"
           type="search"
@@ -596,11 +1012,13 @@ export function TagBrowserView({ search, data: result, onSearch }: TagBrowserPro
             <option value="desc">Descending</option>
           </select>
         </label>
-      </div>
+      </FilterBar>
+
+      <MemberNotice directory={directory} />
 
       <div className="table-card">
         <DataTable
-          className="table"
+          className="table tags-table"
           columns={tagColumns}
           data={result.tags}
           empty={
@@ -668,70 +1086,63 @@ function statusChip(status: TicketSummary['status']): string {
   return 'chip';
 }
 
-const ticketColumns = ticketColumn.columns([
-  ticketColumn.accessor('number', {
-    id: 'number',
-    header: 'Ticket',
-    cell: (c) => `#${c.getValue()}`,
-  }),
-  ticketColumn.accessor('subject', {
-    id: 'subject',
-    header: 'Subject',
-    cell: (c) => {
-      const subject = c.getValue();
-      if (!subject) return '—';
+function ticketColumnsFor(selected: string | null, onSelect: (id: string) => void) {
+  return ticketColumn.columns([
+    ticketColumn.accessor('number', {
+      id: 'number',
+      header: 'Ticket',
+      // The row's own way in. A queue whose rows open nothing is a report about tickets rather than
+      // a queue, which is what nine read-only columns made this.
+      cell: (c) => (
+        <button
+          type="button"
+          className="row-open"
+          aria-pressed={c.row.original.id === selected}
+          onClick={() => onSelect(c.row.original.id)}
+        >
+          #{c.getValue()}
+        </button>
+      ),
+    }),
+    ticketColumn.accessor('subject', {
+      id: 'subject',
+      header: 'Subject',
+      cell: (c) => {
+        const subject = c.getValue();
+        if (!subject) return '—';
 
-      return (
-        <span title={subject}>{subject.length > 60 ? `${subject.slice(0, 60)}…` : subject}</span>
-      );
-    },
-  }),
-  ticketColumn.accessor('typeId', {
-    id: 'typeId',
-    header: 'Type',
-    cell: (c) => <span className="mono">{c.getValue()}</span>,
-  }),
-  ticketColumn.accessor('status', {
-    id: 'status',
-    header: 'Status',
-    cell: (c) => <span className={statusChip(c.getValue())}>{c.getValue()}</span>,
-  }),
-  ticketColumn.accessor('priority', {
-    id: 'priority',
-    header: 'Priority',
-    cell: (c) => (
-      <span className={c.getValue() === 'urgent' ? 'chip chip-warn' : 'chip'}>
-        {PRIORITY_LABELS[c.getValue()]}
-      </span>
-    ),
-  }),
-  ticketColumn.accessor('ownerId', {
-    id: 'ownerId',
-    header: 'Owner',
-    cell: (c) => <span className="id">{c.getValue()}</span>,
-  }),
-  ticketColumn.accessor('claimedById', {
-    id: 'claimedById',
-    header: 'Claimed by',
-    cell: (c) => {
-      const id = c.getValue();
-      return id ? <span className="id">{id}</span> : '—';
-    },
-  }),
-  ticketColumn.accessor('openedAt', {
-    id: 'openedAt',
-    header: 'Opened (UTC)',
-    cell: (c) => <span className="stamp">{formatInstant(c.getValue())}</span>,
-  }),
-  ticketColumn.accessor('closedAt', {
-    id: 'closedAt',
-    header: 'Closed (UTC)',
-    cell: (c) => {
-      const at = c.getValue();
-      return at ? <span className="stamp">{formatInstant(at)}</span> : '—';
-    },
-  }),
-]);
+        return <span title={subject}>{subject}</span>;
+      },
+    }),
+    ticketColumn.accessor('status', {
+      id: 'status',
+      header: 'Status',
+      cell: (c) => <span className={statusChip(c.getValue())}>{c.getValue()}</span>,
+    }),
+    ticketColumn.accessor('priority', {
+      id: 'priority',
+      header: 'Priority',
+      cell: (c) => (
+        <span className={c.getValue() === 'urgent' ? 'chip chip-warn' : 'chip'}>
+          {PRIORITY_LABELS[c.getValue()]}
+        </span>
+      ),
+    }),
+    ticketColumn.accessor('openedAt', {
+      id: 'openedAt',
+      header: 'Opened',
+      cell: (c) => <Stamp iso={c.getValue()} />,
+    }),
+    ticketColumn.accessor('closedAt', {
+      id: 'closedAt',
+      header: 'Closed',
+      cell: (c) => {
+        const at = c.getValue();
+        return at ? <Stamp iso={at} /> : '—';
+      },
+    }),
+  ]);
+}
 
 const TICKET_SORTABLE: Record<string, TicketSortField> = {
   number: 'number',
@@ -739,31 +1150,234 @@ const TICKET_SORTABLE: Record<string, TicketSortField> = {
   closedAt: 'closedAt',
 };
 
+const NO_TICKET_FILTERS: Partial<TicketQueryInput> = {
+  search: undefined,
+  status: undefined,
+  priority: undefined,
+  typeId: undefined,
+  ownerId: undefined,
+};
+
+function TicketPane({
+  ticket,
+  directory,
+}: {
+  ticket: TicketSummary | undefined;
+  directory: Directory;
+}): ReactElement {
+  const guildId = openGuildId();
+
+  if (!ticket) {
+    return (
+      <div className="surface ticket-pane">
+        <div className="empty-state">
+          <span className="tile">
+            <Icon name="ticket" />
+          </span>
+          <span className="empty-state-title">Pick a ticket to read it.</span>
+          <p className="status">
+            Everything Proton recorded about a ticket is here — who opened it, who took it, and what
+            closed it.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <section className="surface ticket-pane" aria-labelledby="ticket-pane-head">
+      <div className="ticket-pane-head">
+        <span className="ticket-pane-number">#{ticket.number}</span>
+        <h3 className="ticket-pane-title" id="ticket-pane-head">
+          {ticket.subject ?? 'No subject'}
+        </h3>
+        <span className={statusChip(ticket.status)}>{ticket.status}</span>
+        <span className={ticket.priority === 'urgent' ? 'chip chip-warn' : 'chip'}>
+          {PRIORITY_LABELS[ticket.priority]}
+        </span>
+      </div>
+
+      <dl className="ticket-facts">
+        <div>
+          <dt>Opened by</dt>
+          <dd>
+            <UserChip id={ticket.openerId} member={directory.of(ticket.openerId)} as="opener" />
+          </dd>
+        </div>
+        <div>
+          <dt>Owner</dt>
+          <dd>
+            <UserChip id={ticket.ownerId} member={directory.of(ticket.ownerId)} as="owner" />
+          </dd>
+        </div>
+        <div>
+          <dt>Claimed by</dt>
+          <dd>
+            {ticket.claimedById ? (
+              <UserChip
+                id={ticket.claimedById}
+                member={directory.of(ticket.claimedById)}
+                as="claimer"
+              />
+            ) : (
+              'Nobody yet'
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Assigned to</dt>
+          <dd>
+            {ticket.assignedToId ? (
+              <UserChip
+                id={ticket.assignedToId}
+                member={directory.of(ticket.assignedToId)}
+                as="assignee"
+              />
+            ) : (
+              'Nobody'
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>Type</dt>
+          <dd className="mono">{ticket.typeId}</dd>
+        </div>
+        <div>
+          <dt>Panel</dt>
+          <dd className="mono">{ticket.panelId}</dd>
+        </div>
+        <div>
+          <dt>Messages</dt>
+          <dd className="num mono">{ticket.messageCount.toLocaleString()}</dd>
+        </div>
+        <div>
+          <dt>Opened</dt>
+          <dd>
+            <Stamp iso={ticket.openedAt} />
+          </dd>
+        </div>
+        <div>
+          <dt>Last activity</dt>
+          <dd>
+            <Stamp iso={ticket.lastActivityAt} />
+          </dd>
+        </div>
+        {ticket.closedAt ? (
+          <div>
+            <dt>Closed</dt>
+            <dd>
+              <Stamp iso={ticket.closedAt} />
+            </dd>
+          </div>
+        ) : null}
+        {ticket.closedBy ? (
+          <div>
+            <dt>Closed by</dt>
+            <dd>
+              <UserChip id={ticket.closedBy} member={directory.of(ticket.closedBy)} as="closer" />
+            </dd>
+          </div>
+        ) : null}
+        {ticket.closeReason ? (
+          <div className="ticket-facts-wide">
+            <dt>Close reason</dt>
+            <dd>{ticket.closeReason}</dd>
+          </div>
+        ) : null}
+      </dl>
+
+      <div className="ticket-pane-actions">
+        {guildId === null ? null : (
+          <a
+            className="button button-quiet"
+            href={`https://discord.com/channels/${guildId}/${ticket.channelId}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon name="hash" />
+            Open the ticket channel
+          </a>
+        )}
+        {ticket.transcriptUrl ? (
+          <a
+            className="button button-quiet"
+            href={ticket.transcriptUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Icon name="chat-teardrop-text" />
+            Read the transcript
+          </a>
+        ) : null}
+      </div>
+
+      <p className="field-description">
+        Claiming, replying and closing happen in the ticket’s own channel. Proton’s API has no route
+        for any of them, so this pane reads tickets and does not change them.
+      </p>
+    </section>
+  );
+}
+
 export function TicketBrowserView({
   search,
   data: result,
   onSearch,
 }: TicketBrowserProps): ReactElement {
+  const [picked, setPicked] = useState<string | null>(null);
+
   function setFilters(patch: Partial<TicketQueryInput>): void {
     onSearch({ ...patch, page: patch.page ?? 1 });
   }
 
   const lastPage = lastPageOf(result.total, result.pageSize);
 
-  const filtered =
-    search.search !== undefined ||
-    search.status !== undefined ||
-    search.priority !== undefined ||
-    search.typeId !== undefined ||
-    search.ownerId !== undefined;
+  const applied = countSet([
+    search.search,
+    search.status,
+    search.priority,
+    search.typeId,
+    search.ownerId,
+  ]);
+
+  const ids = useMemo(
+    () =>
+      result.tickets.flatMap((ticket) => [
+        ticket.openerId,
+        ticket.ownerId,
+        ticket.claimedById,
+        ticket.assignedToId,
+        ticket.closedBy,
+      ]),
+    [result.tickets],
+  );
+  const directory = useMembers(ids);
+
+  // The first row, until somebody picks another: a pane that opens empty beside a full list is one
+  // more click before the queue says anything. A page change drops a pick that is no longer here.
+  const shown =
+    result.tickets.find((ticket) => ticket.id === picked) ?? result.tickets[0] ?? undefined;
+
+  const selected = shown?.id ?? null;
+  const columns = useMemo(() => ticketColumnsFor(selected, setPicked), [selected]);
 
   return (
     <div className="panel-wide">
-      <p className="page-lede">
-        Members are listed by ID, not by name. A ticket stays here after its channel is gone.
-      </p>
-
-      <div className="filters">
+      <FilterBar
+        applied={applied}
+        onClear={() => setFilters(NO_TICKET_FILTERS)}
+        more={{
+          applied: countSet([search.typeId]),
+          children: (
+            <IdFilter
+              label="Type"
+              inputMode="text"
+              value={search.typeId}
+              onCommit={(typeId) => setFilters({ typeId })}
+            />
+          ),
+        }}
+      >
         <label className="filter">
           <span>Status</span>
           <select
@@ -805,12 +1419,6 @@ export function TicketBrowserView({
         </label>
 
         <IdFilter
-          label="Type"
-          inputMode="text"
-          value={search.typeId}
-          onCommit={(typeId) => setFilters({ typeId })}
-        />
-        <IdFilter
           label="Owner ID"
           value={search.ownerId}
           onCommit={(ownerId) => setFilters({ ownerId })}
@@ -822,91 +1430,94 @@ export function TicketBrowserView({
           value={search.search ?? ''}
           onCommit={(next) => setFilters({ search: next || undefined })}
         />
-      </div>
+      </FilterBar>
 
-      <div className="table-card">
-        <DataTable
-          className="table"
-          columns={ticketColumns}
-          data={result.tickets}
-          rowAttributes={(row) => ({ 'data-ticket-number': row.number })}
-          sort={{
-            fields: TICKET_SORTABLE,
-            field: search.sort,
-            direction: search.direction,
-            onSort: setFilters,
-          }}
-          empty={
-            result.total > 0 ? (
-              <div className="empty-state">
-                <span className="tile">
-                  <Icon name="arrow-u-down-left" />
-                </span>
-                <span className="empty-state-title">There is no page {search.page}.</span>
-                <p className="status">
-                  {result.total} {result.total === 1 ? 'ticket matches' : 'tickets match'} these
-                  filters, which is fewer than this page would need.
-                </p>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  onClick={() => setFilters({ page: lastPage })}
-                >
-                  Go to the last page
-                </button>
-              </div>
-            ) : filtered ? (
-              <div className="empty-state">
-                <span className="tile">
-                  <Icon name="funnel-x" />
-                </span>
-                <span className="empty-state-title">No ticket matches these filters.</span>
-                <p className="status">
-                  Every ticket this server has opened is kept, the closed and deleted ones included,
-                  so an empty list here means nothing matched.
-                </p>
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  onClick={() =>
-                    setFilters({
-                      search: undefined,
-                      status: undefined,
-                      priority: undefined,
-                      typeId: undefined,
-                      ownerId: undefined,
-                    })
-                  }
-                >
-                  Clear filters
-                </button>
-              </div>
-            ) : (
-              <div className="empty-state">
-                <span className="tile">
-                  <Icon name="ticket" />
-                </span>
-                <span className="empty-state-title">Nobody has opened a ticket yet.</span>
-                <p className="status">
-                  Tickets appear here once the module is switched on and a member opens one from a
-                  panel.
-                </p>
-              </div>
-            )
-          }
-        />
-      </div>
+      <MemberNotice directory={directory} />
 
-      <Pager
-        className="pagination"
-        page={search.page}
-        lastPage={lastPage}
-        onPage={(page) => setFilters({ page })}
-      >
-        <span className="status">
-          Page {search.page} of {lastPage}
-        </span>
-      </Pager>
+      <div className="queue">
+        <div className="queue-list">
+          <div className="table-card">
+            <DataTable
+              className="table queue-table"
+              columns={columns}
+              data={result.tickets}
+              rowAttributes={(row) => ({
+                'data-ticket-number': row.number,
+                ...(row.id === shown?.id ? { 'data-selected': 'true' } : {}),
+              })}
+              sort={{
+                fields: TICKET_SORTABLE,
+                field: search.sort,
+                direction: search.direction,
+                onSort: setFilters,
+              }}
+              empty={
+                result.total > 0 ? (
+                  <div className="empty-state">
+                    <span className="tile">
+                      <Icon name="arrow-u-down-left" />
+                    </span>
+                    <span className="empty-state-title">There is no page {search.page}.</span>
+                    <p className="status">
+                      {result.total} {result.total === 1 ? 'ticket matches' : 'tickets match'} these
+                      filters, which is fewer than this page would need.
+                    </p>
+                    <button
+                      type="button"
+                      className="button button-quiet"
+                      onClick={() => setFilters({ page: lastPage })}
+                    >
+                      Go to the last page
+                    </button>
+                  </div>
+                ) : applied > 0 ? (
+                  <div className="empty-state">
+                    <span className="tile">
+                      <Icon name="funnel-x" />
+                    </span>
+                    <span className="empty-state-title">No ticket matches these filters.</span>
+                    <p className="status">
+                      Every ticket this server has opened is kept, the closed and deleted ones
+                      included, so an empty list here means nothing matched.
+                    </p>
+                    <button
+                      type="button"
+                      className="button button-quiet"
+                      onClick={() => setFilters(NO_TICKET_FILTERS)}
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <span className="tile">
+                      <Icon name="ticket" />
+                    </span>
+                    <span className="empty-state-title">Nobody has opened a ticket yet.</span>
+                    <p className="status">
+                      Tickets appear here once the module is switched on and a member opens one from
+                      a panel.
+                    </p>
+                  </div>
+                )
+              }
+            />
+          </div>
+
+          <Pager
+            className="pagination"
+            page={search.page}
+            lastPage={lastPage}
+            onPage={(page) => setFilters({ page })}
+          >
+            <span className="status">
+              Page {search.page} of {lastPage}
+            </span>
+          </Pager>
+        </div>
+
+        <TicketPane ticket={shown} directory={directory} />
+      </div>
     </div>
   );
 }
@@ -930,7 +1541,13 @@ function useLiftBlockedMember(guildId: string) {
 
 const blockedColumn = dataColumnHelper<BlockedMember>();
 
-function LiftCell({ row }: { row: BlockedMember }): ReactElement {
+function LiftCell({
+  row,
+  member,
+}: {
+  row: BlockedMember;
+  member: ChipMember | null;
+}): ReactElement {
   const [asking, setAsking] = useState(false);
   const lift = useLiftBlockedMember(row.guildId);
 
@@ -949,6 +1566,7 @@ function LiftCell({ row }: { row: BlockedMember }): ReactElement {
         className="button button-quiet"
         onClick={() => setAsking(true)}
         disabled={lift.isPending}
+        data-busy={lift.isPending || undefined}
       >
         Lift
       </button>
@@ -956,7 +1574,7 @@ function LiftCell({ row }: { row: BlockedMember }): ReactElement {
       {/* The only mutation in the product that used to fail in silence: the row stayed blocked, the
           button came back, and a moderator could not tell a refusal from a slow network. */}
       {lift.error ? (
-        <span className="save-bar-failed" role="alert">
+        <span className="save-bar-failed" role="alert" title={failureDetail(lift.error)}>
           <Icon name="warning-circle" weight="fill" />
           {saveFailure(lift.error, 'Could not lift this block')}
         </span>
@@ -974,44 +1592,47 @@ function LiftCell({ row }: { row: BlockedMember }): ReactElement {
             lift.mutate({ userId: row.userId });
           }}
         >
-          {row.userId} will be able to verify in this server again. This does not unban them — if
-          they were also banned, that is a separate lift in Discord.
+          {member ? `${member.displayName} (${row.userId})` : row.userId} will be able to verify in
+          this server again. This does not unban them — if they were also banned, that is a separate
+          lift in Discord.
         </ConfirmDialog>
       ) : null}
     </>
   );
 }
 
-const blockedColumns = blockedColumn.columns([
-  blockedColumn.accessor('userId', {
-    id: 'userId',
-    header: 'Member',
-    cell: (c) => <span className="id">{c.getValue()}</span>,
-  }),
-  blockedColumn.accessor('reason', {
-    id: 'reason',
-    header: 'Why',
-    cell: (c) => {
-      const reason = c.getValue();
-      return (
-        <span className="blocklist-reason" title={reason}>
-          {reason.length > 90 ? `${reason.slice(0, 90)}…` : reason}
-        </span>
-      );
-    },
-  }),
-  blockedColumn.accessor('moduleId', { id: 'moduleId', header: 'Added by' }),
-  blockedColumn.accessor('createdAt', {
-    id: 'createdAt',
-    header: 'When',
-    cell: (c) => <span className="mono">{formatInstant(c.getValue())}</span>,
-  }),
-  blockedColumn.display({
-    id: 'actions',
-    header: '',
-    cell: (c) => <LiftCell row={c.row.original} />,
-  }),
-]);
+function blockedColumnsFor(directory: Directory) {
+  return blockedColumn.columns([
+    blockedColumn.accessor('userId', {
+      id: 'userId',
+      header: 'Member',
+      cell: (c) => <UserChip id={c.getValue()} member={directory.of(c.getValue())} />,
+    }),
+    blockedColumn.accessor('reason', {
+      id: 'reason',
+      header: 'Why',
+      cell: (c) => {
+        const reason = c.getValue();
+        return (
+          <span className="blocklist-reason" title={reason}>
+            {reason}
+          </span>
+        );
+      },
+    }),
+    blockedColumn.accessor('moduleId', { id: 'moduleId', header: 'Added by' }),
+    blockedColumn.accessor('createdAt', {
+      id: 'createdAt',
+      header: 'When',
+      cell: (c) => <Stamp iso={c.getValue()} />,
+    }),
+    blockedColumn.display({
+      id: 'actions',
+      header: '',
+      cell: (c) => <LiftCell row={c.row.original} member={directory.of(c.row.original.userId)} />,
+    }),
+  ]);
+}
 
 export function BlockedMembersView({
   search,
@@ -1020,9 +1641,16 @@ export function BlockedMembersView({
 }: BlockedMembersProps): ReactElement {
   const lastPage = lastPageOf(result.total, search.pageSize);
 
+  const ids = useMemo(() => result.rows.map((row) => row.userId), [result.rows]);
+  const directory = useMembers(ids);
+  const blockedColumns = useMemo(() => blockedColumnsFor(directory), [directory]);
+
   return (
     <div className="panel-wide">
-      <div className="filters">
+      <FilterBar
+        applied={countSet([search.userId, search.moduleId])}
+        onClear={() => onSearch({ userId: undefined, moduleId: undefined, page: 1 })}
+      >
         <DebouncedFilter
           label="Member id"
           type="search"
@@ -1049,7 +1677,9 @@ export function BlockedMembersView({
           value={search.moduleId ?? ''}
           onCommit={(next) => onSearch({ moduleId: next || undefined, page: 1 })}
         />
-      </div>
+      </FilterBar>
+
+      <MemberNotice directory={directory} />
 
       <div className="table-card">
         <DataTable

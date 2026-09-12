@@ -7,8 +7,8 @@ import {
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import { findMenu, type RolemenuConfig, type RolemenuMenu } from './config.ts';
-import { buildComponents } from './message.ts';
 import { MESSAGE_MAX, MODULE_ID, replyEphemeral, succeeded } from './perform.ts';
+import { postMenu } from './post.ts';
 
 type Command = CommandDefinition<RolemenuConfig>;
 
@@ -73,38 +73,18 @@ async function runRolemenu(ctx: Ctx): Promise<void> {
 }
 
 async function postComponents(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
-  const content = ctx.options.getString('message') ?? undefined;
-  const refreshing = menu.messageId !== undefined;
-
-  const built = buildComponents(menu);
-  if (!built.ok) {
-    return reply(
-      ctx,
-      `I couldn't build '${menu.id}': ${built.humanReason} Edit the menu under Role menus in ` +
-        'the Proton dashboard.',
-    );
-  }
-
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: refreshing ? 'edit_message' : 'send',
+  const posted = await postMenu(ctx, menu, {
     actorId: ctx.userId,
-    dryRun: false,
-    idempotencyKey: `${MODULE_ID}:${ctx.idempotencyKey}:post:${menu.id}`,
-    payload: {
-      channelId: menu.channelId,
-      ...(menu.messageId ? { messageId: menu.messageId } : {}),
-      ...(content ? { content } : {}),
-      components: built.components,
-    },
+    idempotencyKey: ctx.idempotencyKey,
+    content: ctx.options.getString('message') ?? undefined,
   });
 
-  if (!succeeded(result)) {
+  const refreshing = posted.refreshed;
+
+  if (!posted.ok) {
     return reply(
       ctx,
-      `I couldn't ${refreshing ? 'refresh' : 'post'} '${menu.id}': ` +
-        `${result.failure?.humanReason ?? 'no reason was reported'}`,
+      `I couldn't ${refreshing ? 'refresh' : 'post'} '${menu.id}': ${posted.humanReason}`,
     );
   }
 

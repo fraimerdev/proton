@@ -2,7 +2,7 @@ import type { AutomodConfig } from '@proton/module-automod/config';
 import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { EnforcementPanel } from '../../../components/automod/enforcement.tsx';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { FieldRow, SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { AUTOMOD_AREAS as AREAS } from '../../../components/module/area-index.ts';
 import { activeArea } from '../../../components/module/areas.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
@@ -15,7 +15,7 @@ import {
   Toggle,
   Tokens,
 } from '../../../components/module/inputs.tsx';
-import { AreaHub, ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
+import { ModuleChrome, ModuleSettings, tabsFor } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
 const RESPONSES = ['none', 'warn', 'timeout', 'kick', 'ban'] as const;
@@ -34,25 +34,30 @@ function AutomodPage(): ReactElement {
 
   return (
     <>
-      <ModuleChrome guildId={guildId} summary={form.summary} area={area} tabs={[]} />
+      <ModuleChrome
+        guildId={guildId}
+        summary={form.summary}
+        area={area}
+        tabs={tabsFor([], search.view, area?.id, AREAS)}
+      />
 
-      {area === undefined ? (
-        <AreaHub areas={AREAS} config={form.config} />
-      ) : (
-        <ModuleSettings form={form}>
-          {area.id === 'checks' ? <ChecksArea /> : null}
-          {area.id === 'response' ? <ResponseArea /> : null}
-          {area.id === 'discord' ? <DiscordArea config={form.live as AutomodConfig} /> : null}
-          {area.id === 'exemptions' ? <ExemptionsArea /> : null}
-        </ModuleSettings>
-      )}
+      <ModuleSettings form={form}>
+        {area?.id === 'checks' ? <ChecksArea /> : null}
+        {area?.id === 'response' ? <ResponseArea /> : null}
+        {area?.id === 'discord' ? <DiscordArea config={form.live as AutomodConfig} /> : null}
+        {area?.id === 'exemptions' ? <ExemptionsArea /> : null}
+      </ModuleSettings>
     </>
   );
 }
 
 function ChecksArea(): ReactElement {
   return (
-    <>
+    // Half, not full. A rule row spanning 1176px puts its severity select four hundred pixels from
+    // the name it belongs to, and eleven checks read as three screens of one column. At half the
+    // head is still one line, the thresholds take a second, and every check Proton makes is on
+    // screen at once — which is the question this tab is opened to answer.
+    <SettingsGrid>
       <SectionCard id="automod:spam" title="Spam">
         <Rule id="flood" label="Message flood" path="floodSeverity">
           <Num
@@ -180,14 +185,48 @@ function ChecksArea(): ReactElement {
 
         <Rule id="zalgo" label="Zalgo text" path="zalgoSeverity" />
       </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }
 
 function ResponseArea(): ReactElement {
   return (
-    <>
-      <SectionCard id="automod:general" title="General">
+    <SettingsGrid>
+      <SectionCard
+        id="automod:response"
+        title="What each severity does"
+        hint="A check’s own severity is set beside it under Checks."
+      >
+        <Choice path="lowResponse" label="Low severity" options={RESPONSES} defaultValue="none" />
+        <Choice
+          path="mediumResponse"
+          label="Medium severity"
+          options={RESPONSES}
+          defaultValue="warn"
+        />
+        <Choice
+          path="highResponse"
+          label="High severity"
+          options={RESPONSES}
+          defaultValue="timeout"
+        />
+        <FieldRow>
+          <Duration path="mediumTimeout" label="Medium timeout" defaultValue="10m" />
+          <Duration path="highTimeout" label="High timeout" defaultValue="1h" />
+        </FieldRow>
+      </SectionCard>
+
+      <SectionCard
+        id="automod:alerts"
+        title="Deletion and alerts"
+        hint="What happens to the message itself, and where every catch is reported."
+      >
+        <Choice
+          path="deleteFrom"
+          label="Delete messages from"
+          options={['low', 'medium', 'high', 'never']}
+          defaultValue="low"
+        />
         <ChannelField
           path="alertChannelId"
           label="Alert channel"
@@ -195,51 +234,15 @@ function ResponseArea(): ReactElement {
           optional
         />
       </SectionCard>
-
-      <SectionCard id="automod:response" title="Response">
-        <Choice
-          path="deleteFrom"
-          label="Delete from severity"
-          options={['low', 'medium', 'high', 'never']}
-          defaultValue="low"
-        />
-        <Choice
-          path="lowResponse"
-          label="Low severity response"
-          options={RESPONSES}
-          defaultValue="none"
-        />
-        <Choice
-          path="mediumResponse"
-          label="Medium severity response"
-          options={RESPONSES}
-          defaultValue="warn"
-        />
-        <Choice
-          path="highResponse"
-          label="High severity response"
-          options={RESPONSES}
-          defaultValue="timeout"
-        />
-        <Duration path="mediumTimeout" label="Medium timeout" defaultValue="10m" />
-        <Duration path="highTimeout" label="High timeout" defaultValue="1h" />
-      </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }
 
 function DiscordArea({ config }: { config: AutomodConfig }): ReactElement {
   return (
-    <>
-      <SectionCard id="automod:discord" title="Enforced by Discord">
-        <Tokens
-          path="blockedWords"
-          kind="string"
-          label="Blocked words"
-          help="Blocked by Discord before Proton ever sees them"
-          maxItems={1000}
-        />
-        <Tokens path="allowedWords" kind="string" label="Allowed words" maxItems={100} />
+    <SettingsGrid>
+      <SectionCard id="automod:discord" title="Enforced by Discord" span="full">
+        <Tokens path="blockedWords" kind="string" label="Blocked words" maxItems={1000} />
         <Tokens
           path="presets"
           kind="enum"
@@ -247,31 +250,52 @@ function DiscordArea({ config }: { config: AutomodConfig }): ReactElement {
           options={['profanity', 'sexualContent', 'slurs']}
           maxItems={3}
         />
+        <Tokens
+          path="allowedWords"
+          kind="string"
+          label="Allowed words"
+          help="Exceptions to the blocked words and to the presets"
+          maxItems={100}
+        />
+        <Tokens
+          path="regexPatterns"
+          kind="string"
+          label="Regex patterns"
+          help="How serious a match is set beside Custom patterns, under Checks"
+          maxItems={10}
+        />
+
         <Num
           path="mentionLimit"
-          label="Mention limit (Discord)"
-          help="0 turns it off"
+          label="Mention limit"
+          help="0 turns it off. Proton’s own mass-mention check is under Checks"
           min={0}
           max={50}
           defaultValue={0}
         />
         <Toggle path="nativeSpam" label="Discord spam filter" defaultValue={false} />
-        <Tokens path="regexPatterns" kind="string" label="Regex patterns" maxItems={10} />
       </SectionCard>
 
-      <SectionCard id="automod:panel:enforcement" title={null}>
+      <SectionCard id="automod:panel:enforcement" title={null} span="full">
         <EnforcementPanel config={config} />
       </SectionCard>
-    </>
+    </SettingsGrid>
   );
 }
 
 function ExemptionsArea(): ReactElement {
   return (
-    <SectionCard id="automod:exemptions" title="Exemptions">
-      <Tokens path="exemptRoleIds" kind="role-id" label="Exempt roles" maxItems={20} />
-      <Tokens path="exemptChannelIds" kind="channel-id" label="Exempt channels" maxItems={50} />
-      <Toggle path="exemptBots" label="Exempt bots" defaultValue={true} />
-    </SectionCard>
+    <SettingsGrid>
+      <SectionCard
+        id="automod:exemptions"
+        title="Exemptions"
+        hint="Skipped by every check on this module, including the ones Discord enforces."
+        span="full"
+      >
+        <Tokens path="exemptRoleIds" kind="role-id" label="Exempt roles" maxItems={20} />
+        <Tokens path="exemptChannelIds" kind="channel-id" label="Exempt channels" maxItems={50} />
+        <Toggle path="exemptBots" label="Exempt bots" defaultValue={true} />
+      </SectionCard>
+    </SettingsGrid>
   );
 }

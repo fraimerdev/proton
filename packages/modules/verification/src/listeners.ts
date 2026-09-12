@@ -13,6 +13,7 @@ export const MODAL_EVENT_TYPES: EventType[] = ['interaction.modal'];
 
 export const SERVICE_EVENT_TYPES: EventType[] = [
   'proton.config_changed',
+  'proton.panel_requested',
   'verification.web_passed',
 ];
 
@@ -47,7 +48,10 @@ export function createServiceListener(deps: VerificationDeps): EventListener<Ver
   return {
     types: SERVICE_EVENT_TYPES,
     async handler(event, ctx) {
-      if (event.type === 'proton.config_changed') {
+      // The dashboard's "post it" button and a config save both end in the same reconcile: it
+      // posts the panel, or edits the one already there, or re-posts one somebody deleted. The
+      // button exists for that last case, which a save alone only fixes by accident.
+      if (event.type === 'proton.config_changed' || event.type === 'proton.panel_requested') {
         await reconcilePanel(event, ctx, deps);
         return;
       }

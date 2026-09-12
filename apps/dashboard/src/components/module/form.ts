@@ -1,10 +1,13 @@
-import type { ModuleConfigView, ModuleSummary } from '@proton/core';
+import type { ModuleConfigView, ModuleSummary, Postable } from '@proton/core';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { useBlocker } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getAtPath, setAtPath } from '../../lib/config-paths.ts';
+import type { GuildEmoji } from '../../lib/discord.ts';
+import { guildIconUrl } from '../../lib/guild-access.ts';
 import {
   channelsQuery,
+  emojisQuery,
   moduleConfigQuery,
   modulesQuery,
   rolesQuery,
@@ -20,9 +23,15 @@ export interface ModuleForm {
   moduleId: string;
   summary: ModuleSummary;
   guildName: string;
+  guildIcon: string | null;
 
   channels: readonly DiscordChannel[];
   roles: readonly DiscordRole[];
+  emojis: readonly GuildEmoji[];
+
+  // What this module keeps in a channel and can put there again, derived by the api from the
+  // config it just returned. The post button reads it to know the channel and the name.
+  postables: readonly Postable[];
   tier: ModuleConfigView['tier'];
 
   config: Record<string, unknown>;
@@ -92,7 +101,9 @@ export function useModuleForm(
   const settings = useSuspenseQuery(moduleConfigQuery(guildId, moduleId)).data;
   const channels = useSuspenseQuery(channelsQuery(guildId)).data;
   const roles = useSuspenseQuery(rolesQuery(guildId)).data;
+  const emojis = useSuspenseQuery(emojisQuery(guildId)).data;
   const { guilds } = useSuspenseQuery(sessionQuery()).data;
+  const guild = guilds.find((candidate) => candidate.id === guildId);
 
   // Edits only, never a copy of the whole config. Save writes these paths over the stored config,
   // so a field this page does not render is a field this page cannot erase.
@@ -189,10 +200,13 @@ export function useModuleForm(
     guildId,
     moduleId,
     summary,
-    guildName: guilds.find((guild) => guild.id === guildId)?.name ?? 'this server',
+    guildName: guild?.name ?? 'this server',
+    guildIcon: guild ? guildIconUrl(guild) : null,
 
     channels,
     roles,
+    emojis,
+    postables: settings.postables,
     tier: settings.tier,
 
     config: settings.config,

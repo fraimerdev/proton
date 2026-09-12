@@ -1,5 +1,10 @@
 import type { ModuleSummary } from '@proton/core';
-import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import {
+  useIsMutating,
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query';
 import { createFileRoute, Link, Outlet, redirect, useRouterState } from '@tanstack/react-router';
 import { type ReactElement, useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from '../../components/shell/app-shell.tsx';
@@ -68,7 +73,10 @@ function GuildShell(): ReactElement {
   // after a later one succeeded would flip back with no banner naming what went wrong.
   const [failure, setFailure] = useState<string | null>(null);
 
+  const toggleKey = ['guild', guildId, 'module-toggle'];
+
   const toggle = useMutation({
+    mutationKey: toggleKey,
     mutationFn: ({ module, enabled }: { module: ModuleSummary; enabled: boolean }) =>
       updateModuleConfig({ data: { guildId, moduleId: module.id, enabled } }),
 
@@ -90,6 +98,9 @@ function GuildShell(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: queryKeys.moduleConfig(guildId, module.id) });
     },
   });
+
+  // Counted across calls rather than read off toggle.isPending, which reports only the newest one.
+  const saving = useIsMutating({ mutationKey: toggleKey }) > 0;
 
   const onToggleModule = useCallback(
     (module: ModuleSummary, enabled: boolean) => toggle.mutate({ module, enabled }),
@@ -121,6 +132,8 @@ function GuildShell(): ReactElement {
         presenceKnown={presenceKnown}
         user={user}
         modules={modules}
+        saving={saving}
+        saveFailed={failure !== null}
       >
         <div aria-live="assertive" ref={banner}>
           {failure ? (

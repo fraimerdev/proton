@@ -8,7 +8,11 @@ import {
   rolemenuFormSchema,
 } from './config.ts';
 import type { RolemenuDeps } from './deps.ts';
-import { createComponentListener, createReactionListener } from './listeners.ts';
+import {
+  createComponentListener,
+  createPanelListener,
+  createReactionListener,
+} from './listeners.ts';
 
 export { rolemenuCommand, rolemenuCommands } from './commands.ts';
 export {
@@ -53,7 +57,9 @@ export {
 export {
   COMPONENT_EVENT_TYPES,
   createComponentListener,
+  createPanelListener,
   createReactionListener,
+  PANEL_EVENT_TYPES,
   REACTION_EVENT_TYPES,
   ROLEMENU_EVENT_TYPES,
 } from './listeners.ts';
@@ -113,7 +119,20 @@ export function createRolemenuModule(
     ],
 
     commands: rolemenuCommands,
-    listeners: [createReactionListener(deps), createComponentListener(deps)],
+    listeners: [
+      createReactionListener(deps),
+      createComponentListener(deps),
+      createPanelListener(deps),
+    ],
+
+    // One per configured menu. `/rolemenu <id>` is the other way to post one, and both end in
+    // postMenu, so a menu posted from the dashboard is the message the command would have made.
+    postables: (config) =>
+      config.menus.map((menu) => ({
+        id: menu.id,
+        name: menu.id,
+        channelId: menu.channelId === '' ? undefined : menu.channelId,
+      })),
 
     dashboard: {
       icon: 'list-checks',

@@ -16,6 +16,7 @@ export const ACTION_KINDS = [
   'interaction_reply',
   'interaction_followup',
   'warn',
+  'unwarn',
   'ban',
   'unban',
   'kick',
@@ -69,6 +70,7 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
   interaction_followup: 0n,
 
   warn: 0n,
+  unwarn: 0n,
 
   ban: Permissions.BanMembers,
   unban: Permissions.BanMembers,
@@ -133,6 +135,10 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   // True despite issuing no REST call: I8 is about what Proton will do, not what Discord permits.
   warn: true,
 
+  // False, unlike warn: withdrawing one is leniency, and the hierarchy check would strand a
+  // warning on any member who has been promoted above the bot since it was written.
+  unwarn: false,
+
   ban: true,
   unban: false,
   kick: true,
@@ -188,6 +194,7 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
   interaction_followup: false,
 
   warn: false,
+  unwarn: false,
 
   ban: false,
   unban: false,
@@ -343,6 +350,7 @@ export function reversalOf(kind: ActionKind): ActionKind | undefined {
 
 export const LEDGER_ONLY_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>([
   'warn',
+  'unwarn',
   // A draw changes who won, not anything on Discord: the announcement is a separate send. It
   // still belongs in the ledger, which is what makes a giveaway auditable alongside every other
   // state change (PLAN.md I1).

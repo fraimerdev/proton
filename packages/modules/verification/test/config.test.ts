@@ -1,13 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { type FieldDescriptor, zodToDescriptors } from '@proton/core';
 import {
+  DEFAULT_PANEL,
+  liftStoredConfig,
   VERIFICATION_FAILURE_ACTIONS,
   VERIFICATION_MODES,
   verificationConfigSchema,
   verificationDefaultConfig,
+  verificationFormSchema,
+  verificationPanelSchema,
 } from '../src/config.ts';
 
-const DESCRIPTORS = zodToDescriptors(verificationConfigSchema);
+// The form schema, not the config: `panel` is an authored message the generator cannot render, and
+// the manifest declares it the same way.
+const DESCRIPTORS = zodToDescriptors(verificationFormSchema);
 
 function descriptor(path: string): FieldDescriptor {
   const found = DESCRIPTORS.find((candidate) => candidate.path === path);
@@ -27,9 +33,9 @@ const CAPTCHA_ONLY = [
 const ALWAYS_SHOWN = [
   'mode',
   'panelChannelId',
-  'panelTitle',
-  'panelBody',
   'panelButtonLabel',
+  'panelButtonEmoji',
+  'panelButtonStyle',
   'unverifiedRoleId',
   'verifiedRoleId',
   'applyUnverifiedOnJoin',
@@ -94,5 +100,85 @@ describe('the shipped defaults', () => {
 
   test('parse against the schema that will read them back', () => {
     expect(verificationConfigSchema.safeParse(verificationDefaultConfig).success).toBe(true);
+  });
+});
+
+/**
+ * v1 kept the panel as `panelTitle` and `panelBody`. Zod strips unknown keys, so without a lift the
+ * next switch toggle — which sends no config at all — would persist the stripped object and every
+ * guild's panel copy would be gone with nothing on screen to say it had happened.
+ */
+describe('reading a panel saved before it was an authored message', () => {
+  test('carries the old heading and text into the message, worded as it was posted', () => {
+    const lifted = verificationConfigSchema.parse(
+      liftStoredConfig({
+        enabled: true,
+        panelTitle: 'Members only',
+        panelBody: 'Press below.',
+        panelButtonLabel: 'Let me in',
+      }),
+    );
+
+    expect(lifted.panel.content).toBe('## Members only\n\nPress below.');
+    expect(lifted.panelButtonLabel).toBe('Let me in');
+  });
+
+  test('leaves a config that has already been migrated alone', () => {
+    const already = { panel: { content: 'Already a message' }, panelTitle: 'ignored' };
+
+    expect((liftStoredConfig(already) as { panel: { content: string } }).panel.content).toBe(
+      'Already a message',
+    );
+  });
+
+  test('falls back to the shipped panel when there was nothing to carry', () => {
+    const lifted = verificationConfigSchema.parse(liftStoredConfig({ enabled: true }));
+
+    expect(lifted.panel).toEqual(DEFAULT_PANEL);
+  });
+
+  test('is not confused by something that is not a config object', () => {
+    expect(liftStoredConfig(null)).toBeNull();
+    expect(liftStoredConfig('nonsense')).toBe('nonsense');
+    expect(liftStoredConfig([1, 2])).toEqual([1, 2]);
+  });
+});
+
+describe('what the panel may carry', () => {
+  // Proton attaches the verify button itself, and Discord allows a message one set of components.
+  test('refuses a panel that brings its own button rows', () => {
+    const parsed = verificationPanelSchema.safeParse({
+      content: 'Verify',
+      components: [
+        {
+          kind: 'buttons',
+          buttons: [
+            {
+              key: 'x',
+              style: 'primary',
+              label: 'Press',
+              action: { kind: 'reply', content: 'hi' },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  test('refuses a components layout, which cannot carry an action row', () => {
+    const parsed = verificationPanelSchema.safeParse({ v2: [{ kind: 'text', content: 'Verify' }] });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  test('takes text and embeds, which is what the builder offers here', () => {
+    const parsed = verificationPanelSchema.safeParse({
+      content: 'Read the rules.',
+      embeds: [{ title: 'Members only', description: 'Press below.', color: 0x5865f2 }],
+    });
+
+    expect(parsed.success).toBe(true);
   });
 });

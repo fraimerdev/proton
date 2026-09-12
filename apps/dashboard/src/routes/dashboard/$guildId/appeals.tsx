@@ -1,7 +1,7 @@
 import { type AppealPanel, appealPanelsSchema } from '@proton/module-appeals/config';
 import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { ChannelField, Tokens, usePanelSchema } from '../../../components/module/inputs.tsx';
@@ -27,26 +27,31 @@ function AppealsPage(): ReactElement {
       <ModuleChrome guildId={guildId} summary={form.summary} area={undefined} tabs={[]} />
 
       <ModuleSettings form={form}>
-        <SectionCard id="appeals:review" title="Review">
-          <ChannelField
-            path="reviewChannelId"
-            label="Default review channel"
-            help="Where an appeal lands when its form names no channel of its own"
-            channelTypes={[0, 5, 11, 12]}
-            optional
-          />
-          <Tokens
-            path="reviewerRoleIds"
-            label="Default reviewers"
-            help="Who may accept or turn down an appeal, unless the form names its own"
-            kind="role-id"
-            maxItems={25}
-          />
-        </SectionCard>
+        <SettingsGrid>
+          <SectionCard
+            id="appeals:review"
+            title="Review"
+            hint="Used by any appeal form that does not name its own channel and reviewers."
+          >
+            <ChannelField
+              path="reviewChannelId"
+              label="Default review channel"
+              channelTypes={[0, 5, 11, 12]}
+              optional
+            />
+            <Tokens
+              path="reviewerRoleIds"
+              label="Default reviewers"
+              help="Who may accept or turn down an appeal."
+              kind="role-id"
+              maxItems={25}
+            />
+          </SectionCard>
 
-        <SectionCard id="appeals:panel:panels" title="Appeal forms">
-          <Panels form={form} />
-        </SectionCard>
+          <SectionCard id="appeals:panel:panels" title="Appeal forms" span="full">
+            <Panels form={form} />
+          </SectionCard>
+        </SettingsGrid>
       </ModuleSettings>
     </>
   );

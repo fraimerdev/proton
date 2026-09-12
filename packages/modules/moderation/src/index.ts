@@ -2,33 +2,67 @@ import { type ModuleManifest, Permissions } from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
 import { channelCommands } from './commands/channel.ts';
 import { memberCommands } from './commands/member.ts';
+import { roleCommand } from './commands/role.ts';
 import {
   MODERATION_SCHEMA_VERSION,
   moderationConfigSchema,
   moderationDefaultConfig,
 } from './config.ts';
+import type { ModerationDeps } from './deps.ts';
+import { createRoleRunHandler, ROLE_RUN_JOB } from './role-run.ts';
 
-export {
-  channelCommands,
-  lockdownCommand,
-  slowmodeCommand,
-  unlockCommand,
-} from './commands/channel.ts';
+export { channelCommands, lockdownCommand, slowmodeCommand } from './commands/channel.ts';
 export {
   banCommand,
   kickCommand,
   memberCommands,
   timeoutCommand,
-  untimeoutCommand,
   warnCommand,
 } from './commands/member.ts';
+export { roleCommand } from './commands/role.ts';
 export {
   MODERATION_SCHEMA_VERSION,
   type ModerationConfig,
   moderationConfigSchema,
   moderationDefaultConfig,
 } from './config.ts';
+export type { ModerationDeps } from './deps.ts';
+export {
+  type GuildMemberLister,
+  type GuildMemberSummary,
+  type MemberPage,
+  type MemberPageResult,
+  RestGuildMemberLister,
+} from './members.ts';
 export { MODULE_ID } from './perform.ts';
+export { guardRole, type RoleGuardInput } from './role-guard.ts';
+export {
+  createRoleRunHandler,
+  matchesRun,
+  ROLE_RUN_JOB,
+  ROLE_RUN_KEY,
+  ROLE_RUN_PAGE,
+  renderFinished,
+  renderProgress,
+} from './role-run.ts';
+export {
+  ROLE_RUN_MODES,
+  type RoleRun,
+  type RoleRunMode,
+  type RoleRunStore,
+  roleRunSchema,
+} from './run-store.ts';
+export type { StandingWarning, WarningStore, WithdrawInput } from './store.ts';
+
+export function createModerationModule(
+  deps: ModerationDeps = {},
+): ModuleManifest<typeof moderationConfigSchema> {
+  return {
+    ...moderationModule,
+    commands: [...memberCommands(deps), ...channelCommands, roleCommand(deps)],
+    scheduledHandlers: { [ROLE_RUN_JOB]: createRoleRunHandler(deps) },
+  };
+}
 
 export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
   id: 'moderation',
@@ -42,6 +76,7 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
 
   requiredPermissions: [
     Permissions.ViewChannel,
+    Permissions.SendMessages,
     Permissions.BanMembers,
     Permissions.KickMembers,
     Permissions.ModerateMembers,
@@ -51,6 +86,7 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
   ],
   actionKinds: [
     'warn',
+    'unwarn',
     'ban',
     'unban',
     'kick',
@@ -59,9 +95,17 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
     'slowmode',
     'lockdown',
     'unlock',
+    'add_role',
+    'remove_role',
+    'send',
+    'edit_message',
     'interaction_reply',
+    'interaction_followup',
   ],
-  commands: [...memberCommands, ...channelCommands],
+  commands: [...memberCommands({}), ...channelCommands, roleCommand({})],
+
+  schedules: [ROLE_RUN_JOB],
+  scheduledHandlers: { [ROLE_RUN_JOB]: createRoleRunHandler({}) },
 
   emits: ['moderation.warned'],
   dashboard: {

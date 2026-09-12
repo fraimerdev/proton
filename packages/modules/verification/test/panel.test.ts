@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { parseCustomId } from '@proton/core';
+import { BUTTON_STYLE_VALUES, parseCustomId } from '@proton/core';
 import { ButtonStyle, ComponentType, TextInputStyle } from 'discord-api-types/v10';
-import { verificationDefaultConfig } from '../src/config.ts';
+import { verificationDefaultConfig, verificationPanelSchema } from '../src/config.ts';
 import {
   ANSWER_ACTION,
   buildCaptchaMessage,
@@ -29,14 +29,51 @@ describe('the panel message', () => {
   test('carries the guild’s own copy and its own button label', () => {
     const built = buildPanelMessage({
       ...verificationDefaultConfig,
-      panelTitle: 'Members only',
-      panelBody: 'Press below.',
+      panel: verificationPanelSchema.parse({ content: '## Members only\n\nPress below.' }),
       panelButtonLabel: 'Let me in',
     });
 
     if (!built.ok) throw new Error(built.humanReason);
     expect(built.content).toBe('## Members only\n\nPress below.');
     expect(row(built.components)[0]?.label).toBe('Let me in');
+  });
+
+  // The panel is an authored message now, so an admin may build one out of embeds with no text at
+  // all — and the button still has to be attached under it.
+  test('posts an embed-only panel with the button still under it', () => {
+    const built = buildPanelMessage({
+      ...verificationDefaultConfig,
+      panel: verificationPanelSchema.parse({
+        embeds: [{ title: 'Members only', description: 'Press below.', color: 0x5865f2 }],
+      }),
+    });
+
+    if (!built.ok) throw new Error(built.humanReason);
+    expect(built.content).toBeUndefined();
+    expect(built.embeds).toHaveLength(1);
+    expect(row(built.components)[0]?.label).toBe('Verify');
+  });
+
+  test('wears the colour and the emoji the guild picked for its button', () => {
+    const built = buildPanelMessage({
+      ...verificationDefaultConfig,
+      panelButtonStyle: 'primary',
+      panelButtonEmoji: '<a:wave:123456789012345678>',
+    });
+
+    if (!built.ok) throw new Error(built.humanReason);
+
+    const button = row(built.components)[0];
+    expect(button?.style).toBe(BUTTON_STYLE_VALUES.primary);
+    expect(button?.emoji).toEqual({ name: 'wave', id: '123456789012345678', animated: true });
+  });
+
+  // Green is what every panel posted before these fields existed is wearing.
+  test('stays green when the guild has never picked a colour', () => {
+    const built = buildPanelMessage(verificationDefaultConfig);
+
+    if (!built.ok) throw new Error(built.humanReason);
+    expect(row(built.components)[0]?.style).toBe(BUTTON_STYLE_VALUES.success);
   });
 
   test('the button names the module and the action and nothing else, so a press re-reads config', () => {

@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-import { ModuleRegistry } from '@proton/core';
+import { type ModuleManifest, ModuleRegistry, type ProtonEvent } from '@proton/core';
 import { createDb, type DbHandle, runMigrations } from '@proton/db';
 import { guildModules, guilds } from '@proton/db/schema';
 import { pingModule } from '@proton/module-ping';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 import { ModuleConfigError, ModuleConfigService } from '../src/modules/service.ts';
 
 let container: StartedPostgreSqlContainer;
@@ -57,7 +59,7 @@ describe('reading module config', () => {
       schemaVersion: 1,
     });
 
-    await expect(service.get(GUILD, 'ping')).rejects.toThrow(/does not satisfy/);
+    await expect(service.get(GUILD, 'ping')).rejects.toThrow(/could not read this server/);
   });
 
   test('fills in defaults for fields added since the row was written', async () => {
@@ -178,6 +180,152 @@ describe('writing module config', () => {
         source: 'dashboard',
       }),
     ).rejects.toThrow();
+
+    const rows = await handle.client`select count(*)::int as n from audit_trail`;
+    expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);
+  });
+});
+
+describe('asking Proton to post a panel', () => {
+  const PANELS = 'panels';
+
+  const panelConfigSchema = z.object({
+    enabled: z.boolean().default(true),
+    channelId: z.string().nullable().default(null),
+  });
+
+  const panelModule: ModuleManifest<typeof panelConfigSchema> = {
+    id: PANELS,
+    name: 'Panels',
+    category: 'utility',
+    configSchema: panelConfigSchema,
+    defaultConfig: { enabled: true, channelId: null },
+    schemaVersion: 1,
+    requiredIntents: [],
+    requiredPermissions: [],
+    postables: (config) => [
+      { id: 'panel', name: 'The panel', channelId: config.channelId ?? undefined },
+    ],
+  };
+
+  let published: ProtonEvent[];
+  let panels: ModuleConfigService;
+
+  beforeEach(async () => {
+    published = [];
+
+    const registry = new ModuleRegistry();
+    registry.register(pingModule);
+    registry.register(panelModule);
+
+    panels = new ModuleConfigService(handle, registry, {
+      bus: {
+        publish: async (e) => {
+          published.push(e);
+        },
+        subscribe: () => ({ group: 'test', close: async () => {} }),
+      },
+    });
+
+    await handle.db.insert(guildModules).values({
+      guildId: GUILD,
+      moduleId: PANELS,
+      enabled: true,
+      config: { enabled: true, channelId: '700000000000000001' },
+      schemaVersion: 1,
+    });
+  });
+
+  async function ask(panelId = 'panel') {
+    return panels.requestPanel({
+      guildId: GUILD,
+      moduleId: PANELS,
+      panelId,
+      actorId: ACTOR,
+      source: 'dashboard',
+    });
+  }
+
+  test('publishes the request and names the panel back', async () => {
+    const answer = await ask();
+
+    expect(answer.name).toBe('The panel');
+    expect(published).toHaveLength(1);
+    expect(published[0]?.type).toBe('proton.panel_requested');
+    expect(published[0]?.payload).toMatchObject({
+      auditId: answer.auditId,
+      guildId: GUILD,
+      moduleId: PANELS,
+      panelId: 'panel',
+      actorId: ACTOR,
+    });
+  });
+
+  test('writes an audit row whoever pressed the button can be traced by', async () => {
+    const answer = await ask();
+
+    const rows = (await handle.client`
+      select id, actor_id, action, after from audit_trail where id = ${answer.auditId}
+    `) as unknown as Array<{ actor_id: string; action: string; after: { name: string } }>;
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.actor_id).toBe(ACTOR);
+    expect(rows[0]?.action).toBe(`module.${PANELS}.panel.post`);
+    expect(rows[0]?.after.name).toBe('The panel');
+  });
+
+  test('refuses a module that keeps nothing in a channel', async () => {
+    await expect(
+      panels.requestPanel({
+        guildId: GUILD,
+        moduleId: 'ping',
+        panelId: 'panel',
+        actorId: ACTOR,
+        source: 'dashboard',
+      }),
+    ).rejects.toThrow(/nothing Proton posts/);
+  });
+
+  test('refuses to post for a module that is switched off', async () => {
+    await handle.db
+      .update(guildModules)
+      .set({ enabled: false })
+      .where(and(eq(guildModules.guildId, GUILD), eq(guildModules.moduleId, PANELS)));
+
+    await expect(ask()).rejects.toThrow(/switched off/);
+    expect(published).toHaveLength(0);
+  });
+
+  test('refuses a panel id the config no longer has', async () => {
+    await expect(ask('renamed-since-the-page-loaded')).rejects.toThrow(/may have been renamed/);
+    expect(published).toHaveLength(0);
+  });
+
+  test('refuses a panel with no channel yet rather than publishing a request nobody can serve', async () => {
+    await handle.db
+      .update(guildModules)
+      .set({ config: { enabled: true, channelId: null } })
+      .where(and(eq(guildModules.guildId, GUILD), eq(guildModules.moduleId, PANELS)));
+
+    await expect(ask()).rejects.toThrow(/no channel to go in/);
+    expect(published).toHaveLength(0);
+  });
+
+  test('says so when there is no bus, instead of reporting a send that never happened', async () => {
+    const registry = new ModuleRegistry();
+    registry.register(panelModule);
+
+    const busless = new ModuleConfigService(handle, registry);
+
+    await expect(
+      busless.requestPanel({
+        guildId: GUILD,
+        moduleId: PANELS,
+        panelId: 'panel',
+        actorId: ACTOR,
+        source: 'dashboard',
+      }),
+    ).rejects.toThrow(/cannot reach its event bus/);
 
     const rows = await handle.client`select count(*)::int as n from audit_trail`;
     expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);

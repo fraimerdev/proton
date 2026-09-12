@@ -29,75 +29,69 @@ export function verifyCommand(deps: VerificationDeps): Command {
 export function quarantineCommand(deps: VerificationDeps): Command {
   return {
     name: 'quarantine',
-    description: 'Swap a member’s roles for the quarantine role, recording what they had.',
+    description: 'Quarantine a member, or lift a quarantine.',
 
     data: new SlashCommandBuilder()
       .setName('quarantine')
-      .setDescription('Swap a member’s roles for the quarantine role, recording what they had.')
+      .setDescription('Quarantine a member, or lift a quarantine.')
       .setContexts(InteractionContextType.Guild)
       .setDefaultMemberPermissions(Permissions.ManageRoles)
-      .addUserOption((option) =>
-        option.setName('user').setDescription('The member to quarantine.').setRequired(true),
+      .addSubcommand((sub) =>
+        sub
+          .setName('add')
+          .setDescription('Swap a member’s roles for the quarantine role, recording what they had.')
+          .addUserOption((option) =>
+            option.setName('user').setDescription('The member to quarantine.').setRequired(true),
+          )
+          .addStringOption((option) =>
+            option
+              .setName('reason')
+              .setDescription('Written to the Discord audit log, to the case and to the record.')
+              .setMaxLength(REASON_MAX),
+          ),
       )
-      .addStringOption((option) =>
-        option
-          .setName('reason')
-          .setDescription('Written to the Discord audit log, to the case and to the record.')
-          .setMaxLength(REASON_MAX),
+      .addSubcommand((sub) =>
+        sub
+          .setName('remove')
+          .setDescription('Lift a quarantine and put the member’s roles back exactly.')
+          .addUserOption((option) =>
+            option.setName('user').setDescription('The member to release.').setRequired(true),
+          )
+          .addStringOption((option) =>
+            option
+              .setName('reason')
+              .setDescription('Written to the Discord audit log and to the case.')
+              .setMaxLength(REASON_MAX),
+          ),
       )
       .toJSON(),
 
     async handler(ctx) {
-      const targetId = ctx.options.getUserId('user');
-      if (!targetId) {
-        await reply(ctx, 'I need a member to quarantine.');
+      const sub = ctx.options.getSubcommand();
+      if (sub !== 'add' && sub !== 'remove') {
+        await reply(
+          ctx,
+          'Use /quarantine add to quarantine somebody, or /quarantine remove to release them.',
+        );
         return;
       }
 
-      await runQuarantine(ctx, deps, {
-        targetId,
-        reason: ctx.options.getString('reason') ?? undefined,
-      });
-    },
-  };
-}
-
-export function unquarantineCommand(deps: VerificationDeps): Command {
-  return {
-    name: 'unquarantine',
-    description: 'Lift a quarantine and put the member’s roles back exactly.',
-
-    data: new SlashCommandBuilder()
-      .setName('unquarantine')
-      .setDescription('Lift a quarantine and put the member’s roles back exactly.')
-      .setContexts(InteractionContextType.Guild)
-      .setDefaultMemberPermissions(Permissions.ManageRoles)
-      .addUserOption((option) =>
-        option.setName('user').setDescription('The member to release.').setRequired(true),
-      )
-      .addStringOption((option) =>
-        option
-          .setName('reason')
-          .setDescription('Written to the Discord audit log and to the case.')
-          .setMaxLength(REASON_MAX),
-      )
-      .toJSON(),
-
-    async handler(ctx) {
       const targetId = ctx.options.getUserId('user');
       if (!targetId) {
-        await reply(ctx, 'I need a member to release.');
+        await reply(
+          ctx,
+          sub === 'add' ? 'I need a member to quarantine.' : 'I need a member to release.',
+        );
         return;
       }
 
-      await runRelease(ctx, deps, {
-        targetId,
-        reason: ctx.options.getString('reason') ?? undefined,
-      });
+      const input = { targetId, reason: ctx.options.getString('reason') ?? undefined };
+
+      await (sub === 'add' ? runQuarantine(ctx, deps, input) : runRelease(ctx, deps, input));
     },
   };
 }
 
 export function verificationCommands(deps: VerificationDeps): Command[] {
-  return [verifyCommand(deps), quarantineCommand(deps), unquarantineCommand(deps)];
+  return [verifyCommand(deps), quarantineCommand(deps)];
 }

@@ -48,6 +48,7 @@ import {
   unbanPayloadSchema,
   unlockPayloadSchema,
   untimeoutPayloadSchema,
+  unwarnPayloadSchema,
   warnPayloadSchema,
 } from './payloads.ts';
 import type { RestFile } from './rest-client.ts';
@@ -325,6 +326,12 @@ export function toRestCall(request: ActionRequest): PayloadResult {
 
     case 'warn': {
       const p = warnPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+      return LEDGER_ONLY;
+    }
+
+    case 'unwarn': {
+      const p = unwarnPayloadSchema.safeParse(request.payload);
       if (!p.success) return issues(request, p.error.issues);
       return LEDGER_ONLY;
     }

@@ -92,6 +92,6 @@ export const submitAppeal = createServerFn({ method: 'POST' })
       const reason = error instanceof Error ? error.message : String(error);
 
       console.warn(`an appeal was refused: ${reason}`);
-      return { ok: false, reason: 'Your appeal was not sent. ' + reason };
+      return { ok: false, reason: `Your appeal was not sent. ${reason}` };
     }
   });

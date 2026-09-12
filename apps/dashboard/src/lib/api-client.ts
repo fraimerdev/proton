@@ -23,6 +23,8 @@ import {
   moduleConfigViewSchema,
   moduleIndexSchema,
   moduleUpdateResultSchema,
+  type PanelRequestResult,
+  panelRequestResultSchema,
   verificationRequestResultSchema,
 } from '@proton/core';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
@@ -230,5 +232,20 @@ export class ApiClient {
       method: 'POST',
       body: JSON.stringify(body),
     });
+  }
+
+  // "Asked", not "posted": the api has no Discord client, so it records the request and publishes
+  // it for the worker. The name comes back so the page can say which panel it was.
+  postPanel(
+    guildId: string,
+    moduleId: string,
+    panelId: string,
+    body: AuditStamp,
+  ): Promise<PanelRequestResult> {
+    return this.#parsed(
+      `/guilds/${guildId}/modules/${moduleId}/panels/${encodeURIComponent(panelId)}/post`,
+      panelRequestResultSchema,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
   }
 }

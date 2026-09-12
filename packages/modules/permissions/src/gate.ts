@@ -1,4 +1,4 @@
-import type { PermissionsConfig } from './config.ts';
+import { type PermissionsConfig, RETIRED_COMMAND_ALIASES } from './config.ts';
 
 export const PERMISSIONS_MODULE_ID = 'permissions';
 
@@ -22,7 +22,19 @@ export interface CommandGateInput {
 }
 
 export function requiredRolesFor(config: PermissionsConfig, commandName: string): string[] {
-  return config.overrides[commandName] ?? [];
+  const own = config.overrides[commandName];
+  if (own && own.length > 0) return own;
+
+  // The worker parses stored config directly, so it never sees liftStoredConfig — without this
+  // fold, retiring /untimeout would drop the gate an admin set on it until they saved the page.
+  for (const [retired, survivor] of Object.entries(RETIRED_COMMAND_ALIASES)) {
+    if (survivor !== commandName) continue;
+
+    const inherited = config.overrides[retired];
+    if (inherited && inherited.length > 0) return inherited;
+  }
+
+  return own ?? [];
 }
 
 export function evaluateCommandGate(input: CommandGateInput): CommandGateDecision {

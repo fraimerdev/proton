@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { Num } from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
@@ -24,16 +24,22 @@ function BackupPage(): ReactElement {
       <ModuleChrome guildId={guildId} summary={form.summary} area={undefined} tabs={[]} />
 
       <ModuleSettings form={form}>
-        <SectionCard id="backup:retention" title="Retention">
-          <Num
-            path="retainBackups"
-            label="Snapshots to keep"
-            help="A new snapshot deletes the oldest beyond this count"
-            min={1}
-            max={MAX_RETAINED_BACKUPS}
-            defaultValue={10}
-          />
-        </SectionCard>
+        <SettingsGrid>
+          <SectionCard
+            id="backup:snapshots"
+            title="Snapshots"
+            hint="Taken and restored with /backup in Discord; how many are kept is all this page sets."
+          >
+            <Num
+              path="retainBackups"
+              label="Snapshots to keep"
+              help="A new snapshot deletes the oldest beyond this count."
+              min={1}
+              max={MAX_RETAINED_BACKUPS}
+              defaultValue={10}
+            />
+          </SectionCard>
+        </SettingsGrid>
       </ModuleSettings>
     </>
   );

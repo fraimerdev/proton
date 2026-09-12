@@ -1,4 +1,4 @@
-import type { AreaEntry } from './areas.ts';
+import type { AreaCount, AreaEntry } from './areas.ts';
 import { tally } from './areas.ts';
 
 /**
@@ -13,19 +13,22 @@ export interface IndexedArea extends AreaEntry {
   fields: readonly string[];
 }
 
-function checksOn(config: Record<string, unknown>): string | null {
+function checksOn(config: Record<string, unknown>): AreaCount | null {
   const severities = Object.entries(config).filter(([key]) => /severity$/i.test(key));
   if (severities.length === 0) return null;
 
   const on = severities.filter(([, value]) => typeof value === 'string' && value !== 'off').length;
 
-  return `${on} of ${severities.length} on`;
+  return {
+    short: `${on} of ${severities.length} on`,
+    long: `${on} of ${severities.length} checks on`,
+  };
 }
 
 export const AUTOMOD_AREAS: readonly IndexedArea[] = [
   {
     id: 'checks',
-    title: 'Message checks',
+    title: 'Checks',
     blurb: 'Everything Proton itself looks for in a message, and how serious each one is.',
     icon: 'list-checks',
     count: checksOn,
@@ -71,7 +74,7 @@ export const AUTOMOD_AREAS: readonly IndexedArea[] = [
   },
   {
     id: 'discord',
-    title: 'Enforced by Discord',
+    title: 'Discord AutoMod',
     blurb:
       'Word lists and patterns Proton hands to Discord’s own AutoMod, blocked before Proton sees them.',
     icon: 'lock',
@@ -98,14 +101,14 @@ export const AUTOMOD_AREAS: readonly IndexedArea[] = [
 export const SERVERLOG_AREAS: readonly IndexedArea[] = [
   {
     id: 'routing',
-    title: 'Categories and channels',
+    title: 'Categories',
     blurb: 'Which categories of event are logged, and the channel each one is written to.',
     icon: 'hash',
     fields: ['defaultChannelId', 'categories', 'categoryChannels'],
   },
   {
     id: 'events',
-    title: 'Individual logs',
+    title: 'Individual events',
     blurb: 'Every event Discord reports, switched on one at a time and routed on its own.',
     icon: 'list-checks',
     fields: ['events'],
@@ -124,7 +127,9 @@ export const MESSAGES_AREAS: readonly IndexedArea[] = [
   {
     id: 'templates',
     title: 'Templates',
-    blurb: 'Named messages you post with /message, and everything they carry.',
+    // The module's own lede already says what a template is; a note under the tab that repeats it
+    // is a line the reader has now read twice on one screen. This says where they get used.
+    blurb: 'Composed once here, then posted into any channel with /message post.',
     icon: 'chat-circle-text',
     count: (config) => tally(config, 'templates', 'template'),
     fields: ['templates'],
@@ -157,7 +162,7 @@ export const LEVELING_AREAS: readonly IndexedArea[] = [
   },
   {
     id: 'levelup',
-    title: 'Level-up announcement',
+    title: 'Level-up',
     blurb: 'Where Proton says somebody levelled up, and what it says.',
     icon: 'megaphone',
     fields: ['levelUpChannelId', 'levelUpMessage'],
@@ -190,21 +195,21 @@ export const LEVELING_AREAS: readonly IndexedArea[] = [
 export const WELCOME_AREAS: readonly IndexedArea[] = [
   {
     id: 'welcome',
-    title: 'Welcome message',
+    title: 'Welcome',
     blurb: 'Posted when somebody joins, with the channel it lands in.',
     icon: 'hand-waving',
     fields: ['welcomeChannelId', 'welcomeMessage'],
   },
   {
     id: 'goodbye',
-    title: 'Goodbye message',
+    title: 'Goodbye',
     blurb: 'Posted when somebody leaves, with the channel it lands in.',
     icon: 'sign-out',
     fields: ['goodbyeChannelId', 'goodbyeMessage'],
   },
   {
     id: 'card',
-    title: 'Welcome card',
+    title: 'Card',
     blurb: 'The image drawn onto the greeting.',
     icon: 'layout',
     fields: ['card', 'preset', 'cardAccent', 'cardBackgroundUrl', 'cardShowMemberCount'],
@@ -247,7 +252,7 @@ export const HONEYPOT_AREAS: readonly IndexedArea[] = [
   },
   {
     id: 'exemptions',
-    title: 'Who is exempt',
+    title: 'Exemptions',
     blurb: 'Catches from these are logged and counted, but nothing is done to the account.',
     icon: 'user-minus',
     count: (config) => tally(config, 'exemptRoleIds', 'exempt role'),
@@ -255,7 +260,7 @@ export const HONEYPOT_AREAS: readonly IndexedArea[] = [
   },
   {
     id: 'notice',
-    title: 'The warning message',
+    title: 'Warning',
     blurb:
       'The notice posted in every bait channel, so a member who wanders in knows to leave it alone.',
     icon: 'warning',
@@ -263,14 +268,14 @@ export const HONEYPOT_AREAS: readonly IndexedArea[] = [
   },
   {
     id: 'dm',
-    title: 'The direct message',
+    title: 'Direct message',
     blurb: 'What the caught account is told, sent just before the action lands.',
     icon: 'paper-plane-tilt',
     fields: ['sendDirectMessage', 'offerWayBackIn', 'inviteUrl', 'dmLayout'],
   },
   {
     id: 'escalation',
-    title: 'Escalation and logging',
+    title: 'Escalation',
     blurb: 'What else happens to a caught account, and where it is logged.',
     icon: 'shield-slash',
     fields: ['addToBlacklist', 'quoteMessage', 'logChannelId'],

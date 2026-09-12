@@ -25,7 +25,7 @@ describe('the not-in-this-server treatment', () => {
 
   test('the stylesheet greys out exactly what those components mark', () => {
     expect(STYLES).toContain('.server-card[data-present="false"]');
-    expect(STYLES).toContain('.rail-guild[data-present="false"]');
+    expect(STYLES).toContain('.switcher-row[data-present="false"]');
   });
 
   // The card is a picture with a button under it, so "Invite" instead of "Manage" is the only thing
@@ -34,7 +34,9 @@ describe('the not-in-this-server treatment', () => {
     expect(PICKER).toContain('Proton is not in this server');
   });
 
-  test('the rail, which is icons only, says so where a screen reader can reach it', () => {
+  // The switcher row prints the reason under the server's name, but the crest beside it is also
+  // dimmed, and a reader meeting the row through its accessible name gets neither.
+  test('the switcher row says so where a screen reader can reach it', () => {
     expect(SHELL).toMatch(/aria-label=\{[\s\S]*?Proton is not in this server/);
   });
 
@@ -48,9 +50,9 @@ describe('the not-in-this-server treatment', () => {
   // Every card's button reads "Manage" or "Invite". Without the server's name on the control, a
   // screen reader's link list is five identical entries and the choice cannot be made from it.
   test('each card names its own server on the control, not only beside it', () => {
-    expect(PICKER).toMatch(/aria-label=\{`Manage \$\{guild\.name\}`\}/);
-    expect(PICKER).toMatch(/`Proton is not in this server[\s\S]*?\$\{guild\.name\}`/);
-    expect(PICKER).toMatch(/`Invite Proton to \$\{guild\.name\}`/);
+    expect(PICKER).toMatch(/aria-label=\{`Configure \$\{guild\.name\}`\}/);
+    expect(PICKER).toMatch(/`Add Proton to \$\{guild\.name\} — Proton is not in this server`/);
+    expect(PICKER).toMatch(/`Add Proton to \$\{guild\.name\}`/);
   });
 });
 

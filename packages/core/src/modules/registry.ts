@@ -37,6 +37,7 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   interaction_reply: 0n,
   interaction_followup: 0n,
   warn: 0n,
+  unwarn: 0n,
   ban: 0n,
   unban: 0n,
   kick: 0n,

@@ -410,6 +410,8 @@ export interface Harness {
 
   saved(overrides?: Partial<SavedOverrides>): Promise<PanelOutcome>;
 
+  asked(overrides?: Partial<SavedOverrides>): Promise<PanelOutcome>;
+
   webPassed(
     payload: Record<string, unknown>,
     overrides?: Partial<PressOverrides>,
@@ -559,7 +561,7 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
   };
 
   const serviceEvent = (
-    type: 'proton.config_changed' | 'verification.web_passed',
+    type: 'proton.config_changed' | 'proton.panel_requested' | 'verification.web_passed',
     payload: unknown,
     overrides: Partial<PressOverrides>,
   ): ProtonEvent => ({
@@ -792,6 +794,28 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
       return reconcilePanel(event, moduleContext(config), overrides.deps ?? deps);
     },
 
+    async asked(overrides = {}) {
+      const config = overrides.config ?? {};
+      const auditId = newId();
+
+      const event = serviceEvent(
+        'proton.panel_requested',
+        {
+          auditId,
+          guildId: GUILD,
+          moduleId: overrides.moduleId ?? MODULE_ID,
+          panelId: 'panel',
+          actorId: overrides.userId ?? MODERATOR,
+        },
+        {
+          ...overrides,
+          eventId: overrides.eventId ?? `proton.panel_requested:${GUILD}:${auditId}`,
+        },
+      );
+
+      return reconcilePanel(event, moduleContext(config), overrides.deps ?? deps);
+    },
+
     async webPassed(payload, overrides = {}) {
       const event = serviceEvent('verification.web_passed', payload, overrides);
 
@@ -829,6 +853,10 @@ export function userOption(name: string, value: string): RawOption {
 
 export function stringOption(name: string, value: string): RawOption {
   return { name, type: OptionType.String, value };
+}
+
+export function subcommand(name: string, options: RawOption[]): RawOption[] {
+  return [{ name, type: OptionType.Subcommand, options }];
 }
 
 export function joinPayload(userId: string, roleIds: string[] = []): Record<string, unknown> {

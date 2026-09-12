@@ -35,6 +35,13 @@ const updateBodySchema = z.object({
   ipHash: z.string().optional(),
 });
 
+// The panel is named in the path; the body carries only who asked, exactly as a config write does.
+const postPanelBodySchema = z.object({
+  actorId: z.string().min(1),
+  source: z.enum(['dashboard', 'command', 'system']).default('dashboard'),
+  ipHash: z.string().optional(),
+});
+
 // Discord answers /users/@me/guilds with at most 200, and the dashboard asks about the subset of
 // those the signed-in user administers — so a longer list is a caller bug, not a big server.
 const presenceBodySchema = z.object({
@@ -379,6 +386,29 @@ export function createApiApp(deps: ApiDeps): Hono {
         moduleId: c.req.param('moduleId'),
         ...parsed.data,
       });
+      return c.json(result);
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  // Asked, not posted: this process has no Discord client, so it records the request and publishes
+  // it for the worker. The response says which panel was asked for, and nothing about the send.
+  app.post('/guilds/:guildId/modules/:moduleId/panels/:panelId/post', async (c) => {
+    const parsed = postPanelBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      const result = await deps.modules.requestPanel({
+        guildId: c.req.param('guildId'),
+        moduleId: c.req.param('moduleId'),
+        panelId: c.req.param('panelId'),
+        ...parsed.data,
+      });
+
       return c.json(result);
     } catch (error) {
       const { status, body } = toErrorResponse(error);

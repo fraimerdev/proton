@@ -11,13 +11,17 @@ import type {
 } from '@proton/core';
 import { tryParseDuration } from '@proton/core';
 import type { ReactElement, ReactNode } from 'react';
-import { useId, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import { optionLabel } from '../../lib/enum-labels.ts';
+import { EmojiInput } from '../emoji/picker.tsx';
+import { useDismiss } from '../shell/dismiss.ts';
 import { Icon } from '../shell/icon.tsx';
+import { PatternList, patternSyntaxFor } from './pattern-list.tsx';
 import type { DiscordChannel, DiscordRole } from './picker.tsx';
 import {
   channelOptions,
   enumOptions,
+  Popover,
   roleOptions,
   SinglePicker,
   TokenInput,
@@ -40,6 +44,19 @@ export interface FieldProps<D extends FieldDescriptor = FieldDescriptor> {
   // On the field's own root, never on a wrapper: the form's only row separator is `.field + .field`,
   // and an element in between stops the adjacent sibling matching at all.
   hidden?: boolean | undefined;
+
+  // The rare long caveat, behind the ⓘ. `description` is printed on the row instead: it is the one
+  // sentence that stops somebody pinging the whole server, and it was hidden behind a hover.
+  detail?: string | undefined;
+
+  // A duration's own ceiling, in seconds, so the control can refuse 29 days on a Discord timeout
+  // rather than accepting it and explaining itself afterwards.
+  bounds?: DurationBounds | undefined;
+}
+
+export interface DurationBounds {
+  minSeconds?: number | undefined;
+  maxSeconds?: number | undefined;
 }
 
 export interface FieldSlot {
@@ -59,6 +76,7 @@ function Shell({
   describedBy,
   className,
   hidden,
+  detail,
   children,
 }: {
   descriptor: FieldDescriptor;
@@ -67,12 +85,19 @@ function Shell({
   describedBy: string;
   className: string;
   hidden?: boolean | undefined;
+  detail?: string | undefined;
   children: ReactNode;
 }): ReactElement {
   if (!param) {
     return (
       <div className={`field ${className}`} data-path={descriptor.path} hidden={hidden}>
-        <Head descriptor={descriptor} controlId={controlId} describedBy={describedBy} />
+        <Head
+          label={descriptor.label}
+          description={descriptor.description}
+          controlId={controlId}
+          describedBy={describedBy}
+          detail={detail}
+        />
         {children}
       </div>
     );
@@ -93,51 +118,83 @@ function Shell({
   );
 }
 
-function Head({
-  descriptor,
-  controlId,
-  describedBy,
-}: {
-  descriptor: FieldDescriptor;
-  controlId?: string | undefined;
-  describedBy: string;
-}): ReactElement {
-  // WCAG 1.4.13 asks that content shown on hover be dismissible without moving the pointer. The
-  // flag is cleared when the pointer or focus next leaves, so Escape suppresses this one reveal
-  // rather than turning the tooltip off for good.
-  const [dismissed, setDismissed] = useState(false);
+const TOOLTIP_WANT = { width: 320, height: 240 };
+
+/**
+ * The ⓘ, for the caveat that is too long to sit on the row. It opens on a press rather than on
+ * hover: hover-revealed content has to survive the pointer travelling into it, and this one is
+ * parented to the body so that no card's overflow can clip it.
+ */
+function FieldDetail({ label, text }: { label: string; text: string }): ReactElement {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const tipId = useId();
+  const close = useCallback(() => setOpen(false), []);
+
+  useDismiss(open, close, pop, trigger);
 
   return (
-    <span className="field-head">
-      {controlId === undefined ? (
-        <span className="field-label">{descriptor.label}</span>
-      ) : (
-        <label className="field-label" htmlFor={controlId}>
-          {descriptor.label}
-        </label>
-      )}
-      {descriptor.description ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: the handlers only dismiss a tooltip the button already owns
-        <span
-          className="field-info"
-          data-dismissed={dismissed || undefined}
-          onBlur={() => setDismissed(false)}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') setDismissed(true);
-          }}
-          onPointerLeave={() => setDismissed(false)}
+    <span className="field-info">
+      <button
+        type="button"
+        ref={trigger}
+        className="field-info-button"
+        aria-label={`What “${label}” does`}
+        aria-expanded={open}
+        aria-describedby={open ? tipId : undefined}
+        onClick={() => setOpen((was) => !was)}
+      >
+        <Icon name="info" weight="fill" />
+      </button>
+
+      {open ? (
+        <Popover
+          anchor={trigger}
+          popRef={pop}
+          className="popover field-tooltip"
+          want={TOOLTIP_WANT}
+          role="tooltip"
+          id={tipId}
         >
-          <button
-            type="button"
-            className="field-info-button"
-            aria-label={`What “${descriptor.label}” does`}
-            aria-describedby={describedBy}
-          >
-            <Icon name="info" weight="fill" />
-          </button>
-          <span className="field-tooltip" role="tooltip" id={describedBy}>
-            {descriptor.description}
-          </span>
+          {text}
+        </Popover>
+      ) : null}
+    </span>
+  );
+}
+
+function Head({
+  label,
+  description,
+  controlId,
+  describedBy,
+  detail,
+}: {
+  label: string;
+  description?: string | undefined;
+  controlId?: string | undefined;
+  describedBy: string;
+  detail?: string | undefined;
+}): ReactElement {
+  return (
+    <span className="field-head">
+      <span className="field-head-line">
+        {controlId === undefined ? (
+          <span className="field-label">{label}</span>
+        ) : (
+          <label className="field-label" htmlFor={controlId}>
+            {label}
+          </label>
+        )}
+        {detail ? <FieldDetail label={label} text={detail} /> : null}
+      </span>
+
+      {/* On the row, not behind a hover. This is the sentence that stops somebody pinging forty
+          thousand people, and it is also what aria-describedby on the control points at. */}
+      {description ? (
+        <span className="field-description" id={describedBy}>
+          {description}
         </span>
       ) : null}
     </span>
@@ -194,6 +251,7 @@ export function BooleanFieldInput({
   onChange,
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as BooleanField;
   const id = useId();
@@ -207,6 +265,7 @@ export function BooleanFieldInput({
       describedBy={id}
       className="field-boolean"
       hidden={hidden}
+      detail={detail}
     >
       <input
         id={controlId}
@@ -221,12 +280,67 @@ export function BooleanFieldInput({
   );
 }
 
+export interface BooleanGroupToggle {
+  path: string;
+  label: string;
+  value: boolean;
+  onChange: (next: boolean) => void;
+}
+
+export interface BooleanGroupProps {
+  label: string;
+  description?: string | undefined;
+  detail?: string | undefined;
+  toggles: readonly BooleanGroupToggle[];
+  hidden?: boolean | undefined;
+}
+
+/**
+ * One decision with several parts, on one row. Three related booleans — leveling's "what the card
+ * shows", starboard's scope, honeypot's notice — were three 57px rows carrying a 23px switch each,
+ * and reading them as three separate settings is the mistake the layout was teaching.
+ */
+export function BooleanGroupFieldInput({
+  label,
+  description,
+  detail,
+  toggles,
+  hidden,
+}: BooleanGroupProps): ReactElement {
+  const id = useId();
+
+  return (
+    <div className="field field-bool-group" hidden={hidden}>
+      <Head label={label} description={description} describedBy={id} detail={detail} />
+
+      <fieldset className="bool-group">
+        {/* The row's own label is the group's name, and a legend is how a checkbox group carries
+            one — but printing it twice is what the sr-only is for. */}
+        <legend className="sr-only">{label}</legend>
+
+        {toggles.map((toggle) => (
+          <label className="bool-group-item" key={toggle.path} data-path={toggle.path}>
+            <input
+              type="checkbox"
+              checked={toggle.value}
+              aria-describedby={description ? id : undefined}
+              onChange={(e) => toggle.onChange(e.target.checked)}
+            />
+            <span>{toggle.label}</span>
+          </label>
+        ))}
+      </fieldset>
+    </div>
+  );
+}
+
 export function StringFieldInput({
   descriptor,
   value,
   onChange,
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as StringField;
   const id = useId();
@@ -259,6 +373,7 @@ export function StringFieldInput({
       describedBy={id}
       className="field-string"
       hidden={hidden}
+      detail={detail}
     >
       {counted ? (
         <span className="field-counted">
@@ -283,6 +398,7 @@ export function NumberFieldInput({
   onChange,
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as NumberField;
   const id = useId();
@@ -305,6 +421,7 @@ export function NumberFieldInput({
       describedBy={id}
       className="field-number"
       hidden={hidden}
+      detail={detail}
     >
       <span className="field-control">
         <input
@@ -343,6 +460,7 @@ export function ColourFieldInput({
   onChange,
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as ColourField;
   const id = useId();
@@ -370,6 +488,7 @@ export function ColourFieldInput({
       describedBy={id}
       className="field-colour"
       hidden={hidden}
+      detail={detail}
     >
       <span className="colour-input">
         <input
@@ -411,12 +530,47 @@ export function ColourFieldInput({
   );
 }
 
+/**
+ * An emoji is a string in the config, and used to be a string in the form too — a box asking an
+ * admin to type a unicode character their keyboard cannot produce, or paste `<:name:123…>` out of
+ * a Discord message. The stored shape is unchanged; only the way one is chosen is.
+ */
+export function EmojiFieldInput({
+  descriptor,
+  value,
+  onChange,
+  param,
+  hidden,
+  detail,
+}: FieldProps): ReactElement {
+  const id = useId();
+
+  return (
+    <Shell
+      descriptor={descriptor}
+      param={param}
+      describedBy={id}
+      className="field-emoji"
+      hidden={hidden}
+      detail={detail}
+    >
+      <EmojiInput
+        value={typeof value === 'string' ? value : ''}
+        clearable={descriptor.optional}
+        name={param?.name ?? descriptor.label}
+        onChange={(next) => onChange(descriptor.optional && next === '' ? undefined : next)}
+      />
+    </Shell>
+  );
+}
+
 export function EnumFieldInput({
   descriptor,
   value,
   onChange,
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as EnumField;
   const id = useId();
@@ -430,6 +584,7 @@ export function EnumFieldInput({
       describedBy={id}
       className="field-enum"
       hidden={hidden}
+      detail={detail}
     >
       <select
         id={controlId}
@@ -455,6 +610,7 @@ export function ChannelIdFieldInput({
   channels = [],
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as ChannelIdField;
   const id = useId();
@@ -470,6 +626,7 @@ export function ChannelIdFieldInput({
       describedBy={id}
       className="field-channel-id"
       hidden={hidden}
+      detail={detail}
     >
       <span className="field-control">
         <SinglePicker
@@ -494,6 +651,7 @@ export function RoleIdFieldInput({
   roles = [],
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as RoleIdField;
   const id = useId();
@@ -509,6 +667,7 @@ export function RoleIdFieldInput({
       describedBy={id}
       className="field-role-id"
       hidden={hidden}
+      detail={detail}
     >
       <span className="field-control">
         <SinglePicker
@@ -526,25 +685,37 @@ export function RoleIdFieldInput({
   );
 }
 
+export const DURATION_UNITS = [
+  { unit: 's', label: 'seconds', per: 1 },
+  { unit: 'm', label: 'minutes', per: 60 },
+  { unit: 'h', label: 'hours', per: 3_600 },
+  { unit: 'd', label: 'days', per: 86_400 },
+  { unit: 'w', label: 'weeks', per: 604_800 },
+] as const;
+
+const DURATION_PATTERN = /^(\d+)\s*([smhdw])$/i;
+
+function perSecondsOf(unit: string): number {
+  return DURATION_UNITS.find((part) => part.unit === unit)?.per ?? 1;
+}
+
+/**
+ * A duration is stored as one number and one unit — `30m`, `7d` — so the control can be exactly
+ * that, and the grammar stops being something to guess from a placeholder and learn from an error.
+ * What was here was `<input type="text">`, which accepted "banana" until the save bar caught it.
+ */
 export function DurationFieldInput({
   descriptor,
   value,
   onChange,
   param,
   hidden,
+  detail,
+  bounds,
 }: FieldProps): ReactElement {
   const field = descriptor as DurationField;
   const id = useId();
   const controlId = `${id}-control`;
-  const errorId = `${id}-error`;
-
-  const text = typeof value === 'string' ? value : '';
-  const unreadable = text !== '' && tryParseDuration(text) === null;
-
-  // A stored value that is already unreadable says so on arrival — the save bar gates on it. What
-  // is suppressed is only the half-typed state: "3" is not a duration yet, and neither is "30".
-  const [editing, setEditing] = useState(false);
-  const invalid = unreadable && !editing;
 
   return (
     <Shell
@@ -554,31 +725,155 @@ export function DurationFieldInput({
       describedBy={id}
       className="field-duration"
       hidden={hidden}
+      detail={detail}
     >
       <span className="field-control">
-        <input
-          id={controlId}
-          type="text"
-          value={text}
-          placeholder="30m"
+        <DurationControl
+          value={typeof value === 'string' ? value : ''}
+          onChange={onChange}
+          bounds={bounds}
+          label={param?.name ?? field.label}
+          controlId={controlId}
           required={!field.optional}
-          aria-invalid={invalid}
-          aria-describedby={
-            [describedBy(field, id), invalid ? errorId : undefined].filter(Boolean).join(' ') ||
-            undefined
-          }
-          onFocus={() => setEditing(true)}
-          onBlur={() => setEditing(false)}
-          onChange={(e) => onChange(e.target.value === '' ? undefined : e.target.value)}
+          describedBy={describedBy(field, id)}
         />
-        {invalid ? (
-          <span className="field-error" id={errorId} role="alert">
-            “{text}” is not a duration. Use a number followed by s, m, h, d or w — 30m, 12h, 7d.
-          </span>
-        ) : null}
       </span>
     </Shell>
   );
+}
+
+// Amount and unit, its own bounds, its own named error. Split out of the settings field so anything
+// asking for a duration gets the control rather than a text box that only knew it was wrong.
+export function DurationControl({
+  value,
+  onChange,
+  bounds,
+  label,
+  controlId,
+  required = false,
+  describedBy: described,
+}: {
+  value: string;
+  onChange: (next: string | undefined) => void;
+  bounds?: DurationBounds | undefined;
+  label: string;
+  controlId?: string | undefined;
+  required?: boolean | undefined;
+  describedBy?: string | undefined;
+}): ReactElement {
+  const id = useId();
+  const errorId = `${id}-error`;
+
+  const text = value;
+  const parsed = DURATION_PATTERN.exec(text.trim());
+
+  // Held, both of them. The stored string is rebuilt on every keystroke, so "3" rebuilt as "3m"
+  // would refill the box under the cursor, and an emptied box has no unit left to read back — the
+  // select jumped from days to minutes mid-edit. A value arriving from outside still wins, so a
+  // reset puts both back.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [lastUnit, setLastUnit] = useState<string | null>(null);
+
+  const unit = (parsed?.[2] ?? lastUnit ?? 'm').toLowerCase();
+  const amount = parsed?.[1] ?? '';
+  const shown = draft ?? amount;
+
+  const unreadable = text !== '' && tryParseDuration(text) === null;
+
+  const per = perSecondsOf(unit);
+  const ceiling = bounds?.maxSeconds === undefined ? null : Math.floor(bounds.maxSeconds / per);
+  const floor = bounds?.minSeconds === undefined ? null : Math.ceil(bounds.minSeconds / per);
+
+  const over = ceiling !== null && shown !== '' && Number(shown) > ceiling;
+  const under = floor !== null && shown !== '' && Number(shown) < floor;
+  const invalid = unreadable || over || under;
+
+  function write(next: string, nextUnit: string): void {
+    setLastUnit(nextUnit);
+    onChange(next === '' ? undefined : `${next}${nextUnit}`);
+  }
+
+  function typed(raw: string): void {
+    const digits = raw.replace(/\D/g, '');
+
+    setDraft(digits);
+    write(digits, unit);
+  }
+
+  /**
+   * The paste path the text box used to be. A number input discards "7d" before any handler sees
+   * it, so the clipboard is read here instead — an admin copying a value out of a help page or
+   * another server's settings pastes a whole duration, not a bare number.
+   */
+  function pasted(clipboard: string): boolean {
+    const whole = DURATION_PATTERN.exec(clipboard.trim());
+    if (!whole?.[1] || !whole[2]) return false;
+
+    setDraft(whole[1]);
+    write(whole[1], whole[2].toLowerCase());
+
+    return true;
+  }
+
+  return (
+    <>
+      <span className="duration-field">
+        <input
+          id={controlId}
+          className="duration-amount"
+          type="number"
+          value={shown}
+          min={floor ?? 0}
+          max={ceiling ?? undefined}
+          step={1}
+          required={required}
+          aria-invalid={invalid}
+          aria-describedby={
+            [described, invalid ? errorId : undefined].filter(Boolean).join(' ') || undefined
+          }
+          onBlur={() => {
+            setDraft(null);
+            if (ceiling !== null && shown !== '' && Number(shown) > ceiling) {
+              write(String(ceiling), unit);
+            }
+          }}
+          onChange={(e) => typed(e.target.value)}
+          onPaste={(e) => {
+            if (pasted(e.clipboardData.getData('text'))) e.preventDefault();
+          }}
+        />
+        <select
+          className="duration-unit"
+          value={unit}
+          aria-label={`${label}, unit`}
+          onChange={(e) => {
+            setDraft(null);
+            write(shown, e.target.value);
+          }}
+        >
+          {DURATION_UNITS.map((part) => (
+            <option key={part.unit} value={part.unit}>
+              {part.label}
+            </option>
+          ))}
+        </select>
+      </span>
+
+      {invalid ? (
+        <span className="field-error" id={errorId} role="alert">
+          {unreadable
+            ? `“${text}” is not a duration. Use a number followed by s, m, h, d or w — 30m, 12h, 7d.`
+            : over
+              ? `This setting allows at most ${ceiling} ${unitLabel(unit)}.`
+              : `This setting needs at least ${floor} ${unitLabel(unit)}.`}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function unitLabel(unit: string): string {
+  return DURATION_UNITS.find((part) => part.unit === unit)?.label ?? unit;
 }
 
 export const TOKEN_KINDS: readonly FieldDescriptor['kind'][] = [
@@ -599,6 +894,7 @@ export function ArrayFieldInput({
   channels = [],
   roles = [],
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const id = useId();
   const controlId = `${id}-control`;
@@ -613,10 +909,33 @@ export function ArrayFieldInput({
           ? enumOptions(descriptor.options, descriptor.optionLabels)
           : null;
 
+  // Patterns and phrases are not chips. A chip commits on a comma, and a comma is a quantifier's
+  // own punctuation: `a{2,5}` came out as `a{2` and `5}`, neither of them something Discord runs.
+  const syntax = options === null ? patternSyntaxFor(descriptor.path) : null;
+
   return (
     <div className="field field-array field-stacked" data-path={descriptor.path} hidden={hidden}>
-      <Head descriptor={descriptor} {...(options === null ? { controlId } : {})} describedBy={id} />
-      {options === null ? (
+      <Head
+        label={descriptor.label}
+        description={descriptor.description}
+        {...(options === null ? { controlId } : {})}
+        describedBy={id}
+        detail={detail}
+      />
+      {syntax !== null ? (
+        <PatternList
+          id={controlId}
+          label={descriptor.label}
+          values={items.map(String)}
+          onChange={onChange}
+          syntax={syntax}
+          max={descriptor.maxItems}
+          {...(descriptor.kind === 'string' && descriptor.maxLength !== undefined
+            ? { maxLength: descriptor.maxLength }
+            : {})}
+          describedBy={describedBy(descriptor, id)}
+        />
+      ) : options === null ? (
         <TokenInput
           id={controlId}
           label={descriptor.label}
@@ -679,6 +998,7 @@ export function SecondsFieldInput({
   onChange,
   param,
   hidden,
+  detail,
 }: FieldProps): ReactElement {
   const field = descriptor as NumberField;
   const id = useId();
@@ -706,6 +1026,7 @@ export function SecondsFieldInput({
       describedBy={id}
       className="field-seconds"
       hidden={hidden}
+      detail={detail}
     >
       <span className="field-control">
         {/* One grouped control rather than four labelled rows: the spinners are one setting, and

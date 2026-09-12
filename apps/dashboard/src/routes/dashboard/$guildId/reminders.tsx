@@ -1,7 +1,7 @@
 import { tryParseDuration } from '@proton/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { type ReactElement, useEffect } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { FieldRow, SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { Duration } from '../../../components/module/inputs.tsx';
@@ -22,9 +22,15 @@ function RemindersPage(): ReactElement {
       <ModuleChrome guildId={guildId} summary={form.summary} area={undefined} tabs={[]} />
 
       <ModuleSettings form={form}>
-        <SectionCard id="reminders:bounds" title="How far ahead">
-          <Bounds form={form} />
-        </SectionCard>
+        <SettingsGrid>
+          <SectionCard
+            id="reminders:bounds"
+            title="How far ahead"
+            hint="A reminder asked for outside these bounds is refused."
+          >
+            <Bounds form={form} />
+          </SectionCard>
+        </SettingsGrid>
       </ModuleSettings>
     </>
   );
@@ -59,9 +65,9 @@ function Bounds({ form }: { form: ModuleForm }): ReactElement {
   }, [report, inverted, max]);
 
   return (
-    <>
+    <FieldRow>
       <Duration path="minDuration" label="Soonest" defaultValue="30s" />
       <Duration path="maxDuration" label="Furthest ahead" defaultValue="365d" />
-    </>
+    </FieldRow>
   );
 }

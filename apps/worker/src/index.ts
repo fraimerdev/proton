@@ -51,6 +51,9 @@ import { DrizzleStickyRoleStore, RedisPendingGrantStore } from '@proton/module-j
 import { levelForXp, MAX_XP, RedisVoiceSessionStore } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
 import { PostgresMessageLogStore, runMessageLogMaintenance } from '@proton/module-logging';
+import { RestGuildMemberLister } from '@proton/module-moderation/members';
+import { RedisRoleRunStore } from '@proton/module-moderation/run-store';
+import { DrizzleWarningStore } from '@proton/module-moderation/store';
 import { RedisBlocklistStore, refreshBlocklist } from '@proton/module-phishing';
 import { DrizzlePollStore } from '@proton/module-polls';
 import { DrizzleReminderStore } from '@proton/module-reminders';
@@ -249,6 +252,14 @@ const registry = createModuleRegistry(
   {
     help: { dashboardUrl: env.DASHBOARD_URL },
     cases: { history: new DrizzleCaseHistoryStore(handle) },
+    moderation: {
+      warnings: new DrizzleWarningStore(handle),
+      guildState,
+      fetchMemberRoles,
+      members: new RestGuildMemberLister(rest),
+      roleRuns: new RedisRoleRunStore(moduleRedis),
+      applicationId: env.DISCORD_APPLICATION_ID,
+    },
     antinuke: {
       rateWindow,
       maintenance: new RedisMaintenanceStore(moduleRedis),

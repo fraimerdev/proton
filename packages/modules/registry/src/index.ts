@@ -14,7 +14,7 @@ import { createJoinRolesModule, type JoinRolesDeps } from '@proton/module-joinro
 import { createLevelingModule, type LevelingDeps } from '@proton/module-leveling';
 import { createLoggingModule, type LoggingDeps } from '@proton/module-logging';
 import { createMessagesModule, type MessagesDeps } from '@proton/module-messages';
-import { moderationModule } from '@proton/module-moderation';
+import { createModerationModule, type ModerationDeps } from '@proton/module-moderation';
 import { permissionsModule } from '@proton/module-permissions';
 import { createPhishingModule, type PhishingDeps } from '@proton/module-phishing';
 import { pingModule } from '@proton/module-ping';
@@ -33,6 +33,7 @@ import { createWelcomeModule, type WelcomeDeps } from '@proton/module-welcome';
 export interface ModuleBindings {
   help?: HelpDeps;
   cases?: CasesDeps;
+  moderation?: ModerationDeps;
   appeals?: AppealsDeps;
 
   antinuke?: AntinukeDeps;
@@ -68,7 +69,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
     createHelpModule(bindings.help ?? {}) as ModuleManifest,
     pingModule as ModuleManifest,
     createCasesModule(bindings.cases ?? {}) as ModuleManifest,
-    moderationModule as ModuleManifest,
+    createModerationModule(bindings.moderation ?? {}) as ModuleManifest,
     createAppealsModule(bindings.appeals ?? {}) as ModuleManifest,
     createLoggingModule(bindings.logging ?? {}) as ModuleManifest,
     createServerlogModule(bindings.serverlog ?? {}) as ModuleManifest,

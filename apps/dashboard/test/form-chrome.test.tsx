@@ -31,21 +31,21 @@ const PLAIN = <Text path="response" label="Reply text" />;
 const DESCRIBED = <Text path="response" label="Reply text" help={HELP} />;
 
 describe('a field description', () => {
-  test('renders behind an info button rather than as text on the row', () => {
+  test('prints on the row rather than behind an info button', () => {
     const html = render(DESCRIBED);
 
-    expect(html).toContain('field-info-button');
-    expect(html).toContain('role="tooltip"');
+    expect(html).toContain('field-description');
     expect(html).toContain(HELP);
-    expect(html).not.toContain('field-description');
+    expect(html).not.toContain('field-info-button');
+    expect(html).not.toContain('role="tooltip"');
   });
 
   test('is still what aria-describedby on the control points at', () => {
     const html = render(DESCRIBED);
 
-    const tooltip = /<span class="field-tooltip" role="tooltip" id="([^"]+)"/.exec(html);
-    expect(tooltip?.[1]).toBeDefined();
-    expect(html).toContain(`aria-describedby="${tooltip?.[1]}"`);
+    const help = /<span class="field-description" id="([^"]+)"/.exec(html);
+    expect(help?.[1]).toBeDefined();
+    expect(html).toContain(`aria-describedby="${help?.[1]}"`);
   });
 
   test('leaves no info button behind when the field has none', () => {
@@ -69,7 +69,7 @@ describe('a field description', () => {
       domains: ['a.example', 'b.example'],
     });
 
-    expect([...html.matchAll(/role="tooltip"/g)]).toHaveLength(1);
+    expect([...html.matchAll(/class="field-description"/g)]).toHaveLength(1);
   });
 });
 

@@ -1,14 +1,15 @@
 import type { LogEventOverride } from '@proton/module-serverlog/config';
 import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { Callout, SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { SERVERLOG_AREAS as AREAS } from '../../../components/module/area-index.ts';
 import { activeArea } from '../../../components/module/areas.ts';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { ChannelField, Toggle, Tokens } from '../../../components/module/inputs.tsx';
-import { AreaHub, ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
+import { ModuleChrome, ModuleSettings, tabsFor } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
+import { moduleState } from '../../../components/shell/module-meta.ts';
 
 const LogEventMatrix = lazyRouteComponent(
   () => import('../../../components/serverlog/event-matrix.tsx'),
@@ -47,85 +48,91 @@ function ServerlogPage(): ReactElement {
 
   return (
     <>
-      <ModuleChrome guildId={guildId} summary={form.summary} area={area} tabs={[]} />
+      <ModuleChrome
+        guildId={guildId}
+        summary={form.summary}
+        area={area}
+        tabs={tabsFor([], search.view, area?.id, AREAS)}
+      />
 
-      {area === undefined ? (
-        <AreaHub areas={AREAS} config={form.config} />
-      ) : (
-        <ModuleSettings form={form}>
-          {area.id === 'routing' ? <RoutingArea /> : null}
-          {area.id === 'events' ? <EventsArea form={form} /> : null}
-          {area.id === 'filters' ? <FiltersArea /> : null}
-        </ModuleSettings>
-      )}
+      <ModuleSettings form={form}>
+        <SettingsGrid>
+          {moduleState(form.summary) === 'off' ? (
+            <Callout>
+              Server logs is switched off. Everything here is saved, and Proton writes nothing to a
+              log channel until the switch above is on.
+            </Callout>
+          ) : null}
+
+          {area?.id === 'routing' ? <RoutingArea /> : null}
+          {area?.id === 'events' ? <EventsArea form={form} /> : null}
+          {area?.id === 'filters' ? <FiltersArea /> : null}
+        </SettingsGrid>
+      </ModuleSettings>
     </>
   );
 }
 
 function RoutingArea(): ReactElement {
   return (
-    <>
-      <SectionCard id="serverlog:general" title="General">
-        <ChannelField
-          path="defaultChannelId"
-          label="Default log channel"
-          help="Category and per-event channels override this"
-          channelTypes={LOG_CHANNEL_TYPES}
-          defaultValue=""
-        />
-      </SectionCard>
+    <SectionCard id="serverlog:categories" title="Categories and channels" span="full">
+      <ChannelField
+        path="defaultChannelId"
+        label="Default log channel"
+        help="Used when neither the category nor the individual event names a channel of its own."
+        channelTypes={LOG_CHANNEL_TYPES}
+        defaultValue=""
+      />
 
-      <SectionCard id="serverlog:categories" title="Categories">
-        {/* Two parallel objects over one set of keys, drawn as the table they are. As plain rows
-            this section was every category's switch followed by every category's channel —
-            twenty-six rows carrying thirteen labels twice, with a category's two halves a full
-            screen apart. */}
-        <table className="matrix">
-          <thead>
-            <tr>
-              <th scope="col">Category</th>
-              <th scope="col">Logged</th>
-              <th scope="col">Channel</th>
+      {/* Two parallel objects over one set of keys, drawn as the table they are. As plain rows
+          this section was every category's switch followed by every category's channel —
+          twenty-six rows carrying thirteen labels twice, with a category's two halves a full
+          screen apart. */}
+      <table className="matrix">
+        <thead>
+          <tr>
+            <th scope="col">Category</th>
+            <th scope="col">Logged</th>
+            <th scope="col">Channel</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CATEGORIES.map((category) => (
+            <tr key={category.key}>
+              <th scope="row">{category.label}</th>
+
+              {/* data-label is read back as the cell's own visible label once the table reflows
+                  to a block per row on a phone and the column headers stop being above
+                  anything. */}
+              <td data-kind="boolean" data-label="Logged">
+                <Toggle
+                  path={`categories.${category.key}`}
+                  label={category.label}
+                  defaultValue={category.on}
+                  // Named per cell: every control in a column carries the same label, and a row
+                  // of switches all called "Logged" is a row nobody can navigate by ear.
+                  param={{ label: undefined, name: `${category.label} — Logged` }}
+                />
+              </td>
+
+              <td data-kind="channel-id" data-label="Channel">
+                <ChannelField
+                  path={`categoryChannels.${category.key}`}
+                  label={category.label}
+                  channelTypes={LOG_CHANNEL_TYPES}
+                  defaultValue=""
+                  param={{
+                    label: undefined,
+                    name: `${category.label} — Channel`,
+                    emptyLabel: 'Inherit',
+                  }}
+                />
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {CATEGORIES.map((category) => (
-              <tr key={category.key}>
-                <th scope="row">{category.label}</th>
-
-                {/* data-label is read back as the cell's own visible label once the table reflows
-                    to a block per row on a phone and the column headers stop being above
-                    anything. */}
-                <td data-kind="boolean" data-label="Logged">
-                  <Toggle
-                    path={`categories.${category.key}`}
-                    label={category.label}
-                    defaultValue={category.on}
-                    // Named per cell: every control in a column carries the same label, and a row
-                    // of switches all called "Logged" is a row nobody can navigate by ear.
-                    param={{ label: undefined, name: `${category.label} — Logged` }}
-                  />
-                </td>
-
-                <td data-kind="channel-id" data-label="Channel">
-                  <ChannelField
-                    path={`categoryChannels.${category.key}`}
-                    label={category.label}
-                    channelTypes={LOG_CHANNEL_TYPES}
-                    defaultValue=""
-                    param={{
-                      label: undefined,
-                      name: `${category.label} — Channel`,
-                      emptyLabel: 'Inherit',
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </SectionCard>
-    </>
+          ))}
+        </tbody>
+      </table>
+    </SectionCard>
   );
 }
 
@@ -138,7 +145,7 @@ function EventsArea({ form }: { form: ModuleForm }): ReactElement {
   const live = form.live;
 
   return (
-    <SectionCard id="serverlog:panel:events" title={null}>
+    <SectionCard id="serverlog:panel:events" title={null} span="full">
       <LogEventMatrix
         events={asRecord<LogEventOverride>(form.value('events', {}))}
         channels={form.channels}
@@ -155,7 +162,7 @@ function EventsArea({ form }: { form: ModuleForm }): ReactElement {
 
 function FiltersArea(): ReactElement {
   return (
-    <SectionCard id="serverlog:filters" title="Filters">
+    <SectionCard id="serverlog:filters" title="What is never logged" span="full">
       <Tokens path="ignoredChannelIds" kind="channel-id" label="Ignored channels" maxItems={100} />
       <Tokens path="ignoredRoleIds" kind="role-id" label="Ignored roles" maxItems={50} />
       <Tokens path="ignoredUserIds" kind="string" label="Ignored user ids" maxItems={100} />

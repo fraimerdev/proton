@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react';
 import { type MarkdownNode, parseDiscordMarkdown } from '../../lib/discord-markdown.ts';
+import { emojiImageUrl } from '../emoji/glyph.tsx';
 import type { DiscordChannel, DiscordRole } from '../form/fields.tsx';
 
 export interface MentionUser {
@@ -159,7 +160,17 @@ function MarkdownFragment({ node, ctx }: { node: MarkdownNode; ctx: RenderContex
       return <span className="dc-mention">/{node.name}</span>;
 
     case 'emoji':
-      return <span className="dc-emoji-name">:{node.name}:</span>;
+      return (
+        <img
+          className="dc-emoji-image"
+          src={emojiImageUrl(node.id, node.animated)}
+          alt={`:${node.name}:`}
+          width={20}
+          height={20}
+          loading="lazy"
+          decoding="async"
+        />
+      );
 
     case 'timestamp':
       return (

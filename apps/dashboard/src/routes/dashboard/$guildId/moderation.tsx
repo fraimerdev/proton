@@ -2,7 +2,7 @@ import { type BlockedMemberList, blockedMemberQuerySchema } from '@proton/core';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, lazyRouteComponent, useNavigate } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { Duration, Num, Toggle } from '../../../components/module/inputs.tsx';
 import {
@@ -91,30 +91,40 @@ function Settings({ guildId }: { guildId: string }): ReactElement {
 
   return (
     <ModuleSettings form={form}>
-      <SectionCard id="moderation:general" title="General">
-        <Toggle
-          path="publicReplies"
-          label="Announce outcomes in the channel"
-          defaultValue={false}
-        />
-      </SectionCard>
+      <SettingsGrid>
+        <SectionCard
+          id="moderation:policy"
+          title="Policy"
+          hint="What a moderator has to supply, and who sees the outcome."
+        >
+          <Toggle path="requireReason" label="Require a reason" defaultValue={false} />
+          <Toggle
+            path="publicReplies"
+            label="Announce outcomes in the channel"
+            defaultValue={false}
+          />
+        </SectionCard>
 
-      <SectionCard id="moderation:policy" title="Policy">
-        <Toggle path="requireReason" label="Require a reason" defaultValue={false} />
-        <Duration
-          path="defaultTimeoutDuration"
-          label="Default timeout length"
-          help="Discord caps timeouts at 28 days"
-          defaultValue="1h"
-        />
-        <Num
-          path="defaultBanDeleteDays"
-          label="Default message deletion on ban (days)"
-          min={0}
-          max={7}
-          defaultValue={0}
-        />
-      </SectionCard>
+        <SectionCard
+          id="moderation:defaults"
+          title="Action defaults"
+          hint="Used when the moderator does not name one on the command."
+        >
+          <Duration
+            path="defaultTimeoutDuration"
+            label="Timeout length"
+            help="Discord caps timeouts at 28 days"
+            defaultValue="1h"
+          />
+          <Num
+            path="defaultBanDeleteDays"
+            label="Message deletion on ban (days)"
+            min={0}
+            max={7}
+            defaultValue={0}
+          />
+        </SectionCard>
+      </SettingsGrid>
     </ModuleSettings>
   );
 }

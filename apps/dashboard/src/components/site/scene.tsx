@@ -120,6 +120,20 @@ export function StarboardScene(): ReactElement {
   return <Scene message={STARBOARD} />;
 }
 
+// The stored panel, as the tickets module keeps it. The landing page prints these settings beside
+// the message below, so the two read off one object rather than agreeing by hand.
+export const TICKET_PANEL_CONFIG = {
+  channel: 'support',
+  title: 'Get help from the staff team',
+  body:
+    'Open a ticket and only you and the support team can read it. Say what you need in ' +
+    'the first message and somebody will pick it up.',
+  types: [
+    { key: 'support', style: 'primary', label: 'Support' },
+    { key: 'report', style: 'secondary', label: 'Report a member' },
+  ],
+} as const;
+
 // A ticket panel is Components V2: buildPanelComponents lays the title and body out as text
 // displays, then a separator, then one button per ticket type.
 const TICKET_PANEL: ProtonMessage = {
@@ -132,32 +146,19 @@ const TICKET_PANEL: ProtonMessage = {
       kind: 'container',
       accentColor: 0x33_69_e8,
       children: [
-        { kind: 'text', content: '## Get help from the staff team' },
-        {
-          kind: 'text',
-          content:
-            'Open a ticket and only you and the support team can read it. Say what you need in ' +
-            'the first message and somebody will pick it up.',
-        },
+        { kind: 'text', content: `## ${TICKET_PANEL_CONFIG.title}` },
+        { kind: 'text', content: TICKET_PANEL_CONFIG.body },
         { kind: 'separator', divider: true, spacing: 'small' },
         {
           kind: 'row',
           row: {
             kind: 'buttons',
-            buttons: [
-              {
-                key: 'support',
-                style: 'primary',
-                label: 'Support',
-                action: { kind: 'reply', content: 'opening', ephemeral: true },
-              },
-              {
-                key: 'report',
-                style: 'secondary',
-                label: 'Report a member',
-                action: { kind: 'reply', content: 'opening', ephemeral: true },
-              },
-            ],
+            buttons: TICKET_PANEL_CONFIG.types.map((type) => ({
+              key: type.key,
+              style: type.style,
+              label: type.label,
+              action: { kind: 'reply' as const, content: 'opening', ephemeral: true },
+            })),
           },
         },
       ],

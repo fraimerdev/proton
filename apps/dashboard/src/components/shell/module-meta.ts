@@ -30,6 +30,141 @@ export function isCategory(value: string): value is Category {
   return (CATEGORY_ORDER as readonly string[]).includes(value);
 }
 
+export interface NavGroup {
+  id: string;
+  label: string;
+  modules: readonly string[];
+}
+
+/**
+ * How the sidebar files the modules: by the job an admin came to do. The manifest's own category is
+ * the worker's taxonomy — it is what /commands and the public catalogue list by — and using it here
+ * produced a group of eleven called Utility headed by Help and Ping.
+ *
+ * Order inside a group is authored, not the registry's: the rows an admin opens first come first.
+ */
+export const NAV_GROUPS: readonly NavGroup[] = [
+  { id: 'joining', label: 'When someone joins', modules: ['verification', 'joinroles', 'welcome'] },
+  {
+    id: 'safety',
+    label: 'Keeping it safe',
+    modules: ['automod', 'antiraid', 'antinuke', 'phishing', 'honeypot'],
+  },
+  {
+    id: 'people',
+    label: 'Moderating people',
+    modules: ['moderation', 'cases', 'appeals', 'permissions'],
+  },
+  {
+    id: 'members',
+    label: 'Things members use',
+    modules: [
+      'tickets',
+      'rolemenu',
+      'tags',
+      'messages',
+      'leveling',
+      'giveaways',
+      'polls',
+      'suggestions',
+      'starboard',
+      'tempvc',
+      'reminders',
+      'counters',
+    ],
+  },
+  { id: 'written', label: 'What gets written down', modules: ['serverlog', 'logging'] },
+  { id: 'server', label: 'The server itself', modules: ['branding', 'backup', 'help', 'ping'] },
+];
+
+export interface NavGroupEntry<T> {
+  id: string;
+  label: string;
+  modules: readonly T[];
+}
+
+export function navGrouped<T extends { id: string; category: string }>(
+  modules: readonly T[],
+): readonly NavGroupEntry<T>[] {
+  const claimed = new Set(NAV_GROUPS.flatMap((group) => group.modules));
+
+  const authored = NAV_GROUPS.map((group) => ({
+    id: group.id,
+    label: group.label,
+    modules: group.modules.flatMap((id) => modules.filter((module) => module.id === id)),
+  }));
+
+  // A module the table has never heard of falls back to its manifest category rather than
+  // disappearing: the api ships modules this build may not know, and an unlisted one is unreachable.
+  const left = modules.filter((module) => !claimed.has(module.id));
+  const byCategory = CATEGORY_ORDER.map((category) => ({
+    id: `category:${category}`,
+    label: CATEGORY_LABELS[category],
+    modules: left.filter((module) => module.category === category),
+  }));
+  const uncategorised = left.filter((module) => !isCategory(module.category));
+
+  return [
+    ...authored,
+    ...byCategory,
+    { id: 'other', label: 'Everything else', modules: uncategorised },
+  ].filter((group) => group.modules.length > 0);
+}
+
+// Search synonyms, not claims about features: the category's users arrive with MEE6's, Dyno's and
+// Carl-bot's vocabulary, and "reaction roles" found nothing at all.
+const MODULE_ALIASES: Record<string, string> = {
+  antinuke: 'nuke protection breaker mass delete',
+  antiraid: 'raid protection join gate lockdown',
+  appeals: 'ban appeal unban request',
+  automod: 'anti-spam antispam auto moderation word filter caps links',
+  backup: 'snapshot restore export server template',
+  branding: 'nickname avatar banner bio name',
+  cases: 'mod log history infractions warnings record',
+  counters: 'member count stats',
+  giveaways: 'raffle draw prize',
+  help: 'commands list what proton does',
+  honeypot: 'bait channel trap spam bots',
+  joinroles: 'auto roles autorole join role sticky roles',
+  leveling: 'levels xp rank leaderboard',
+  logging: 'message logs edited deleted',
+  messages: 'embeds embed builder announcement buttons',
+  moderation: 'ban kick timeout mute purge warn',
+  permissions: 'command permissions who can run',
+  phishing: 'scam links blocklist',
+  ping: 'latency uptime is it up',
+  polls: 'vote poll',
+  reminders: 'remind me timer',
+  rolemenu: 'reaction roles self roles role picker button roles',
+  serverlog: 'audit log mod log server events',
+  starboard: 'highlights pins stars',
+  suggestions: 'ideas feedback votes',
+  tags: 'custom commands snippets autoresponder',
+  tempvc: 'temporary voice join to create voice channels',
+  tickets: 'support helpdesk modmail panels',
+  verification: 'gate member screening rules agree',
+  welcome: 'welcomer greeting goodbye leave message',
+};
+
+export function moduleAliases(moduleId: string): string {
+  return Object.hasOwn(MODULE_ALIASES, moduleId) ? (MODULE_ALIASES[moduleId] ?? '') : '';
+}
+
+// What the first tab of a module with data views but no sub-pages is called. "Settings" named the
+// software rather than the thing being set, on four pages out of thirty.
+const SETTINGS_TAB_TITLES: Record<string, string> = {
+  cases: 'Escalation',
+  moderation: 'Policy',
+  tags: 'Posting',
+  tickets: 'How tickets work',
+};
+
+export function settingsTabTitle(moduleId: string, moduleName: string): string {
+  return Object.hasOwn(SETTINGS_TAB_TITLES, moduleId)
+    ? (SETTINGS_TAB_TITLES[moduleId] ?? moduleName)
+    : moduleName;
+}
+
 // Presentation, not architecture: branding is an ordinary module underneath — it needs the config
 // store, the audit trail and the reconciliation listener — but it configures Proton's own identity
 // in this server rather than adding a feature to it, so listing it beside Tickets and Tags reads
@@ -114,22 +249,27 @@ export interface BrowseView {
   viewId: string;
   title: string;
   icon: IconName;
+
+  // Whether the sidebar's Records group lists it. A leaderboard and a tag library are browsable, but
+  // they are not a record of anything — they reach the admin as tabs on their own module instead.
+  record?: boolean;
 }
 
 // Duplicated from MODULE_VIEWS rather than derived from it: that registry pulls every view's Zod
 // search schema in, and the shell renders on the overview where none of them is used.
 // view-registry.test.tsx fails if the two ever disagree.
 export const BROWSE_VIEWS: readonly BrowseView[] = [
-  { moduleId: 'cases', viewId: 'cases', title: 'Cases', icon: 'scales' },
+  { moduleId: 'cases', viewId: 'cases', title: 'Case log', icon: 'scales', record: true },
   {
     moduleId: 'moderation',
     viewId: 'blocked',
     title: 'Blocked members',
     icon: 'shield-slash',
+    record: true,
   },
   { moduleId: 'leveling', viewId: 'leaderboard', title: 'Leaderboard', icon: 'ranking' },
-  { moduleId: 'tags', viewId: 'tags', title: 'Tags', icon: 'tag' },
-  { moduleId: 'tickets', viewId: 'tickets', title: 'Tickets', icon: 'ticket' },
+  { moduleId: 'tags', viewId: 'tags', title: 'Tag library', icon: 'tag' },
+  { moduleId: 'tickets', viewId: 'tickets', title: 'Ticket queue', icon: 'ticket', record: true },
 ];
 
 // The manifests name their icons in Lucide's vocabulary; the design system draws Phosphor. Mapped
@@ -181,6 +321,21 @@ export function moduleIcon(name: string | null | undefined): IconName {
     : MODULE_ICON_FALLBACK;
 }
 
+const MODULE_ART: Record<string, string> = {
+  moderation: '/art/modules/moderation.png',
+  automod: '/art/modules/automod.png',
+  leveling: '/art/modules/leveling.png',
+  serverlog: '/art/modules/serverlog.png',
+  tickets: '/art/modules/tickets.png',
+  giveaways: '/art/modules/giveaways.png',
+};
+
+export const FEATURED_MODULES: readonly string[] = Object.keys(MODULE_ART);
+
+export function moduleArt(moduleId: string): string | undefined {
+  return Object.hasOwn(MODULE_ART, moduleId) ? MODULE_ART[moduleId] : undefined;
+}
+
 const SHORT_REASONS: Record<string, string> = {
   missing_intent: 'A privileged intent is off',
   missing_permission: 'A permission is missing',
@@ -202,21 +357,6 @@ export function moduleState(module: ModuleSummary): ModuleState {
   if (!module.status || module.status.enabled) return 'running';
 
   return module.status.disabledReason?.code === 'insufficient_entitlement' ? 'degraded' : 'blocked';
-}
-
-// What the control does, not what state it is in. The state is carried by the track's colour, by
-// the reason printed beside it when the module cannot run, and by the save confirmation, which
-// still names a module that was saved while switched off.
-export const SWITCH_NOTE = 'Turn this module on or off for this server.';
-
-// A server-level entry is not a module the server switches on to gain a feature, so the generic
-// note would be describing something the page is not.
-const SERVER_LEVEL_SWITCH_NOTES: Record<string, string> = {
-  branding: 'Use this name and these pictures for Proton in this server.',
-};
-
-export function switchNote(moduleId: string): string {
-  return SERVER_LEVEL_SWITCH_NOTES[moduleId] ?? SWITCH_NOTE;
 }
 
 const WHERE_TO_FIX: Record<string, string> = {
@@ -248,6 +388,7 @@ const ACTION_LOOK: Record<string, ActionLook> = {
   timeout: { icon: 'clock-user', tone: 'warn', verb: 'Timed out' },
   untimeout: { icon: 'clock-counter-clockwise', tone: 'ok', verb: 'Timeout lifted' },
   warn: { icon: 'warning', tone: 'warn', verb: 'Warned' },
+  unwarn: { icon: 'eraser', tone: 'ok', verb: 'Warning withdrawn' },
   purge: { icon: 'eraser', tone: 'accent', verb: 'Purged' },
   add_role: { icon: 'user-plus', tone: 'ok', verb: 'Role added' },
   remove_role: { icon: 'user-minus', tone: 'warn', verb: 'Role removed' },
@@ -271,6 +412,19 @@ const ACTION_LOOK: Record<string, ActionLook> = {
   automod_rule_delete: { icon: 'shield-slash', tone: 'warn', verb: 'AutoMod rule removed' },
   interaction_reply: { icon: 'chat-circle-text', tone: 'accent', verb: 'Replied' },
   interaction_followup: { icon: 'chat-circle-dots', tone: 'accent', verb: 'Followed up' },
+  giveaway_draw: { icon: 'gift', tone: 'accent', verb: 'Giveaway drawn' },
+  create_dm: { icon: 'chat-circle-text', tone: 'accent', verb: 'DM opened' },
+  edit_role: { icon: 'sliders-horizontal', tone: 'accent', verb: 'Role edited' },
+  set_channel_overwrite: { icon: 'lock', tone: 'accent', verb: 'Channel override set' },
+  delete_channel_overwrite: {
+    icon: 'lock-key-open',
+    tone: 'accent',
+    verb: 'Channel override removed',
+  },
+  add_bot_role: { icon: 'user-plus', tone: 'ok', verb: 'Role added to Proton' },
+  remove_bot_role: { icon: 'user-minus', tone: 'warn', verb: 'Role removed from Proton' },
+  set_bot_nickname: { icon: 'identification-badge', tone: 'accent', verb: 'Nickname changed' },
+  set_bot_profile: { icon: 'identification-badge', tone: 'accent', verb: 'Profile changed' },
 };
 
 const ACTION_ICON_FALLBACK: IconName = 'dot-outline';

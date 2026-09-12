@@ -457,11 +457,14 @@ describe('what a tab left open still notices', () => {
   test('the factories this asserts over really are all of them', () => {
     expect([...factories(queries).keys()].sort()).toEqual([
       'channelsQuery',
+      'emojisQuery',
       'guildQuery',
+      'membersQuery',
       'moduleConfigQuery',
       'modulesQuery',
       'rolesQuery',
       'sessionQuery',
+      'viewerQuery',
     ]);
   });
 

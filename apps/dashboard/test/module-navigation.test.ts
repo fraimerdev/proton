@@ -113,15 +113,14 @@ describe('the settings tab round-trips', () => {
     (entry) => ({ id: entry.viewId, title: entry.title }),
   );
 
-  test('with an area open it carries the area, so the current tab is not a way off the page', () => {
-    const tabs = tabsFor(LEVELING_VIEWS, undefined, 'rewards');
-    const settings = tabs.find((tab) => tab.key === SETTINGS_TAB);
+  test('a module with areas spends the strip on them instead of one settings tab', () => {
+    const tabs = tabsFor(LEVELING_VIEWS, undefined, 'rewards', areasFor('leveling'));
 
-    expect(settings?.current).toBe(true);
-    expect(settings?.search).toEqual({ area: 'rewards' });
+    expect(tabs.find((tab) => tab.key === SETTINGS_TAB)).toBeUndefined();
+    expect(tabs.find((tab) => tab.current)?.search).toEqual({ area: 'rewards' });
   });
 
-  test('with no area it stays a bare settings link', () => {
+  test('a module with no areas keeps the bare settings tab', () => {
     expect(
       tabsFor(LEVELING_VIEWS, 'leaderboard').find((tab) => tab.key === SETTINGS_TAB)?.search,
     ).toEqual({});

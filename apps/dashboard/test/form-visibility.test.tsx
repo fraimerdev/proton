@@ -169,22 +169,26 @@ describe('a field its mode does not show', () => {
 
     // The trap the comment above names, asserted rather than described: every icon in the document
     // is aria-hidden, so 'hidden' is in the markup of a page hiding nothing at all.
-    expect(render(gate('captcha'))).toContain('aria-hidden="true"');
+    expect(quiet).toContain('aria-hidden="true"');
   });
 });
 
 describe('a section every field of which its mode does not show', () => {
   // Otherwise switching to a mode that uses none of them leaves an empty titled card behind.
   const shut = render(
-    <div hidden>
+    <div className="grid-passthrough" hidden>
       <SectionCard id="verification:captcha" title="Captcha">
         {gate('button')}
       </SectionCard>
     </div>,
   );
 
-  test('is hidden by a wrapper with no styling of its own, and still says what it is', () => {
-    expect(shut).toContain('<div hidden=""><section class="form-section">');
+  // `display: contents` and nothing else, so the settings grid still places the section rather
+  // than the wrapper — and the UA's !important `[hidden]` still beats it when it is shut.
+  test('is hidden by a wrapper that draws no box of its own, and still says what it is', () => {
+    expect(shut).toContain(
+      '<div class="grid-passthrough" hidden=""><section class="form-section" data-span="half">',
+    );
     expect(shut).toContain('>Captcha<');
   });
 
@@ -198,7 +202,7 @@ describe('a section every field of which its mode does not show', () => {
   test('is shown again when the mode it belongs to is picked', () => {
     const open = renderToStaticMarkup(
       <ModuleFormProvider form={formOf({}, [])}>
-        <div hidden={false}>
+        <div className="grid-passthrough" hidden={false}>
           <SectionCard id="verification:captcha" title="Captcha">
             {gate('captcha')}
           </SectionCard>
@@ -206,9 +210,9 @@ describe('a section every field of which its mode does not show', () => {
       </ModuleFormProvider>,
     );
 
-    expect(open).toContain('<section class="form-section">');
+    expect(open).toContain('<section class="form-section" data-span="half">');
     expect(open).toContain(SHOWN_LENGTH);
-    expect(open).not.toContain('<div hidden=""><section');
+    expect(open).not.toContain('hidden=""><section');
   });
 });
 

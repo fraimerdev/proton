@@ -14,6 +14,7 @@ import { Route as CommandsRouteImport } from './routes/commands'
 import { Route as FaqRouteImport } from './routes/faq'
 import { Route as InviteRouteImport } from './routes/invite'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as SigninRouteImport } from './routes/signin'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AppealTokenRouteImport } from './routes/appeal/$token'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
@@ -78,6 +79,11 @@ const InviteRoute = InviteRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TermsRoute = TermsRouteImport.update({
@@ -307,6 +313,7 @@ export interface FileRoutesByFullPath {
   '/faq': typeof FaqRoute
   '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
+  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/appeal/$token': typeof AppealTokenRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
@@ -354,6 +361,7 @@ export interface FileRoutesByTo {
   '/faq': typeof FaqRoute
   '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
+  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/appeal/$token': typeof AppealTokenRoute
   '/verify/$token': typeof VerifyTokenRoute
@@ -401,6 +409,7 @@ export interface FileRoutesById {
   '/faq': typeof FaqRoute
   '/invite': typeof InviteRoute
   '/privacy': typeof PrivacyRoute
+  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/appeal/$token': typeof AppealTokenRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
@@ -450,6 +459,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/invite'
     | '/privacy'
+    | '/signin'
     | '/terms'
     | '/appeal/$token'
     | '/dashboard/$guildId'
@@ -497,6 +507,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/invite'
     | '/privacy'
+    | '/signin'
     | '/terms'
     | '/appeal/$token'
     | '/verify/$token'
@@ -543,6 +554,7 @@ export interface FileRouteTypes {
     | '/faq'
     | '/invite'
     | '/privacy'
+    | '/signin'
     | '/terms'
     | '/appeal/$token'
     | '/dashboard/$guildId'
@@ -591,6 +603,7 @@ export interface RootRouteChildren {
   FaqRoute: typeof FaqRoute
   InviteRoute: typeof InviteRoute
   PrivacyRoute: typeof PrivacyRoute
+  SigninRoute: typeof SigninRoute
   TermsRoute: typeof TermsRoute
   AppealTokenRoute: typeof AppealTokenRoute
   DashboardGuildIdRoute: typeof DashboardGuildIdRouteWithChildren
@@ -637,6 +650,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/terms': {
@@ -999,6 +1019,7 @@ const rootRouteChildren: RootRouteChildren = {
   FaqRoute: FaqRoute,
   InviteRoute: InviteRoute,
   PrivacyRoute: PrivacyRoute,
+  SigninRoute: SigninRoute,
   TermsRoute: TermsRoute,
   AppealTokenRoute: AppealTokenRoute,
   DashboardGuildIdRoute: DashboardGuildIdRouteWithChildren,

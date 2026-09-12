@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { documentTitle } from '../../lib/document-title.ts';
 import {
   channelsQuery,
+  emojisQuery,
   moduleConfigQuery,
   modulesQuery,
   rolesQuery,
@@ -86,6 +87,7 @@ export function moduleRoute(moduleId: string, spec: ModuleRouteSpec = {}) {
               queryClient.fetchQuery(moduleConfigQuery(params.guildId, moduleId)),
               queryClient.fetchQuery(channelsQuery(params.guildId)),
               queryClient.fetchQuery(rolesQuery(params.guildId)),
+              queryClient.fetchQuery(emojisQuery(params.guildId)),
 
               // Cleared after the first client load, hence the ?.().
               ...editors.map((editor) => editor.preload?.()),
@@ -150,7 +152,9 @@ function ModulePending({
           guildId={guildId}
           summary={summary}
           area={entry ? undefined : area}
-          tabs={tabsFor(views, search.view, area?.id)}
+          // Areas included, or an area'd module opens on one tab called Settings and grows its real
+          // strip the instant the config lands — the jump this whole component exists to prevent.
+          tabs={tabsFor(views, search.view, area?.id, areas)}
         />
       ) : null}
       <Spinner />

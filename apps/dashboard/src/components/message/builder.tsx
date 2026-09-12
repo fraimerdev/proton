@@ -1,6 +1,5 @@
 import type {
   ActionRow,
-  ButtonStyle,
   ComponentAction,
   ContainerChild,
   Embed,
@@ -20,7 +19,6 @@ import type {
 import {
   ACTION_ROWS_MAX,
   BUTTON_LABEL_MAX,
-  BUTTON_STYLES,
   BUTTONS_PER_ROW_MAX,
   countV2Components,
   EMBED_AUTHOR_NAME_MAX,
@@ -52,14 +50,17 @@ import {
   v2Rows,
 } from '@proton/core';
 import { withFreshKeys } from '@proton/module-messages/config';
-import { type ReactElement, useId, useState } from 'react';
+import { type CSSProperties, type ReactElement, useId, useState } from 'react';
+import { EmojiInput } from '../emoji/picker.tsx';
 import {
   type DiscordChannel,
   type DiscordRole,
   roleOptions,
   SinglePicker,
 } from '../form/picker.tsx';
+import { ConfirmDialog } from '../shell/confirm.tsx';
 import { Icon } from '../shell/icon.tsx';
+import { ButtonFace } from './button-face.tsx';
 
 export interface PaletteRow {
   name: string;
@@ -73,25 +74,20 @@ export interface MessageBuilderProps {
   roles: readonly DiscordRole[];
 
   palette?: readonly PaletteRow[];
+
+  // 'embeds' hides the mode picker and the plain button rows. Verification's panel uses it: Proton
+  // attaches the verify button as the message's one row, and Discord will not put a row on a
+  // components-v2 layout.
+  allow?: 'both' | 'embeds';
 }
 
 type InvalidAt = (path: string) => boolean;
-
-const BUTTON_STYLE_LABELS: Record<ButtonStyle, string> = {
-  primary: 'Primary',
-  secondary: 'Secondary',
-  success: 'Success',
-  danger: 'Danger',
-  link: 'Link',
-};
 
 const ROLE_MODE_LABELS: Record<RoleActionMode, string> = {
   toggle: 'Toggle — press to get the role, press again to lose it',
   add: 'Add only — the role is never taken back',
   remove: 'Remove only',
 };
-
-const EMOJI_PLACEHOLDER = 'A unicode emoji, or <:name:123456789012345678>';
 
 function replaced<T>(list: readonly T[], index: number, item: T): T[] {
   return list.map((entry, i) => (i === index ? item : entry));
@@ -177,6 +173,55 @@ const V2_KIND_LABELS: Record<V2Kind, string> = {
   row: 'Buttons or a dropdown',
   container: 'Container',
 };
+
+// What the block's own header says it is. The long labels above are for the "add a block" menu,
+// where the reader is choosing between them and needs the whole phrase.
+const V2_KIND_SHORT: Record<V2Kind, string> = {
+  text: 'Text',
+  separator: 'Separator',
+  gallery: 'Pictures',
+  section: 'Section',
+  row: 'Buttons',
+  container: 'Container',
+};
+
+const SUMMARY_MAX = 44;
+
+function clamp(value: string): string {
+  const line = value.replace(/\s+/g, ' ').trim();
+
+  return line.length > SUMMARY_MAX ? `${line.slice(0, SUMMARY_MAX - 1)}…` : line;
+}
+
+/**
+ * What the block holds, printed beside its kind. A collapsed tree of blocks all called "Text" is a
+ * tree you have to open one at a time to find anything in.
+ */
+function summaryOf(node: V2Component): string {
+  switch (node.kind) {
+    case 'text':
+      return clamp(node.content);
+    case 'separator':
+      return node.divider
+        ? `Line, ${SPACING_LABELS[node.spacing].toLowerCase()} gap`
+        : `${SPACING_LABELS[node.spacing]} gap`;
+    case 'gallery':
+      return `${node.items.length} picture${node.items.length === 1 ? '' : 's'}`;
+    case 'section':
+      return clamp(node.text.join(' '));
+    case 'row':
+      return node.row.kind === 'select'
+        ? clamp(node.row.select.placeholder ?? 'Dropdown')
+        : clamp(
+            node.row.buttons
+              .map((button) => button.label ?? formatComponentEmoji(button.emoji))
+              .filter((label) => label !== '')
+              .join(', '),
+          );
+    case 'container':
+      return node.children.map((child) => V2_KIND_SHORT[child.kind]).join(', ');
+  }
+}
 
 const CHILD_KINDS: readonly V2Kind[] = ['text', 'separator', 'gallery', 'section', 'row'];
 const TOP_KINDS: readonly V2Kind[] = [...CHILD_KINDS, 'container'];
@@ -423,6 +468,30 @@ function LineInput({
         onChange={(e) => onChange(e.target.value)}
       />
     </label>
+  );
+}
+
+/**
+ * A `.filter` row like LineInput, but the control is the picker. The `<label>` becomes a `<div>`
+ * because a label wrapping a button is a label with no form control to name — the trigger carries
+ * its own accessible name instead.
+ */
+function EmojiField({
+  label,
+  value,
+  onChange,
+  invalid = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  invalid?: boolean;
+}): ReactElement {
+  return (
+    <div className="filter">
+      <span>{label}</span>
+      <EmojiInput value={value} onChange={onChange} invalid={invalid} name={label} />
+    </div>
   );
 }
 
@@ -753,14 +822,6 @@ function ButtonEditor({
   onMove,
   onRemove,
 }: ButtonEditorProps): ReactElement {
-  function setStyle(style: ButtonStyle): void {
-    onChange(
-      style === 'link'
-        ? { ...button, style, action: undefined }
-        : { ...button, style, url: undefined },
-    );
-  }
-
   return (
     <div className="builder-row">
       <span className="builder-head">
@@ -775,6 +836,27 @@ function ButtonEditor({
         />
       </span>
 
+      <ButtonFace
+        label={button.label ?? ''}
+        emoji={formatComponentEmoji(button.emoji)}
+        style={button.style}
+        max={BUTTON_LABEL_MAX}
+        disabled={button.disabled === true}
+        labelInvalid={invalid(`${path}.label`)}
+        emojiInvalid={invalid(`${path}.emoji`)}
+        onLabel={(value) => onChange({ ...button, label: blank(value) })}
+        onEmoji={(value) => onChange({ ...button, emoji: parseComponentEmoji(value) })}
+        // A link button carries a URL and no action; every other style carries an action and no
+        // URL, so picking one has to drop the half that no longer applies or the save is refused.
+        onStyle={(style) =>
+          onChange(
+            style === 'link'
+              ? { ...button, style, action: undefined }
+              : { ...button, style, url: undefined },
+          )
+        }
+      />
+
       <label className="filter">
         <span>Key</span>
         <input
@@ -785,33 +867,6 @@ function ButtonEditor({
           onChange={(e) => onChange({ ...button, key: e.target.value })}
         />
       </label>
-
-      <label className="filter">
-        <span>Style</span>
-        <select value={button.style} onChange={(e) => setStyle(e.target.value as ButtonStyle)}>
-          {BUTTON_STYLES.map((style) => (
-            <option key={style} value={style}>
-              {BUTTON_STYLE_LABELS[style]}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <CounterInput
-        label="Label"
-        value={button.label ?? ''}
-        max={BUTTON_LABEL_MAX}
-        invalid={invalid(`${path}.label`)}
-        onChange={(value) => onChange({ ...button, label: blank(value) })}
-      />
-
-      <LineInput
-        label="Emoji"
-        value={formatComponentEmoji(button.emoji)}
-        placeholder={EMOJI_PLACEHOLDER}
-        invalid={invalid(`${path}.emoji`)}
-        onChange={(value) => onChange({ ...button, emoji: parseComponentEmoji(value) })}
-      />
 
       <SwitchField
         label="Greyed out and unpressable"
@@ -906,10 +961,9 @@ function SelectOptionEditor({
         onChange={(value) => onChange({ ...option, description: blank(value) })}
       />
 
-      <LineInput
+      <EmojiField
         label="Emoji"
         value={formatComponentEmoji(option.emoji)}
-        placeholder={EMOJI_PLACEHOLDER}
         invalid={invalid(`${path}.emoji`)}
         onChange={(value) => onChange({ ...option, emoji: parseComponentEmoji(value) })}
       />
@@ -1385,10 +1439,22 @@ function EmbedEditor({
     patch({ timestamp: undefined });
   }
 
+  const accent =
+    embed.color === undefined ? undefined : `#${embed.color.toString(16).padStart(6, '0')}`;
+
   return (
-    <div className="ladder-rung ladder-rung-stacked builder-rung">
-      <span className="builder-head">
-        <span className="builder-head-title">Embed {index + 1}</span>
+    // Shaped like the embed it makes: the accent down the left edge, the author over the title over
+    // the description, the fields, then the footer. The old form was the same values as fourteen
+    // labelled rows in schema order, which told you nothing about what you were building.
+    <div
+      className="embed-card"
+      data-path={path}
+      style={accent === undefined ? undefined : ({ '--embed-accent': accent } as CSSProperties)}
+    >
+      <div className="embed-card-head">
+        <span className="embed-card-title">Embed {index + 1}</span>
+        <span className="embed-card-summary">{clamp(embed.title ?? embed.description ?? '')}</span>
+        <ColorInput color={embed.color} onChange={(color) => patch({ color })} />
         <OrderActions
           label={`embed ${index + 1}`}
           index={index}
@@ -1396,124 +1462,236 @@ function EmbedEditor({
           onMove={onMove}
           onRemove={onRemove}
         />
-      </span>
+      </div>
 
-      <CounterInput
-        label="Title"
-        value={embed.title ?? ''}
-        max={EMBED_TITLE_MAX}
-        invalid={invalid(`${path}.title`)}
-        onChange={(value) => patch({ title: blank(value) })}
-      />
-
-      <CounterInput
-        label="Description"
-        multiline
-        rows={4}
-        value={embed.description ?? ''}
-        max={EMBED_DESCRIPTION_MAX}
-        invalid={invalid(`${path}.description`)}
-        onChange={(value) => patch({ description: blank(value) })}
-      />
-
-      <LineInput
-        label="Title links to"
-        value={embed.url ?? ''}
-        placeholder="https://example.com"
-        invalid={invalid(`${path}.url`)}
-        onChange={(value) => patch({ url: blank(value) })}
-      />
-
-      <ColorInput color={embed.color} onChange={(color) => patch({ color })} />
-
-      <fieldset className="builder-group">
-        <legend>Author</legend>
-        <CounterInput
-          label="Name"
-          value={author?.name ?? ''}
-          max={EMBED_AUTHOR_NAME_MAX}
-          invalid={invalid(`${path}.author.name`)}
-          onChange={(value) => setAuthor(value, author?.url, author?.iconUrl)}
-        />
-        <LineInput
-          label="Name links to"
-          value={author?.url ?? ''}
-          placeholder="https://example.com"
-          invalid={invalid(`${path}.author.url`)}
-          onChange={(value) => setAuthor(author?.name ?? '', blank(value), author?.iconUrl)}
-        />
-        <LineInput
-          label="Icon"
-          value={author?.iconUrl ?? ''}
-          placeholder="https://example.com/avatar.png"
-          invalid={invalid(`${path}.author.iconUrl`)}
-          onChange={(value) => setAuthor(author?.name ?? '', author?.url, blank(value))}
-        />
-      </fieldset>
-
-      <fieldset className="builder-group">
-        <legend>Footer</legend>
-        <CounterInput
-          label="Text"
-          value={footer?.text ?? ''}
-          max={EMBED_FOOTER_TEXT_MAX}
-          invalid={invalid(`${path}.footer.text`)}
-          onChange={(value) => setFooter(value, footer?.iconUrl)}
-        />
-        <LineInput
-          label="Icon"
-          value={footer?.iconUrl ?? ''}
-          placeholder="https://example.com/icon.png"
-          invalid={invalid(`${path}.footer.iconUrl`)}
-          onChange={(value) => setFooter(footer?.text ?? '', blank(value))}
-        />
-      </fieldset>
-
-      <fieldset className="builder-group">
-        <legend>Pictures</legend>
-        <LineInput
-          label="Image"
-          value={embed.imageUrl ?? ''}
-          placeholder="https://example.com/banner.png"
-          invalid={invalid(`${path}.imageUrl`)}
-          onChange={(value) => patch({ imageUrl: blank(value) })}
-        />
-        <LineInput
-          label="Thumbnail"
-          value={embed.thumbnailUrl ?? ''}
-          placeholder="https://example.com/thumb.png"
-          invalid={invalid(`${path}.thumbnailUrl`)}
-          onChange={(value) => patch({ thumbnailUrl: blank(value) })}
-        />
-      </fieldset>
-
-      <label className="filter">
-        <span>Timestamp</span>
-        <select value={stampMode} onChange={(e) => setStampMode(e.target.value)}>
-          <option value="none">None</option>
-          <option value="now">The moment it is posted</option>
-          <option value="fixed">A fixed time</option>
-        </select>
-      </label>
-
-      {stampMode === 'fixed' && stamp !== undefined && stamp !== 'now' ? (
-        <label className="filter">
-          <span>Shows</span>
-          <input
-            type="datetime-local"
-            value={toLocalInput(stamp)}
-            aria-invalid={invalid(`${path}.timestamp`)}
-            onChange={(e) => patch({ timestamp: fromLocalInput(e.target.value) })}
+      <div className="embed-card-body">
+        <div className="embed-line embed-line-author">
+          <Avatar url={author?.iconUrl} />
+          <FaceInput
+            label="Author name"
+            placeholder="Author"
+            value={author?.name ?? ''}
+            max={EMBED_AUTHOR_NAME_MAX}
+            invalid={invalid(`${path}.author.name`)}
+            onChange={(value) => setAuthor(value, author?.url, author?.iconUrl)}
           />
-        </label>
-      ) : null}
+        </div>
 
-      <EmbedFieldsEditor
-        fields={embed.fields ?? []}
-        embedIndex={index}
-        path={`${path}.fields`}
-        invalid={invalid}
-        onChange={(fields) => patch({ fields })}
+        <FaceInput
+          label="Title"
+          placeholder="Title"
+          className="embed-title"
+          value={embed.title ?? ''}
+          max={EMBED_TITLE_MAX}
+          invalid={invalid(`${path}.title`)}
+          onChange={(value) => patch({ title: blank(value) })}
+        />
+
+        <FaceInput
+          label="Description"
+          placeholder="Description"
+          className="embed-description"
+          multiline
+          rows={5}
+          value={embed.description ?? ''}
+          max={EMBED_DESCRIPTION_MAX}
+          invalid={invalid(`${path}.description`)}
+          onChange={(value) => patch({ description: blank(value) })}
+        />
+
+        <EmbedFieldsEditor
+          fields={embed.fields ?? []}
+          embedIndex={index}
+          path={`${path}.fields`}
+          invalid={invalid}
+          onChange={(fields) => patch({ fields })}
+        />
+
+        <Picture
+          label="Image"
+          url={embed.imageUrl}
+          invalid={invalid(`${path}.imageUrl`)}
+          onChange={(value) => patch({ imageUrl: value })}
+        />
+
+        <div className="embed-line embed-line-footer">
+          <Avatar url={footer?.iconUrl} small />
+          <FaceInput
+            label="Footer text"
+            placeholder="Footer"
+            value={footer?.text ?? ''}
+            max={EMBED_FOOTER_TEXT_MAX}
+            invalid={invalid(`${path}.footer.text`)}
+            onChange={(value) => setFooter(value, footer?.iconUrl)}
+          />
+        </div>
+      </div>
+
+      {/* The links, the small pictures and the timestamp. Every embed has a title and a body; most
+          have none of these, and in schema order they sat between the two things that are always
+          filled in. */}
+      <details className="embed-more">
+        <summary>Links, icons and timestamp</summary>
+
+        <div className="embed-more-body">
+          <LineInput
+            label="Title links to"
+            value={embed.url ?? ''}
+            placeholder="https://example.com"
+            invalid={invalid(`${path}.url`)}
+            onChange={(value) => patch({ url: blank(value) })}
+          />
+          <LineInput
+            label="Author links to"
+            value={author?.url ?? ''}
+            placeholder="https://example.com"
+            invalid={invalid(`${path}.author.url`)}
+            onChange={(value) => setAuthor(author?.name ?? '', blank(value), author?.iconUrl)}
+          />
+          <LineInput
+            label="Author icon"
+            value={author?.iconUrl ?? ''}
+            placeholder="https://example.com/avatar.png"
+            invalid={invalid(`${path}.author.iconUrl`)}
+            onChange={(value) => setAuthor(author?.name ?? '', author?.url, blank(value))}
+          />
+          <LineInput
+            label="Footer icon"
+            value={footer?.iconUrl ?? ''}
+            placeholder="https://example.com/icon.png"
+            invalid={invalid(`${path}.footer.iconUrl`)}
+            onChange={(value) => setFooter(footer?.text ?? '', blank(value))}
+          />
+          <LineInput
+            label="Thumbnail"
+            value={embed.thumbnailUrl ?? ''}
+            placeholder="https://example.com/thumb.png"
+            invalid={invalid(`${path}.thumbnailUrl`)}
+            onChange={(value) => patch({ thumbnailUrl: blank(value) })}
+          />
+
+          <label className="filter">
+            <span>Timestamp</span>
+            <select value={stampMode} onChange={(e) => setStampMode(e.target.value)}>
+              <option value="none">None</option>
+              <option value="now">The moment it is posted</option>
+              <option value="fixed">A fixed time</option>
+            </select>
+          </label>
+
+          {stampMode === 'fixed' && stamp !== undefined && stamp !== 'now' ? (
+            <label className="filter">
+              <span>Shows</span>
+              <input
+                type="datetime-local"
+                value={toLocalInput(stamp)}
+                aria-invalid={invalid(`${path}.timestamp`)}
+                onChange={(e) => patch({ timestamp: fromLocalInput(e.target.value) })}
+              />
+            </label>
+          ) : null}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function Avatar({ url, small }: { url?: string | undefined; small?: boolean }): ReactElement {
+  return (
+    <span className={`embed-avatar${small ? ' embed-avatar-sm' : ''}`} aria-hidden="true">
+      {url ? <img src={url} alt="" /> : <Icon name="user-circle" />}
+    </span>
+  );
+}
+
+/**
+ * The placeholder is the label. That is normally forbidden — a placeholder disappears the moment
+ * anything is typed — so the real label is still there for a screen reader, just not drawn: on this
+ * one surface the point is that the form looks like the embed, and a column of labels down the left
+ * is what stopped it doing that.
+ */
+function FaceInput({
+  label,
+  placeholder,
+  value,
+  max,
+  className,
+  multiline,
+  rows,
+  invalid,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  max: number;
+  className?: string;
+  multiline?: boolean;
+  rows?: number;
+  invalid: boolean;
+  onChange: (value: string) => void;
+}): ReactElement {
+  const over = value.length > max;
+
+  return (
+    <span className={`embed-face${className ? ` ${className}` : ''}`}>
+      {multiline ? (
+        <textarea
+          rows={rows ?? 3}
+          value={value}
+          placeholder={placeholder}
+          aria-label={label}
+          aria-invalid={invalid || over}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value}
+          placeholder={placeholder}
+          aria-label={label}
+          aria-invalid={invalid || over}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
+
+      {/* Only once something is typed. An empty embed drawn with six 0/256 counters reads as a form
+          with six problems in it. */}
+      {value === '' ? null : (
+        <span className="embed-face-count num" data-over={over || undefined}>
+          {value.length}/{max}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function Picture({
+  label,
+  url,
+  invalid,
+  onChange,
+}: {
+  label: string;
+  url: string | undefined;
+  invalid: boolean;
+  onChange: (value: string | undefined) => void;
+}): ReactElement {
+  return (
+    <div className="embed-picture" data-filled={url ? 'true' : undefined}>
+      {url ? (
+        <img className="embed-picture-preview" src={url} alt="" />
+      ) : (
+        <Icon name="image" className="embed-picture-mark" />
+      )}
+
+      <input
+        type="text"
+        value={url ?? ''}
+        placeholder={`${label} URL`}
+        aria-label={label}
+        aria-invalid={invalid}
+        onChange={(event) => onChange(blank(event.target.value))}
       />
     </div>
   );
@@ -1835,69 +2013,302 @@ function V2Nodes({
   taken,
   onChange,
 }: V2NodesProps): ReactElement {
+  // Per list, so a drag started in a nested list is invisible to the one around it: the outer
+  // blocks see the same bubbled dragover, and bail because their own drag never started.
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+
+  function drop(to: number): void {
+    if (dragging !== null) onChange(moved(nodes, dragging, to));
+
+    setDragging(null);
+    setOver(null);
+  }
+
   return (
     <>
       {nodes.map((node, index) => (
-        <div
-          className={frame}
+        <Block
           // biome-ignore lint/suspicious/noArrayIndexKey: blocks carry no id, and their keys are edited
           key={`node-${index}`}
-        >
-          <span className="builder-head">
-            <span className="builder-head-title">
-              {label} {index + 1}
-            </span>
-            <span className="pill">{V2_KIND_LABELS[node.kind]}</span>
-            <OrderActions
-              label={`${lowerFirst(label)} ${index + 1}`}
-              index={index}
-              count={nodes.length}
-              onMove={(to) => onChange(moved(nodes, index, to))}
-              onRemove={() => onChange(removed(nodes, index))}
-            />
-          </span>
-
-          <NodeBody
-            node={node}
-            index={index}
-            path={`${path}.${index}`}
-            invalid={invalid}
-            roles={roles}
-            taken={taken}
-            onChange={(next) => onChange(replaced(nodes, index, next))}
-          />
-        </div>
+          node={node}
+          index={index}
+          count={nodes.length}
+          label={label}
+          frame={frame}
+          path={`${path}.${index}`}
+          invalid={invalid}
+          roles={roles}
+          taken={taken}
+          dragging={dragging === index}
+          over={over === index && dragging !== null && dragging !== index}
+          onGrab={() => setDragging(index)}
+          onDrag={() => (dragging === null ? undefined : setOver(index))}
+          onDrop={() => drop(index)}
+          onRelease={() => {
+            setDragging(null);
+            setOver(null);
+          }}
+          onMove={(to) => onChange(moved(nodes, index, to))}
+          onRemove={() => onChange(removed(nodes, index))}
+          onDuplicate={() =>
+            onChange([...nodes.slice(0, index + 1), copyOf(node, taken), ...nodes.slice(index + 1)])
+          }
+          onChange={(next) => onChange(replaced(nodes, index, next))}
+        />
       ))}
 
       {nodes.length === 0 ? <p className="field-empty">{empty}</p> : null}
 
-      <label className="filter builder-v2-add">
-        <span>Add a block</span>
-        <select
-          value=""
-          onChange={(e) => {
-            if (e.target.value === '') return;
-            onChange([...nodes, blankNode(e.target.value as V2Kind, taken)]);
-          }}
-        >
-          <option value="">Choose a block…</option>
-          {kinds.map((kind) => (
-            <option key={kind} value={kind}>
-              {V2_KIND_LABELS[kind]}
-            </option>
-          ))}
-        </select>
-      </label>
+      <AddBlock
+        kinds={kinds}
+        inside={label !== 'Layout'}
+        onAdd={(kind) => onChange([...nodes, blankNode(kind, taken)])}
+      />
     </>
   );
 }
 
-function Superseded(): ReactElement {
+/**
+ * A duplicate has to claim its own button and option keys, or the copy and the original answer to
+ * the same custom id and Discord routes every press to whichever the worker registered last.
+ */
+function copyOf(node: V2Component, taken: ReadonlySet<string>): V2Component {
+  if (node.kind === 'row') return { kind: 'row', row: withFreshKeys(node.row, taken) };
+
+  if (node.kind === 'section' && node.accessory.kind === 'button') {
+    const row = withFreshKeys({ kind: 'buttons', buttons: [node.accessory.button] }, taken);
+    const button = row.kind === 'buttons' ? row.buttons[0] : undefined;
+
+    return button ? { ...node, accessory: { kind: 'button', button } } : structuredClone(node);
+  }
+
+  if (node.kind === 'container') {
+    const claimed = new Set(taken);
+    const children = node.children.map((child) => {
+      const copy = copyOf(child, claimed);
+      for (const key of layoutKeys([copy])) claimed.add(key);
+
+      return copy as ContainerChild;
+    });
+
+    return { ...node, children };
+  }
+
+  return structuredClone(node);
+}
+
+function AddBlock({
+  kinds,
+  inside,
+  onAdd,
+}: {
+  kinds: readonly V2Kind[];
+  inside: boolean;
+  onAdd: (kind: V2Kind) => void;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+
   return (
-    <p className="builder-superseded">
-      The layout is the whole message. Nothing left in this section is sent, and the message will
-      not save until it is empty.
-    </p>
+    <div className="builder-add">
+      <button type="button" className="builder-add-trigger" onClick={() => setOpen((was) => !was)}>
+        <Icon name={open ? 'x' : 'plus'} />
+        {inside ? 'Add block inside' : 'Add block'}
+      </button>
+
+      {open ? (
+        <div className="builder-add-menu">
+          {kinds.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              className="builder-add-option"
+              onClick={() => {
+                onAdd(kind);
+                setOpen(false);
+              }}
+            >
+              {V2_KIND_LABELS[kind]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+interface BlockProps {
+  node: V2Component;
+  index: number;
+  count: number;
+  label: string;
+  frame: string;
+  path: string;
+  invalid: InvalidAt;
+  roles: readonly DiscordRole[];
+  taken: ReadonlySet<string>;
+
+  dragging: boolean;
+  over: boolean;
+  onGrab: () => void;
+  onDrag: () => void;
+  onDrop: () => void;
+  onRelease: () => void;
+
+  onMove: (to: number) => void;
+  onRemove: () => void;
+  onDuplicate: () => void;
+  onChange: (node: V2Component) => void;
+}
+
+function Block({
+  node,
+  index,
+  count,
+  label,
+  frame,
+  path,
+  invalid,
+  roles,
+  taken,
+  dragging,
+  over,
+  onGrab,
+  onDrag,
+  onDrop,
+  onRelease,
+  onMove,
+  onRemove,
+  onDuplicate,
+  onChange,
+}: BlockProps): ReactElement {
+  const [open, setOpen] = useState(true);
+  const bodyId = useId();
+
+  const named = `${lowerFirst(label)} ${index + 1}`;
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the drop target is the block; the grip is what drags, and the arrow buttons are the keyboard path
+    <div
+      className={frame}
+      data-dragging={dragging || undefined}
+      data-over={over || undefined}
+      onDragOver={(event) => {
+        event.preventDefault();
+        onDrag();
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        onDrop();
+      }}
+    >
+      <div className="builder-block-head">
+        {/* Draggable itself rather than the whole block: a draggable container swallows the text
+            selection in every input inside it. */}
+        <span
+          className="builder-block-grip"
+          draggable
+          title="Drag to reorder"
+          aria-hidden="true"
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = 'move';
+
+            const block = event.currentTarget.closest('.builder-block');
+            if (block instanceof HTMLElement) event.dataTransfer.setDragImage(block, 16, 16);
+
+            onGrab();
+          }}
+          onDragEnd={onRelease}
+        >
+          <Icon name="dots-six-vertical" />
+        </span>
+
+        <button
+          type="button"
+          className="builder-block-toggle"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          aria-label={`${V2_KIND_SHORT[node.kind]}, ${named}`}
+          onClick={() => setOpen((was) => !was)}
+        >
+          <Icon name={open ? 'caret-down' : 'caret-right'} />
+          <span className="builder-block-kind">{V2_KIND_SHORT[node.kind]}</span>
+          <span className="builder-block-summary">{summaryOf(node)}</span>
+        </button>
+
+        <span className="builder-block-actions">
+          <button
+            type="button"
+            className="button button-ghost"
+            aria-label={`Duplicate ${named}`}
+            onClick={onDuplicate}
+          >
+            <Icon name="copy" />
+          </button>
+          <OrderActions
+            label={named}
+            index={index}
+            count={count}
+            onMove={onMove}
+            onRemove={onRemove}
+          />
+        </span>
+      </div>
+
+      <div className="builder-block-body" id={bodyId} hidden={!open}>
+        <NodeBody
+          node={node}
+          index={index}
+          path={path}
+          invalid={invalid}
+          roles={roles}
+          taken={taken}
+          onChange={onChange}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The two shapes a Discord message can take, as a choice rather than a switch. They are mutually
+ * exclusive in the schema — `refineMessage` refuses a layout that also carries text, an embed or a
+ * plain row — so the old toggle left half the builder on screen, greyed out and unusable, with a
+ * note under each dead section explaining why. The picker swaps the workspace instead.
+ */
+function ModePicker({
+  laidOut,
+  onPick,
+}: {
+  laidOut: boolean;
+  onPick: (laidOut: boolean) => void;
+}): ReactElement {
+  const name = useId();
+
+  return (
+    <fieldset className="builder-mode">
+      <legend className="sr-only">How this message is built</legend>
+
+      <div className="mode-cards">
+        <label className="mode-card" data-current={laidOut ? undefined : 'true'}>
+          <input type="radio" name={name} checked={!laidOut} onChange={() => onPick(false)} />
+          <span className="mode-card-art mode-card-art-embeds" aria-hidden="true" />
+          <span className="mode-card-text">
+            <span className="mode-card-name">Embeds</span>
+            <span className="mode-card-blurb">Coloured panels with text and fields.</span>
+          </span>
+        </label>
+
+        <label className="mode-card" data-current={laidOut ? 'true' : undefined}>
+          <input type="radio" name={name} checked={laidOut} onChange={() => onPick(true)} />
+          <span className="mode-card-art mode-card-art-components" aria-hidden="true" />
+          <span className="mode-card-text">
+            <span className="mode-card-name">Components</span>
+            <span className="mode-card-blurb">Text, images and buttons in any order.</span>
+          </span>
+        </label>
+      </div>
+    </fieldset>
   );
 }
 
@@ -1906,6 +2317,7 @@ export function MessageBuilder({
   onChange,
   roles,
   palette = [],
+  allow = 'both',
 }: MessageBuilderProps): ReactElement {
   const parsed = messageSchema.safeParse(message);
 
@@ -1921,11 +2333,26 @@ export function MessageBuilder({
   const laidOut = layout.length > 0;
   const used = countV2Components(layout);
 
+  const [discarding, setDiscarding] = useState(false);
+
   function setMentions(patch: Partial<MentionPolicy>): void {
     onChange({ ...message, mentions: { ...message.mentions, ...patch } });
   }
 
+  // Picking Embeds throws the whole layout away, and the picker is one click. Anything already
+  // built asks first; an empty layout switches straight back, because there is nothing to lose.
+  function askToPick(next: boolean): void {
+    if (!next && layout.length > 0) {
+      setDiscarding(true);
+      return;
+    }
+
+    setLaidOut(next);
+  }
+
   function setLaidOut(next: boolean): void {
+    setDiscarding(false);
+
     if (!next) {
       onChange({ ...message, v2: [] });
       return;
@@ -1947,74 +2374,58 @@ export function MessageBuilder({
 
   return (
     <div className="ladder builder" data-path="message">
-      <fieldset className="builder-section">
-        <legend>Layout</legend>
-        <p className="field-description">
-          A message is either a classic one — text, embeds and button rows — or a layout built from
-          the blocks below. Never both.
-        </p>
+      {allow === 'both' ? <ModePicker laidOut={laidOut} onPick={askToPick} /> : null}
 
+      {laidOut ? (
         <p className="builder-v2-note">
-          <Icon name="warning" /> Once a message has been posted as a layout it stays one. Editing
-          it later can only change the layout — it can never go back to text and embeds. Post a new
-          message instead.
+          <Icon name="warning" /> Once a message has been posted as components it stays that way.
+          Editing it later can only change the components — it can never go back to embeds. Post a
+          new message instead.
         </p>
+      ) : null}
 
-        <SwitchField
-          label="Build this message as a layout"
-          description="Switching on moves the message text and any button rows into the layout. Switching off clears the layout and the message goes back to text, embeds and button rows."
-          checked={laidOut}
-          onChange={setLaidOut}
-        />
-
-        {laidOut ? (
-          <>
-            <p className="field-description">
-              This layout comes to{' '}
-              <span
-                className="builder-count"
-                data-over={used > V2_COMPONENTS_MAX ? 'true' : undefined}
-              >
-                {used}/{V2_COMPONENTS_MAX}
-              </span>{' '}
-              components. Discord counts every block in the tree, containers, section text and
-              buttons included.
-            </p>
-
-            <V2Nodes
-              nodes={layout}
-              label="Layout"
-              kinds={TOP_KINDS}
-              path="v2"
-              frame="ladder-rung ladder-rung-stacked builder-rung"
-              empty="This layout is empty. Add a block, or switch the layout off."
-              invalid={invalid}
-              roles={roles}
-              taken={layoutKeys(layout)}
-              onChange={(v2) => onChange({ ...message, v2 })}
-            />
-          </>
-        ) : embeds.length > 0 ? (
+      {laidOut ? (
+        <fieldset className="builder-section">
+          <legend>Components</legend>
           <p className="field-description">
-            An embed cannot go inside a layout. Remove the{' '}
-            {embeds.length === 1 ? 'embed' : 'embeds'} below first, or the message will not save.
+            This layout comes to{' '}
+            <span
+              className="builder-count"
+              data-over={used > V2_COMPONENTS_MAX ? 'true' : undefined}
+            >
+              {used}/{V2_COMPONENTS_MAX}
+            </span>{' '}
+            components. Discord counts every block in the tree, containers, section text and buttons
+            included.
           </p>
-        ) : null}
-      </fieldset>
 
-      <fieldset className="builder-section">
-        <legend>Text</legend>
-        {laidOut ? <Superseded /> : null}
-        <CounterInput
-          label="Message text"
-          multiline
-          rows={4}
-          value={message.content ?? ''}
-          max={MESSAGE_CONTENT_MAX}
-          invalid={invalid('content')}
-          onChange={(value) => onChange({ ...message, content: blank(value) })}
-        />
-      </fieldset>
+          <V2Nodes
+            nodes={layout}
+            label="Layout"
+            kinds={TOP_KINDS}
+            path="v2"
+            frame="builder-block"
+            empty="Nothing here yet. Add a block to start the message."
+            invalid={invalid}
+            roles={roles}
+            taken={layoutKeys(layout)}
+            onChange={(v2) => onChange({ ...message, v2 })}
+          />
+        </fieldset>
+      ) : (
+        <fieldset className="builder-section">
+          <legend>Text</legend>
+          <CounterInput
+            label="Message text"
+            multiline
+            rows={4}
+            value={message.content ?? ''}
+            max={MESSAGE_CONTENT_MAX}
+            invalid={invalid('content')}
+            onChange={(value) => onChange({ ...message, content: blank(value) })}
+          />
+        </fieldset>
+      )}
 
       <fieldset className="builder-section">
         <legend>Mentions</legend>
@@ -2040,60 +2451,80 @@ export function MessageBuilder({
         />
       </fieldset>
 
-      <fieldset className="builder-section">
-        <legend>Embeds</legend>
-        {laidOut ? <Superseded /> : null}
-        <p className="field-description">
-          Every embed on this message shares one budget of{' '}
-          <span className="builder-count" data-over={total > EMBED_TOTAL_MAX ? 'true' : undefined}>
-            {total}/{EMBED_TOTAL_MAX}
-          </span>{' '}
-          characters, counted across titles, descriptions, field names, field text, footers and
-          author names.
-        </p>
+      {laidOut ? null : (
+        <fieldset className="builder-section">
+          <legend>Embeds</legend>
+          <p className="field-description">
+            Every embed on this message shares one budget of{' '}
+            <span
+              className="builder-count"
+              data-over={total > EMBED_TOTAL_MAX ? 'true' : undefined}
+            >
+              {total}/{EMBED_TOTAL_MAX}
+            </span>{' '}
+            characters, counted across titles, descriptions, field names, field text, footers and
+            author names.
+          </p>
 
-        {embeds.map((embed, index) => (
-          <EmbedEditor
-            // biome-ignore lint/suspicious/noArrayIndexKey: embeds carry no id of their own
-            key={`embed-${index}`}
-            embed={embed}
-            index={index}
-            count={embeds.length}
-            path={`embeds.${index}`}
+          {embeds.map((embed, index) => (
+            <EmbedEditor
+              // biome-ignore lint/suspicious/noArrayIndexKey: embeds carry no id of their own
+              key={`embed-${index}`}
+              embed={embed}
+              index={index}
+              count={embeds.length}
+              path={`embeds.${index}`}
+              invalid={invalid}
+              onChange={(next) => onChange({ ...message, embeds: replaced(embeds, index, next) })}
+              onMove={(to) => onChange({ ...message, embeds: moved(embeds, index, to) })}
+              onRemove={() => onChange({ ...message, embeds: removed(embeds, index) })}
+            />
+          ))}
+
+          {embeds.length === 0 ? (
+            <p className="field-empty">No embeds. The message is posted as plain text.</p>
+          ) : null}
+
+          <button
+            type="button"
+            className="button button-quiet"
+            disabled={embeds.length >= EMBEDS_PER_MESSAGE_MAX}
+            onClick={() => onChange({ ...message, embeds: [...embeds, { description: '' }] })}
+          >
+            {embeds.length >= EMBEDS_PER_MESSAGE_MAX
+              ? `Limit of ${EMBEDS_PER_MESSAGE_MAX} embeds reached`
+              : 'Add embed'}
+          </button>
+        </fieldset>
+      )}
+
+      {/* Absent under `allow="embeds"`: the surface using it attaches its own row, and Discord
+          allows a message one set of components. */}
+      {laidOut || allow === 'embeds' ? null : (
+        <fieldset className="builder-section">
+          <legend>Buttons and dropdowns</legend>
+          <ComponentsEditor
+            rows={message.components}
             invalid={invalid}
-            onChange={(next) => onChange({ ...message, embeds: replaced(embeds, index, next) })}
-            onMove={(to) => onChange({ ...message, embeds: moved(embeds, index, to) })}
-            onRemove={() => onChange({ ...message, embeds: removed(embeds, index) })}
+            roles={roles}
+            palette={palette}
+            onChange={(components) => onChange({ ...message, components })}
           />
-        ))}
+        </fieldset>
+      )}
 
-        {embeds.length === 0 ? (
-          <p className="field-empty">No embeds. The message is posted as plain text.</p>
-        ) : null}
-
-        <button
-          type="button"
-          className="button button-quiet"
-          disabled={embeds.length >= EMBEDS_PER_MESSAGE_MAX}
-          onClick={() => onChange({ ...message, embeds: [...embeds, { description: '' }] })}
+      {discarding ? (
+        <ConfirmDialog
+          title="Switch to embeds and discard this layout?"
+          cancelLabel="Keep the components"
+          confirmLabel="Discard and switch"
+          onCancel={() => setDiscarding(false)}
+          onConfirm={() => setLaidOut(false)}
         >
-          {embeds.length >= EMBEDS_PER_MESSAGE_MAX
-            ? `Limit of ${EMBEDS_PER_MESSAGE_MAX} embeds reached`
-            : 'Add embed'}
-        </button>
-      </fieldset>
-
-      <fieldset className="builder-section">
-        <legend>Buttons and dropdowns</legend>
-        {laidOut ? <Superseded /> : null}
-        <ComponentsEditor
-          rows={message.components}
-          invalid={invalid}
-          roles={roles}
-          palette={palette}
-          onChange={(components) => onChange({ ...message, components })}
-        />
-      </fieldset>
+          {used === 1 ? 'The one block' : `All ${used} blocks`} in this layout will be removed. A
+          message is either embeds or components, so the two cannot both be kept.
+        </ConfirmDialog>
+      ) : null}
 
       {parsed.success ? null : (
         <ul className="ladder-errors" role="alert">

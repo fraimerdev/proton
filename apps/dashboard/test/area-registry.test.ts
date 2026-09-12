@@ -65,9 +65,9 @@ function writesIn(body: string): string[] {
   ];
 }
 
-// The area component named by the `area.id === '…' ? <X /> : null` dispatch every area'd route uses.
+// The area component named by the `area?.id === '…' ? <X /> : null` dispatch every area'd route uses.
 function componentFor(source: string, areaId: string): string | undefined {
-  return new RegExp(`area\\.id === '${areaId}' \\? <([A-Za-z0-9]+)`).exec(source)?.[1];
+  return new RegExp(`area\\?\\.id === '${areaId}' \\? <([A-Za-z0-9]+)`).exec(source)?.[1];
 }
 
 /**
@@ -222,8 +222,14 @@ describe('resolveArea', () => {
   const moduleId = AREA_MODULES[0] ?? 'leveling';
   const areas = areasFor(moduleId);
 
-  test('no area parameter opens the hub rather than throwing', () => {
-    expect(resolveArea(moduleId, areas, undefined)).toBeUndefined();
+  // It used to answer undefined, and the page that meant drew a menu of the module's own areas —
+  // a screen and a click whose whole content was links to the settings already asked for.
+  test('no area parameter opens the first area rather than a menu of them', () => {
+    expect(resolveArea(moduleId, areas, undefined)).toBe(areas[0]);
+  });
+
+  test('a module with no areas still resolves to nothing at all', () => {
+    expect(resolveArea('ping', areasFor('ping'), undefined)).toBeUndefined();
   });
 
   test('a registered id resolves to its entry', () => {

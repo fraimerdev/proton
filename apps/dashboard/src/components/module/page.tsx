@@ -1,12 +1,18 @@
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { Link, useRouterState } from '@tanstack/react-router';
-import { type ReactElement, type ReactNode, useEffect } from 'react';
+import { type ReactElement, type ReactNode, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { saveFailure } from '../../lib/errors.ts';
+import { moduleConfigQuery } from '../../lib/queries.ts';
+import { EmojiCatalogProvider } from '../emoji/catalog.tsx';
+import { useSaveSlot, useShellSaving } from '../shell/app-shell.tsx';
 import { ConfirmDialog } from '../shell/confirm.tsx';
 import { Icon } from '../shell/icon.tsx';
 import { ModuleHeader } from '../shell/module-header.tsx';
-import { moduleIcon, moduleState, shortReason } from '../shell/module-meta.ts';
-import type { AreaEntry } from './areas.ts';
+import { moduleIcon, moduleState, settingsTabTitle, shortReason } from '../shell/module-meta.ts';
+import { areasFor } from './area-index.ts';
+import type { AreaCount, AreaEntry } from './areas.ts';
+import { areaCount } from './areas.ts';
 import type { ModuleForm } from './form.ts';
 import { ModuleFormProvider } from './inputs.tsx';
 import type { ModuleView } from './views.ts';
@@ -16,106 +22,134 @@ export interface TabDescriptor {
   title: string;
   search: Record<string, unknown>;
   current: boolean;
+  kind: 'area' | 'view';
 }
 
 export const SETTINGS_TAB = 'settings';
 
-// The settings tab is the absence of ?view=, not the id 'settings', which a view may legally own.
+/**
+ * One strip, carrying both kinds of face a module has: the areas its settings are split into, and
+ * the data views it also holds. They used to be two navigations — a page of link cards for the
+ * areas, a tab row for the views — which cost a click and a screen to say what a row of words says.
+ *
+ * The settings tab is the absence of ?view=, not the id 'settings', which a view may legally own.
+ */
 export function tabsFor(
   views: readonly { id: string; title: string }[],
   view: unknown,
   area?: string | undefined,
+  areas: readonly { id: string; title: string }[] = [],
 ): readonly TabDescriptor[] {
-  if (views.length === 0) return [];
-
   const active = views.find((entry) => entry.id === view);
 
+  const faces: TabDescriptor[] =
+    areas.length > 0
+      ? areas.map((entry, index) => ({
+          key: `area:${entry.id}`,
+          title: entry.title,
+          search: { area: entry.id },
+          // The first area is what ?area= resolves to when it is absent, so it is current on the
+          // bare url as well as on its own.
+          current:
+            active === undefined && (area === entry.id || (area === undefined && index === 0)),
+          kind: 'area' as const,
+        }))
+      : views.length > 0
+        ? [
+            {
+              key: SETTINGS_TAB,
+              title: 'Settings',
+              search: {},
+              current: active === undefined,
+              kind: 'area' as const,
+            },
+          ]
+        : [];
+
+  if (faces.length === 0) return [];
+
   return [
-    // Carries the open area, or the tab marked current navigates somewhere else when clicked —
-    // to the module's hub, unmounting the settings form and the edits in it.
-    {
-      key: SETTINGS_TAB,
-      title: 'Settings',
-      search: area === undefined ? {} : { area },
-      current: active === undefined,
-    },
+    ...faces,
     ...views.map((entry) => ({
       key: `view:${entry.id}`,
       title: entry.title,
       search: { view: entry.id },
       current: entry === active,
+      kind: 'view' as const,
     })),
   ];
 }
 
 export function ModuleChrome({
+  guildId,
   summary,
   area,
   tabs,
 }: {
-  // Accepted and unused: every module page passes it, and the header stopped needing it when the
-  // crumb became a relative link.
   guildId: string;
   summary: Parameters<typeof ModuleHeader>[0]['summary'];
   area: AreaEntry | undefined;
   tabs: readonly TabDescriptor[];
 }): ReactElement {
+  // One face and nothing else to switch to is not a navigation. The strip is drawn only where
+  // there is somewhere else to go.
+  const navigable = tabs.length > 1;
+
+  // enabled:false, so this reads the cache and never fetches: the loader has already put the config
+  // there for every settings face, and a browse face renders none of it and must not pay for it.
+  const config = useQuery({ ...moduleConfigQuery(guildId, summary.id), enabled: false }).data
+    ?.config;
+
+  const counts = new Map<string, AreaCount>();
+  for (const entry of areasFor(summary.id)) {
+    const count = areaCount(entry, config);
+    if (count) counts.set(entry.id, count);
+  }
+
+  // Two at most: the head has one line, and a module with four counted areas would otherwise spend
+  // it on a list.
+  const fact =
+    [...counts.values()]
+      .map((count) => count.long)
+      .slice(0, 2)
+      .join(' · ') || null;
+
   return (
     <>
       {/* Above the tabs, not inside the settings tab: the switch governs the whole module, and a
           data view is a face of the same module rather than a separate thing to turn on. */}
-      <ModuleHeader summary={summary} area={area} showLede={area === undefined} />
+      <ModuleHeader summary={summary} fact={fact} />
 
-      {tabs.length > 0 ? (
-        <nav className="tabs" aria-label={`${summary.name} views`}>
-          {tabs.map((tab) => (
-            <Link
-              key={tab.key}
-              className="tab"
-              to="."
-              search={tab.search}
-              aria-current={tab.current ? 'page' : undefined}
-            >
-              {tab.title}
-            </Link>
-          ))}
+      {navigable ? (
+        <nav className="tabs" aria-label={`${summary.name} sections`}>
+          {tabs.map((tab) => {
+            const count = tab.key.startsWith('area:')
+              ? counts.get(tab.key.slice('area:'.length))
+              : undefined;
+
+            return (
+              <Link
+                key={tab.key}
+                className="tab"
+                data-kind={tab.kind}
+                to="."
+                search={tab.search}
+                aria-current={tab.current ? 'page' : undefined}
+              >
+                {/* The settings face of a module with no sub-pages used to be called Settings, which
+                    names the software rather than what it sets. */}
+                {tab.key === SETTINGS_TAB ? settingsTabTitle(summary.id, summary.name) : tab.title}
+                {count ? <span className="tab-count">{count.short}</span> : null}
+              </Link>
+            );
+          })}
         </nav>
       ) : null}
+
+      {/* Under the strip that named it, not in the page lede. The lede belongs to the module and
+          has to stay put as the tabs are clicked, or the whole head jumps on every face change. */}
+      {navigable && area?.blurb ? <p className="area-note">{area.blurb}</p> : null}
     </>
-  );
-}
-
-export function AreaHub({
-  areas,
-  config,
-}: {
-  areas: readonly AreaEntry[];
-  config: Record<string, unknown>;
-}): ReactElement {
-  return (
-    <ul className="area-menu">
-      {areas.map((area) => {
-        const count = area.count?.(config);
-
-        return (
-          <li className="area-card" key={area.id}>
-            <span className="tile">
-              <Icon name={area.icon} />
-            </span>
-            <Link to="." search={{ area: area.id }} className="area-open">
-              <span className="area-title">{area.title}</span>
-              <span className="area-blurb">{area.blurb}</span>
-            </Link>
-            {count === undefined ? null : (
-              <span className={`area-count${count === null ? ' area-count-empty' : ''}`}>
-                {count ?? 'None yet'}
-              </span>
-            )}
-            <Icon name="caret-right" className="area-chevron" />
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -242,7 +276,7 @@ export function EmptyModule({
 
 /**
  * The settings body: everything a module page has in common below the tabs. The fields themselves
- * are the page's own; this owns the save bar, the announcement, and the discard confirmation.
+ * are the page's own; this owns the save state, the announcement, and the discard confirmation.
  */
 export function ModuleSettings({
   form,
@@ -253,11 +287,53 @@ export function ModuleSettings({
 }): ReactElement {
   useHashJump();
 
+  const slot = useSaveSlot();
   const { summary, guildName } = form;
+
+  // The bar's readout is 12px in the far corner of a 1240px page, and a refusal from the api is a
+  // paragraph. It is reported here instead, where the work is and at full length; the bar keeps a
+  // pointer to it. A field that is merely not filled in yet stays out of this — the field itself
+  // says so, and a danger block appearing mid-keystroke would be shouting.
+  const failure = form.error ? saveFailure(form.error, 'Could not save') : null;
+  const failureRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (failure !== null) failureRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [failure]);
+
+  // The primary control of this page is a button in a corner the keyboard cannot reach without
+  // leaving the form. ⌘K was the only shortcut the shell bound.
+  useEffect(() => {
+    function onKey(event: KeyboardEvent): void {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return;
+
+      event.preventDefault();
+      if (form.dirty && !form.saving && form.problem === null) form.save();
+    }
+
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [form.dirty, form.saving, form.problem, form.save]);
 
   return (
     <ModuleFormProvider form={form}>
-      {children}
+      <div ref={failureRef}>
+        {failure === null ? null : (
+          <div className="save-stop">
+            <Icon name="warning-circle" weight="fill" />
+            <div className="save-stop-body">
+              <span className="save-stop-head">Proton did not save {summary.name}</span>
+              <p className="save-stop-text" role="alert">
+                {failure}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <EmojiCatalogProvider emojis={form.emojis} guildName={guildName} guildIcon={form.guildIcon}>
+        {children}
+      </EmojiCatalogProvider>
 
       {/* Mounted whether or not the bar is. A live region that arrives already holding its message
           is a region the reader was not watching, so the bar's own aria-live announced nothing the
@@ -271,58 +347,74 @@ export function ModuleSettings({
         })}
       </span>
 
-      {/* Both outcomes belong in the bar that triggered them. Rendered in flow they landed after
-          seven cards and a panel, so a save that failed from a sticky button at the bottom of the
-          viewport reported itself three thousand pixels away. */}
-      {form.dirty || form.error || form.settled ? (
-        <div className="save-bar">
-          <div className="save-bar-inner">
-            <span className="save-bar-status">
-              {/* The problem first: it is the reason Save is disabled right now, and testing it
-                  last let a four-second-old "Saved." sit where the explanation belonged. */}
-              {form.problem ? (
-                <span className="save-bar-text save-bar-failed" role="alert">
-                  <Icon name="warning-circle" weight="fill" />
-                  {form.problem}
-                </span>
-              ) : form.error ? (
-                <span className="save-bar-text save-bar-failed" role="alert">
-                  <Icon name="warning-circle" weight="fill" />
-                  {saveFailure(form.error, 'Could not save')}
-                </span>
-              ) : form.dirty ? (
-                <span className="save-bar-text">You have unsaved changes.</span>
-              ) : (
-                <span className="save-bar-text save-bar-saved">
-                  <Icon name="check-circle" weight="fill" />
-                  {savedLine(moduleState(summary), summary, guildName)}
-                </span>
-              )}
-            </span>
-
-            {form.dirty ? (
-              <>
-                <button type="button" className="button button-ghost" onClick={form.reset}>
-                  Reset
-                </button>
-                <button
-                  type="button"
-                  className="button"
-                  disabled={form.saving || form.problem !== null}
-                  onClick={form.save}
-                >
-                  {form.saving ? 'Saving…' : 'Save changes'}
-                </button>
-              </>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {slot ? createPortal(<SaveState form={form} />, slot) : null}
 
       {form.blocked ? (
         <LeaveConfirm moduleName={summary.name} onStay={form.stay} onLeave={form.leave} />
       ) : null}
     </ModuleFormProvider>
+  );
+}
+
+function SaveState({ form }: { form: ModuleForm }): ReactElement {
+  const { summary, guildName } = form;
+
+  // The header's master switch saves through the layout's toggle, not through this form, so a clean
+  // form can still have a write in flight above it.
+  const shellSaving = useShellSaving();
+
+  const failure = form.error ? saveFailure(form.error, 'Could not save') : null;
+  const saved = savedLine(moduleState(summary), summary, guildName);
+  const idle =
+    !form.dirty &&
+    !form.settled &&
+    !form.saving &&
+    !shellSaving &&
+    failure === null &&
+    form.problem === null;
+
+  return (
+    <div className="save-state" data-idle={idle || undefined}>
+      {/* The problem first: it is the reason Save is disabled right now, and testing it last let a
+          four-second-old "Saved." sit where the explanation belonged. A refused write is a pointer
+          only — its full text is in the content column, where it cannot be clamped at 12px. */}
+      {form.problem ? (
+        <span className="save-status save-bar-failed" role="alert" data-wrap="true">
+          <Icon name="warning-circle" weight="fill" />
+          {form.problem}
+        </span>
+      ) : failure !== null ? (
+        <span className="save-status save-bar-failed">Not saved — see the page</span>
+      ) : /* Before the dirty branch: this form stays dirty until the write lands, so a save in
+             flight was reporting "Unsaved changes" beside a button reading "Saving…". */
+      form.saving || shellSaving ? (
+        <span className="save-status save-status-pending">Saving…</span>
+      ) : form.dirty ? (
+        <span className="save-status save-status-dirty">Unsaved changes</span>
+      ) : form.settled ? (
+        <span className="save-status save-status-saved" title={saved}>
+          <Icon name="check-circle" weight="fill" />
+          {saved}
+        </span>
+      ) : null}
+
+      {form.dirty ? (
+        <button type="button" className="button button-ghost" onClick={form.reset}>
+          Reset
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={form.dirty ? 'button' : 'button button-quiet'}
+        // shellSaving too: the switch above writes through the layout, not through this form, so an
+        // enabled Save used to sit beside the bar's own "Saving…".
+        disabled={!form.dirty || form.saving || shellSaving || form.problem !== null}
+        aria-keyshortcuts="Control+S Meta+S"
+        onClick={form.save}
+      >
+        {form.saving ? 'Saving…' : 'Save changes'}
+      </button>
+    </div>
   );
 }
 

@@ -20,6 +20,7 @@ import {
 import { bindStore, clockOf, PROTON_ACTOR, type TicketsDeps } from './deps.ts';
 import { createTicketInteractionListener } from './interactions.ts';
 import { archiveTicket, closeTicket, deleteTicket } from './lifecycle.ts';
+import { createTicketPanelListener } from './post.ts';
 import { createTicketChannelListener, createTicketPatrolListener, patrol } from './reconcile.ts';
 import {
   AUTO_CLOSE_JOB,
@@ -216,6 +217,12 @@ export {
   withParticipant,
 } from './overwrites.ts';
 export { buildPanelMessage, type PanelMessage } from './panel.ts';
+export {
+  createTicketPanelListener,
+  PANEL_EVENT_TYPES,
+  type SendPanelResult,
+  sendPanel,
+} from './post.ts';
 export { DrizzleTicketStore } from './postgres-store.ts';
 export {
   armPatrol,
@@ -495,6 +502,7 @@ export function createTicketsModule(
       createTicketActivityListener(deps),
       createTicketChannelListener(deps),
       createTicketPatrolListener(deps),
+      createTicketPanelListener(),
     ],
 
     schedules: [...TICKET_JOBS],
@@ -505,6 +513,15 @@ export function createTicketsModule(
       [CLOSE_REQUEST_JOB]: closeRequestHandler(deps),
       [SWEEP_JOB]: sweepHandler(deps),
     },
+
+    // One per configured panel. `/ticket panel` is the other way to post one, and both end in
+    // sendPanel, so a panel posted from the dashboard is the message the command would have made.
+    postables: (config) =>
+      config.panels.map((panel) => ({
+        id: panel.id,
+        name: panel.name,
+        channelId: panel.channelId,
+      })),
 
     dashboard: {
       icon: 'ticket',

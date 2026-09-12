@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { ChannelField, Text } from '../../../components/module/inputs.tsx';
 import { ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
@@ -20,21 +20,24 @@ function PingPage(): ReactElement {
       <ModuleChrome guildId={guildId} summary={form.summary} area={undefined} tabs={[]} />
 
       <ModuleSettings form={form}>
-        <SectionCard id="ping:general" title="General">
-          <Text
-            path="response"
-            label="Reply text"
-            minLength={1}
-            maxLength={200}
-            defaultValue="Pong!"
-          />
-          <ChannelField
-            path="restrictToChannel"
-            label="Restrict to channel"
-            channelTypes={[0]}
-            optional
-          />
-        </SectionCard>
+        <SettingsGrid>
+          <SectionCard id="ping:command" title="The ping command">
+            <Text
+              path="response"
+              label="Reply text"
+              minLength={1}
+              maxLength={200}
+              defaultValue="Pong!"
+            />
+            <ChannelField
+              path="restrictToChannel"
+              label="Restrict to channel"
+              help="Empty answers everywhere; in any other channel /ping is ignored without a reply"
+              channelTypes={[0]}
+              optional
+            />
+          </SectionCard>
+        </SettingsGrid>
       </ModuleSettings>
     </>
   );

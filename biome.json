@@ -14,7 +14,8 @@
       "!**/drizzle",
       "!**/routeTree.gen.ts",
       "!**/icon-set.gen.ts",
-      "!**/command-set.gen.ts"
+      "!**/command-set.gen.ts",
+      "!**/emoji-set.gen.ts"
     ]
   },
   "formatter": {

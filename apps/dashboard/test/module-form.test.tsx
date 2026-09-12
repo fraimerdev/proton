@@ -33,6 +33,7 @@ function view(config: Record<string, unknown>): ModuleConfigView {
     schemaVersion: 3,
     migrated: false,
     tier: 'free',
+    postables: [],
   };
 }
 
@@ -58,6 +59,7 @@ const CACHE = new Map<string, unknown>([
   [JSON.stringify(queryKeys.moduleConfig(GUILD, MODULE)), view(structuredClone(STORED))],
   [JSON.stringify(queryKeys.channels(GUILD)), []],
   [JSON.stringify(queryKeys.roles(GUILD)), []],
+  [JSON.stringify(queryKeys.emojis(GUILD)), []],
   [JSON.stringify(queryKeys.session()), { guilds: [{ id: GUILD, name: 'Test Guild' }] }],
 ]);
 
@@ -86,18 +88,42 @@ afterAll(() => {
   mock.module('@tanstack/react-router', () => reactRouter);
 });
 
+/**
+ * A real QueryClient with two of its methods recorded, and not a two-method object standing in for
+ * one. The mock below reaches `useBaseQuery` inside react-query itself — not only the callers in
+ * this file — and re-registering the namespace afterwards does not put that binding back. So every
+ * later suite that renders a real `useQuery` is handed whatever this returns, and a bare stub made
+ * it throw on `client.defaultQueryOptions`.
+ */
+const spyClient = new reactQuery.QueryClient();
+
+spyClient.setQueryData = ((key: unknown, data: unknown) => {
+  cacheWrites.push({ key, data });
+}) as typeof spyClient.setQueryData;
+
+spyClient.invalidateQueries = ((filters: unknown) => {
+  invalidations.push(filters);
+  return Promise.resolve();
+}) as typeof spyClient.invalidateQueries;
+
 // The one mock with no real module behind it: importing it validates the dashboard's env and throws.
 mock.module('../src/server/modules.ts', () => ({
   listGuilds: () => Promise.resolve(CACHE.get(JSON.stringify(queryKeys.session()))),
+  getViewer: () => Promise.resolve({ signedIn: true }),
   listModules: () => Promise.resolve(CACHE.get(JSON.stringify(queryKeys.modules(GUILD)))),
   getModuleConfig: () => Promise.resolve(undefined),
   getGuildOverview: () => Promise.resolve(undefined),
   getGuildChannels: () => Promise.resolve([]),
   getGuildRoles: () => Promise.resolve([]),
+  getGuildEmojis: () => Promise.resolve([]),
+  getGuildMembers: () => Promise.resolve([]),
   searchCases: () => Promise.resolve(undefined),
   searchLeaderboard: () => Promise.resolve(undefined),
   searchTags: () => Promise.resolve(undefined),
   searchTickets: () => Promise.resolve(undefined),
+  // Unused here, but this mock is process-wide: post-panel.tsx imports it, so its absence breaks
+  // every later suite that reaches the post panel.
+  postModulePanel: () => Promise.resolve(undefined),
 
   updateModuleConfig: ({ data }: { data: Submission }) => {
     submissions.push(data);
@@ -127,13 +153,7 @@ mock.module('@tanstack/react-query', () => ({
     reset: () => undefined,
   }),
 
-  useQueryClient: () => ({
-    setQueryData: (key: unknown, data: unknown) => cacheWrites.push({ key, data }),
-    invalidateQueries: (filters: unknown) => {
-      invalidations.push(filters);
-      return Promise.resolve();
-    },
-  }),
+  useQueryClient: () => spyClient,
 }));
 
 // useBlocker wants a router above it; nothing here navigates, so it always answers "not blocked".

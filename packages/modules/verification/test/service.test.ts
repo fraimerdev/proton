@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { verificationPanelSchema } from '../src/config.ts';
 import {
   ABOVE_BOT_ROLE,
   CHANNEL,
@@ -40,7 +41,12 @@ describe('the panel, reconciled every time the guild saves verification', () => 
   test('renders the copy the guild has just saved, not what it had when it last posted', async () => {
     const h = harness();
 
-    await h.saved({ config: { ...PANELLED, panelTitle: 'Read the rules first' } });
+    await h.saved({
+      config: {
+        ...PANELLED,
+        panel: verificationPanelSchema.parse({ content: 'Read the rules first' }),
+      },
+    });
 
     expect(h.sentIn(CHANNEL)[0]?.content).toContain('Read the rules first');
   });
@@ -234,5 +240,56 @@ describe('verification.web_passed', () => {
 
     const error = h.logs.find((entry) => entry.level === 'error');
     expect(error?.message).toContain('RedisGuildStateStore');
+  });
+});
+
+describe('the dashboard asking verification to post its panel', () => {
+  test('posts a panel nobody has posted yet, without a save', async () => {
+    const h = harness();
+
+    const outcome = await h.asked({ config: PANELLED });
+
+    if (outcome.action !== 'posted') throw new Error(`expected a post, got ${outcome.action}`);
+    expect(h.sentIn(CHANNEL)).toHaveLength(1);
+  });
+
+  // The button exists for this case. A save alone only fixes it by accident: reconcile edits the
+  // message it remembers, and there is nothing to notice that somebody deleted it.
+  test('puts back a panel somebody deleted, and remembers the new message', async () => {
+    const h = harness();
+
+    const first = await h.saved({ config: PANELLED });
+    if (first.action !== 'posted') throw new Error('expected a post');
+
+    h.rest.fail((call) => call.method === 'PATCH', {
+      status: 404,
+      body: { message: 'Unknown Message' },
+    });
+
+    const again = await h.asked({ config: PANELLED });
+
+    if (again.action !== 'posted') throw new Error(`expected a repost, got ${again.action}`);
+    expect(again.messageId).not.toBe(first.messageId);
+    expect(h.panel.records.get(GUILD)?.messageId).toBe(again.messageId);
+  });
+
+  test('edits the panel already there rather than posting a twin', async () => {
+    const h = harness();
+
+    const first = await h.saved({ config: PANELLED });
+    const again = await h.asked({ config: PANELLED });
+
+    if (first.action !== 'posted') throw new Error('expected a post');
+    expect(again).toEqual({ action: 'edited', messageId: first.messageId });
+    expect(h.sentIn(CHANNEL)).toHaveLength(1);
+  });
+
+  test('another module’s request is left alone — every module hears the same event', async () => {
+    const h = harness();
+
+    const outcome = await h.asked({ config: PANELLED, moduleId: 'tickets' });
+
+    expect(outcome.action).toBe('ignored');
+    expect(h.sentIn(CHANNEL)).toHaveLength(0);
   });
 });

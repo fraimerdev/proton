@@ -22,9 +22,9 @@ describe('the manifest', () => {
       'enabled',
       'mode',
       'panelChannelId',
-      'panelTitle',
-      'panelBody',
       'panelButtonLabel',
+      'panelButtonEmoji',
+      'panelButtonStyle',
       'unverifiedRoleId',
       'verifiedRoleId',
       'applyUnverifiedOnJoin',
@@ -37,7 +37,11 @@ describe('the manifest', () => {
       'quarantineRoleId',
     ]);
 
-    expect(paths).toHaveLength(Object.keys(verificationConfigSchema.shape).length);
+    // Every field but `panel`, which is an authored message the generator cannot render and the
+    // dashboard draws with the message builder — the manifest declares it as formSchema for exactly
+    // that reason, so this list is one shorter than the config.
+    expect(paths).toHaveLength(Object.keys(verificationConfigSchema.shape).length - 1);
+    expect(paths).not.toContain('panel');
   });
 
   test('renders the three role fields as role pickers, not text boxes', () => {
@@ -76,7 +80,7 @@ describe('the manifest', () => {
       ['member.joined'],
       ['interaction.component'],
       ['interaction.modal'],
-      ['proton.config_changed', 'verification.web_passed'],
+      ['proton.config_changed', 'proton.panel_requested', 'verification.web_passed'],
     ]);
   });
 
@@ -136,15 +140,16 @@ describe('the manifest', () => {
       (verificationModule.commands ?? []).map((command) => [command.name, command]),
     );
 
-    expect([...commands.keys()]).toEqual(['verify', 'quarantine', 'unquarantine']);
+    expect([...commands.keys()]).toEqual(['verify', 'quarantine']);
 
     expect(commands.get('verify')?.data.default_member_permissions ?? null).toBeNull();
     expect(commands.get('quarantine')?.data.default_member_permissions).toBe(
       String(Permissions.ManageRoles),
     );
-    expect(commands.get('unquarantine')?.data.default_member_permissions).toBe(
-      String(Permissions.ManageRoles),
-    );
+    expect((commands.get('quarantine')?.data.options ?? []).map((o) => o.name)).toEqual([
+      'add',
+      'remove',
+    ]);
   });
 
   test('every dashboard section names real config keys, and none is left off', () => {

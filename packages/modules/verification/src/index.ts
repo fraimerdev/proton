@@ -2,9 +2,11 @@ import { type ModuleManifest, Permissions } from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
 import { verificationCommands } from './commands.ts';
 import {
+  liftStoredConfig,
   VERIFICATION_SCHEMA_VERSION,
   verificationConfigSchema,
   verificationDefaultConfig,
+  verificationFormSchema,
 } from './config.ts';
 import type { VerificationDeps } from './deps.ts';
 import {
@@ -20,29 +22,29 @@ export {
   challengeTtlMs,
   newChallenge,
 } from './challenge.ts';
+export { quarantineCommand, verificationCommands, verifyCommand } from './commands.ts';
 export {
-  quarantineCommand,
-  unquarantineCommand,
-  verificationCommands,
-  verifyCommand,
-} from './commands.ts';
-export {
+  BUTTON_EMOJI_MAX,
   BUTTON_LABEL_MAX,
   CAPTCHA_ATTEMPTS_MAX,
   CAPTCHA_DELIVERIES,
   CAPTCHA_LENGTH_MAX,
   CAPTCHA_LENGTH_MIN,
   type CaptchaDelivery,
-  PANEL_BODY_MAX,
-  PANEL_TITLE_MAX,
+  DEFAULT_PANEL,
+  PANEL_BUTTON_STYLES,
+  type PanelButtonStyle,
   VERIFICATION_FAILURE_ACTIONS,
   VERIFICATION_MODES,
   VERIFICATION_SCHEMA_VERSION,
   type VerificationConfig,
   type VerificationFailureAction,
   type VerificationMode,
+  type VerificationPanel,
   verificationConfigSchema,
   verificationDefaultConfig,
+  verificationFormSchema,
+  verificationPanelSchema,
 } from './config.ts';
 export {
   type BindResult,
@@ -91,6 +93,7 @@ export {
 export {
   ANSWER_ACTION,
   type BuiltMessage,
+  type BuiltTextMessage,
   buildCaptchaMessage,
   buildCaptchaModal,
   buildPanelMessage,
@@ -156,6 +159,8 @@ export function createVerificationModule(
     name: 'Verification',
     category: 'security',
     configSchema: verificationConfigSchema,
+    formSchema: verificationFormSchema,
+    liftStoredConfig,
     defaultConfig: verificationDefaultConfig,
     schemaVersion: VERIFICATION_SCHEMA_VERSION,
 
@@ -187,6 +192,12 @@ export function createVerificationModule(
       createServiceListener(deps),
     ],
 
+    // One panel, and only once it has somewhere to go. Verification also reposts it on every save
+    // — this is the button for the other case, where somebody deleted the message in Discord.
+    postables: (config) => [
+      { id: 'panel', name: 'Verification panel', channelId: config.panelChannelId },
+    ],
+
     dashboard: {
       icon: 'shield-check',
       sections: [
@@ -204,7 +215,13 @@ export function createVerificationModule(
         {
           id: 'panel',
           title: 'Panel',
-          fields: ['panelChannelId', 'panelTitle', 'panelBody', 'panelButtonLabel'],
+          fields: [
+            'panelChannelId',
+            'panel',
+            'panelButtonLabel',
+            'panelButtonEmoji',
+            'panelButtonStyle',
+          ],
         },
         {
           id: 'captcha',

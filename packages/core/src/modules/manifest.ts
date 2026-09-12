@@ -86,6 +86,17 @@ export interface SectionDescriptor {
   fields: string[];
 }
 
+/**
+ * One message a module keeps in a channel: a ticket panel, a role menu, the verification panel.
+ * `channelId` is optional because a panel can be configured before its channel is chosen, and a
+ * panel with nowhere to go is worth showing as unpostable rather than hiding.
+ */
+export interface Postable {
+  id: string;
+  name: string;
+  channelId?: string | undefined;
+}
+
 export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObject<z.ZodRawShape>> {
   id: string;
   name: string;
@@ -129,6 +140,18 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   // has to stay a ZodObject for the form generator, so the lift cannot be a z.preprocess wrapped
   // around it — and without one, Zod strips the old key and the next write persists the loss.
   liftStoredConfig?(raw: unknown): unknown;
+
+  /**
+   * The messages this module puts in a channel and can put there again — a ticket panel, a role
+   * menu, the verification panel. The dashboard lists them beside the channel they live in and
+   * offers to post or refresh one; the api reads this to check the id an admin asked for is real
+   * before it publishes `proton.panel_requested`, so a stale button says so rather than going quiet.
+   *
+   * Pure and derived from config, like compileRules: it is asked on the api, which has no Discord
+   * client and must not acquire one.
+   */
+  postables?(config: z.infer<C>): Postable[];
+
   jobs?: ScheduledJob[];
   dashboard?: { icon: string; sections: SectionDescriptor[] };
 }

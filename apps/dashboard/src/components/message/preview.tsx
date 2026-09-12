@@ -9,6 +9,7 @@ import type {
   V2Component,
 } from '@proton/core';
 import type { ReactElement, ReactNode } from 'react';
+import { emojiImageUrl } from '../emoji/glyph.tsx';
 import type { DiscordChannel, DiscordRole } from '../form/fields.tsx';
 import { Markdown, type MentionUser, Plain } from './markdown.tsx';
 
@@ -74,11 +75,24 @@ function PreviewImage({ url, className }: { url: string; className: string }): R
   );
 }
 
+// Drawn rather than named. A custom emoji rendered as ':name:' was the preview showing something
+// the posted message will not, which is the one thing a preview must not do — and it only read that
+// way because nothing here knew the CDN URL.
 function EmojiGlyph({ emoji }: { emoji: ComponentEmoji | undefined }): ReactElement | null {
   if (!emoji) return null;
   if (!emoji.id) return <span className="dc-emoji">{emoji.name}</span>;
 
-  return <span className="dc-emoji-name">:{emoji.name ?? 'emoji'}:</span>;
+  return (
+    <img
+      className="dc-emoji-image"
+      src={emojiImageUrl(emoji.id, emoji.animated === true)}
+      alt={`:${emoji.name ?? 'emoji'}:`}
+      width={20}
+      height={20}
+      loading="lazy"
+      decoding="async"
+    />
+  );
 }
 
 // Discord packs consecutive inline fields three to a row; a non-inline field takes the full width

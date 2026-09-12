@@ -302,6 +302,7 @@ describe('the tables every action kind is read out of', () => {
       'interaction_reply',
       'interaction_followup',
       'warn',
+      'unwarn',
       'giveaway_draw',
       'create_dm',
       // Modify Current Member lists a permission against `nick` and none against avatar, banner or

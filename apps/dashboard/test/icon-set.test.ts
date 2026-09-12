@@ -29,9 +29,13 @@ describe('the generated icon set', () => {
     }
   });
 
+  // A ceiling, not a target: the Phosphor webfont this replaced was a ~200KB download of roughly
+  // 1200 glyphs, and the point of generating the set is that the app ships only what it draws.
+  // Raise it when a surface genuinely needs a new glyph, at roughly 700 bytes each — the guard is
+  // there to make that a decision rather than a drift.
   test('is worth having: the font it replaced carried far more than this', () => {
     expect(Object.keys(ICONS).length).toBeLessThan(200);
-    expect(Buffer.byteLength(JSON.stringify(ICONS), 'utf8')).toBeLessThan(60_000);
+    expect(Buffer.byteLength(JSON.stringify(ICONS), 'utf8')).toBeLessThan(72_000);
   });
 });
 

@@ -8,6 +8,7 @@ import {
   type Logger,
   type ModuleRegistry,
   newId,
+  type Postable,
 } from '@proton/core';
 import type { DbHandle, GuildRuleStore } from '@proton/db';
 import { auditTrail, guildModules, guilds } from '@proton/db/schema';
@@ -25,6 +26,18 @@ export interface ModuleConfigView {
   // surface already makes and the worker already caches, so putting the tier anywhere else would
   // mean a second round trip per command, listener and scheduled job just to count against a limit.
   tier: EntitlementTier;
+
+  // What this module puts in a channel and can put there again, for the dashboard's post button.
+  postables: Postable[];
+}
+
+export interface RequestPanelInput {
+  guildId: string;
+  moduleId: string;
+  panelId: string;
+  actorId: string;
+  source: 'dashboard' | 'command' | 'system';
+  ipHash?: string | undefined;
 }
 
 export interface UpdateModuleConfigInput {
@@ -74,6 +87,25 @@ export function overLimit(
 // migrated rather than silently emptied.
 function lift(manifest: { liftStoredConfig?(raw: unknown): unknown }, raw: unknown): unknown {
   return manifest.liftStoredConfig ? manifest.liftStoredConfig(raw) : raw;
+}
+
+/**
+ * Derived from the config being returned, never stored: a panel added or renamed on the page is a
+ * different postable the moment the save lands, and a cached list would draw a button for one that
+ * no longer exists. Guarded, because `postables` is a module's own code and a throw here would take
+ * the whole settings page down over a button.
+ */
+function postablesOf(
+  manifest: { id: string; postables?(config: never): Postable[] },
+  config: unknown,
+): Postable[] {
+  if (!manifest.postables) return [];
+
+  try {
+    return manifest.postables(config as never);
+  } catch {
+    return [];
+  }
 }
 
 export class ModuleConfigError extends Error {
@@ -155,6 +187,7 @@ export class ModuleConfigService {
         schemaVersion: manifest.schemaVersion,
         migrated: false,
         tier,
+        postables: postablesOf(manifest, manifest.defaultConfig),
       };
     }
 
@@ -177,7 +210,96 @@ export class ModuleConfigService {
       schemaVersion: manifest.schemaVersion,
       migrated,
       tier,
+      postables: postablesOf(manifest, parsed.data),
     };
+  }
+
+  /**
+   * "Post it now", from the dashboard. This process has no Discord client and must not acquire one
+   * — the worker is the only one allowed to talk to Discord — so everything that can be checked
+   * here is checked here, and then the module's own listener does the posting.
+   *
+   * What is checked: the module exists, is switched on, declares postables, and still has one under
+   * the id the button was drawn for. The answer is "asked", never "posted": the send happens in
+   * another process and this one would be guessing.
+   */
+  async requestPanel(input: RequestPanelInput): Promise<{ auditId: string; name: string }> {
+    const manifest = this.#manifest(input.moduleId);
+
+    if (!manifest.postables) {
+      throw new ModuleConfigError(
+        'not_postable',
+        `${manifest.name} has nothing Proton posts into a channel, so there is nothing to send.`,
+      );
+    }
+
+    const current = await this.get(input.guildId, input.moduleId);
+    if (!current.enabled) {
+      throw new ModuleConfigError(
+        'module_disabled',
+        `${manifest.name} is switched off in this server, so posting this would put a message ` +
+          'nobody can use in a channel. Switch it on first.',
+      );
+    }
+
+    const found = manifest
+      .postables(current.config as never)
+      .find((candidate) => candidate.id === input.panelId);
+
+    if (!found) {
+      throw new ModuleConfigError(
+        'unknown_panel',
+        `${manifest.name} has nothing called '${input.panelId}' to post. It may have been renamed ` +
+          'or removed since this page was opened — reload and try again.',
+      );
+    }
+
+    if (!found.channelId) {
+      throw new ModuleConfigError(
+        'no_channel',
+        `'${found.name}' has no channel to go in yet. Pick one and save, then post it.`,
+      );
+    }
+
+    const bus = this.#options.bus;
+    if (!bus) {
+      throw new ModuleConfigError(
+        'no_bus',
+        'Proton cannot reach its event bus, and the worker is the only process allowed to talk ' +
+          'to Discord, so nothing was sent. Set REDIS_URL for the api and restart it.',
+      );
+    }
+
+    const auditId = newId();
+
+    await this.#db.db.insert(auditTrail).values({
+      id: auditId,
+      guildId: input.guildId,
+      actorId: input.actorId,
+      source: input.source,
+      action: `module.${input.moduleId}.panel.post`,
+      before: null,
+      after: { panelId: found.id, name: found.name, channelId: found.channelId },
+      ipHash: input.ipHash ?? null,
+    });
+
+    // After the audit row, never before: an event for a request with no durable record is one
+    // nobody can trace back to whoever pressed the button.
+    await bus.publish({
+      id: `proton.panel_requested:${input.guildId}:${auditId}`,
+      type: 'proton.panel_requested',
+      guildId: input.guildId,
+      occurredAt: this.#options.now?.() ?? Date.now(),
+      payload: {
+        auditId,
+        guildId: input.guildId,
+        moduleId: input.moduleId,
+        panelId: found.id,
+        actorId: input.actorId,
+      },
+    });
+
+    return { auditId, name: found.name };
   }
 
   async update(input: UpdateModuleConfigInput): Promise<{
@@ -225,6 +347,7 @@ export class ModuleConfigService {
       schemaVersion: manifest.schemaVersion,
       migrated: false,
       tier: before.tier,
+      postables: postablesOf(manifest, nextConfig),
     };
 
     // Hoisted out of the transaction so the published event can carry the same id as the durable

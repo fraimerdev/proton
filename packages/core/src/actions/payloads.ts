@@ -306,6 +306,17 @@ export const warnPayloadSchema = z.object({
   note: z.string().max(1024).optional(),
 });
 
+// Loose on length on purpose: every case recorded before ids were shortened carries a 26-character
+// ULID, and a moderator pasting one of those must still find its case.
+export const caseIdSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9]{1,32}$/, 'a case id is letters and digits, like K7f3M2q');
+
+export const unwarnPayloadSchema = z.object({
+  userId: snowflakeSchema,
+  caseId: caseIdSchema,
+});
+
 export const giveawayDrawPayloadSchema = z.object({
   giveawayId: z.string().min(1).max(64),
   drawNumber: z.number().int().min(1),
@@ -644,6 +655,7 @@ export type AddReactionPayload = z.infer<typeof addReactionPayloadSchema>;
 export type InteractionReplyPayload = z.infer<typeof interactionReplyPayloadSchema>;
 export type InteractionFollowupPayload = z.infer<typeof interactionFollowupPayloadSchema>;
 export type WarnPayload = z.infer<typeof warnPayloadSchema>;
+export type UnwarnPayload = z.infer<typeof unwarnPayloadSchema>;
 export type BanPayload = z.infer<typeof banPayloadSchema>;
 export type GiveawayDrawPayload = z.infer<typeof giveawayDrawPayloadSchema>;
 export type CreateDmPayload = z.infer<typeof createDmPayloadSchema>;

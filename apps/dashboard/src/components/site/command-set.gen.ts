@@ -391,10 +391,19 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: null,
   },
   {
-    usage: '/lockdown',
+    usage: '/lockdown add',
     description: 'Stop everyone posting in this channel.',
     args: [
       { name: 'duration', required: false },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Channels',
+  },
+  {
+    usage: '/lockdown remove',
+    description: 'Let everyone post in this channel again.',
+    args: [
       { name: 'reason', required: false },
     ],
     module: 'moderation',
@@ -467,8 +476,18 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: null,
   },
   {
-    usage: '/quarantine',
+    usage: '/quarantine add',
     description: 'Swap a member’s roles for the quarantine role, recording what they had.',
+    args: [
+      { name: 'user', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'verification',
+    permission: 'Manage Roles',
+  },
+  {
+    usage: '/quarantine remove',
+    description: 'Lift a quarantine and put the member’s roles back exactly.',
     args: [
       { name: 'user', required: true },
       { name: 'reason', required: false },
@@ -510,6 +529,76 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     args: [],
     module: 'reminders',
     permission: null,
+  },
+  {
+    usage: '/role add',
+    description: 'Add a role to a user.',
+    args: [
+      { name: 'user', required: true },
+      { name: 'role', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
+  },
+  {
+    usage: '/role all',
+    description: 'Add a role to all users.',
+    args: [
+      { name: 'role', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
+  },
+  {
+    usage: '/role bots',
+    description: 'Add a role to all bots.',
+    args: [
+      { name: 'role', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
+  },
+  {
+    usage: '/role cancel',
+    description: 'Stop a mass role run that is still going.',
+    args: [],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
+  },
+  {
+    usage: '/role humans',
+    description: 'Add a role to all users excluding bots.',
+    args: [
+      { name: 'role', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
+  },
+  {
+    usage: '/role in',
+    description: 'Add a role to users with a specific role.',
+    args: [
+      { name: 'role', required: true },
+      { name: 'target_role', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
+  },
+  {
+    usage: '/role remove',
+    description: 'Remove a role from a user.',
+    args: [
+      { name: 'user', required: true },
+      { name: 'role', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Manage Roles, Timeout Members',
   },
   {
     usage: '/rolemenu',
@@ -834,7 +923,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: null,
   },
   {
-    usage: '/timeout',
+    usage: '/timeout add',
     description: 'Time a member out for a while.',
     args: [
       { name: 'user', required: true },
@@ -845,26 +934,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: 'Timeout Members',
   },
   {
-    usage: '/unlock',
-    description: 'Let everyone post in this channel again.',
-    args: [
-      { name: 'reason', required: false },
-    ],
-    module: 'moderation',
-    permission: 'Manage Channels',
-  },
-  {
-    usage: '/unquarantine',
-    description: 'Lift a quarantine and put the member’s roles back exactly.',
-    args: [
-      { name: 'user', required: true },
-      { name: 'reason', required: false },
-    ],
-    module: 'verification',
-    permission: 'Manage Roles',
-  },
-  {
-    usage: '/untimeout',
+    usage: '/timeout remove',
     description: 'End a timeout early.',
     args: [
       { name: 'user', required: true },
@@ -994,10 +1064,20 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: null,
   },
   {
-    usage: '/warn',
+    usage: '/warn add',
     description: 'Record a warning against a member.',
     args: [
       { name: 'user', required: true },
+      { name: 'reason', required: false },
+    ],
+    module: 'moderation',
+    permission: 'Timeout Members',
+  },
+  {
+    usage: '/warn remove',
+    description: 'Withdraw a warning, so it stops counting against the member.',
+    args: [
+      { name: 'case', required: true },
       { name: 'reason', required: false },
     ],
     module: 'moderation',

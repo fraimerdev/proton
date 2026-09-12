@@ -1,5 +1,6 @@
 export const queryKeys = {
   session: () => ['session'] as const,
+  viewer: () => ['viewer'] as const,
 
   guild: (guildId: string) => ['guild', guildId] as const,
   guildOverview: (guildId: string) => ['guild', guildId, 'overview'] as const,
@@ -9,6 +10,7 @@ export const queryKeys = {
 
   channels: (guildId: string) => ['guild', guildId, 'channels'] as const,
   roles: (guildId: string) => ['guild', guildId, 'roles'] as const,
+  emojis: (guildId: string) => ['guild', guildId, 'emojis'] as const,
   view: (guildId: string, viewId: string, search: unknown) =>
     ['guild', guildId, 'view', viewId, search] as const,
 };

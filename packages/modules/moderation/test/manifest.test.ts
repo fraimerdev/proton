@@ -8,7 +8,7 @@ describe('moderation manifest', () => {
     const registry = new ModuleRegistry();
 
     expect(() => registry.register(moderationModule)).not.toThrow();
-    expect(registry.get('moderation')?.commands).toHaveLength(8);
+    expect(registry.get('moderation')?.commands).toHaveLength(7);
   });
 
   test('command names match their registration payloads', () => {
@@ -18,12 +18,21 @@ describe('moderation manifest', () => {
     }
   });
 
-  test('ban carries its lift as a subcommand rather than a second command', () => {
-    const ban = moderationModule.commands?.find((c) => c.name === 'ban');
-    const subcommands = (ban?.data.options ?? []).map((o) => o.name);
+  test.each(['ban', 'timeout', 'warn', 'lockdown'])(
+    '%s carries its lift as a subcommand rather than a second command',
+    (name) => {
+      const command = moderationModule.commands?.find((c) => c.name === name);
 
-    expect(subcommands).toEqual(['add', 'remove']);
-    expect(moderationModule.commands?.some((c) => c.name === 'unban')).toBe(false);
+      expect((command?.data.options ?? []).map((o) => o.name)).toEqual(['add', 'remove']);
+    },
+  );
+
+  test('the commands an add/remove pair replaced are gone', () => {
+    const names = new Set((moderationModule.commands ?? []).map((c) => c.name));
+
+    for (const retired of ['unban', 'untimeout', 'unwarn', 'unlock']) {
+      expect(`${retired} registered: ${names.has(retired)}`).toBe(`${retired} registered: false`);
+    }
   });
 
   test('command names are unique', () => {

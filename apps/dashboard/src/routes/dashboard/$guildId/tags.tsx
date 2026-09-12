@@ -2,7 +2,7 @@ import { type TagSearchResult, tagQuerySchema } from '@proton/module-tags/query'
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, lazyRouteComponent, useNavigate } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { SectionCard } from '../../../components/form/section.tsx';
+import { SectionCard, SettingsGrid } from '../../../components/form/section.tsx';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { Toggle } from '../../../components/module/inputs.tsx';
 import {
@@ -23,7 +23,7 @@ import { LIVE, queryKeys, STALE } from '../../../lib/query-keys.ts';
 const VIEWS: readonly ModuleView[] = [
   {
     id: 'tags',
-    title: 'Tags',
+    title: 'Tag library',
     searchSchema: tagQuerySchema,
 
     query: ({ guildId, search }) => ({
@@ -93,15 +93,17 @@ function TagsSettings(): ReactElement {
 
   return (
     <ModuleSettings form={form}>
-      <SectionCard id="tags:posting" title="How tags are posted">
-        <Toggle path="ephemeral" label="Show tags only to whoever asked" defaultValue={false} />
-        <Toggle
-          path="allowMentions"
-          label="Let tag text ping people"
-          help="A stored @everyone becomes pingable by any member"
-          defaultValue={false}
-        />
-      </SectionCard>
+      <SettingsGrid>
+        <SectionCard id="tags:posting" title="How tags are posted">
+          <Toggle path="ephemeral" label="Show tags only to whoever asked" defaultValue={false} />
+          <Toggle
+            path="allowMentions"
+            label="Let tag text ping people"
+            help="A stored @everyone becomes pingable by any member"
+            defaultValue={false}
+          />
+        </SectionCard>
+      </SettingsGrid>
     </ModuleSettings>
   );
 }

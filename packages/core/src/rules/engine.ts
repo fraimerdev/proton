@@ -105,6 +105,10 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'warn':
       return facts.actorId ? { userId: facts.actorId } : {};
 
+    // A withdrawal names the case it is striking out, and no fact carries a case id.
+    case 'unwarn':
+      return {};
+
     case 'send':
     case 'purge':
     case 'slowmode':

@@ -35,6 +35,19 @@ export const moduleSummarySchema = z.object({
 
 export const moduleIndexSchema = z.object({ modules: z.array(moduleSummarySchema) });
 
+// What the api can honestly answer: the request was recorded and published. Whether Discord took
+// the message is the worker's business and arrives later, in the panel itself.
+export const panelRequestResultSchema = z.object({
+  auditId: z.string(),
+  name: z.string(),
+});
+
+export const postableSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  channelId: z.string().optional(),
+});
+
 export const moduleConfigViewSchema = z.object({
   moduleId: z.string(),
   enabled: z.boolean(),
@@ -42,6 +55,11 @@ export const moduleConfigViewSchema = z.object({
   schemaVersion: z.number().int(),
   migrated: z.boolean(),
   tier: z.enum(ENTITLEMENT_TIERS),
+
+  // What this module puts in a channel and can put there again, derived from the config being
+  // returned. On the config view rather than the summary because it is a function of config: the
+  // module index is fetched once for the sidebar and would go stale the moment a panel was added.
+  postables: z.array(postableSchema).default([]),
 });
 
 export const moduleUpdateResultSchema = z.object({
@@ -81,6 +99,7 @@ export type ModuleStatusView = z.infer<typeof moduleStatusSchema>;
 export type ModuleSummary = z.infer<typeof moduleSummarySchema>;
 export type ModuleIndex = z.infer<typeof moduleIndexSchema>;
 export type ModuleConfigView = z.infer<typeof moduleConfigViewSchema>;
+export type PanelRequestResult = z.infer<typeof panelRequestResultSchema>;
 export type ModuleUpdateResult = z.infer<typeof moduleUpdateResultSchema>;
 export type GuildOverview = z.infer<typeof guildOverviewSchema>;
 export type GuildPresence = z.infer<typeof guildPresenceSchema>;

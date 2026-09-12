@@ -8,110 +8,109 @@ web
 
 ## Users
 
-Discord server owners and their admin/mod staff — anyone the server grants `MANAGE_GUILD`, or a
-staff role resolved through `guilds.members.read`. They arrive holding a specific intent ("turn
-on tickets", "why did the welcome message stop", "find case #412") and leave once it is done.
-
-Usage is **config-first**: the centre of gravity is switching modules on and configuring them.
-Day-to-day operations — reading the case ledger, checking the leaderboard — happen too, but one
-level deeper, not on the way in.
-
-Physical scene: a wide desktop screen, in Discord's own visual company, usually with the server
-open in another window or on a second monitor. Phones are a real secondary surface that must work
-and must not embarrass, but the design is sized for desktop.
+Discord server administrators — the same audience the mainstream multipurpose bots serve. Typically the
+owner or a small staff team of a community, gaming, creator or interest server, not security
+professionals. They are Discord-fluent and interface-fluent, but not administrators by trade: they know
+roles, channels, permissions and embeds by heart, and they learn a bot by clicking through it rather than
+by reading documentation. They arrive already using one or more bots and are deciding whether one
+platform can replace them. They configure in bursts — set something up, leave it running for weeks, come
+back when something breaks or when the server grows.
 
 ## Product Purpose
 
-Proton is one Discord bot covering moderation, security and engagement, with this dashboard as its
-only configuration surface. The dashboard exists so an admin can see exactly what Proton is
-allowed to do in their server, change it, and have the change be live in Discord immediately.
-
-Success: an admin finds the switch or field they came for in seconds, changes it, and trusts that
-the change took effect.
+Proton is one bot that covers what a Discord server normally installs several bots to get: moderation,
+automatic moderation, anti-raid and anti-nuke protection, verification, honeypot traps, tickets, appeals,
+leveling, giveaways, starboard, polls, suggestions, role menus, temporary voice channels, welcome
+messages, counters, reminders, tags, backups, phishing-link blocking, branding, and Discord audit-event
+logging. Success is a server owner running Proton alone where they used to run three or four bots, and
+being able to answer "what did this bot do in my server, and why" at any point.
 
 ## Positioning
 
-The stated success metric for the whole product is **predictable degradation**, not flawlessness.
-When Discord's API misbehaves Proton queues rather than drops, and it names the exact missing
-permission or intent instead of failing silently. Every state-changing action becomes a numbered,
-searchable, reversible case with actor, target, reason and time. Competitors in this category
-(MEE6, Sapphire, Wick) do not make the audit trail the product.
+The owner's framing: **"Why MEE6 when you've got Proton?"** Proton competes for the mainstream
+multipurpose-bot audience rather than positioning itself as niche security tooling — but it carries depth
+those bots do not:
+
+- **Everything is written down.** Every state-changing action goes through one executor and lands as a
+  numbered case carrying the moderator, the target, the reason typed and the time. Reversals attach to the
+  case they undo instead of rewriting it, and actions Proton takes on its own are recorded beside human
+  ones.
+- **It refuses to pretend.** Every module ships switched off. When Proton cannot act it names the exact
+  permission or privileged intent it is missing, in the wording the server's own settings use, rather than
+  failing silently. A module that cannot run is never greyed out — its switch stays live, so the admin can
+  always turn it back off.
+- **Serious protection sits beside the community features.** An anti-nuke breaker, join-rate anti-raid
+  gating, honeypot channels and verification live in the same product, config store and case ledger as
+  leveling and giveaways.
 
 ## Operating Context
 
-- Configuration is per-server. A user may administer several servers and switches between them.
-- Modules are loaded from Proton's own deployment; a server cannot add or remove modules, only
-  switch the ones it has on and off and configure them.
-- ~27 modules exist, grouped into five categories: Moderation, Security, Engagement, Utility,
-  Logging.
-- Every module's settings form is **generated** from its Zod schema into `FieldDescriptor[]`.
-  Supported field kinds: `string`, `number`, `boolean`, `enum`, `channel-id`, `role-id`,
-  `duration`, and flat arrays of those; objects nest one level. Some modules add bespoke panels
-  (server-log event matrix, role-menu builder, escalation ladder, embed preview, ticket panels).
-- Three modules also carry data views reached as tabs: cases (filterable ledger), leveling
-  (leaderboard), tags (browser). All table filter state lives in Zod-validated URL search params
-  and must stay shareable by URL.
-- Unsaved settings edits are blocked on navigation and confirmed before discarding.
-- No websockets in v1; freshness comes from TanStack Query refetching.
-- Auth is Discord OAuth (`identify`, `guilds`, `guilds.members.read`). The browser never talks to
-  Discord directly; every mutation is authorised and audited server-side.
+Configured on the web, used in Discord. Almost every setting produces something a member sees inside
+Discord — an embed, a panel with buttons, a role, a channel, a logged event — so the dashboard's job is
+to make the Discord-side result predictable before it is posted. Admins work per server and often
+administer more than one. The product spans five runtime services (gateway, worker, REST proxy, API,
+dashboard); the dashboard never talks to Discord directly, so some data an admin might expect (live member
+counts, per-guild permission truth) is not available to it today.
 
 ## Capabilities and Constraints
 
-- Stack is fixed: TanStack Start (React), TanStack Router/Query, hand-written CSS in a single
-  stylesheet, Bun. Pinned exact versions for `@tanstack/*`.
-- Dark only. `color-scheme: dark` is declared at the root and there is no light theme.
-- Discord's API cannot report a bot's own guild permissions, so Proton can never truthfully claim
-  "everything is fine". It can only report the failures it knows about.
-- Members are shown by ID, not name: Discord's rate limits do not permit fetching a whole member
-  list.
-- Channels the bot cannot view are never returned by Discord and so cannot be listed.
-- English only in v1, but strings stay externalizable.
-- **Owner directive (2026-08-21): the server home is the module list and nothing else.** No stats
-  strip, no health section, no activity feed, no "needs attention" page. Users see only what they
-  need to see. A module's own inability to run stays visible on that module (its row and its page),
-  because a silently dead module contradicts the product's core promise — see Product Principles.
+- 30 modules, 121 slash commands (counted at subcommand level), 88 Discord audit-log events across 13
+  categories, all derived in-app from the catalogue rather than hard-coded.
+- Sign-in is Discord OAuth, scopes `identify`, `guilds` and `guilds.members.read`. Only servers where the
+  visitor is owner or holds Manage Server are listed.
+- Modules default to off; a module's row is written only on first save.
+- Entitlement tiers exist (free / plus / pro) and cap list sizes — ticket panels and types, tags, counters,
+  temp-VC hubs, saved templates, honeypot channels, appeal forms, polls. No module is gated as a whole,
+  and no prices are published anywhere in the product.
+- Message-log and ticket-transcript capture are opt-in and expire after 30 days.
+- Not available to the dashboard today: live member counts, real per-guild permission checks (the API
+  reports every permission as granted), and any tier that is not "free" (nothing writes one).
+- Terminology the product uses with members and admins: server, channel, role, member, module, switch,
+  case, appeal, ticket, panel, giveaway, level, XP.
 
 ## Brand Commitments
 
-- Name: **Proton**.
-- The mark (`apps/dashboard/public/proton-mark.png`) is a circular wireframe node graph — vertices
-  joined by thin edges — filled with a cyan → blue → violet gradient. It is the one fixed visual
-  asset.
-- Voice: plain, specific, non-hyped. It names the thing that went wrong and where to fix it. No
-  exclamation marks, no marketing adjectives, no emoji.
-- Not Discord. Proton must read as a tool that manages a Discord server, not as a Discord clone,
-  and must never copy Discord's, MEE6's, Sapphire's or Wick's assets or layouts.
-- **Standing preference (2026-08-21): familiarity over invention.** Offered a set of distinctive
-  visual worlds, the owner chose the category standard — the arrangement people already know how
-  to use — rendered in Proton's own theme. The craft bar they named is **Discord's own settings**
-  (for familiarity and native-feeling affordances) and the **Stripe Dashboard** (for typographic
-  discipline, authoritative tables, and state carried by precise small type rather than colour
-  blocks). Future visual work meets that bar; it does not reopen the choice.
+- **Standing preference: the category standard, played straight.** Offered a derived visual world
+  (a matchday/league-table system) against the conventional one, the owner chose convention on purpose.
+  Proton keeps the shape its category's users already know — a marketing site that explains and
+  demonstrates, and a sidebar dashboard of per-module settings — and competes on execution quality rather
+  than on an invented metaphor. Do not re-pitch a metaphor-led identity.
+- **Craft bar: MEE6, Dyno and Carl-bot, beaten on execution.** The comparison set is the category's own
+  products; the bar is clearer hierarchy, better controls, better copy and less clutter than any of them.
+- **The conventional shape does not license the generic-AI look.** The owner's ban list holds inside the
+  convention: no gradient hero or gradient text, no glowing orbs or decorative glows, no glassmorphism or
+  gratuitous blur, no oversized radii, no everything-in-a-floating-card or nested cards, no pill soup or
+  ornamental badges, no icon+heading+description grids or repeated three-column feature sections, no giant
+  cards holding almost nothing, no fake charts, no generic purple/blue SaaS palette, no vague marketing
+  headlines, and no single settings template reused for every module.
+- The Proton mark (`/proton-mark.png`) and the name "Proton" are fixed.
+- Discord's own conventions are respected: blurple for Discord actions, message and embed previews that
+  look like genuine Discord output, role colours, and channel-type distinctions.
+- Not affiliated with or endorsed by Discord Inc., and the product says so.
 
 ## Evidence on Hand
 
-- Real: the module catalog and every module's real field schema; the case record shape; the
-  leaderboard and tag query results; Discord channel/role lists for the connected guild.
-- Real: the brand mark, favicon, apple-touch-icon.
-- Absent, and not to be invented: pricing, plan names beyond the existing `insufficient_entitlement`
-  state, customer counts, testimonials, uptime figures, server counts, benchmarks.
-- Message volume is genuinely not measured — message logging is opt-in and off by default.
+- A working signed-in dashboard against a real test server, with real cases, modules and configuration.
+- Genuine Discord output previews already built from the product's own renderer (`components/site/scene.tsx`,
+  `components/message/preview.tsx`) — moderation replies, a rank card, a starboard post, a ticket panel, a
+  server-log embed, a refusal message.
+- Module artwork for six modules in `public/art/modules/`.
+- No testimonials, no customer names, no user counts, no benchmarks, no pricing. None of these may be
+  invented.
 
 ## Product Principles
 
-1. **Show only what this person needs for the job they came for.** Density is not the enemy;
-   irrelevance is.
-2. **Never fail silently.** If Proton cannot do something, the surface names what is missing and
-   where to fix it. "The bot did nothing" is a bug.
-3. **State is honest.** Never claim health that cannot be verified; distinguish "switched off",
-   "cannot run" and "not on this plan".
-4. **Every change is auditable and addressable.** URLs carry filter state; every mutation is
-   audited; unsaved work is never lost quietly.
-5. **Configured here, run in Discord.** The dashboard is a control surface, not a second Discord.
+1. Every claim the interface makes must be checkable against what the code actually does.
+2. Show the Discord-side result rather than describing it; the admin should never have to imagine what a
+   setting will produce.
+3. Nothing runs until someone switches it on, and the interface says plainly when something cannot run and
+   what to do about it.
+4. Depth is available but never mandatory: a first-time owner and an experienced admin use the same
+   screens, and neither is punished.
+5. The record is permanent and legible — what happened, who did it, and why, retrievable months later.
 
 ## Accessibility & Inclusion
 
-Keyboard-complete: skip link, focus trapping in dialogs, visible focus rings, `aria-current` on
-navigation, live regions for save and failure messages. Colour is never the only carrier of state.
-Target WCAG 2.1 AA contrast against the dark ground.
+WCAG AA is the working floor: body text at 4.5:1, control borders and state graphics at 3:1, visible
+keyboard focus everywhere, state never carried by colour alone (every state colour has a word beside it),
+and `prefers-reduced-motion` honoured.

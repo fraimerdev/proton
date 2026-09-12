@@ -44,6 +44,24 @@ export const protonSecurityTrippedSchema = z.object({
 
 export type ProtonSecurityTripped = z.infer<typeof protonSecurityTrippedSchema>;
 
+/**
+ * An admin pressing "post it" in the dashboard. The api cannot talk to Discord — the worker is the
+ * only process allowed to — so the button publishes this and the owning module's listener does the
+ * posting, exactly as `verification.web_passed` already works.
+ *
+ * The panel is named, never carried: the worker re-reads the config it is about to post, so a panel
+ * edited between the press and the send is posted as it is now rather than as it was on the page.
+ */
+export const protonPanelRequestedSchema = z.object({
+  auditId: z.string().min(1),
+  guildId: snowflakeSchema,
+  moduleId: z.string().min(1),
+  panelId: z.string().min(1).max(100),
+  actorId: z.string().min(1),
+});
+
+export type ProtonPanelRequested = z.infer<typeof protonPanelRequestedSchema>;
+
 export function diffKeys(
   before: Record<string, unknown>,
   after: Record<string, unknown>,

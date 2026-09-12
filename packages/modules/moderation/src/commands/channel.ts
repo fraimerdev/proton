@@ -1,4 +1,5 @@
 import {
+  type CommandContext,
   type CommandDefinition,
   formatDuration,
   MAX_SLOWMODE_SECONDS,
@@ -10,8 +11,6 @@ import type { ModerationConfig } from '../config.ts';
 import { everyoneRoleId, isRefusal, perform, readDuration, readSpan } from '../perform.ts';
 
 type Command = CommandDefinition<ModerationConfig>;
-
-const REASON_MAX = 512;
 
 export const slowmodeCommand: Command = {
   name: 'slowmode',
@@ -25,14 +24,11 @@ export const slowmodeCommand: Command = {
     .addStringOption((option) =>
       option
         .setName('duration')
-        .setDescription('Wait between messages, e.g. 30s or 5m. Use 0s to switch slowmode off.')
+        .setDescription('The wait between messages, e.g. 30s or 5m. Use 0s to switch slowmode off.')
         .setRequired(true),
     )
     .addStringOption((option) =>
-      option
-        .setName('reason')
-        .setDescription('Written to the Discord audit log and to the case.')
-        .setMaxLength(REASON_MAX),
+      option.setName('reason').setDescription('The reason for this action.').setMaxLength(512),
     )
     .toJSON(),
 
@@ -46,9 +42,7 @@ export const slowmodeCommand: Command = {
     const seconds = span.ms / 1000;
     if (seconds > MAX_SLOWMODE_SECONDS) {
       return perform(ctx, {
-        refusal:
-          `Discord caps slowmode at ${formatDuration(MAX_SLOWMODE_SECONDS * 1000)}, and ` +
-          `'${raw}' is longer than that.`,
+        refusal: `You cannot set the slowmode to more than ${formatDuration(MAX_SLOWMODE_SECONDS * 1000)}`,
       });
     }
 
@@ -68,82 +62,87 @@ export const slowmodeCommand: Command = {
 
 export const lockdownCommand: Command = {
   name: 'lockdown',
-  description: 'Stop everyone posting in this channel.',
+  description: 'Lock this channel, or reopen it.',
 
   data: new SlashCommandBuilder()
     .setName('lockdown')
-    .setDescription('Stop everyone posting in this channel.')
+    .setDescription('Lock this channel, or reopen it.')
     .setContexts(InteractionContextType.Guild)
     .setDefaultMemberPermissions(Permissions.ManageChannels)
-    .addStringOption((option) =>
-      option
-        .setName('duration')
-        .setDescription('Unlock automatically after this long, e.g. 30m. Omit to stay locked.'),
+    .addSubcommand((sub) =>
+      sub
+        .setName('add')
+        .setDescription('Stop everyone posting in this channel.')
+        .addStringOption((option) =>
+          option
+            .setName('duration')
+            .setDescription('Reopen automatically after this long, e.g. 30m. Omit to stay locked.'),
+        )
+        .addStringOption((option) =>
+          option.setName('reason').setDescription('The reason for this action.').setMaxLength(512),
+        ),
     )
-    .addStringOption((option) =>
-      option
-        .setName('reason')
-        .setDescription('Written to the Discord audit log and to the case.')
-        .setMaxLength(REASON_MAX),
+    .addSubcommand((sub) =>
+      sub
+        .setName('remove')
+        .setDescription('Let everyone post in this channel again.')
+        .addStringOption((option) =>
+          option.setName('reason').setDescription('The reason for this action.').setMaxLength(512),
+        ),
     )
     .toJSON(),
 
   async handler(ctx) {
-    const reason = ctx.options.getString('reason');
-    const rawDuration = ctx.options.getString('duration');
-
-    const payload = { channelId: ctx.channelId, roleId: everyoneRoleId(ctx.guildId) };
-
-    if (!rawDuration) {
-      return perform(ctx, {
-        kind: 'lockdown',
-        payload,
-        ...(reason ? { reason } : {}),
-        success: 'Locked this channel. Run /unlock when it should reopen.',
-      });
+    switch (ctx.options.getSubcommand()) {
+      case 'add':
+        return addLockdown(ctx);
+      case 'remove':
+        return removeLockdown(ctx);
+      default:
+        return perform(ctx, {
+          refusal: 'Use /lockdown add to lock this channel, or /lockdown remove to reopen it.',
+        });
     }
+  },
+};
 
-    const duration = readDuration(rawDuration, 'A lockdown');
-    if (isRefusal(duration)) return perform(ctx, duration);
+async function addLockdown(ctx: CommandContext<ModerationConfig>): Promise<void> {
+  const reason = ctx.options.getString('reason');
+  const rawDuration = ctx.options.getString('duration');
 
+  const payload = { channelId: ctx.channelId, roleId: everyoneRoleId(ctx.guildId) };
+
+  if (!rawDuration) {
     return perform(ctx, {
       kind: 'lockdown',
       payload,
       ...(reason ? { reason } : {}),
-      expiresAt: new Date(Date.now() + duration.ms),
-      success: `Locked this channel. It reopens automatically in ${formatDuration(duration.ms)}.`,
-      successWithoutReversal: 'Locked this channel.',
+      success: 'Locked this channel. Run /lockdown remove when it should reopen.',
     });
-  },
-};
+  }
 
-export const unlockCommand: Command = {
-  name: 'unlock',
-  description: 'Let everyone post in this channel again.',
+  const duration = readDuration(rawDuration, 'A lockdown');
+  if (isRefusal(duration)) return perform(ctx, duration);
 
-  data: new SlashCommandBuilder()
-    .setName('unlock')
-    .setDescription('Let everyone post in this channel again.')
-    .setContexts(InteractionContextType.Guild)
-    .setDefaultMemberPermissions(Permissions.ManageChannels)
-    .addStringOption((option) =>
-      option
-        .setName('reason')
-        .setDescription('Written to the Discord audit log and to the case.')
-        .setMaxLength(REASON_MAX),
-    )
-    .toJSON(),
+  return perform(ctx, {
+    kind: 'lockdown',
+    payload,
+    ...(reason ? { reason } : {}),
+    expiresAt: new Date(Date.now() + duration.ms),
+    success: `Locked this channel. It reopens automatically in ${formatDuration(duration.ms)}.`,
+    successWithoutReversal: 'Locked this channel.',
+  });
+}
 
-  async handler(ctx) {
-    const reason = ctx.options.getString('reason');
+async function removeLockdown(ctx: CommandContext<ModerationConfig>): Promise<void> {
+  const reason = ctx.options.getString('reason');
 
-    return perform(ctx, {
-      kind: 'unlock',
-      payload: { channelId: ctx.channelId, roleId: everyoneRoleId(ctx.guildId) },
-      ...(reason ? { reason } : {}),
-      success: 'Unlocked this channel.',
-    });
-  },
-};
+  return perform(ctx, {
+    kind: 'unlock',
+    payload: { channelId: ctx.channelId, roleId: everyoneRoleId(ctx.guildId) },
+    ...(reason ? { reason } : {}),
+    success: 'Unlocked this channel.',
+  });
+}
 
-export const channelCommands: Command[] = [slowmodeCommand, lockdownCommand, unlockCommand];
+export const channelCommands: Command[] = [slowmodeCommand, lockdownCommand];

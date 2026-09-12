@@ -12,7 +12,7 @@ import { activeArea } from '../../../components/module/areas.ts';
 import type { ModuleForm } from '../../../components/module/form.ts';
 import { useModuleForm } from '../../../components/module/form.ts';
 import { usePanelSchema } from '../../../components/module/inputs.tsx';
-import { AreaHub, ModuleChrome, ModuleSettings } from '../../../components/module/page.tsx';
+import { ModuleChrome, ModuleSettings, tabsFor } from '../../../components/module/page.tsx';
 import { moduleRoute } from '../../../components/module/route.tsx';
 
 const TemplatesEditor = lazyRouteComponent(
@@ -39,16 +39,17 @@ function MessagesPage(): ReactElement {
 
   return (
     <>
-      <ModuleChrome guildId={guildId} summary={form.summary} area={area} tabs={[]} />
+      <ModuleChrome
+        guildId={guildId}
+        summary={form.summary}
+        area={area}
+        tabs={tabsFor([], search.view, area?.id, AREAS)}
+      />
 
-      {area === undefined ? (
-        <AreaHub areas={AREAS} config={form.config} />
-      ) : (
-        <ModuleSettings form={form}>
-          {area.id === 'templates' ? <TemplatesArea form={form} /> : null}
-          {area.id === 'components' ? <ComponentsArea form={form} /> : null}
-        </ModuleSettings>
-      )}
+      <ModuleSettings form={form}>
+        {area?.id === 'templates' ? <TemplatesArea form={form} /> : null}
+        {area?.id === 'components' ? <ComponentsArea form={form} /> : null}
+      </ModuleSettings>
     </>
   );
 }
@@ -58,7 +59,7 @@ function TemplatesArea({ form }: { form: ModuleForm }): ReactElement {
   usePanelSchema('templates', 'Templates', templatesSchema, templates);
 
   return (
-    <SectionCard id="messages:panel:templates" title="Templates">
+    <SectionCard id="messages:panel:templates" title={null} span="full">
       <TemplatesEditor
         templates={templates}
         channels={form.channels}
@@ -77,7 +78,7 @@ function ComponentsArea({ form }: { form: ModuleForm }): ReactElement {
   usePanelSchema('components', 'Components', savedComponentsSchema, components);
 
   return (
-    <SectionCard id="messages:panel:components" title="Components">
+    <SectionCard id="messages:panel:components" title={null} span="full">
       <PaletteEditor
         components={components}
         roles={form.roles}

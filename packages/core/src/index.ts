@@ -9,7 +9,6 @@ export {
   type CaseSearchResult,
   type CaseSortDirection,
   type CaseSortField,
-  caseIdSchema,
   caseQuerySchema,
 } from './actions/case-query.ts';
 export type { CaseInput, CaseRecorder } from './actions/case-recorder.ts';
@@ -231,9 +230,11 @@ export {
   diffKeys,
   type ProtonActionExecuted,
   type ProtonConfigChanged,
+  type ProtonPanelRequested,
   type ProtonSecurityTripped,
   protonActionExecutedSchema,
   protonConfigChangedSchema,
+  protonPanelRequestedSchema,
   protonSecurityTrippedSchema,
 } from './events/proton.ts';
 export {
@@ -496,6 +497,9 @@ export {
   moduleStatusSchema,
   moduleSummarySchema,
   moduleUpdateResultSchema,
+  type PanelRequestResult,
+  panelRequestResultSchema,
+  postableSchema,
   type VerificationRequestResult,
   verificationRequestResultSchema,
 } from './modules/api-io.ts';
@@ -508,6 +512,7 @@ export type {
   ModuleCategory,
   ModuleContext,
   ModuleManifest,
+  Postable,
   ScheduledHandler,
   SectionDescriptor,
 } from './modules/manifest.ts';

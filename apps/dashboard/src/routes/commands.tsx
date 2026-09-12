@@ -51,7 +51,6 @@ function CommandsPage(): ReactElement {
     <SitePage>
       <div className="doc-page doc-page-wide">
         <header className="doc-head">
-          <span className="site-label">Commands</span>
           <h1 className="doc-title">Every command Proton registers.</h1>
           <p className="doc-lede">
             All {COMMAND_COUNT} of them, with the arguments each one takes and the Discord

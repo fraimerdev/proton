@@ -1,11 +1,17 @@
-import { tryParseDuration } from '@proton/core';
+import { MAX_TIMEOUT_MS } from '@proton/core';
 import {
   ESCALATION_ACTIONS,
   type EscalationAction,
   type EscalationRung,
   escalationLadderSchema,
 } from '@proton/module-cases';
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
+import { useId } from 'react';
+import { DurationControl } from '../form/fields.tsx';
+
+// Discord refuses a timeout past 28 days, so the control refuses it here rather than letting the
+// save come back with it.
+const TIMEOUT_BOUNDS = { maxSeconds: MAX_TIMEOUT_MS / 1000 };
 
 export interface EscalationLadderEditorProps {
   rungs: readonly EscalationRung[];
@@ -23,6 +29,7 @@ export function EscalationLadderEditor({
   onChange,
 }: EscalationLadderEditorProps): ReactElement {
   const parsed = escalationLadderSchema.safeParse(rungs);
+  const baseId = useId();
 
   function update(index: number, patch: Partial<EscalationRung>): void {
     onChange(
@@ -55,7 +62,15 @@ export function EscalationLadderEditor({
           className="ladder-rung"
           // biome-ignore lint/suspicious/noArrayIndexKey: the edited value cannot key its own row
           key={`rung-${index}`}
+          style={{ '--rung': index } as CSSProperties}
         >
+          {/* The rows are identical otherwise, so the one thing the ladder is for — consequence
+              climbing — was legible only by reading every warning count in order. Tone carries the
+              severity, never alone: the action's own name is in the select beside it. */}
+          <span className="ladder-step" data-action={rung.action} aria-hidden="true">
+            {index + 1}
+          </span>
+
           <label className="filter">
             <span>At warning</span>
             <input
@@ -88,22 +103,22 @@ export function EscalationLadderEditor({
           {rung.action === 'kick' ? (
             <span className="field-description ladder-rung-note">A kick cannot be timed.</span>
           ) : (
-            <label className="filter">
-              <span>{rung.action === 'timeout' ? 'For' : 'For (blank = permanent)'}</span>
-              <input
-                type="text"
-                placeholder="1h"
+            // A duration is four characters. Left to grow with the rung it took a third of the
+            // row, which put the action it qualifies in the middle of a line instead of at its end.
+            // Not a <label>: the control is an amount and a unit, and one label over two of them
+            // names neither.
+            <span className="filter filter-brief">
+              <label htmlFor={`${baseId}-for-${index}`}>
+                {rung.action === 'timeout' ? 'For' : 'For (blank = permanent)'}
+              </label>
+              <DurationControl
+                controlId={`${baseId}-for-${index}`}
                 value={rung.duration ?? ''}
-                aria-invalid={
-                  rung.duration !== undefined && tryParseDuration(rung.duration) === null
-                }
-                onChange={(e) =>
-                  update(index, {
-                    duration: e.target.value === '' ? undefined : e.target.value,
-                  })
-                }
+                onChange={(next) => update(index, { duration: next })}
+                label={`Duration at ${rung.atWarnings} warnings`}
+                bounds={rung.action === 'timeout' ? TIMEOUT_BOUNDS : undefined}
               />
-            </label>
+            </span>
           )}
 
           <button

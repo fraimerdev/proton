@@ -29,6 +29,45 @@ export const permissionsConfigSchema = z.object({
 
 export type PermissionsConfig = z.infer<typeof permissionsConfigSchema>;
 
+// Commands that used to be their own top-level name and are now a subcommand of the one they map
+// to. An override left on a retired key would gate nothing, so it is read as the survivor's.
+//
+// A guild that gated the two halves differently cannot keep both: the gate only ever sees the
+// top-level command name, so one list has to win and the other is dropped. The survivor's wins,
+// which widens the lift (/timeout remove now admits whoever could /timeout add) rather than the
+// punishment — the safer of the two directions, and the only one where nobody gains the ability
+// to act *against* a member they could not act against before.
+export const RETIRED_COMMAND_ALIASES: Readonly<Record<string, string>> = {
+  untimeout: 'timeout',
+  unquarantine: 'quarantine',
+  unlock: 'lockdown',
+};
+
+export function liftStoredConfig(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+
+  const config = raw as Record<string, unknown>;
+  const stored = config.overrides;
+  if (typeof stored !== 'object' || stored === null) return raw;
+
+  const overrides = { ...(stored as Record<string, unknown>) };
+  let changed = false;
+
+  for (const [retired, survivor] of Object.entries(RETIRED_COMMAND_ALIASES)) {
+    if (!(retired in overrides)) continue;
+
+    const inherited = overrides[retired];
+    delete overrides[retired];
+    changed = true;
+
+    if (!Array.isArray(overrides[survivor]) || (overrides[survivor] as unknown[]).length === 0) {
+      overrides[survivor] = inherited;
+    }
+  }
+
+  return changed ? { ...config, overrides } : raw;
+}
+
 export const permissionsDefaultConfig: PermissionsConfig = {
   enabled: true,
 

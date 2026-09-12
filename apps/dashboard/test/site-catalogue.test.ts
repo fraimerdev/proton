@@ -11,12 +11,21 @@ import {
   COMMAND_COUNT,
   catalogueByCategory,
   LOG_CATEGORY_COUNT,
+  LOG_CATEGORY_ROUTING,
   LOG_EVENT_COUNT,
   MODULE_COUNT,
+  moduleNames,
   OAUTH_SCOPES,
+  REPLACES,
   TOP_LEVEL_COMMANDS,
 } from '../src/components/site/catalogue.ts';
-import { COMMAND_SET, groupCommands, usageLine } from '../src/components/site/commands.ts';
+import {
+  COMMAND_SET,
+  groupCommands,
+  LANDING_COMMANDS,
+  landingCommands,
+  usageLine,
+} from '../src/components/site/commands.ts';
 
 const MODULES_DIR = join(import.meta.dir, '..', '..', '..', 'packages', 'modules');
 
@@ -88,8 +97,48 @@ describe('every command the catalogue prints is one a module registers', () => {
     }
   });
 
-  test('the marquee draws from the same list', () => {
+  test('the top-level list the pages draw from is the same list', () => {
     expect(TOP_LEVEL_COMMANDS).toEqual(CATALOGUE.flatMap((entry) => entry.commands));
+  });
+
+  // The landing page prints these ten in full — usage, arguments, permission. A renamed command
+  // would drop its row silently.
+  test('every command the landing page prints is one a module registers', () => {
+    expect(landingCommands().map((command) => command.usage)).toEqual([...LANDING_COMMANDS]);
+  });
+});
+
+describe('the bots the landing page says Proton replaces', () => {
+  test('account for every module, exactly once', () => {
+    const filed = REPLACES.flatMap((row) => row.modules);
+
+    expect([...filed].sort()).toEqual(CATALOGUE.map((entry) => entry.id).sort());
+  });
+
+  test('name modules the catalogue can put a name to', () => {
+    for (const row of REPLACES) {
+      expect(`${row.job}: ${moduleNames(row.modules).length}`).toBe(
+        `${row.job}: ${row.modules.length}`,
+      );
+    }
+  });
+});
+
+describe('the Server logs routing figure on the landing page', () => {
+  // Copied from the settings page rather than read off the module, because the module's catalogue
+  // drags all 88 event renderers in. This is what notices the copy going stale.
+  test('prints the categories and default states that page does', () => {
+    const page = readFileSync(
+      join(import.meta.dir, '..', 'src', 'routes', 'dashboard', '$guildId', 'serverlog.tsx'),
+      'utf8',
+    );
+
+    const rows = [
+      ...page.matchAll(/\{ key: '([a-z]+)', label: '([^']+)', on: (true|false) \}/g),
+    ].map((match) => ({ key: match[1] ?? '', label: match[2] ?? '', on: match[3] === 'true' }));
+
+    expect(rows.length).toBe(LOG_CATEGORY_COUNT);
+    expect(LOG_CATEGORY_ROUTING).toEqual(rows);
   });
 });
 
@@ -150,7 +199,7 @@ describe('searching the commands page', () => {
   test('finds a command by its name without the slash', () => {
     const found = groupCommands('timeout', 'all').flatMap((group) => group.commands);
 
-    expect(found.map((command) => command.usage)).toContain('/timeout');
+    expect(found.map((command) => command.usage)).toContain('/timeout add');
   });
 
   test('finds one by the words in its description', () => {
