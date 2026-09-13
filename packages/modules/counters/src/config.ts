@@ -56,7 +56,7 @@ export const counterSchema = z.preprocess(
       .register(protonFields, {
         field: 'channel-id',
         label: 'Channel',
-        description: 'Discord rewrites text channel names to lowercase-with-dashes',
+        description: 'Discord changes text channel names to lowercase, with dashes for spaces.',
       })
       .optional(),
 
@@ -117,7 +117,7 @@ export const countersListSchema = z
 const settings = {
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Counts refresh every 10 minutes, not instantly',
+    description: 'Counts refresh every 10 minutes, not instantly.',
   }),
 };
 

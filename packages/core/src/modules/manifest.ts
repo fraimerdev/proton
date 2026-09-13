@@ -139,7 +139,7 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   // Run over a stored config before it is parsed, for a module that has renamed a key. configSchema
   // has to stay a ZodObject for the form generator, so the lift cannot be a z.preprocess wrapped
   // around it — and without one, Zod strips the old key and the next write persists the loss.
-  liftStoredConfig?(raw: unknown): unknown;
+  liftStoredConfig?(raw: unknown, current?: Record<string, unknown>): unknown;
 
   /**
    * The messages this module puts in a channel and can put there again — a ticket panel, a role

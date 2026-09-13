@@ -25,7 +25,7 @@ export const DEFAULT_GOODBYE_MESSAGE = '{username} has left {server}.';
 const ONLY_LINK_BUTTONS =
   'a welcome or goodbye message can carry link buttons and nothing else: Proton does not watch ' +
   'for presses on a greeting, so any other button would do nothing when a member pressed it. ' +
-  'Make this a link button, or post the interactive message with the Embeds module instead.';
+  'Make this a link button, or post the interactive message with the Messages module instead.';
 
 export function liftLegacyGreeting(value: unknown): unknown {
   // A greeting stored before it could hold embeds is a bare string, and z.object would strip it to
@@ -105,7 +105,7 @@ const welcomeShape = {
 
   card: z.boolean().default(false).register(protonFields, {
     label: 'Attach a card',
-    description: 'Costs an extra image render per join',
+    description: 'Costs an extra image render per join.',
   }),
 
   preset: z.enum(CARD_PRESETS).default('midnight').register(protonFields, { label: 'Card style' }),
@@ -124,13 +124,13 @@ const welcomeShape = {
     .optional()
     .register(protonFields, {
       label: 'Background image',
-      description: 'Only images hosted on Discord’s CDN load',
+      description: 'Only images hosted on Discord’s CDN load.',
     }),
 
   cardShowMemberCount: z
     .boolean()
     .default(true)
-    .register(protonFields, { label: 'Show the member count' }),
+    .register(protonFields, { label: 'Show member count' }),
 };
 
 export const welcomeConfigSchema = z.object(welcomeShape);

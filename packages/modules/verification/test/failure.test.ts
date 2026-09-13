@@ -178,7 +178,7 @@ describe('planFailure', () => {
     );
 
     if (result === null || !('unconfigured' in result)) throw new Error('expected a refusal');
-    expect(result.unconfigured).toContain('Timeout length');
+    expect(result.unconfigured).toContain('Timeout duration');
     expect(result.unconfigured).toContain("'soon'");
     expect(result.unconfigured).toContain('Proton dashboard');
   });

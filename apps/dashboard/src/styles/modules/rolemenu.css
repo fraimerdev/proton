@@ -1,0 +1,85 @@
+/* rolemenu page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.rolemenu-budget-note {
+  margin: -6px 0 12px;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  max-width: 74ch;
+}
+
+.rolemenu-section-error {
+  margin: -2px 0 12px;
+  color: var(--danger);
+  font-size: var(--text-secondary-size);
+}
+
+.rolemenu-budget {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.rolemenu-budget.over {
+  color: var(--danger);
+}
+
+.rolemenu-preview-note {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 74ch;
+}
+
+.rolemenu-post {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.rolemenu-post .button {
+  order: 0;
+}
+
+.rolemenu-post .async-status {
+  order: 1;
+  flex: 1 1 100%;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.rolemenu-post .async-status svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.rolemenu-post-reason {
+  order: 2;
+  flex: 1 1 100%;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+}
+
+.rolemenu-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.rolemenu-reaction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}

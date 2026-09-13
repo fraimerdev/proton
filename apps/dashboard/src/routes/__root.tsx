@@ -21,22 +21,21 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
       { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
-      // The hero is 60px of Public Sans, and discovering it only after the stylesheet parses paints
-      // the headline in the fallback first and reflows it. One variable woff2 covers 400..700. The
-      // URL carries Google's revision, so it goes stale silently: a miss costs a warning, not the
-      // font, which the stylesheet below still fetches.
+      // Inter carries the whole product — 11px section labels through the 29px page title — so the
+      // first paint discovering it only after the stylesheet parses reflows every row on the page.
+      // One variable woff2 covers 400..700.
       {
         rel: 'preload',
         as: 'font',
         type: 'font/woff2',
-        href: 'https://fonts.gstatic.com/s/publicsans/v21/ijwRs572Xtc6ZYQws9YVwnNGfJ4.woff2',
+        href: 'https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2',
         crossOrigin: 'anonymous',
       },
-      // Manrope and Inter are named by no CSS rule: @proton/cards rasterises the rank card in them,
-      // and the live preview has to match the PNG the bot posts.
+      // Manrope is named by no CSS rule: @proton/cards rasterises the rank card in Manrope and
+      // Inter, and the dashboard's live preview has to match the PNG the bot actually posts.
       {
         rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Public+Sans:wght@400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;600;700;800&family=Inter:wght@400;700&display=swap',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;600;700;800&display=swap',
       },
       { rel: 'stylesheet', href: appCss },
     ],

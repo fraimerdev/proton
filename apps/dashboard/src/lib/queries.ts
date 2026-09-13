@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query';
 import {
+  getAntinukeMaintenance,
   getGuildChannels,
   getGuildEmojis,
   getGuildMembers,
@@ -56,6 +57,18 @@ export function moduleConfigQuery(guildId: string, moduleId: string) {
     queryKey: queryKeys.moduleConfig(guildId, moduleId),
     queryFn: () => getModuleConfig({ data: { guildId, moduleId } }),
     staleTime: STALE.moduleConfig,
+    ...LIVE,
+  });
+}
+
+// Polled while a window is open: it expires on a clock, and a page that says "suspended" after
+// the breaker re-armed is worse than one that says nothing.
+export function maintenanceQuery(guildId: string) {
+  return queryOptions({
+    queryKey: [...queryKeys.guild(guildId), 'antinuke', 'maintenance'] as const,
+    queryFn: () => getAntinukeMaintenance({ data: { guildId } }),
+    refetchInterval: 30_000,
+    retry: false,
     ...LIVE,
   });
 }

@@ -269,8 +269,8 @@ const settings = {
       message: `a ticket name needs ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} in it, or every ticket channel would share one name.`,
     })
     .register(protonFields, {
-      label: 'Ticket channel name',
-      description: `Used when a ticket type does not set its own. ${NUMBER_PLACEHOLDER}, ${USER_PLACEHOLDER} and ${TYPE_PLACEHOLDER} are replaced.`,
+      label: 'Name pattern',
+      description: `How new ticket channels are named, using ${NUMBER_PLACEHOLDER}, ${USER_PLACEHOLDER} and ${TYPE_PLACEHOLDER}. Ticket types can set their own.`,
     }),
 
   closeConfirmation: z
@@ -280,39 +280,43 @@ const settings = {
     .default('This ticket is closed. Staff can reopen it, and it will be tidied up later.')
     .register(protonFields, {
       label: 'Closing message',
+      description: 'Posted in the ticket channel when it closes.',
     }),
 
   maxOpenPerUser: z.number().int().min(1).max(100).default(3).register(protonFields, {
     label: 'Open tickets per member',
-    description: 'A ticket type may set a lower limit of its own. Your plan caps this too.',
+    description: 'Ticket types can set a lower limit. Your plan caps this too.',
   }),
 
   maxOpenPerGuild: z.number().int().min(1).max(500).default(200).register(protonFields, {
-    label: 'Open tickets in the whole server',
-    description: 'A ceiling on the queue. Discord allows 500 channels in a server in total.',
+    label: 'Total open tickets',
+    description:
+      'How many tickets can be open at once. Discord allows up to 500 channels in a server.',
   }),
 
-  creationCooldown: durationStringSchema
-    .default('5s')
-    .register(protonFields, { field: 'duration', label: 'Wait between opening tickets' }),
+  creationCooldown: durationStringSchema.default('5s').register(protonFields, {
+    field: 'duration',
+    label: 'Creation cooldown',
+    description: 'How long a member must wait before opening another ticket.',
+  }),
 
   logChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
-    label: 'Ticket log channel',
+    label: 'Log channel',
     channelTypes: [TEXT_CHANNEL_TYPE],
   }),
 
   transcriptChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Transcript channel',
-    description: 'Used when a ticket type does not name one of its own.',
+    description: 'Where Proton posts ticket transcripts. Ticket types can set their own.',
     channelTypes: [TEXT_CHANNEL_TYPE],
   }),
 
   staffRoleIds: z.array(snowflakeSchema).max(20).default([]).register(protonFields, {
     field: 'role-id',
-    label: 'Support roles',
-    description: 'Reach every ticket. A ticket type can add roles that reach only its own.',
+    label: 'Staff roles',
+    description: 'Roles that can access every ticket. Each ticket type can add more.',
   }),
 
   blacklistMessage: z
@@ -320,7 +324,11 @@ const settings = {
     .min(1)
     .max(500)
     .default('You cannot open tickets in this server.')
-    .register(protonFields, { label: 'Message for blacklisted members' }),
+    .register(protonFields, {
+      label: 'Blacklist message',
+      description:
+        'Shown to blacklisted members when they try to open a ticket. Use /ticket blacklist in Discord to add or remove members.',
+    }),
 };
 
 export const ticketsConfigSchema = z.object({

@@ -1,0 +1,49 @@
+/* messages page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.messages-crumb {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.messages-crumb:hover {
+  color: var(--text-secondary);
+  text-decoration: underline;
+}
+
+.messages-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* A component's controls read left to right in one wrapping line, each under its own label, so a
+   narrow editor column folds them rather than shrinking them. */
+.messages-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px 12px;
+}
+
+.messages-field-grow {
+  flex: 1 1 190px;
+  min-width: 0;
+}
+
+.messages-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.messages-preview-note {
+  margin-top: 8px;
+}
+
+.messages-layout-drop {
+  margin-top: 10px;
+}

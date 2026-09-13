@@ -1,0 +1,97 @@
+/* welcome page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.welcome-areas {
+  margin-bottom: 24px;
+}
+
+.welcome-stacked {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.welcome-token {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.welcome-token:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.welcome-token:focus-visible {
+  box-shadow: var(--focus-ring-tight);
+}
+
+.welcome-detail-wide {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.welcome-item {
+  padding: 12px 16px;
+}
+
+.welcome-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-medium);
+}
+
+.welcome-nested {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 14px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.welcome-attachment {
+  margin-top: 12px;
+}
+
+.welcome-attachment-name {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+}
+
+.welcome-swatch {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+
+.welcome-swatch span {
+  width: 7px;
+  height: 13px;
+  border-radius: 2px;
+}
+
+/* The card is 1100x370: beside a column of five settings it reads as a thumbnail, so the image
+   takes the wide half and the settings the narrow one. */
+.welcome-card-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+.welcome-card-main {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .welcome-card-area {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

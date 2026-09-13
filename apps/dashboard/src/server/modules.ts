@@ -13,6 +13,7 @@ import { ApiClient } from '../lib/api-client.ts';
 import { auth } from '../lib/auth.ts';
 import type { GuildMember } from '../lib/discord.ts';
 import {
+  fetchCurrentUser,
   fetchGuildChannels,
   fetchGuildEmojis,
   fetchGuildMembers,
@@ -71,7 +72,11 @@ export const listGuilds = createServerFn({ method: 'GET' })
   .handler(async ({ context }) => {
     const token = await getDiscordAccessToken(getRequest().headers, context.session.user.id);
     const user = context.session.user;
-    const guilds = administrableGuilds(await fetchUserGuilds(env.REST_PROXY_URL, token));
+    const [allGuilds, profile] = await Promise.all([
+      fetchUserGuilds(env.REST_PROXY_URL, token),
+      fetchCurrentUser(env.REST_PROXY_URL, token),
+    ]);
+    const guilds = administrableGuilds(allGuilds);
 
     const [joined, invite] = await Promise.all([presence(guilds), botInvite()]);
 
@@ -79,7 +84,12 @@ export const listGuilds = createServerFn({ method: 'GET' })
       guilds: withPresence(guilds, joined.present),
       presenceKnown: joined.known,
       invite,
-      user: { id: user.id, name: user.name, image: user.image ?? null, email: user.email ?? null },
+      user: {
+        id: user.id,
+        name: profile?.name ?? user.name,
+        image: profile?.avatarUrl ?? user.image ?? null,
+        email: user.email ?? null,
+      },
     };
   });
 
@@ -185,6 +195,19 @@ export const getGuildMembers = createServerFn({ method: 'GET' })
     return [...found, ...answered];
   });
 
+export const getAntinukeMaintenance = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(z.object({ guildId: z.string().min(1) }))
+  .handler(({ data }) => api.getMaintenance(data.guildId));
+
+// requireManageGuild: re-arming the breaker early is a security decision, not a read.
+export const endAntinukeMaintenance = createServerFn({ method: 'POST' })
+  .middleware([requireManageGuild])
+  .validator(z.object({ guildId: z.string().min(1) }))
+  .handler(({ data, context }) =>
+    withAudit(context.session.user.id, (stamp) => api.endMaintenance(data.guildId, stamp.actorId)),
+  );
+
 export const searchCases = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(caseQuerySchema.extend({ guildId: z.string().min(1) }))
@@ -266,7 +289,7 @@ export const updateModuleConfig = createServerFn({ method: 'POST' })
   );
 
 /**
- * "Post it now" from the settings page. requireManageGuild, not requireGuildAccess: this puts a
+ * Post from the settings page. requireManageGuild, not requireGuildAccess: this puts a
  * message in a channel, which is a change to the server rather than a read of it.
  */
 export const postModulePanel = createServerFn({ method: 'POST' })

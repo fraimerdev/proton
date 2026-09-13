@@ -10,6 +10,7 @@ import {
   type RegistryEnvironment,
   snowflakeSchema,
 } from '@proton/core';
+import type { MaintenanceStore } from '@proton/module-antinuke';
 import { isAssetKind } from '@proton/module-branding/kinds';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { ticketQuerySchema, ticketStatsQuerySchema } from '@proton/module-tickets/query';
@@ -124,6 +125,11 @@ export interface ApiDeps {
   appeals: AppealsService;
   branding: BrandingAssetService;
   registry: ModuleRegistry;
+
+  // Anti-nuke's maintenance window lives in Redis, written by the command that opens it. The
+  // dashboard has to be able to say the breaker is suspended and to close the window early;
+  // absent a Redis client the routes answer 503 rather than claiming protection is active.
+  maintenance?: MaintenanceStore;
   bus?: EventBus;
   // What the bot actually has, for `registry.evaluate`. A function because intents come from the
   // gateway's identify and permissions from the guild, neither of which is known at construction.
@@ -264,6 +270,41 @@ export function createApiApp(deps: ApiDeps): Hono {
     return c.json(
       moduleIndex(deps.registry, switches, deps.environment ? deps.environment() : undefined),
     );
+  });
+
+  app.get('/guilds/:guildId/antinuke/maintenance', async (c) => {
+    if (!deps.maintenance) {
+      return c.json(
+        {
+          error: 'no_redis',
+          message:
+            'Proton cannot reach Redis, where the maintenance window is kept, so it cannot say ' +
+            'whether anti-nuke is suspended. Set REDIS_URL for the api and restart it.',
+        },
+        503,
+      );
+    }
+
+    const window = await deps.maintenance.get(c.req.param('guildId'));
+    return c.json({ window: window ?? null, now: Date.now() });
+  });
+
+  // Closing the window early is a security decision, so it is recorded like a config write.
+  app.delete('/guilds/:guildId/antinuke/maintenance', async (c) => {
+    if (!deps.maintenance) {
+      return c.json({ error: 'no_redis', message: 'Proton cannot reach Redis.' }, 503);
+    }
+
+    const actorId = c.req.header('x-proton-actor');
+    if (!actorId) return c.json({ error: 'invalid_body', message: 'no actor was named' }, 400);
+
+    const guildId = c.req.param('guildId');
+    const held = await deps.maintenance.get(guildId);
+
+    await deps.maintenance.clear(guildId);
+    await deps.modules.recordMaintenanceEnded(guildId, actorId, held);
+
+    return c.json({ ok: true, window: null });
   });
 
   app.get('/guilds/:guildId/cases', async (c) => {

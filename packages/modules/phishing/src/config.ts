@@ -13,13 +13,14 @@ export const phishingConfigSchema = z.object({
 
   action: z.enum(PHISHING_ACTIONS).default('timeout').register(protonFields, {
     label: 'Action',
-    description: 'The message itself is never deleted',
+    description:
+      'What Proton does to the member who posted the link. The message itself is never deleted.',
   }),
 
   timeoutDuration: durationStringSchema.default('1h').register(protonFields, {
     field: 'duration',
-    label: 'Timeout length',
-    description: 'Discord caps timeouts at 28 days',
+    label: 'Timeout duration',
+    description: 'Discord caps timeouts at 28 days.',
   }),
 
   alertChannel: z
@@ -28,7 +29,7 @@ export const phishingConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Alert channel',
-
+      description: 'Where Proton reports Phishing actions.',
       channelTypes: [0, 5, 11, 12],
     }),
 
@@ -45,8 +46,9 @@ export const phishingConfigSchema = z.object({
     .max(GUILD_LIST_MAX)
     .default([])
     .register(protonFields, {
-      label: 'Never blocked',
-      description: 'Also allows every subdomain',
+      label: 'Allowed domains',
+      description:
+        'Ignore links to these domains, even when the community blocklist includes them.',
     }),
 });
 

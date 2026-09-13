@@ -18,7 +18,7 @@ export const starboardConfigSchema = z.object({
 
   emoji: z.string().min(1).max(64).default(DEFAULT_STAR_EMOJI).register(protonFields, {
     label: 'Star emoji',
-    description: 'Unicode emoji, or a custom one pasted straight from chat',
+    description: 'The reaction members use to star a message.',
   }),
 
   threshold: z.number().int().min(1).max(100).default(3).register(protonFields, {
@@ -32,7 +32,8 @@ export const starboardConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Source channels',
-      description: 'Empty watches every channel Proton can see',
+      description:
+        'Only messages in these channels can be starred. Leave empty to allow every channel Proton can see.',
       channelTypes: [0, 5, 11, 12],
     }),
 

@@ -3,8 +3,10 @@ import type {
   EventType,
   GuildRule,
   Logger,
+  ModuleManifest,
   ModuleRegistry,
   ProtonEvent,
+  RuleDefinition,
   RuleEngine,
   RuleEvaluationReport,
   RuleOutcome,
@@ -21,6 +23,8 @@ import type { ConfigProvider } from './runtime.ts';
 export const RULE_DISPATCH_GROUP = 'rules';
 
 export const RULE_PRESET_GROUP = 'rule-presets';
+
+const REBUILD_ATTEMPTS = 3;
 
 export const RULE_CRON_QUEUE = 'proton-rule-cron';
 
@@ -111,11 +115,22 @@ export class RuleDispatchRuntime {
   }
 
   async #moduleEnabled(guildId: string, moduleId: string, event: ProtonEvent): Promise<boolean> {
-    if (!this.#deps.registry.get(moduleId)) {
+    const manifest = this.#deps.registry.get(moduleId);
+    if (!manifest) {
       this.#deps.logger.warn(
         `guild ${guildId} has stored rules for '${moduleId}', but no module with that id is ` +
           'loaded in this worker, so they were not evaluated. Either the module was removed ' +
           "from the build or its id changed; delete the guild's rows for it, or restore it.",
+        { guildId, moduleId, eventType: event.type },
+      );
+      return false;
+    }
+
+    if (manifest.rules === undefined && manifest.compileRules === undefined) {
+      this.#deps.logger.warn(
+        `guild ${guildId} has stored rules for '${moduleId}', but that module ships no rules in ` +
+          'this build, so they were not evaluated. An earlier release wrote them before they ' +
+          "moved to another module; delete the guild's rows for it.",
         { guildId, moduleId, eventType: event.type },
       );
       return false;
@@ -213,6 +228,8 @@ export interface RulePresetSeederDeps {
   bus: EventBus;
   registry: ModuleRegistry;
   store: GuildRuleStore;
+
+  config: ConfigProvider;
   logger: Logger;
 
   cron?: RuleCronRegistrar;
@@ -240,6 +257,11 @@ export class RulePresetSeeder {
 
     let seeded = 0;
     for (const manifest of this.#deps.registry.all()) {
+      if (manifest.compileRules) {
+        await this.#rebuild(guildId, manifest, event);
+        continue;
+      }
+
       const presets = manifest.rules ?? [];
       if (presets.length === 0) continue;
       seeded += await this.#deps.store.seedPresets(guildId, manifest.id, presets);
@@ -248,6 +270,67 @@ export class RulePresetSeeder {
     if (seeded > 0) this.#deps.logger.info(`seeded ${seeded} preset rule(s)`, { guildId });
 
     await this.#registerCron(guildId);
+  }
+
+  async #rebuild(guildId: string, manifest: ModuleManifest, event: ProtonEvent): Promise<void> {
+    let compiled = await this.#compile(guildId, manifest, event);
+    if (compiled === null) return;
+
+    // Replaced, then re-read: an insert cannot drop a deleted rung, and a save mid-read would be undone.
+    for (let attempt = 0; attempt < REBUILD_ATTEMPTS; attempt += 1) {
+      await this.#deps.store.replaceModuleRules(guildId, manifest.id, compiled);
+
+      const settled = await this.#compile(guildId, manifest, event);
+      if (settled === null || JSON.stringify(settled) === JSON.stringify(compiled)) return;
+
+      compiled = settled;
+    }
+
+    throw new Error(
+      `${manifest.id}'s settings in guild ${guildId} changed ${REBUILD_ATTEMPTS} times while its ` +
+        'rules were being rebuilt from them, so the rules may not match them yet. guild.available ' +
+        'will be redelivered to rebuild them again.',
+    );
+  }
+
+  async #compile(
+    guildId: string,
+    manifest: ModuleManifest,
+    event: ProtonEvent,
+  ): Promise<RuleDefinition[] | null> {
+    if (!manifest.compileRules) return null;
+
+    const snapshot = await this.#deps.config.get(guildId, manifest.id).catch((error: unknown) => {
+      if (error instanceof ConfigUnavailableError && error.permanent) {
+        this.#deps.logger.error(
+          `the preset rules belonging to ${manifest.id} were not seeded in this server because ` +
+            `the module's configuration could not be read, and retrying will not help: ` +
+            `${error.message}. Open the module's settings in the Proton dashboard and save ` +
+            'them once to rewrite the stored config and the rules compiled from it.',
+          { guildId, moduleId: manifest.id, status: error.status, eventId: event.id },
+        );
+        return null;
+      }
+
+      throw error;
+    });
+
+    if (snapshot === null) return null;
+
+    const parsed = manifest.configSchema.safeParse(snapshot.config);
+    if (!parsed.success) {
+      this.#deps.logger.error(
+        `the preset rules belonging to ${manifest.id} were not seeded in this server because ` +
+          `its stored configuration is not valid: ${parsed.error.issues
+            .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
+            .join('; ')}. Open the module's settings in the Proton dashboard and save them ` +
+          'once to rewrite it.',
+        { guildId, moduleId: manifest.id, eventId: event.id },
+      );
+      return null;
+    }
+
+    return manifest.compileRules(parsed.data);
   }
 
   async #registerCron(guildId: string): Promise<void> {

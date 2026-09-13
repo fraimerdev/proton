@@ -202,20 +202,21 @@ export const tempVcHubsSchema = z
 const settings = {
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Does nothing until at least one creator channel is added',
+    description: 'Nothing happens until a creator channel is added.',
   }),
 
   ownerCommands: z.boolean().default(true).register(protonFields, {
     label: 'Let owners manage their own channel',
     description:
-      'Turns off /voice and the control panel everywhere, whatever each creator channel allows',
+      'If off, owners cannot use /voice or the control panel, whatever each creator channel allows.',
   }),
 
   // Server-wide, not per hub: it exists to keep Proton under Discord's channel-creation rate
   // limit, which is a property of the guild rather than of any one creator channel.
   serverCreationLimit: z.number().int().min(1).max(200).default(30).register(protonFields, {
     label: 'New channels per minute',
-    description: 'Discord rate-limits channel creation per server; past this Proton waits',
+    description:
+      'Discord limits how fast a server can create channels. Past this, Proton waits before creating more.',
   }),
 };
 

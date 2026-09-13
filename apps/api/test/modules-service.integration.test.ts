@@ -186,6 +186,41 @@ describe('writing module config', () => {
   });
 });
 
+describe('a save from a dashboard page loaded before the last deploy', () => {
+  test('a lift is handed the config being replaced, so a key the page never sent survives', async () => {
+    const carrying: typeof pingModule = {
+      ...pingModule,
+      liftStoredConfig: (raw, current) =>
+        current !== undefined && typeof raw === 'object' && raw !== null && !('response' in raw)
+          ? { ...raw, response: current.response }
+          : raw,
+    };
+
+    const registry = new ModuleRegistry();
+    registry.register(carrying);
+    const modules = new ModuleConfigService(handle, registry);
+
+    await modules.update({
+      guildId: GUILD,
+      moduleId: 'ping',
+      enabled: true,
+      config: { enabled: true, response: 'Kept', restrictToChannel: null },
+      actorId: ACTOR,
+      source: 'dashboard',
+    });
+
+    const { after } = await modules.update({
+      guildId: GUILD,
+      moduleId: 'ping',
+      config: { enabled: true, restrictToChannel: null },
+      actorId: ACTOR,
+      source: 'dashboard',
+    });
+
+    expect(after.config.response).toBe('Kept');
+  });
+});
+
 describe('asking Proton to post a panel', () => {
   const PANELS = 'panels';
 

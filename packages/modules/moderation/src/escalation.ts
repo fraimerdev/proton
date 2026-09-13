@@ -1,12 +1,12 @@
 import type { RuleDefinition } from '@proton/core';
-import { type CasesConfig, casesDefaultConfig, type EscalationRung } from './config.ts';
+import { type EscalationRung, type ModerationConfig, moderationDefaultConfig } from './config.ts';
 
 export function escalationRuleId(rung: EscalationRung): string {
   return `escalate-at-${rung.atWarnings}`;
 }
 
 export function escalationRules(
-  config: Pick<CasesConfig, 'escalationLadder' | 'escalationWindow'>,
+  config: Pick<ModerationConfig, 'escalationLadder' | 'escalationWindow'>,
 ): RuleDefinition[] {
   return config.escalationLadder.map((rung, index) => ({
     id: escalationRuleId(rung),
@@ -28,4 +28,4 @@ export function escalationRules(
   }));
 }
 
-export const casesPresetRules: RuleDefinition[] = escalationRules(casesDefaultConfig);
+export const moderationPresetRules: RuleDefinition[] = escalationRules(moderationDefaultConfig);

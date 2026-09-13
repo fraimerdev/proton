@@ -79,39 +79,39 @@ beforeEach(async () => {
 
 describe('seedPresets', () => {
   test('writes one row per preset, keyed by guild, module and rule', async () => {
-    expect(await store().seedPresets(GUILD, 'cases', [escalate])).toBe(1);
+    expect(await store().seedPresets(GUILD, 'moderation', [escalate])).toBe(1);
 
     const stored = await rows<{ id: string; created_by: string | null }>(
       handle.client`select id, created_by from rules`,
     );
     expect(stored).toEqual([
-      { id: guildRuleRowId(GUILD, 'cases', 'escalate-at-3'), created_by: PRESET_CREATED_BY },
+      { id: guildRuleRowId(GUILD, 'moderation', 'escalate-at-3'), created_by: PRESET_CREATED_BY },
     ]);
   });
 
   test('a preset a guild disabled stays disabled across re-seeding', async () => {
-    await store().seedPresets(GUILD, 'cases', [escalate]);
+    await store().seedPresets(GUILD, 'moderation', [escalate]);
 
-    const rowId = guildRuleRowId(GUILD, 'cases', 'escalate-at-3');
+    const rowId = guildRuleRowId(GUILD, 'moderation', 'escalate-at-3');
     await handle.db.update(rules).set({ enabled: false }).where(eq(rules.id, rowId));
 
-    expect(await store().seedPresets(GUILD, 'cases', [escalate])).toBe(0);
-    expect(await store().seedPresets(GUILD, 'cases', [escalate])).toBe(0);
+    expect(await store().seedPresets(GUILD, 'moderation', [escalate])).toBe(0);
+    expect(await store().seedPresets(GUILD, 'moderation', [escalate])).toBe(0);
 
     const [stored] = await handle.db.select().from(rules).where(eq(rules.id, rowId));
     expect(stored?.enabled).toBe(false);
   });
 
   test('re-seeding does not overwrite a guild’s edits to a preset', async () => {
-    await store().seedPresets(GUILD, 'cases', [escalate]);
+    await store().seedPresets(GUILD, 'moderation', [escalate]);
 
-    const rowId = guildRuleRowId(GUILD, 'cases', 'escalate-at-3');
+    const rowId = guildRuleRowId(GUILD, 'moderation', 'escalate-at-3');
     await handle.db
       .update(rules)
       .set({ actions: [{ kind: 'kick', reason: 'Third warning' }], priority: 99 })
       .where(eq(rules.id, rowId));
 
-    await store().seedPresets(GUILD, 'cases', [escalate]);
+    await store().seedPresets(GUILD, 'moderation', [escalate]);
 
     const [stored] = await handle.db.select().from(rules).where(eq(rules.id, rowId));
     expect(stored?.actions).toEqual([{ kind: 'kick', reason: 'Third warning' }]);
@@ -119,8 +119,8 @@ describe('seedPresets', () => {
   });
 
   test('two guilds get their own row for the same preset', async () => {
-    await store().seedPresets(GUILD, 'cases', [escalate]);
-    expect(await store().seedPresets(OTHER_GUILD, 'cases', [escalate])).toBe(1);
+    await store().seedPresets(GUILD, 'moderation', [escalate]);
+    expect(await store().seedPresets(OTHER_GUILD, 'moderation', [escalate])).toBe(1);
 
     expect(await store().listForEvent(GUILD, 'moderation.warned')).toHaveLength(1);
     expect(await store().listForEvent(OTHER_GUILD, 'moderation.warned')).toHaveLength(1);
@@ -137,12 +137,12 @@ describe('seedPresets', () => {
       ],
     } as RuleDefinition;
 
-    expect(await store().seedPresets(GUILD, 'cases', [escalate, broken])).toBe(1);
+    expect(await store().seedPresets(GUILD, 'moderation', [escalate, broken])).toBe(1);
 
     expect(reported).toHaveLength(1);
     expect(reported[0]?.context).toEqual({
       guildId: GUILD,
-      moduleId: 'cases',
+      moduleId: 'moderation',
       ruleId: 'escalate-at-5',
       source: 'preset',
     });
@@ -150,16 +150,16 @@ describe('seedPresets', () => {
   });
 
   test('seeding nothing writes nothing and costs no statement', async () => {
-    expect(await store().seedPresets(GUILD, 'cases', [])).toBe(0);
+    expect(await store().seedPresets(GUILD, 'moderation', [])).toBe(0);
     expect(await rows(handle.client`select id from rules`)).toEqual([]);
   });
 });
 
 describe('listForEvent', () => {
   beforeEach(async () => {
-    await store().seedPresets(GUILD, 'cases', [escalate, nightly]);
+    await store().seedPresets(GUILD, 'moderation', [escalate, nightly]);
     await store().seedPresets(GUILD, 'autorole', [autorole]);
-    await store().seedPresets(OTHER_GUILD, 'cases', [escalate]);
+    await store().seedPresets(OTHER_GUILD, 'moderation', [escalate]);
   });
 
   test('returns the rule under the id its module declared', async () => {
@@ -167,7 +167,7 @@ describe('listForEvent', () => {
 
     expect(found?.id).toBe('escalate-at-3');
     expect(found?.guildId).toBe(GUILD);
-    expect(found?.moduleId).toBe('cases');
+    expect(found?.moduleId).toBe('moderation');
     expect(found?.trigger).toEqual({ kind: 'event', event: 'moderation.warned' });
     expect(found?.conditions).toEqual(escalate.conditions);
     expect(found?.actions).toEqual(escalate.actions);
@@ -188,9 +188,9 @@ describe('listForEvent', () => {
 
   test('orders by priority, so two rules on one event run in a fixed order', async () => {
     await handle.db.insert(rules).values({
-      id: guildRuleRowId(GUILD, 'cases', 'escalate-at-5'),
+      id: guildRuleRowId(GUILD, 'moderation', 'escalate-at-5'),
       guildId: GUILD,
-      moduleId: 'cases',
+      moduleId: 'moderation',
       trigger: { kind: 'event', event: 'moderation.warned' },
       conditions: [],
       actions: [{ kind: 'kick' }],
@@ -207,7 +207,7 @@ describe('listForEvent', () => {
     await handle.client`
       insert into rules (id, guild_id, module_id, trigger, conditions, actions, priority)
       values (
-        ${guildRuleRowId(GUILD, 'cases', 'no-actions')}, ${GUILD}, 'cases',
+        ${guildRuleRowId(GUILD, 'moderation', 'no-actions')}, ${GUILD}, 'moderation',
         '{"kind":"event","event":"moderation.warned"}'::jsonb, '[]'::jsonb, '[]'::jsonb, 0
       )
     `;
@@ -223,7 +223,7 @@ describe('listForEvent', () => {
 
 describe('listCron', () => {
   beforeEach(async () => {
-    await store().seedPresets(GUILD, 'cases', [escalate, nightly]);
+    await store().seedPresets(GUILD, 'moderation', [escalate, nightly]);
   });
 
   test('returns the cron rules and nothing else', async () => {
@@ -240,7 +240,7 @@ describe('listCron', () => {
   test('a row with an unreadable trigger is reported, not scheduled', async () => {
     await handle.client`
       insert into rules (id, guild_id, module_id, trigger, actions)
-      values ('broken', ${GUILD}, 'cases', '{"kind":"whenever"}'::jsonb, '[{"kind":"kick"}]'::jsonb)
+      values ('broken', ${GUILD}, 'moderation', '{"kind":"whenever"}'::jsonb, '[{"kind":"kick"}]'::jsonb)
     `;
 
     const found = await store().listCron(GUILD);

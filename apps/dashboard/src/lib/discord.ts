@@ -137,8 +137,7 @@ const CDN = 'https://cdn.discordapp.com';
 
 // Verified against docs.discord.com/developers/reference: a per-guild avatar lives under the guild,
 // a global one under the user, and a member with neither gets the default indexed by their own id.
-function avatarUrl(guildId: string, user: RawUser, memberAvatar: string | null): string | null {
-  if (memberAvatar) return `${CDN}/guilds/${guildId}/users/${user.id}/avatars/${memberAvatar}.png`;
+function userAvatarUrl(user: RawUser): string {
   if (user.avatar) return `${CDN}/avatars/${user.id}/${user.avatar}.png`;
 
   if (user.discriminator && user.discriminator !== '0') {
@@ -146,6 +145,11 @@ function avatarUrl(guildId: string, user: RawUser, memberAvatar: string | null):
   }
 
   return `${CDN}/embed/avatars/${(BigInt(user.id) >> 22n) % 6n}.png`;
+}
+
+function avatarUrl(guildId: string, user: RawUser, memberAvatar: string | null): string | null {
+  if (memberAvatar) return `${CDN}/guilds/${guildId}/users/${user.id}/avatars/${memberAvatar}.png`;
+  return userAvatarUrl(user);
 }
 
 interface RawUser {
@@ -162,6 +166,35 @@ interface RawMember {
   nick?: string | null;
   avatar?: string | null;
   roles?: string[];
+}
+
+export interface DiscordProfile {
+  id: string;
+  name: string | null;
+  avatarUrl: string;
+}
+
+// Read live: the avatar hash Better Auth stored at sign-in 404s once the member changes it.
+export async function fetchCurrentUser(
+  restProxyUrl: string,
+  accessToken: string,
+): Promise<DiscordProfile | null> {
+  try {
+    const response = await fetch(`${restProxyUrl.replace(/\/$/, '')}/api/users/@me`, {
+      headers: { 'x-proton-authorization': `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return null;
+
+    const user = (await response.json()) as RawUser;
+
+    return {
+      id: user.id,
+      name: user.global_name ?? user.username ?? null,
+      avatarUrl: userAvatarUrl(user),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Discord has no batch endpoint for a known set of ids, so this is one request each, six at a time

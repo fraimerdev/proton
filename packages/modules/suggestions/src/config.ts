@@ -45,12 +45,13 @@ export const suggestionsConfigSchema = z.object({
   channelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Suggestion channel',
-    description: 'Needs View Channel, Send Messages and Embed Links there',
+    description:
+      'Where suggestions are posted. Needs View Channel, Send Messages and Embed Links there.',
   }),
 
   createThread: z.boolean().default(false).register(protonFields, {
-    label: 'Open a discussion thread for each suggestion',
-    description: 'Also needs Create Public Threads in the suggestion channel',
+    label: 'Create discussion threads',
+    description: 'Also needs Create Public Threads in the suggestion channel.',
   }),
 
   allowSelfVote: z
@@ -58,10 +59,15 @@ export const suggestionsConfigSchema = z.object({
     .default(true)
     .register(protonFields, { label: 'Let members vote on their own suggestion' }),
 
-  anonymous: z.boolean().default(false).register(protonFields, {
-    label: 'Hide who wrote each suggestion',
-    description: 'Proton still stores the author and can tell staff on request',
-  }),
+  anonymous: z
+    .boolean()
+    .default(false)
+    .register(protonFields, {
+      label: 'Attribution',
+      description:
+        'Choose whether suggestions show who wrote them. Proton still stores the author and can ' +
+        'tell staff on request.',
+    }),
 });
 
 export type SuggestionsConfig = z.infer<typeof suggestionsConfigSchema>;

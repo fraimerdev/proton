@@ -1,0 +1,40 @@
+/* cases page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.table-toolbar .cases-search {
+  flex: 0 1 320px;
+}
+
+.cases-filters {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.cases-filters .field {
+  gap: 4px;
+}
+
+.cases-filters .field-label {
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+}
+
+.cases-note {
+  margin: -6px 0 12px;
+}
+
+.cases-reason {
+  display: block;
+  max-width: 42ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cases-wrap {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

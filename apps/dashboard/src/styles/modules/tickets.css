@@ -1,0 +1,91 @@
+/* tickets page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.tickets-ceiling-note {
+  margin: -6px 0 12px;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+.tickets-row-error {
+  margin: -4px 0 10px;
+  padding: 0 16px;
+}
+
+.tickets-row-note {
+  margin: -4px 0 10px;
+  padding: 0 16px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 78ch;
+}
+
+.tickets-detail-note {
+  margin: -2px 0 4px;
+  max-width: 74ch;
+}
+
+.tickets-detail-back {
+  margin-bottom: 12px;
+}
+
+.tickets-preview-note,
+.tickets-foot-note {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 74ch;
+}
+
+.tickets-preview-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.tickets-choices {
+  padding: 8px 0 4px;
+}
+
+.tickets-typeids {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.tickets-typeid-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+}
+
+.tickets-typeid-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-secondary-size);
+}
+
+.tickets-toolbar {
+  flex-wrap: wrap;
+}
+
+.tickets-search-help {
+  margin: 8px 0 12px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  max-width: 78ch;
+}
+
+.tickets-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}

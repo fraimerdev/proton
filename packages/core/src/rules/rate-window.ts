@@ -90,6 +90,66 @@ interface RateWindowCommand {
 
 export const crossedKeyFor = (windowKey: string): string => `${windowKey}:crossed`;
 
+export interface RateWindowMove {
+  from: string;
+  to: string;
+}
+
+const MOVE_WINDOW_LUA = `
+local source = KEYS[1]
+local target = KEYS[2]
+
+local sourceTtl = redis.call('PTTL', source)
+if sourceTtl == -2 then return 0 end
+
+if redis.call('TYPE', source).ok == 'zset' then
+  local targetTtl = redis.call('PTTL', target)
+  redis.call('ZUNIONSTORE', target, 2, target, source, 'AGGREGATE', 'MIN')
+  local ttl = math.max(sourceTtl, targetTtl)
+  if ttl > 0 then redis.call('PEXPIRE', target, ttl) end
+elseif sourceTtl > 0 then
+  redis.call('SET', target, redis.call('GET', source), 'PX', sourceTtl, 'NX')
+else
+  redis.call('SET', target, redis.call('GET', source), 'NX')
+end
+
+redis.call('DEL', source)
+return 1
+`;
+
+const globLiteral = (text: string): string => text.replace(/[*?[\]\\]/g, '\\$&');
+
+export async function moveRateWindows(
+  redis: Redis,
+  move: RateWindowMove,
+  prefix: string = RATE_WINDOW_PREFIX,
+): Promise<number> {
+  const head = `${prefix}:`;
+  const pattern = `${globLiteral(head)}*:${globLiteral(move.from)}*`;
+
+  let moved = 0;
+  let cursor = '0';
+
+  do {
+    const [next, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 1000);
+    cursor = next;
+
+    for (const key of keys) {
+      const rest = key.slice(head.length);
+      const guildEnd = rest.indexOf(':');
+      if (guildEnd < 0) continue;
+
+      const tail = rest.slice(guildEnd + 1);
+      if (!tail.startsWith(move.from)) continue;
+
+      const target = `${head}${rest.slice(0, guildEnd)}:${move.to}${tail.slice(move.from.length)}`;
+      moved += Number(await redis.eval(MOVE_WINDOW_LUA, 2, key, target));
+    }
+  } while (cursor !== '0');
+
+  return moved;
+}
+
 export interface RedisRateWindowOptions {
   keyPrefix?: string;
 }

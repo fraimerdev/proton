@@ -322,8 +322,18 @@ bash /srv/proton/deploy/deploy.sh --with-gateway
 ```
 
 pm2 runs these in fork mode, so a reload is a restart — expect a second or two of 502s on the
-dashboard. Migrations run before the reload, so a release must be backwards-compatible with the
-processes still running when they apply.
+dashboard. The api and worker are stopped before migrations run and start again on the new code, so
+neither can write back a config shape or rule a migration has just moved; Discord events wait on the
+bus until the worker is back. The rest-proxy, gateway and dashboard keep running through the
+migrations, so a release must stay backwards-compatible with those. A dashboard tab opened before the
+deploy keeps the old page until it is reloaded.
+
+After the migrations the script moves the warn escalation rate windows in Redis from Cases to
+Moderation, which migration 0032 re-keyed, so a member's warnings inside the window still count.
+Later deploys find nothing to move.
+
+If either step fails, the api and worker stay stopped. Fix the cause and run the script again, or roll
+back as below.
 
 Rollback:
 

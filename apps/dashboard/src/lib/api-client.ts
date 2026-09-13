@@ -30,7 +30,23 @@ import {
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
 import type { TicketQuery, TicketSearchResult } from '@proton/module-tickets/query';
 import type { z } from 'zod';
+import { z as zod } from 'zod';
 import type { AuditStamp } from '../server/audit.ts';
+
+const maintenanceViewSchema = zod.object({
+  window: zod
+    .object({
+      guildId: zod.string(),
+      enabledBy: zod.string(),
+      reason: zod.string().nullable(),
+      startedAt: zod.number(),
+      expiresAt: zod.number(),
+    })
+    .nullable(),
+  now: zod.number().optional(),
+});
+
+export type MaintenanceView = zod.infer<typeof maintenanceViewSchema>;
 
 function queryString(query: Record<string, unknown>): string {
   const params = new URLSearchParams();
@@ -127,6 +143,17 @@ export class ApiClient {
     return this.#parsed(`/guilds/${guildId}/verification/passed`, verificationRequestResultSchema, {
       method: 'POST',
       body: JSON.stringify(body),
+    });
+  }
+
+  getMaintenance(guildId: string): Promise<MaintenanceView> {
+    return this.#parsed(`/guilds/${guildId}/antinuke/maintenance`, maintenanceViewSchema);
+  }
+
+  endMaintenance(guildId: string, actorId: string): Promise<MaintenanceView> {
+    return this.#parsed(`/guilds/${guildId}/antinuke/maintenance`, maintenanceViewSchema, {
+      method: 'DELETE',
+      headers: { 'x-proton-actor': actorId },
     });
   }
 

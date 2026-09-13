@@ -1,9 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import type { RuleDefinition } from '@proton/core';
-import { casesModule } from '@proton/module-cases';
+import { createModuleRegistry } from '@proton/modules';
 
-describe('cases compiles its ladder from a guild’s own config', () => {
-  const compile = casesModule.compileRules;
+const registry = createModuleRegistry();
+
+const policy = {
+  enabled: true,
+  requireReason: false,
+  publicReplies: false,
+  defaultTimeoutDuration: '1h',
+  defaultBanDeleteDays: 0,
+};
+
+describe('moderation compiles its ladder from a guild’s own config', () => {
+  const compile = registry.get('moderation')?.compileRules;
 
   test('the manifest declares a compiler at all', () => {
     expect(typeof compile).toBe('function');
@@ -11,8 +21,7 @@ describe('cases compiles its ladder from a guild’s own config', () => {
 
   test('a guild’s rungs produce a rule each', () => {
     const rules = compile?.({
-      enabled: true,
-      historyLimit: 10,
+      ...policy,
       escalationWindow: '7d',
       escalationLadder: [
         { atWarnings: 2, action: 'timeout', duration: '10m' },
@@ -25,14 +34,9 @@ describe('cases compiles its ladder from a guild’s own config', () => {
     expect(rules[1]?.actions[0]?.kind).toBe('kick');
   });
 
-  /**
-   * The bug this closes: the ladder editor wrote config and the rules stayed on the shipped
-   * defaults, so editing it changed nothing about what fired.
-   */
   test('an edited window reaches the compiled condition', () => {
     const rules = compile?.({
-      enabled: true,
-      historyLimit: 10,
+      ...policy,
       escalationWindow: '30d',
       escalationLadder: [{ atWarnings: 3, action: 'timeout', duration: '1h' }],
     } as Parameters<NonNullable<typeof compile>>[0]) as RuleDefinition[];
@@ -44,12 +48,20 @@ describe('cases compiles its ladder from a guild’s own config', () => {
 
   test('an emptied ladder compiles to no rules, so nothing escalates', () => {
     const rules = compile?.({
-      enabled: true,
-      historyLimit: 10,
+      ...policy,
       escalationWindow: '7d',
       escalationLadder: [],
     } as Parameters<NonNullable<typeof compile>>[0]) as RuleDefinition[];
 
     expect(rules).toEqual([]);
+  });
+});
+
+describe('cases no longer carries the ladder', () => {
+  test('it ships and compiles no rules, so a cases save leaves the rules table alone', () => {
+    const cases = registry.get('cases');
+
+    expect(cases?.rules).toBeUndefined();
+    expect(cases?.compileRules).toBeUndefined();
   });
 });

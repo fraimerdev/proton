@@ -101,7 +101,7 @@ describe('planRestore', () => {
 
     expect(plan.restore).toEqual(['700000000000000001']);
     expect(plan.skipped[0]?.roleId).toBe('700000000000000002');
-    expect(plan.skipped[0]?.reason).toContain('eligible for restoring');
+    expect(plan.skipped[0]?.reason).toContain('Roles to restore');
   });
 
   test('an empty allowlist means every role is eligible', () => {

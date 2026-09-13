@@ -616,9 +616,11 @@ export {
 } from './rules/migrate.ts';
 export {
   crossedKeyFor,
+  moveRateWindows,
   RATE_WINDOW_GUILD_SCOPE,
   RATE_WINDOW_PREFIX,
   type RateWindowHit,
+  type RateWindowMove,
   type RateWindowResult,
   type RateWindowStore,
   RedisRateWindow,

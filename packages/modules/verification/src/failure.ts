@@ -45,8 +45,8 @@ export function planFailure(
       if (ms === null || ms <= 0) {
         return {
           unconfigured:
-            `Verification's Timeout length is stored as '${config.failureTimeout}', which is not a ` +
-            'readable length. It must be a number followed by s, m, h, d or w. Fix it in the ' +
+            `Verification's Timeout duration is stored as '${config.failureTimeout}', which is not a ` +
+            'readable duration. It must be a number followed by s, m, h, d or w. Fix it in the ' +
             'Proton dashboard under Verification.',
         };
       }

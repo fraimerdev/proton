@@ -1,0 +1,58 @@
+/* starboard page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.starboard-rule {
+  margin: -2px 0 26px;
+  max-width: 70ch;
+}
+
+.starboard-rule-line {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.starboard-star {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-1);
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.starboard-star > * + * {
+  margin-left: 5px;
+}
+
+.starboard-star img {
+  vertical-align: -3px;
+}
+
+.starboard-star strong {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.starboard-chan {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}
+
+/* ChannelName lays itself out with .inline, which is display:flex — inside a sentence that would
+   put the channel on a line of its own. */
+.starboard-chan .inline {
+  display: inline;
+}
+
+.starboard-chan svg {
+  vertical-align: -2px;
+}
+
+.starboard-rule-note {
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.55;
+}

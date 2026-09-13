@@ -145,7 +145,7 @@ describe('timing them out first', () => {
     );
 
     expect(reason).toContain("'later'");
-    expect(reason).toContain('holding timeout');
+    expect(reason).toContain('First timeout duration');
   });
 
   test('holds before a kick and before a warning too', () => {

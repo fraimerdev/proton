@@ -245,7 +245,7 @@ export function componentKeys(row: ActionRow): string[] {
 export const messagesConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Who may run /message is set in the Permissions module',
+    description: 'Set who can use /message in Permissions.',
   }),
 
   templates: templatesSchema.default([]),

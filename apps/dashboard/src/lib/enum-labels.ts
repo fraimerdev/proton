@@ -31,12 +31,12 @@ export type ActionChoice = (typeof ACTION_CHOICES)[number];
 // Verification keeps its own labels on purpose: its `none` is "let them try again", a retry rather
 // than a decision not to act, so adopting this table there would change what the option means.
 export const ACTION_LABELS: Record<ActionChoice, string> = {
-  none: 'Do nothing but log it',
-  warn: 'Warn them',
-  timeout: 'Time them out',
-  kick: 'Kick them',
-  softban: 'Remove them and delete what they posted',
-  ban: 'Ban them',
-  quarantine: 'Give them the quarantine role',
-  verify: 'Make them verify',
+  none: 'Log only',
+  warn: 'Warn',
+  timeout: 'Timeout',
+  kick: 'Kick',
+  softban: 'Softban — remove and delete messages',
+  ban: 'Ban',
+  quarantine: 'Add quarantine role',
+  verify: 'Add verification role',
 };

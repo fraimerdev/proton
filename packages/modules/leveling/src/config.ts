@@ -51,7 +51,7 @@ export function liftLevelUpMessage(value: unknown): unknown {
 const NO_INTERACTIVE =
   'a level-up message can carry link buttons and nothing else: Proton does not watch for presses ' +
   'on a level-up announcement, so any other button would do nothing when a member pressed it. ' +
-  'Make it a link button, or post the interactive message with the Embeds module instead.';
+  'Make it a link button, or post the interactive message with the Messages module instead.';
 
 export function isSilentLevelUp(message: {
   content?: string | undefined;
@@ -95,11 +95,11 @@ const levelingShape = {
   enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
   xpPerMessageMin: z.number().int().min(0).max(1000).default(15).register(protonFields, {
-    label: 'XP per message (minimum)',
+    label: 'Minimum XP per message',
   }),
 
   xpPerMessageMax: z.number().int().min(0).max(1000).default(25).register(protonFields, {
-    label: 'XP per message (maximum)',
+    label: 'Maximum XP per message',
   }),
 
   messageCooldown: durationStringSchema.default('60s').register(protonFields, {
@@ -122,7 +122,7 @@ const levelingShape = {
     .register(protonFields, {
       field: 'colour',
       label: 'Accent colour',
-      description: 'Colours the progress bar, the rank number and the avatar ring',
+      description: 'Colours the progress bar, rank number and avatar ring.',
     }),
 
   cardBackgroundUrl: z
@@ -131,11 +131,11 @@ const levelingShape = {
     .optional()
     .register(protonFields, {
       label: 'Background image',
-      description: 'Only images hosted on Discord’s CDN load',
+      description: 'Only images hosted on Discord’s CDN load.',
     }),
 
   cardShowRank: z.boolean().default(true).register(protonFields, {
-    label: 'Show the rank number',
+    label: 'Show rank number',
   }),
 
   cardShowPercent: z.boolean().default(true).register(protonFields, {
@@ -149,7 +149,8 @@ const levelingShape = {
   levelUpChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Level-up channel',
-    description: 'Empty posts in the member’s channel, silencing voice level-ups',
+    description:
+      'Where Proton announces new levels. Voice level-ups are announced only when a channel is set.',
     channelTypes: [0, 5, 11, 12],
   }),
 
@@ -169,8 +170,9 @@ const levelingShape = {
   }),
 
   voiceXpPerMinute: z.number().int().min(0).max(100).default(5).register(protonFields, {
-    label: 'Voice XP per minute',
-    description: 'Credited when the member leaves the voice channel, not during',
+    label: 'Voice XP',
+    description:
+      'XP earned for each minute in voice. Proton adds it when the member leaves the channel.',
   }),
 
   afkChannelId: snowflakeSchema.optional().register(protonFields, {

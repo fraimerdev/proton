@@ -45,7 +45,7 @@ export const loggingConfigSchema = z.object({
     .default(MESSAGE_CACHE_DEFAULT_RETENTION)
     .register(protonFields, {
       field: 'duration',
-      label: 'How long to remember',
+      label: 'Remember for',
     }),
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { ModuleRegistry, zodToDescriptors } from '@proton/core';
-import { moderationConfigSchema } from '../src/config.ts';
+import { liftStoredConfig, moderationConfigSchema, moderationFormSchema } from '../src/config.ts';
 import { moderationModule } from '../src/index.ts';
 
 describe('moderation manifest', () => {
@@ -48,20 +48,31 @@ describe('moderation manifest', () => {
   });
 
   test('config renders as dashboard fields, including the duration kind', () => {
-    const descriptors = zodToDescriptors(moderationConfigSchema);
+    const descriptors = zodToDescriptors(moderationFormSchema);
     const byPath = new Map(descriptors.map((d) => [d.path, d]));
 
     expect(byPath.get('defaultTimeoutDuration')?.kind).toBe('duration');
     expect(byPath.get('defaultBanDeleteDays')?.kind).toBe('number');
     expect(byPath.get('requireReason')?.kind).toBe('boolean');
+    expect(byPath.get('escalationWindow')?.kind).toBe('duration');
   });
 
-  test('dashboard sections name real config fields', () => {
-    const paths = new Set(zodToDescriptors(moderationConfigSchema).map((d) => d.path));
+  test('dashboard sections place every config field exactly once', () => {
     const claimed = (moderationModule.dashboard?.sections ?? []).flatMap((s) => s.fields);
 
-    for (const field of claimed) expect(paths).toContain(field);
-    expect(new Set(claimed).size).toBe(paths.size);
+    expect([...claimed].sort()).toEqual(Object.keys(moderationConfigSchema.shape).sort());
+  });
+
+  test('the ladder gets its own section, since the generated form cannot draw it', () => {
+    expect(moderationModule.dashboard?.sections.find((s) => s.id === 'escalation')).toEqual({
+      id: 'escalation',
+      title: 'Warn escalation',
+      fields: ['escalationWindow', 'escalationLadder'],
+    });
+  });
+
+  test('lifts a save that carries no ladder, so a stale page cannot reset it', () => {
+    expect(moderationModule.liftStoredConfig).toBe(liftStoredConfig);
   });
 
   test('needs no privileged intent', () => {

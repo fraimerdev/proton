@@ -1,0 +1,6 @@
+/* help page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.help-caveat {
+  margin: 12px 0 0;
+  max-width: 72ch;
+}

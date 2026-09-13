@@ -1,0 +1,46 @@
+/* tempvc page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+/* Each privacy, sync, ownerless and temporary-role option is a whole sentence, so the native
+   select needs more than the shared 252px before it starts truncating them. */
+.tempvc-select {
+  width: 340px;
+  max-width: 100%;
+}
+
+.tempvc-allow {
+  margin-top: 10px;
+}
+
+.tempvc-allow .matrix-group-head:hover {
+  background: var(--surface-2);
+}
+
+.tempvc-allow-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tempvc-allow-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 40px;
+  padding: 4px 14px;
+  border-top: 1px solid var(--border-subtle);
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.tempvc-allow-cell:hover {
+  background: var(--surface-hover);
+}
+
+.tempvc-allow-cell .matrix-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .tempvc-allow-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

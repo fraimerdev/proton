@@ -434,10 +434,9 @@ const registry = createModuleRegistry(
   { providers: providerRegistry },
 );
 
-const config = new CachingConfigProvider(
-  new HttpConfigProvider(env.API_URL, env.API_SHARED_SECRET),
-  { ttlMs: env.CONFIG_CACHE_TTL_MS },
-);
+const configApi = new HttpConfigProvider(env.API_URL, env.API_SHARED_SECRET);
+
+const config = new CachingConfigProvider(configApi, { ttlMs: env.CONFIG_CACHE_TTL_MS });
 
 const publisherFor = createModulePublisher({ bus, registry, logger: console });
 const schedulerFor = createModuleScheduler({ store: schedule, registry, logger: console });
@@ -512,6 +511,8 @@ const rulePresets = new RulePresetSeeder({
   bus,
   registry,
   store: ruleStore,
+  // Uncached: the seeder re-reads to catch a save made while it rebuilt the rules, and a cache hides it.
+  config: configApi,
   cron: ruleCron,
   logger: console,
 });

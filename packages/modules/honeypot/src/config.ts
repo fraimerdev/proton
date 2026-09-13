@@ -84,49 +84,50 @@ export const DEFAULT_NOTICE_MESSAGE: HoneypotLayout =
 export const DEFAULT_DM_MESSAGE: HoneypotLayout = honeypotLayoutSchema.parse(DEFAULT_DM_LAYOUT);
 
 const ACTION_LABELS: Record<HoneypotAction, string> = {
-  softban: 'Softban — remove them and delete what they posted',
+  softban: 'Softban — remove and delete messages',
   ban: 'Ban',
   kick: 'Kick',
   timeout: 'Timeout',
   warn: 'Warn',
-  none: 'Log it and do nothing else',
+  none: 'Log only',
 };
 
 const settings = {
-  enabled: z.boolean().default(false).register(protonFields, { label: 'Honeypot enabled' }),
+  enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
   includeThreads: z.boolean().default(true).register(protonFields, {
-    label: 'Threads count too',
-    description: 'A thread under a bait channel is part of the trap',
+    label: 'Include threads',
+    description: 'Messages in threads under a bait channel trigger Honeypot too.',
   }),
 
   keepChannelActive: z.boolean().default(false).register(protonFields, {
-    label: 'Keep the channel active',
-    description: 'Posts something once a day so the channel does not read as abandoned',
+    label: 'Keep channels active',
+    description: 'Post a short message in bait channels once a day so they do not look abandoned.',
   }),
 
   renameChannelDaily: z.boolean().default(false).register(protonFields, {
-    label: 'Rename the channel daily',
-    description: 'Rotates the bait channel’s name once a day',
+    label: 'Rename channels daily',
+    description:
+      'Change the ending of each bait channel’s name every day, such as -notes or -archive.',
   }),
 
   action: z.enum(HONEYPOT_ACTIONS).default('softban').register(protonFields, {
-    label: 'What happens to them',
+    label: 'Action',
     optionLabels: ACTION_LABELS,
   }),
 
   timeoutFirst: z.boolean().default(false).register(protonFields, {
-    label: 'Time them out first',
-    description: 'Silences them before the action lands, so a burst stops immediately',
+    label: 'Timeout first',
+    description: 'Time out the member before the main action, so they stop posting at once.',
   }),
 
   timeoutFirstDuration: durationStringSchema.default('5m').register(protonFields, {
-    label: 'Held for',
+    label: 'First timeout duration',
     showWhen: { path: 'timeoutFirst', equals: ['true'] },
   }),
 
   timeoutDuration: durationStringSchema.default('1h').register(protonFields, {
-    label: 'Timed out for',
+    label: 'Timeout duration',
     showWhen: { path: 'action', equals: ['timeout'] },
   }),
 
@@ -137,8 +138,9 @@ const settings = {
     .max(DELETE_SECONDS_MAX)
     .default(DELETE_SECONDS_MAX)
     .register(protonFields, {
-      label: 'Messages to wipe',
-      description: 'How far back their messages are deleted. Only a softban or a ban can do this',
+      label: 'Delete messages',
+      description:
+        'How far back to delete the member’s messages. Only a softban or a ban can do this.',
     }),
 
   waitBeforeActingSeconds: z
@@ -149,7 +151,8 @@ const settings = {
     .default(0)
     .register(protonFields, {
       label: 'Wait before acting',
-      description: 'Leave at zero to act immediately',
+      description:
+        'How long to wait after a member triggers Honeypot. Leave at zero to act immediately.',
     }),
 
   auditLogReason: z
@@ -160,16 +163,16 @@ const settings = {
     .default(DEFAULT_AUDIT_REASON)
     .register(protonFields, {
       label: 'Audit log reason',
-      description: 'What Discord’s own audit log records against the action',
+      description: 'The reason shown in Discord’s audit log.',
     }),
 
   deleteTriggerMessage: z.boolean().default(true).register(protonFields, {
-    label: 'Delete their message',
+    label: 'Delete trigger message',
   }),
 
   exemptAdministrators: z.boolean().default(true).register(protonFields, {
     label: 'Exempt administrators',
-    description: 'Anyone holding Administrator is caught and counted, but not acted on',
+    description: 'Anyone holding Administrator is caught and counted, but not acted on.',
   }),
 
   exemptAdminRoleId: snowflakeSchema.optional().register(protonFields, {
@@ -183,8 +186,8 @@ const settings = {
   }),
 
   postNotice: z.boolean().default(true).register(protonFields, {
-    label: 'Post the warning',
-    description: 'Puts a notice in every bait channel so a member who wanders in knows to leave',
+    label: 'Post a warning message',
+    description: 'Shown in every armed bait channel to warn members away.',
   }),
 
   noticeCounterButton: z
@@ -192,7 +195,7 @@ const settings = {
     .default(true)
     .register(protonFields, {
       label: 'Counter button',
-      description: 'Shows the live number this trap has caught',
+      description: 'Show how many members this bait channel has caught.',
       showWhen: { path: 'postNotice', equals: ['true'] },
     }),
 
@@ -200,14 +203,14 @@ const settings = {
     .boolean()
     .default(false)
     .register(protonFields, {
-      label: 'Hide what is a honeypot',
-      description: 'Warns members off without saying the channel is a trap',
+      label: 'Hide channel purpose',
+      description: 'Warn members away without explaining that the channel catches spam bots.',
       showWhen: { path: 'postNotice', equals: ['true'] },
     }),
 
   sendDirectMessage: z.boolean().default(true).register(protonFields, {
     label: 'Send a direct message',
-    description: 'Sent just before the action lands, while there is still a shared server',
+    description: 'Sent just before Proton acts, while the member is still in the server.',
   }),
 
   offerWayBackIn: z
@@ -225,24 +228,24 @@ const settings = {
     .optional()
     .register(protonFields, {
       label: 'Invite link',
-      description: 'Where the way back in points. Proton cannot mint one for you',
+      description: 'The server invite behind the Rejoin button. Proton cannot create one.',
       showWhen: { path: 'offerWayBackIn', equals: ['true'] },
     }),
 
   addToBlacklist: z.boolean().default(false).register(protonFields, {
-    label: 'Add them to the blacklist',
-    description: 'A blocked account cannot pass verification until a moderator lifts it',
+    label: 'Block caught members',
+    description: 'A blocked account cannot pass verification until a moderator lifts it.',
   }),
 
   quoteMessage: z.boolean().default(false).register(protonFields, {
     label: 'Quote the message',
-    description: 'Puts what they posted in the incident log',
+    description: 'Include the member’s message in the incident log.',
   }),
 
   logChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
-    label: 'Log channel',
-    description: 'Where Proton reports every trap it springs',
+    label: 'Incident log',
+    description: 'Where Proton reports Honeypot detections.',
 
     channelTypes: [0, 5, 11, 12],
   }),

@@ -45,7 +45,7 @@ function timeoutMs(raw: string, what: string): number | { unconfigured: string }
   if (ms === null || ms <= 0) {
     return {
       unconfigured:
-        `This honeypot's ${what} is stored as '${raw}', which is not a readable length. It must ` +
+        `Honeypot's ${what} is stored as '${raw}', which is not a readable duration. It must ` +
         'be a number followed by s, m, h, d or w. Fix it in the Proton dashboard under Honeypot.',
     };
   }
@@ -61,7 +61,7 @@ export function planTrap(punishment: Punishment, userId: string, now: number): T
   // Collapsed when the punishment is itself a timeout: two timeout calls on one member is the
   // second overwriting the first, and the holding one is always the shorter.
   if (punishment.timeoutFirst && action !== 'timeout' && action !== 'none') {
-    const held = timeoutMs(punishment.timeoutFirstDuration, 'holding timeout');
+    const held = timeoutMs(punishment.timeoutFirstDuration, 'First timeout duration');
     if (typeof held !== 'number') return held;
 
     holding.push({
@@ -113,7 +113,7 @@ export function planTrap(punishment: Punishment, userId: string, now: number): T
       };
 
     case 'timeout': {
-      const capped = timeoutMs(punishment.timeoutDuration, 'timeout length');
+      const capped = timeoutMs(punishment.timeoutDuration, 'Timeout duration');
       if (typeof capped !== 'number') return capped;
 
       return {

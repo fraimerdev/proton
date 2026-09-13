@@ -1,0 +1,169 @@
+:root {
+  --proton-cyan: #0bb7fd;
+  --proton-blue: #2a8af7;
+
+  --app-topbar: #0f131a;
+  --app-sidebar: #121720;
+  --app-canvas: #161a22;
+
+  --surface-1: #1d232d;
+  --surface-2: #232a35;
+  --surface-3: #27303c;
+  --surface-hover: #29323f;
+  --surface-selected: #2b3545;
+  --surface-active: #303c4e;
+  --surface-sunken: #171c24;
+
+  --border-subtle: #2a3340;
+  --border-default: #323d4b;
+  --border-strong: #3a4657;
+  /* Not the brief's #323d4b: an empty field's edge needs 3:1 on --surface-2, and that is 1.31:1. */
+  --input-border: #677483;
+  --control-border: #6e7b8e;
+
+  --text-primary: #f4f7fb;
+  --text-secondary: #bcc5d0;
+  /* Row metadata sits on --surface-selected; anything darker than this drops under 4.5:1 there. */
+  --text-muted: #929dac;
+  --text-disabled: #5f6977;
+
+  --primary: var(--proton-blue);
+  --primary-hover: #4199f8;
+  /* Not the brief's #2479dc: as a hovered switch track on --surface-hover that is 2.99:1. */
+  --primary-pressed: #257add;
+  --primary-border: rgba(42, 138, 247, 0.38);
+  /* White on --primary is 3.46:1, under AA for a 13px label; the owner chose it over dark ink. */
+  --on-primary: #ffffff;
+
+  --focus: var(--proton-cyan);
+  --focus-soft: rgba(11, 183, 253, 0.18);
+  --highlight: var(--proton-cyan);
+
+  --selection: rgba(42, 138, 247, 0.32);
+
+  --link: #59a8f8;
+  --link-hover: #78b9fa;
+
+  --sidebar-selected: rgba(42, 138, 247, 0.1);
+  --tab-inactive: #9faaba;
+
+  --switch-track-off: #3a4350;
+  --switch-track-off-hover: #46505e;
+  --switch-thumb-off: #a7afba;
+  --switch-thumb-on: var(--on-primary);
+
+  --badge-neutral-bg: var(--surface-hover);
+  --badge-neutral-text: var(--text-secondary);
+  /* Opaque, not the --*-soft tints: a translucent pill lightens with a hovered row and drops its text under 4.5:1. */
+  --badge-success-bg: #243738;
+  --badge-warning-bg: #353433;
+  --badge-danger-bg: #372d37;
+  --badge-info-bg: #243345;
+  --badge-brand-bg: #1f2f45;
+  --badge-brand-text: var(--link);
+
+  --scrollbar-thumb: var(--border-strong);
+  --scrollbar-thumb-hover: #4a586a;
+
+  --success: #55c98b;
+  --warning: #e6b45d;
+  /* A danger menu item hovers on --danger-soft over --surface-2; anything darker drops under 4.5:1 there. */
+  --danger: #f27a84;
+  --info: #59a8f8;
+
+  --success-soft: rgba(85, 201, 139, 0.12);
+  --warning-soft: rgba(230, 180, 93, 0.12);
+  --danger-soft: rgba(242, 122, 132, 0.12);
+  --info-soft: rgba(89, 168, 248, 0.12);
+
+  --success-border: rgba(85, 201, 139, 0.32);
+  --warning-border: rgba(230, 180, 93, 0.32);
+  --danger-border: rgba(242, 122, 132, 0.32);
+  --info-border: rgba(89, 168, 248, 0.32);
+
+  --danger-hover: #fe858e;
+  --danger-pressed: #e36d77;
+  --on-danger: #17080a;
+  --on-warning: #1d1608;
+
+  /* The save toast's button is Discord's save green, darker on hover so white keeps ≥4.5:1. */
+  --save: #248046;
+  --save-hover: #1f7040;
+  --save-pressed: #1a6334;
+  --on-save: #ffffff;
+
+  --topbar-height: 42px;
+  --sidebar-width: 240px;
+
+  --content-padding-x: 32px;
+  --content-padding-top: 24px;
+  --content-padding-bottom: 48px;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-dialog: 10px;
+  --radius-pill: 999px;
+
+  --font-sans:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --text-page-title: 29px;
+  --text-section-title: 16px;
+  --text-row-title: 15px;
+  --text-body: 14px;
+  --text-secondary-size: 13px;
+  --text-label: 11px;
+  --text-micro: 12px;
+
+  --weight-regular: 400;
+  --weight-book: 450;
+  --weight-medium: 550;
+  --weight-semibold: 600;
+  --weight-section: 650;
+  --weight-bold: 700;
+
+  --control-height: 34px;
+  --control-height-sm: 28px;
+  --control-height-lg: 38px;
+  --row-min-height: 60px;
+
+  --motion-fast: 150ms;
+  --motion-normal: 240ms;
+  --motion-slow: 340ms;
+  --motion-hero: 640ms;
+  --motion-stagger: 90ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring-soft: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --loading-delay: 180ms;
+  /* React holds a Suspense reveal 300ms after its fallback commits; a shorter wait flashes. */
+  --loading-delay-fallback: 350ms;
+
+  --focus-ring: 0 0 0 2px var(--app-canvas), 0 0 0 4px var(--focus);
+  --focus-ring-tight: 0 0 0 2px var(--focus);
+  --focus-ring-input: 0 0 0 3px var(--focus-soft);
+
+  --shadow-popover: 0 8px 24px -6px rgba(0, 0, 0, 0.55), 0 2px 6px -2px rgba(0, 0, 0, 0.4);
+  --shadow-dialog: 0 24px 56px -12px rgba(0, 0, 0, 0.7), 0 4px 12px -4px rgba(0, 0, 0, 0.5);
+
+  --overlay: rgba(4, 7, 12, 0.72);
+
+  --z-sticky: 20;
+  --z-savebar: 40;
+  --z-topbar: 60;
+  --z-drawer: 70;
+  --z-popover: 80;
+  --z-dialog: 90;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ease-spring-soft: var(--ease-standard);
+    --motion-stagger: 0ms;
+  }
+}

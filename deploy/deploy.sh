@@ -30,8 +30,23 @@ echo "==> installing dependencies"
 echo "==> building dashboard"
 "$BUN" run build
 
+stopped_and_failed() {
+  echo "==> $1 failed. proton-api and proton-worker are stopped: fix it and re-run, or roll back (docs/DEPLOY.md §11)." >&2
+  exit 1
+}
+
+# Stopped, not left running: the last release's api or worker would write back what a migration moved.
+for name in proton-api proton-worker; do
+  echo "==> stopping $name"
+  "$PM2" stop "$name"
+done
+
 echo "==> applying migrations"
-"$BUN" --env-file="$ROOT/.env" "$ROOT/packages/db/src/migrate.ts"
+"$BUN" --env-file="$ROOT/.env" "$ROOT/packages/db/src/migrate.ts" || stopped_and_failed "applying migrations"
+
+echo "==> moving warn escalation rate windows"
+"$BUN" --env-file="$ROOT/.env" "$ROOT/apps/worker/src/move-escalation-windows.ts" ||
+  stopped_and_failed "moving warn escalation rate windows"
 
 # The gateway is excluded on purpose: Discord allows 1000 session starts a day and every restart
 # spends one, so it is reloaded only when its own code changed. Pass --with-gateway for that.

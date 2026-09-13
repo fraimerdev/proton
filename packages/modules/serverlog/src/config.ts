@@ -72,7 +72,7 @@ export const serverlogConfigSchema = z.object({
   defaultChannelId: channelRef().register(protonFields, {
     field: 'channel-id',
     label: 'Default log channel',
-    description: 'Category and per-event channels override this',
+    description: 'Used for events without a category or event channel.',
     channelTypes: LOG_TEXT_CHANNEL_TYPES,
   }),
 
@@ -120,7 +120,7 @@ export const serverlogConfigSchema = z.object({
     .max(100)
     .default([])
     .register(protonFields, {
-      label: 'Ignored user ids',
+      label: 'Ignored user IDs',
     }),
 
   ignoreBots: z.boolean().default(false).register(protonFields, {

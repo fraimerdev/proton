@@ -33,7 +33,7 @@ const editable = {
     .optional()
     .register(protonFields, {
       label: 'Server nickname',
-      description: `What Proton is called in this server. Up to ${NICKNAME_MAX} characters; leave it empty to use its own name.`,
+      description: `Leave empty to use Proton’s own name. Up to ${NICKNAME_MAX} characters.`,
     }),
 
   bio: z
@@ -42,13 +42,13 @@ const editable = {
     .optional()
     .register(protonFields, {
       label: 'Server bio',
-      description: `The "About me" on Proton's profile in this server. Up to ${BIO_MAX} characters.`,
+      description: `Shown as “About me” on Proton’s profile. Up to ${BIO_MAX} characters.`,
     }),
 
   typeface: z.enum(TYPEFACES).default('none').register(protonFields, {
     label: 'Typeface',
     description:
-      'Discord has no font setting a bot can use, so a styled name is spelled in Unicode letters that look like one. Members can still mention Proton, but searching the member list for its plain name stops finding it, and screen readers read the letters out one at a time.',
+      'Discord has no font setting for bots, so Proton spells its name in look-alike Unicode letters. Mentions still work, but searching the member list for the plain name will not find it, and screen readers read it letter by letter.',
   }),
 
   nameEffect: z
@@ -57,7 +57,7 @@ const editable = {
     .register(protonFields, {
       label: 'Effect',
       description:
-        'Colours Proton’s name through a role it holds here. Gradient and holographic need the server to have Discord’s Enhanced Role Colours feature.',
+        'Colour Proton’s name with a role it creates for itself. Gradient and holographic need Discord’s Enhanced Role Colours feature.',
     }),
 
   primaryColor: z
@@ -77,9 +77,8 @@ const editable = {
     .register(protonFields, { field: 'colour', label: 'Second colour' }),
 
   restoreOnDisable: z.boolean().default(true).register(protonFields, {
-    label: 'Undo when switched off',
-    description:
-      'Clears the nickname, avatar, banner and bio in this server when this module is turned off',
+    label: 'Reset when switched off',
+    description: 'Remove the server nickname, avatar, banner and bio.',
   }),
 };
 

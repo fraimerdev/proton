@@ -1,0 +1,41 @@
+/* moderation page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.moderation-reason {
+  display: block;
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moderation-wrap {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.moderation-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--link);
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.moderation-link:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+}
+
+.moderation-field-note {
+  margin: -6px 0 12px;
+}
+
+.moderation-rung-reason {
+  margin: 4px 0 0 48px;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+.moderation-rung-reason span {
+  color: var(--text-secondary);
+}

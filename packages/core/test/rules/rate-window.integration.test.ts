@@ -4,7 +4,13 @@ import Redis from 'ioredis';
 import type { ActionExecutor, ActionRequest, ActionResult } from '../../src/actions/types.ts';
 import type { ProtonEvent } from '../../src/events/types.ts';
 import { RuleEngine } from '../../src/rules/engine.ts';
-import { RATE_WINDOW_PREFIX, RedisRateWindow, rateWindowKey } from '../../src/rules/rate-window.ts';
+import {
+  crossedKeyFor,
+  moveRateWindows,
+  RATE_WINDOW_PREFIX,
+  RedisRateWindow,
+  rateWindowKey,
+} from '../../src/rules/rate-window.ts';
 import type { GuildRule } from '../../src/rules/types.ts';
 
 let container: StartedRedisContainer;
@@ -163,6 +169,84 @@ describe('RedisRateWindow', () => {
     const ttl = await redis.pttl(rateWindowKey(GUILD, RULE, MEMBER));
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(30_000);
+  });
+});
+
+describe('moveRateWindows', () => {
+  const MOVE = { from: 'cases:escalate-at-', to: 'moderation:escalate-at-' };
+  const OLD_3 = 'cases:escalate-at-3';
+  const NEW_3 = 'moderation:escalate-at-3';
+
+  test('a member partway up the ladder keeps their count under the new rule id', async () => {
+    for (let i = 0; i < 3; i++) {
+      await hit({ ruleId: 'cases:escalate-at-5', member: `m${i}`, now: NOW + i });
+    }
+
+    expect(await moveRateWindows(redis, MOVE)).toBe(1);
+
+    const next = { ruleId: 'moderation:escalate-at-5', now: NOW + 3 };
+    expect(await hit({ ...next, member: 'm3' })).toEqual({ count: 4, tripped: false });
+    expect(await hit({ ...next, member: 'm4' })).toEqual({ count: 5, tripped: true });
+  });
+
+  test('a rung already crossed does not cross again in the same window', async () => {
+    for (let i = 0; i < 3; i++) {
+      await hit({ ruleId: OLD_3, limit: 3, member: `m${i}`, now: NOW + i });
+    }
+
+    expect(await moveRateWindows(redis, MOVE)).toBe(2);
+
+    expect(await redis.exists(rateWindowKey(GUILD, OLD_3, MEMBER))).toBe(0);
+    expect(await redis.exists(crossedKeyFor(rateWindowKey(GUILD, OLD_3, MEMBER)))).toBe(0);
+    expect(await hit({ ruleId: NEW_3, limit: 3, member: 'm3', now: NOW + 3 })).toEqual({
+      count: 4,
+      tripped: false,
+    });
+  });
+
+  test('counts already under the new id are merged, not overwritten', async () => {
+    await hit({ ruleId: OLD_3, member: 'before', now: NOW });
+    await hit({ ruleId: NEW_3, member: 'after', now: NOW + 1 });
+
+    await moveRateWindows(redis, MOVE);
+
+    expect(await redis.zrange(rateWindowKey(GUILD, NEW_3, MEMBER), '0', '-1')).toEqual([
+      'before',
+      'after',
+    ]);
+  });
+
+  test('a crossing already recorded under the new id is kept', async () => {
+    await redis.set(crossedKeyFor(rateWindowKey(GUILD, OLD_3, MEMBER)), 'before', 'PX', 10_000);
+    await redis.set(crossedKeyFor(rateWindowKey(GUILD, NEW_3, MEMBER)), 'after', 'PX', 10_000);
+
+    await moveRateWindows(redis, MOVE);
+
+    expect(await redis.get(crossedKeyFor(rateWindowKey(GUILD, NEW_3, MEMBER)))).toBe('after');
+    expect(await redis.exists(crossedKeyFor(rateWindowKey(GUILD, OLD_3, MEMBER)))).toBe(0);
+  });
+
+  test('the moved window still expires, with no more time than it had left', async () => {
+    await hit({ ruleId: OLD_3, member: 'a', windowMs: 30_000 });
+
+    await moveRateWindows(redis, MOVE);
+
+    const ttl = await redis.pttl(rateWindowKey(GUILD, NEW_3, MEMBER));
+    expect(ttl).toBeGreaterThan(0);
+    expect(ttl).toBeLessThanOrEqual(30_000);
+  });
+
+  test('other rules are left alone, and a second run finds nothing', async () => {
+    await hit({ member: 'a' });
+    await hit({ ruleId: 'automod:escalate-at-3', member: 'b' });
+    await hit({ ruleId: OLD_3, member: 'c', actorId: 'guild' });
+
+    expect(await moveRateWindows(redis, MOVE)).toBe(1);
+    expect(await moveRateWindows(redis, MOVE)).toBe(0);
+
+    expect(await redis.exists(rateWindowKey(GUILD, RULE, MEMBER))).toBe(1);
+    expect(await redis.exists(rateWindowKey(GUILD, 'automod:escalate-at-3', MEMBER))).toBe(1);
+    expect(await redis.exists(rateWindowKey(GUILD, NEW_3, 'guild'))).toBe(1);
   });
 });
 

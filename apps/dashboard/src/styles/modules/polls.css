@@ -1,0 +1,19 @@
+/* polls page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+/* Sunken and graphite, never the banner's raised surface: a standing rule, not an alert. */
+.polls-rule {
+  margin: 0 0 28px;
+  padding: 13px 18px;
+  max-width: 76ch;
+  border-left: 1px solid var(--border-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--text-row-title);
+  line-height: 1.65;
+}
+
+.polls-rule-value {
+  color: var(--text-primary);
+  font-weight: var(--weight-medium);
+}

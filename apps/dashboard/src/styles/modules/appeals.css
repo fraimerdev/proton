@@ -1,0 +1,35 @@
+/* appeals page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.appeals-note {
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 74ch;
+}
+
+.appeals-counter {
+  align-self: flex-end;
+}
+
+.appeals-field-grow {
+  flex: 1 1 260px;
+  min-width: 220px;
+}
+
+.appeals-row-bad {
+  border: 1px solid var(--danger-border);
+}
+
+.appeals-crumb-link {
+  color: inherit;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.appeals-crumb-link:hover {
+  color: var(--text-primary);
+}
+
+.appeals-dm {
+  margin-top: 16px;
+}

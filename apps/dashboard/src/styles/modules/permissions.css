@@ -1,0 +1,86 @@
+/* permissions page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.permissions-note {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.55;
+  max-width: 82ch;
+  margin-bottom: 12px;
+}
+
+.permissions-toolbar {
+  flex-wrap: wrap;
+}
+
+/* Nothing is gated while the module is off, so the matrix sits back without going unreadable. */
+.permissions-matrix.off {
+  background: var(--surface-sunken);
+}
+
+.permissions-matrix .matrix-group-head:hover {
+  background: var(--surface-2);
+}
+
+.permissions-bulk {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 10px 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.permissions-bulk-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permissions-bulk-count {
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.permissions-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.permissions-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.permissions-refusal {
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+  max-width: 76ch;
+}
+
+.permissions-row-control {
+  width: 264px;
+}
+
+.permissions-row-trailing {
+  flex: none;
+  width: 32px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .permissions-row-control,
+  .permissions-row-trailing {
+    width: auto;
+  }
+}

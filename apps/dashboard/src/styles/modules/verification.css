@@ -1,0 +1,79 @@
+/* verification page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.verification-select-wide {
+  width: 340px;
+  max-width: 100%;
+}
+
+.verification-detail-wide {
+  flex: 1 1 100%;
+}
+
+/* Narrower than the input above it: a wider message would widen the whole detail column. */
+.verification-detail-error {
+  max-width: 190px;
+}
+
+.verification-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  flex: 1 1 100%;
+}
+
+/* The four Discord button colours, shown in Discord's own colours because that is the setting. */
+.verification-style-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.verification-style-choice {
+  cursor: pointer;
+}
+
+.verification-style-choice[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--surface-1),
+    0 0 0 4px var(--primary);
+}
+
+/* Selection already draws the primary ring, so focus on the selected swatch needs an outer band. */
+.verification-style-choice[aria-pressed="true"]:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--surface-1),
+    0 0 0 4px var(--primary),
+    0 0 0 6px var(--focus);
+}
+
+.verification-post {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.verification-emoji-preview {
+  display: grid;
+  place-items: center;
+  width: var(--control-height);
+  height: var(--control-height);
+  flex: none;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-size: 17px;
+  line-height: 1;
+}
+
+.verification-emoji-preview img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
