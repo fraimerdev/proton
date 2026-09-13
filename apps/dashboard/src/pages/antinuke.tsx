@@ -261,10 +261,10 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
               options={AFTER_STRIP_OPTIONS}
               invalid={form.errorAt('afterStrip') !== undefined}
               value={config.afterStrip}
-              onChange={(event) =>
+              onChange={(value) =>
                 form.setValue((current) => ({
                   ...current,
-                  afterStrip: event.currentTarget.value as AfterStripAction,
+                  afterStrip: value as AfterStripAction,
                 }))
               }
             />

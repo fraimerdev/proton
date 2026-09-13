@@ -255,11 +255,7 @@ function TemplateList({ guildId, moduleId, form, search }: AreaProps): ReactElem
               width="sm"
               value={status}
               options={STATUS_OPTIONS}
-              onChange={(event) => {
-                const next = event.currentTarget.value;
-
-                go({ status: next === 'all' ? undefined : next });
-              }}
+              onChange={(next) => go({ status: next === 'all' ? undefined : next })}
             />
 
             <Button

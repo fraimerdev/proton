@@ -10,7 +10,6 @@
   width: 52px;
   height: 52px;
   flex: none;
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-pill);
   background: var(--surface-sunken);
   object-fit: cover;
@@ -20,7 +19,6 @@
   width: 192px;
   aspect-ratio: 16 / 9;
   flex: none;
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   object-fit: cover;

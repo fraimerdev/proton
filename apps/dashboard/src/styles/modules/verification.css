@@ -65,7 +65,6 @@
   width: var(--control-height);
   height: var(--control-height);
   flex: none;
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   font-size: 17px;

@@ -329,8 +329,7 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
                     // Each option wears its own face, because "script" names nothing an admin can picture.
                     label: applyTypeface(TYPEFACE_LABELS[face], face),
                   }))}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
+                  onChange={(next) => {
                     if (!isTypeface(next)) return;
                     form.setValue((current) => ({ ...current, typeface: next }));
                   }}

@@ -335,9 +335,9 @@ export function QueueArea({
             { value: '', label: 'Any status' },
             ...TICKET_STATUSES.map((name) => ({ value: name, label: STATUS_LABELS[name] })),
           ]}
-          onChange={(event) =>
+          onChange={(value) =>
             go({
-              status: event.currentTarget.value === '' ? undefined : event.currentTarget.value,
+              status: value === '' ? undefined : value,
               page: undefined,
             })
           }
@@ -351,8 +351,8 @@ export function QueueArea({
             { value: '', label: 'Any priority' },
             ...TICKET_PRIORITIES.map((name) => ({ value: name, label: PRIORITY_LABELS[name] })),
           ]}
-          onChange={(event) => {
-            setPriority(event.currentTarget.value as TicketPriority | '');
+          onChange={(value) => {
+            setPriority(value as TicketPriority | '');
             go({ page: undefined });
           }}
         />
@@ -365,8 +365,8 @@ export function QueueArea({
             { value: '', label: 'Any ticket type' },
             ...config.types.map((type) => ({ value: type.id, label: `${type.name} (${type.id})` })),
           ]}
-          onChange={(event) => {
-            setTypeId(event.currentTarget.value);
+          onChange={(value) => {
+            setTypeId(value);
             go({ page: undefined });
           }}
         />
@@ -379,7 +379,7 @@ export function QueueArea({
             value: field,
             label: SORT_LABELS[field],
           }))}
-          onChange={(event) => go({ sort: event.currentTarget.value, page: undefined })}
+          onChange={(value) => go({ sort: value, page: undefined })}
         />
 
         <Button
@@ -395,8 +395,8 @@ export function QueueArea({
           aria-label="Tickets per page"
           value={String(pageSize)}
           options={PAGE_SIZES.map((size) => ({ value: String(size), label: `${size}` }))}
-          onChange={(event) => {
-            setPageSize(Number(event.currentTarget.value));
+          onChange={(value) => {
+            setPageSize(Number(value));
             go({ page: undefined });
           }}
         />

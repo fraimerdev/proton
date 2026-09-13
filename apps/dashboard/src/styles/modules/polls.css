@@ -5,8 +5,7 @@
   margin: 0 0 28px;
   padding: 13px 18px;
   max-width: 76ch;
-  border-left: 1px solid var(--border-strong);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   color: var(--text-secondary);
   font-size: var(--text-row-title);

@@ -234,16 +234,14 @@ export function Events({
           width="sm"
           options={CATEGORY_OPTIONS}
           value={category}
-          onChange={(event) => setCategory(event.currentTarget.value)}
+          onChange={setCategory}
         />
         <Select
           aria-label="State"
           width="md"
           options={STATE_OPTIONS}
           value={state}
-          onChange={(event) =>
-            go({ status: event.currentTarget.value === '' ? undefined : event.currentTarget.value })
-          }
+          onChange={(value) => go({ status: value === '' ? undefined : value })}
         />
         <Button
           size="sm"

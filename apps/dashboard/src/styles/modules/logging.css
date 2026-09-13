@@ -2,13 +2,8 @@
 
 .logging-ledger {
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
-}
-
-.logging-ledger > * + * {
-  border-top: 1px solid var(--border-subtle);
 }
 
 .logging-store {

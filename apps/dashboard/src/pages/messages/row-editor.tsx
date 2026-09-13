@@ -179,10 +179,10 @@ function ActionEditor({
                       value: mode,
                       label: ROLE_MODE_LABELS[mode] ?? mode,
                     }))}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       onChange({
                         ...action,
-                        mode: event.currentTarget.value as (typeof ROLE_ACTION_MODES)[number],
+                        mode: value as (typeof ROLE_ACTION_MODES)[number],
                       })
                     }
                   />
@@ -302,8 +302,8 @@ function ButtonEditor({
                 value: style,
                 label: BUTTON_STYLE_LABELS[style] ?? style,
               }))}
-              onChange={(event) => {
-                const style = event.currentTarget.value as MessageButton['style'];
+              onChange={(value) => {
+                const style = value as MessageButton['style'];
 
                 onChange(
                   style === 'link'

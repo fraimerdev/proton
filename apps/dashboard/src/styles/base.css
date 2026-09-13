@@ -11,6 +11,8 @@
 html {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+  overscroll-behavior: none;
 }
 
 body {
@@ -88,7 +90,6 @@ table {
 
 hr {
   border: none;
-  border-top: 1px solid var(--border-subtle);
 }
 
 :focus-visible {
@@ -109,6 +110,7 @@ hr {
 
 :where(.scroll-y) {
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
 }

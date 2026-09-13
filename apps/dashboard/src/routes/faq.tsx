@@ -28,7 +28,7 @@ const GROUPS: readonly {
       {
         question: 'Nothing happened when I switched a module on.',
         answer:
-          'Open that module in the dashboard. If Proton cannot run it, a banner at the top of the page names the missing intent or permission and where it is missing. The sidebar shows the same thing as an amber dot.',
+          'Open that module in the dashboard. If Proton cannot run it, a banner at the top of the page names the missing intent or permission and where it is missing. The server overview marks it Cannot run.',
       },
     ],
   },

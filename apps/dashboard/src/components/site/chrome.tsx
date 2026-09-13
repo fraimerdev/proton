@@ -29,7 +29,7 @@ export function SiteHeader(): ReactElement {
   return (
     <header className="site-header">
       <Link to="/" className="topbar-brand">
-        <ProtonMark size={22} />
+        <ProtonMark />
         Proton
       </Link>
 

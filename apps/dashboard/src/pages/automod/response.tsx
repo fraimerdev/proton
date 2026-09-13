@@ -98,10 +98,8 @@ function Rung({
             aria-label={`${label} severity action`}
             options={RESPONSE_OPTIONS}
             value={response}
-            onChange={(event) =>
-              form.setValue((current) =>
-                withResponse(current, severity, event.currentTarget.value as Response),
-              )
+            onChange={(value) =>
+              form.setValue((current) => withResponse(current, severity, value as Response))
             }
           />
 
@@ -173,13 +171,9 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
               aria-label="Delete messages"
               options={DELETE_OPTIONS}
               value={config.deleteFrom}
-              onChange={(event) =>
+              onChange={(value) =>
                 form.setValue((current) =>
-                  setField(
-                    current,
-                    'deleteFrom',
-                    event.currentTarget.value as AutomodConfig['deleteFrom'],
-                  ),
+                  setField(current, 'deleteFrom', value as AutomodConfig['deleteFrom']),
                 )
               }
             />

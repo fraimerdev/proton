@@ -100,10 +100,10 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
               options={ACTION_OPTIONS}
               invalid={form.errorAt('action') !== undefined}
               value={config.action}
-              onChange={(event) =>
+              onChange={(value) =>
                 form.setValue((current) => ({
                   ...current,
-                  action: event.currentTarget.value as PhishingAction,
+                  action: value as PhishingAction,
                 }))
               }
             />

@@ -103,34 +103,32 @@ function ShellPending(): ReactElement {
 
 function ShellError({ error }: { error: Error }): ReactElement {
   return (
-    <main className="workspace">
-      <div className="workspace-scroll scroll-y">
-        <Workspace>
-          <header className="page-head">
-            <div className="page-head-main">
-              <h1 className="page-title">Server not loaded</h1>
-            </div>
-          </header>
-
-          <StatusBanner
-            tone="danger"
-            title="Proton could not open this server"
-            actions={
-              <Link to="/dashboard" className="button button-secondary button-sm">
-                Back to your servers
-              </Link>
-            }
-          >
-            {error.message}
-          </StatusBanner>
-
-          <div className="stack stack-8" style={{ marginTop: 16 }}>
-            <Button tone="ghost" onClick={() => window.location.reload()}>
-              Try again
-            </Button>
+    <main className="workspace shell-container">
+      <Workspace>
+        <header className="page-head">
+          <div className="page-head-main">
+            <h1 className="page-title">Server not loaded</h1>
           </div>
-        </Workspace>
-      </div>
+        </header>
+
+        <StatusBanner
+          tone="danger"
+          title="Proton could not open this server"
+          actions={
+            <Link to="/dashboard" className="button button-secondary button-sm">
+              Back to your servers
+            </Link>
+          }
+        >
+          {error.message}
+        </StatusBanner>
+
+        <div className="stack stack-8" style={{ marginTop: 16 }}>
+          <Button tone="ghost" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </div>
+      </Workspace>
     </main>
   );
 }

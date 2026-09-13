@@ -1,6 +1,11 @@
 :root {
   --proton-cyan: #0bb7fd;
   --proton-blue: #2a8af7;
+  --proton-indigo: #416df2;
+  --proton-violet: #5746ed;
+  /* The marks themselves drop under 3:1 on a tinted tile; these are the same hues lifted. */
+  --proton-indigo-ink: #7b98f6;
+  --proton-violet-ink: #8f84f3;
 
   --app-topbar: #0f131a;
   --app-sidebar: #121720;
@@ -17,9 +22,6 @@
   --border-subtle: #2a3340;
   --border-default: #323d4b;
   --border-strong: #3a4657;
-  /* Not the brief's #323d4b: an empty field's edge needs 3:1 on --surface-2, and that is 1.31:1. */
-  --input-border: #677483;
-  --control-border: #6e7b8e;
 
   --text-primary: #f4f7fb;
   --text-secondary: #bcc5d0;
@@ -31,7 +33,6 @@
   --primary-hover: #4199f8;
   /* Not the brief's #2479dc: as a hovered switch track on --surface-hover that is 2.99:1. */
   --primary-pressed: #257add;
-  --primary-border: rgba(42, 138, 247, 0.38);
   /* White on --primary is 3.46:1, under AA for a 13px label; the owner chose it over dark ink. */
   --on-primary: #ffffff;
 
@@ -76,10 +77,8 @@
   --danger-soft: rgba(242, 122, 132, 0.12);
   --info-soft: rgba(89, 168, 248, 0.12);
 
-  --success-border: rgba(85, 201, 139, 0.32);
   --warning-border: rgba(230, 180, 93, 0.32);
   --danger-border: rgba(242, 122, 132, 0.32);
-  --info-border: rgba(89, 168, 248, 0.32);
 
   --danger-hover: #fe858e;
   --danger-pressed: #e36d77;
@@ -95,7 +94,10 @@
   --topbar-height: 42px;
   --sidebar-width: 240px;
 
-  --content-padding-x: 32px;
+  --shell-max-width: 1160px;
+  --shell-gutter: clamp(16px, 3vw, 32px);
+  --shell-gap: 28px;
+
   --content-padding-top: 24px;
   --content-padding-bottom: 48px;
 

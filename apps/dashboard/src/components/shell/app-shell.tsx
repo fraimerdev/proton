@@ -54,27 +54,27 @@ export function DashboardShell({
         navOpen={navOpen}
       />
 
-      <Sidebar guildId={guildId} modules={modules} open={navOpen} />
+      <div className="shell-container shell-body">
+        <Sidebar guildId={guildId} modules={modules} open={navOpen} />
 
-      {scrimPresence.present ? (
-        <button
-          ref={scrim}
-          type="button"
-          className={cx('sidebar-scrim', scrimPresence.leaving && 'leaving')}
-          aria-label="Close navigation"
-          inert={scrimPresence.leaving}
-          onClick={() => setNavOpen(false)}
-          onAnimationEnd={scrimPresence.onAnimationEnd}
-        />
-      ) : null}
+        {scrimPresence.present ? (
+          <button
+            ref={scrim}
+            type="button"
+            className={cx('sidebar-scrim', scrimPresence.leaving && 'leaving')}
+            aria-label="Close navigation"
+            inert={scrimPresence.leaving}
+            onClick={() => setNavOpen(false)}
+            onAnimationEnd={scrimPresence.onAnimationEnd}
+          />
+        ) : null}
 
-      <main className="workspace">
-        <div className="workspace-scroll scroll-y">
+        <main className="workspace">
           <div key={view} className={navigated ? 'motion-enter' : undefined}>
             {children}
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

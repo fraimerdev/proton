@@ -381,10 +381,10 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
               options={RESPONSE_OPTIONS}
               invalid={form.errorAt('response') !== undefined}
               value={config.response}
-              onChange={(event) =>
+              onChange={(value) =>
                 form.setValue((current) => ({
                   ...current,
-                  response: event.currentTarget.value as RaidResponse,
+                  response: value as RaidResponse,
                 }))
               }
             />

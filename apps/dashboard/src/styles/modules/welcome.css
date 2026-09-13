@@ -13,12 +13,12 @@
   cursor: pointer;
   font-family: var(--font-mono);
   transition:
-    border-color var(--motion-fast) var(--ease-standard),
+    background-color var(--motion-fast) var(--ease-standard),
     color var(--motion-fast) var(--ease-standard);
 }
 
 .welcome-token:hover {
-  border-color: var(--border-strong);
+  background: var(--surface-hover);
   color: var(--text-primary);
 }
 
@@ -50,7 +50,6 @@
   flex-direction: column;
   gap: 8px;
   padding-left: 14px;
-  border-left: 1px solid var(--border-subtle);
 }
 
 .welcome-attachment {
@@ -90,7 +89,7 @@
   min-width: 0;
 }
 
-@media (max-width: 1100px) {
+@container workspace (max-width: 860px) {
   .welcome-card-area {
     grid-template-columns: minmax(0, 1fr);
   }

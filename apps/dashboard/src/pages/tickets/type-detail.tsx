@@ -473,10 +473,8 @@ export function TypeDetail({
               aria-label="Default priority"
               options={PRIORITY_OPTIONS}
               value={type.defaultPriority}
-              onChange={(event) =>
-                patch({
-                  defaultPriority: event.currentTarget.value as TicketType['defaultPriority'],
-                })
+              onChange={(value) =>
+                patch({ defaultPriority: value as TicketType['defaultPriority'] })
               }
             />
           </SettingRow>
@@ -519,9 +517,7 @@ export function TypeDetail({
               aria-label="Claim mode"
               options={CLAIM_MODE_OPTIONS}
               value={type.claimMode}
-              onChange={(event) =>
-                patch({ claimMode: event.currentTarget.value as TicketType['claimMode'] })
-              }
+              onChange={(value) => patch({ claimMode: value as TicketType['claimMode'] })}
             />
           </SettingRow>
 
@@ -649,9 +645,7 @@ export function TypeDetail({
               aria-label="Transcript"
               options={TRANSCRIPT_OPTIONS}
               value={type.transcript}
-              onChange={(event) =>
-                patch({ transcript: event.currentTarget.value as TicketType['transcript'] })
-              }
+              onChange={(value) => patch({ transcript: value as TicketType['transcript'] })}
             />
           </SettingRow>
 

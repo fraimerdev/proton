@@ -37,20 +37,14 @@
   letter-spacing: -0.011em;
 }
 
-/* One restrained surface holding sibling rows, hairline-separated. Not a card per setting. */
 .rows {
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .rows + .rows {
   margin-top: 10px;
-}
-
-.rows > * + * {
-  border-top: 1px solid var(--border-subtle);
 }
 
 /* -------------------------------------------------------------- setting row */
@@ -249,7 +243,6 @@ button.nav-row:hover .nav-row-chevron {
   gap: 16px 24px;
   padding: 14px 16px;
   background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
 }
 
@@ -270,7 +263,6 @@ button.nav-row:hover .nav-row-chevron {
   min-width: 200px;
   align-self: center;
   padding-left: 24px;
-  border-left: 1px solid var(--border-subtle);
   color: var(--text-muted);
   font-size: var(--text-secondary-size);
   line-height: 1.5;
@@ -442,7 +434,6 @@ button.collection-row:hover {
 
 .split-detail {
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 
@@ -451,7 +442,6 @@ button.collection-row:hover {
   align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .split-detail-body {
@@ -462,7 +452,7 @@ button.collection-row:hover {
   margin-top: 0;
 }
 
-@media (max-width: 1000px) {
+@container workspace (max-width: 760px) {
   .split {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -473,13 +463,8 @@ button.collection-row:hover {
 .matrix {
   width: 100%;
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
-}
-
-.matrix-group + .matrix-group {
-  border-top: 1px solid var(--border-subtle);
 }
 
 .matrix-group-head {
@@ -520,11 +505,6 @@ button.collection-row:hover {
   min-height: 42px;
   padding: 5px 14px;
   transition: background var(--motion-fast) var(--ease-standard);
-}
-
-.matrix-row + .matrix-row,
-.matrix-group-head + .matrix-row {
-  border-top: 1px solid var(--border-subtle);
 }
 
 .matrix-row:hover {
@@ -637,8 +617,6 @@ button.collection-row:hover {
   .row-detail-explain {
     flex-basis: 100%;
     padding-left: 0;
-    border-left: none;
-    border-top: 1px solid var(--border-subtle);
     padding-top: 10px;
   }
 

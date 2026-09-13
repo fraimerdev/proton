@@ -223,7 +223,7 @@ function Rung({
             width="sm"
             value={rung.action}
             options={ACTION_OPTIONS}
-            onChange={(event) => changeAction(event.currentTarget.value as EscalationAction)}
+            onChange={(value) => changeAction(value as EscalationAction)}
           />
 
           {rung.action === 'timeout' ? (

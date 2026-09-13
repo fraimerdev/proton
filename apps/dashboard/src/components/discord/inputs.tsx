@@ -93,8 +93,8 @@ export function DurationInput({
           value: candidate.value,
           label: candidate.label,
         }))}
-        onChange={(event) => {
-          const next = event.currentTarget.value as Unit;
+        onChange={(value) => {
+          const next = value as Unit;
           setUnit(next);
           emit(amount, next);
         }}

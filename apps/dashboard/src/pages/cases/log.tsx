@@ -380,29 +380,23 @@ export function CaseLogArea({
         <div className="cases-filters">
           <Field label="Type">
             {(props) => (
-              <select
+              <Select
                 {...props}
-                className="select-native control-w-md"
+                width="md"
                 value={type ?? ''}
-                onChange={(event) =>
+                options={[
+                  { value: '', label: 'Any type' },
+                  ...TYPE_GROUPS.flatMap((group) =>
+                    group.kinds.map((kind) => ({ value: kind, label: kind, group: group.label })),
+                  ),
+                ]}
+                onChange={(value) =>
                   go({
-                    status:
-                      event.currentTarget.value === '' ? undefined : event.currentTarget.value,
+                    status: value === '' ? undefined : value,
                     page: undefined,
                   })
                 }
-              >
-                <option value="">Any type</option>
-                {TYPE_GROUPS.map((group) => (
-                  <optgroup key={group.label} label={group.label}>
-                    {group.kinds.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              />
             )}
           </Field>
 
@@ -513,8 +507,8 @@ export function CaseLogArea({
                     value: String(size),
                     label: `${size} per page`,
                   }))}
-                  onChange={(event) => {
-                    setPageSize(Number(event.currentTarget.value));
+                  onChange={(value) => {
+                    setPageSize(Number(value));
                     resetPage();
                   }}
                 />

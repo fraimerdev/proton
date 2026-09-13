@@ -19,7 +19,19 @@
   padding: 0 24px;
   background: color-mix(in srgb, var(--app-topbar) 88%, transparent);
   backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The server picker's header shares the dashboard shell's column instead of the window's edges. */
+.site-header.site-header-contained {
+  display: block;
+  padding: 0;
+}
+
+.site-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 100%;
 }
 
 .site-nav {
@@ -125,23 +137,19 @@
 
 .site-block {
   padding: 56px 0;
-  border-top: 1px solid var(--border-subtle);
 }
 
 .site-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1px;
+  gap: 12px;
   margin-top: 28px;
-  background: var(--border-subtle);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
 }
 
 .site-grid-item {
   padding: 20px;
-  background: var(--app-canvas);
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
 }
 
 .site-grid-item h3 {
@@ -165,7 +173,6 @@
 
 .site-footer {
   padding: 28px 24px 40px;
-  border-top: 1px solid var(--border-subtle);
   color: var(--text-muted);
   font-size: var(--text-secondary-size);
 }
@@ -249,7 +256,6 @@
   max-width: 400px;
   padding: 28px;
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
 }
 
@@ -317,13 +323,11 @@
   flex-direction: column;
   overflow: hidden;
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   /* Promoted up front: promoting only while the lift runs re-rasterises the blurred backdrop each hover. */
   will-change: transform;
   transition:
     background var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard),
     box-shadow var(--motion-normal) var(--ease-standard),
     transform var(--motion-normal) var(--ease-spring-soft);
 }
@@ -331,7 +335,6 @@
 .server-card:hover,
 .server-card:focus-within {
   background: var(--surface-hover);
-  border-color: var(--border-default);
   box-shadow: var(--shadow-popover);
 }
 

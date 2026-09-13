@@ -389,8 +389,7 @@ export function PanelEditor({
                   placeholder="Add ticket type…"
                   value=""
                   options={unattached.map((type) => ({ value: type.id, label: type.name }))}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
+                  onChange={(next) => {
                     if (next !== '') patch({ typeIds: [...panel.typeIds, next] });
                   }}
                 />

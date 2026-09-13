@@ -354,11 +354,8 @@ function ButtonRowEditor({
                 value: style,
                 label: BUTTON_STYLE_LABELS[style] ?? style,
               }))}
-              onChange={(event) =>
-                setButton(index, {
-                  ...button,
-                  style: event.currentTarget.value as MessageButton['style'],
-                })
+              onChange={(value) =>
+                setButton(index, { ...button, style: value as MessageButton['style'] })
               }
             />
             <IconButton

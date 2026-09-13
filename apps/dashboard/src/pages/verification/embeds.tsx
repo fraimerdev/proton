@@ -305,7 +305,7 @@ function EmbedEditor({ form, embeds, index }: EditorProps): ReactElement {
               ? [{ value: timestamp, label: new Date(timestamp).toLocaleString() }]
               : []),
           ]}
-          onChange={(event) => put('timestamp', event.currentTarget.value)}
+          onChange={(value) => put('timestamp', value)}
         />
       </DetailField>
 

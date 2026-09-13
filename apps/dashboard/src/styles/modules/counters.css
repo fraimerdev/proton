@@ -2,7 +2,6 @@
 
 .counter-token {
   background: var(--badge-brand-bg);
-  border: 1px solid var(--primary-border);
   border-radius: var(--radius-xs);
   color: var(--badge-brand-text);
   font-family: var(--font-mono);
@@ -13,7 +12,6 @@
 .counter-preview {
   align-items: center;
   background: var(--surface-sunken);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   display: flex;

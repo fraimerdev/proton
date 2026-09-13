@@ -169,7 +169,7 @@ export function ConsequencesArea({ form }: { form: HoneypotForm }): ReactElement
                 value: action,
                 label: ACTION_LABELS[action],
               }))}
-              onChange={(event) => patch({ action: event.currentTarget.value as HoneypotAction })}
+              onChange={(value) => patch({ action: value as HoneypotAction })}
             />
           </SettingRow>
 
@@ -230,9 +230,7 @@ export function ConsequencesArea({ form }: { form: HoneypotForm }): ReactElement
                 width="md"
                 value={String(config.deleteMessageSeconds)}
                 options={windowOptions(config.deleteMessageSeconds)}
-                onChange={(event) =>
-                  patch({ deleteMessageSeconds: Number(event.currentTarget.value) })
-                }
+                onChange={(value) => patch({ deleteMessageSeconds: Number(value) })}
               />
             </SettingRow>
           ) : null}

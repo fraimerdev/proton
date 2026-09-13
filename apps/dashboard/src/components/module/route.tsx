@@ -77,6 +77,7 @@ export function useModuleNavigate(
         params: { guildId },
         search: (previous: ModuleSearch) => ({ ...previous, ...patch }),
         replace: options?.replace ?? false,
+        resetScroll: false,
         // Same reason as ModuleLink: thirty sibling routes, one shape.
       } as unknown as Parameters<ReturnType<typeof useNavigate>>[0]);
     },

@@ -88,9 +88,7 @@ function AppealFormRow({ form, guildId }: { form: HoneypotForm; guildId: string 
               : []),
             ...panels.map((panel) => ({ value: panel.id, label: panel.name })),
           ]}
-          onChange={(event) =>
-            form.setValue((c) => ({ ...c, appealPanelId: event.currentTarget.value || undefined }))
-          }
+          onChange={(value) => form.setValue((c) => ({ ...c, appealPanelId: value || undefined }))}
         />
       )}
     </SettingRow>

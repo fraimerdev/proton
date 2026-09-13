@@ -5,11 +5,11 @@ import type {
   ReactNode,
   Ref,
   RefObject,
-  SelectHTMLAttributes,
   TextareaHTMLAttributes,
 } from 'react';
-import { useId, useLayoutEffect, useRef } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from './icon.tsx';
+import { Popover } from './overlay.tsx';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -362,43 +362,159 @@ export interface SelectOption {
   value: string;
   label: string;
   disabled?: boolean | undefined;
+  group?: string | undefined;
 }
 
-interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'className'> {
+interface SelectProps {
   options: readonly SelectOption[];
+  value: string | undefined;
+  onChange: (value: string) => void;
   placeholder?: string | undefined;
   invalid?: boolean | undefined;
+  disabled?: boolean | undefined;
   width?: 'xs' | 'sm' | 'md' | 'lg' | 'full' | undefined;
   className?: string | undefined;
+  id?: string | undefined;
+  'aria-label'?: string | undefined;
+  'aria-describedby'?: string | undefined;
+}
+
+function enabledOptions(list: HTMLElement | null): HTMLButtonElement[] {
+  return [...(list?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') ?? [])];
+}
+
+function optionFor(items: HTMLButtonElement[], key: string): HTMLButtonElement | undefined {
+  const current = items.indexOf(document.activeElement as HTMLButtonElement);
+
+  if (key === 'ArrowDown') return items[Math.min(items.length - 1, current + 1)];
+  if (key === 'ArrowUp') return items[Math.max(0, current - 1)];
+  if (key === 'Home') return items[0];
+  if (key === 'End') return items[items.length - 1];
+  if (key.length !== 1 || key.trim() === '') return undefined;
+
+  const needle = key.toLowerCase();
+  return [...items.slice(current + 1), ...items.slice(0, current + 1)].find((item) =>
+    item.textContent?.trim().toLowerCase().startsWith(needle),
+  );
 }
 
 export function Select({
   options,
+  value,
+  onChange,
   placeholder,
   invalid,
+  disabled,
   width,
   className,
-  value,
-  ...rest
+  id,
+  'aria-label': ariaLabel,
+  'aria-describedby': describedBy,
 }: SelectProps): ReactElement {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [minWidth, setMinWidth] = useState<number | undefined>(undefined);
+
+  const current = value ?? '';
+  const selected = options.find((option) => option.value === current);
+
+  const show = (): void => {
+    setMinWidth(anchor.current?.offsetWidth);
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const items = enabledOptions(list.current);
+    const target = items.find((item) => item.getAttribute('aria-selected') === 'true') ?? items[0];
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'nearest' });
+  }, [open]);
+
   return (
-    <select
-      className={cx('select-native', width && width !== 'full' && `control-w-${width}`, className)}
-      aria-invalid={invalid === true ? true : undefined}
-      value={value ?? ''}
-      {...rest}
-    >
-      {placeholder !== undefined ? (
-        <option value="" disabled>
-          {placeholder}
-        </option>
-      ) : null}
-      {options.map((option) => (
-        <option key={option.value} value={option.value} disabled={option.disabled}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        id={id}
+        className={cx(
+          'select-trigger',
+          width && width !== 'full' && `control-w-${width}`,
+          className,
+        )}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-invalid={invalid === true ? true : undefined}
+        aria-label={ariaLabel}
+        aria-describedby={describedBy}
+        onClick={() => (open ? setOpen(false) : show())}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+          event.preventDefault();
+          show();
+        }}
+      >
+        <span className={cx('select-value', selected === undefined && 'select-placeholder')}>
+          {selected?.label ?? placeholder}
+        </span>
+        <Icon name="caret-down" size={12} weight="fill" className="select-chevron" />
+      </button>
+
+      <Popover
+        anchor={anchor}
+        open={open}
+        onClose={() => setOpen(false)}
+        minWidth={minWidth}
+        maxWidth={360}
+      >
+        <div
+          ref={list}
+          className="popover-scroll"
+          role="listbox"
+          aria-label={ariaLabel}
+          onKeyDown={(event) => {
+            if (event.key === 'Tab') {
+              event.preventDefault();
+              setOpen(false);
+              return;
+            }
+
+            const target = optionFor(enabledOptions(list.current), event.key);
+            if (!target) return;
+            event.preventDefault();
+            target.focus();
+          }}
+        >
+          {options.length === 0 ? <p className="picker-note">Nothing to choose from</p> : null}
+          {options.map((option, index) => (
+            <Fragment key={option.value}>
+              {option.group !== undefined && option.group !== options[index - 1]?.group ? (
+                <p className="menu-label">{option.group}</p>
+              ) : null}
+              <button
+                type="button"
+                role="option"
+                aria-selected={option.value === current}
+                disabled={option.disabled === true}
+                className="menu-item select-option"
+                onClick={() => {
+                  setOpen(false);
+                  if (option.value !== current) onChange(option.value);
+                }}
+              >
+                <span className="truncate">{option.label}</span>
+                {option.value === current ? (
+                  <Icon name="check" size={14} weight="fill" className="menu-item-check" />
+                ) : null}
+              </button>
+            </Fragment>
+          ))}
+        </div>
+      </Popover>
+    </>
   );
 }
 

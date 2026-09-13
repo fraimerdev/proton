@@ -17,7 +17,6 @@
 
   padding: 14px 16px;
   background: var(--dc-bg);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   color: var(--dc-text);
   font-family:
@@ -441,17 +440,13 @@
   min-height: var(--control-height);
   padding: 4px 9px;
   background: var(--surface-sunken);
-  border: 1px solid var(--input-border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: var(--text-body);
   font-weight: var(--weight-book);
   text-align: left;
   transition: border-color var(--motion-fast) var(--ease-standard);
-}
-
-.picker-trigger:hover:not(:disabled) {
-  border-color: var(--control-border);
 }
 
 .picker-trigger[aria-expanded="true"] {
@@ -501,7 +496,6 @@
 
 .picker-search {
   padding: 5px;
-  border-bottom: 1px solid var(--border-subtle);
   margin: -5px -5px 5px;
 }
 
@@ -582,7 +576,6 @@
   width: var(--control-height);
   height: var(--control-height);
   flex: none;
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   overflow: hidden;
 }
@@ -616,7 +609,7 @@
   width: 84px;
 }
 
-.duration-input .select-native {
+.duration-input .select-trigger {
   width: 118px;
 }
 
@@ -655,7 +648,6 @@
   gap: 2px;
   padding-bottom: 5px;
   margin-bottom: 5px;
-  border-bottom: 1px solid var(--border-subtle);
 }
 
 .emoji-tab {
@@ -697,7 +689,6 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--surface-sunken);
-  border: 1px solid var(--border-subtle);
 }
 
 .card-preview img {

@@ -122,18 +122,22 @@ export function Popover({
     if (!trigger || !element) return;
 
     const rect = trigger.getBoundingClientRect();
-    const size = element.getBoundingClientRect();
+    // Offsets, not a rect: the entrance animation scales the panel, and a scaled width shifts an end-aligned one.
+    const size = { width: element.offsetWidth, height: element.offsetHeight };
 
     const width = matchWidth ? rect.width : size.width;
+    // The root's client box, not innerWidth: the stable scrollbar gutter sits inside innerWidth.
+    const viewport = document.documentElement;
 
-    const below = window.innerHeight - rect.bottom;
+    const below = viewport.clientHeight - rect.bottom;
     const flip = below < size.height + GAP + EDGE && rect.top > below;
     const side = flip ? 'top' : 'bottom';
 
     const top = flip ? Math.max(EDGE, rect.top - size.height - GAP) : rect.bottom + GAP;
 
     const wanted = align === 'end' ? rect.right - width : rect.left;
-    const left = Math.min(Math.max(EDGE, wanted), Math.max(EDGE, window.innerWidth - width - EDGE));
+    const edge = viewport.clientWidth - width - EDGE;
+    const left = Math.min(Math.max(EDGE, wanted), Math.max(EDGE, edge));
 
     setStyle(matchWidth ? { top, left, width: rect.width, side } : { top, left, side });
   }, [anchor, align, matchWidth]);

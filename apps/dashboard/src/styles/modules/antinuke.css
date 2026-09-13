@@ -10,10 +10,6 @@
   transition: background var(--motion-fast) var(--ease-standard);
 }
 
-.antinuke-threshold + .antinuke-threshold {
-  border-top: 1px solid var(--border-subtle);
-}
-
 .antinuke-threshold:hover {
   background: var(--surface-hover);
 }

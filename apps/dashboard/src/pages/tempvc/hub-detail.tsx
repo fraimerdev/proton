@@ -196,10 +196,10 @@ export function HubDetail({
               aria-label="Who can join"
               options={PRIVACY_OPTIONS}
               value={hub.privacy}
-              onChange={(event) =>
+              onChange={(value) =>
                 change((current) => ({
                   ...current,
-                  privacy: event.currentTarget.value as PrivacyMode,
+                  privacy: value as PrivacyMode,
                 }))
               }
             />
@@ -220,10 +220,10 @@ export function HubDetail({
               aria-label="Starting permissions"
               options={SYNC_OPTIONS}
               value={hub.permissionSync}
-              onChange={(event) =>
+              onChange={(value) =>
                 change((current) => ({
                   ...current,
-                  permissionSync: event.currentTarget.value as PermissionSyncMode,
+                  permissionSync: value as PermissionSyncMode,
                 }))
               }
             />
@@ -283,10 +283,10 @@ export function HubDetail({
               aria-label="When the owner leaves"
               options={OWNERLESS_OPTIONS}
               value={hub.ownerlessMode}
-              onChange={(event) =>
+              onChange={(value) =>
                 change((current) => ({
                   ...current,
-                  ownerlessMode: event.currentTarget.value as OwnerlessMode,
+                  ownerlessMode: value as OwnerlessMode,
                 }))
               }
             />
@@ -306,10 +306,10 @@ export function HubDetail({
               aria-label="Who gets the role"
               options={TEMP_ROLE_OPTIONS}
               value={hub.temporaryRoleMode}
-              onChange={(event) =>
+              onChange={(value) =>
                 change((current) => ({
                   ...current,
-                  temporaryRoleMode: event.currentTarget.value as TempRoleMode,
+                  temporaryRoleMode: value as TempRoleMode,
                 }))
               }
             />

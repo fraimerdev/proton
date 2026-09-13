@@ -10,6 +10,7 @@ export interface AreaMeta {
 export interface ModuleMeta {
   id: string;
   label: string;
+  description: string;
   icon: IconName;
   group: NavGroupId;
   /** Shown under the title only where it carries information the title does not. */
@@ -47,6 +48,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'verification',
     label: 'Verification',
+    description: 'Gate new members behind a button, captcha or website sign-in.',
     icon: 'shield-check',
     group: 'joining',
     aliases: ['verify', 'captcha', 'gate', 'member screening', 'entry'],
@@ -59,6 +61,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'joinroles',
     label: 'Join Roles',
+    description: 'Give roles to new members and bots, and restore roles on rejoin.',
     icon: 'user-plus',
     group: 'joining',
     aliases: [
@@ -81,6 +84,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'welcome',
     label: 'Welcome & Goodbye',
+    description: 'Send a message and optional image card when someone joins or leaves.',
     icon: 'hand-waving',
     group: 'joining',
     aliases: [
@@ -104,6 +108,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'automod',
     label: 'Automod',
+    description: 'Filter spam and unwanted content, and manage Discord AutoMod rules.',
     icon: 'shield-warning',
     group: 'safety',
     aliases: ['auto mod', 'automoderation', 'filter', 'word filter', 'spam', 'caps', 'invites'],
@@ -118,6 +123,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'antiraid',
     label: 'Anti-Raid',
+    description: 'Score new members and give suspicious ones a role or kick them.',
     icon: 'users-three',
     group: 'safety',
     aliases: ['anti raid', 'raid', 'raid protection', 'join spike'],
@@ -125,6 +131,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'antinuke',
     label: 'Anti-Nuke',
+    description: 'Strip roles from members making destructive changes too quickly.',
     icon: 'siren',
     group: 'safety',
     aliases: ['anti nuke', 'nuke', 'nuke protection', 'mass delete', 'maintenance'],
@@ -132,6 +139,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'phishing',
     label: 'Phishing',
+    description: 'Detect known scam links and act on the member who posted them.',
     icon: 'link-break',
     group: 'safety',
     aliases: ['scam links', 'malicious links', 'bad domains', 'blocklist', 'allowlist'],
@@ -139,6 +147,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'honeypot',
     label: 'Honeypot',
+    description: 'Catch spam bots and hacked accounts that post in bait channels.',
     icon: 'bug',
     group: 'safety',
     aliases: ['bait', 'trap', 'spam trap', 'bait channel', 'decoy', 'what happens'],
@@ -158,6 +167,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'moderation',
     label: 'Moderation',
+    description: 'Warn, time out, kick or ban members and escalate repeat warnings.',
     icon: 'gavel',
     group: 'people',
     aliases: [
@@ -184,6 +194,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'cases',
     label: 'Cases',
+    description: 'Search every action Proton has recorded, by member or moderator.',
     icon: 'clipboard-text',
     group: 'people',
     aliases: ['case log', 'infractions', 'history', 'warnings'],
@@ -192,6 +203,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'appeals',
     label: 'Appeals',
+    description: 'Create ban appeal forms and review submissions in a channel.',
     icon: 'scales',
     group: 'people',
     aliases: ['appeal', 'unban request', 'appeal form', 'review settings'],
@@ -204,6 +216,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'permissions',
     label: 'Permissions',
+    description: 'Restrict each Proton command to specific roles.',
     icon: 'lock',
     group: 'people',
     subtitle: 'Choose which roles can use Proton commands.',
@@ -214,6 +227,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'tickets',
     label: 'Tickets',
+    description: 'Let members open private support channels with staff.',
     icon: 'ticket',
     group: 'members',
     aliases: ['support', 'ticket panel', 'helpdesk', 'transcripts', 'claim'],
@@ -229,6 +243,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'rolemenu',
     label: 'Role Menus',
+    description: 'Let members pick roles with reactions, buttons or dropdowns.',
     icon: 'list-checks',
     group: 'members',
     aliases: ['reaction roles', 'reaction role', 'self roles', 'button roles', 'role picker'],
@@ -236,6 +251,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'tags',
     label: 'Tags',
+    description: 'Save text snippets members can post with /tag.',
     icon: 'tag',
     group: 'members',
     aliases: ['custom commands', 'custom command', 'snippets', 'canned responses', 'autoresponder'],
@@ -248,6 +264,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'messages',
     label: 'Messages',
+    description: 'Create embeds and buttons to post with /message or on a schedule.',
     icon: 'chat-centered-text',
     group: 'members',
     aliases: ['embed', 'embeds', 'templates', 'announcements', 'say', 'components', 'buttons'],
@@ -260,6 +277,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'leveling',
     label: 'Leveling',
+    description: 'Give members XP for messages and voice time, with role rewards.',
     icon: 'trend-up',
     group: 'members',
     aliases: ['levels', 'xp', 'rank', 'rank card', 'leaderboard', 'role rewards'],
@@ -275,6 +293,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'giveaways',
     label: 'Giveaways',
+    description: 'Run giveaways with requirements and bonus entries.',
     icon: 'gift',
     group: 'members',
     aliases: ['giveaway', 'raffle', 'draw', 'winners', 'requirements', 'defaults'],
@@ -288,6 +307,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'polls',
     label: 'Polls',
+    description: 'Run Discord’s native polls and announce when they close.',
     icon: 'chart-bar',
     group: 'members',
     aliases: ['poll', 'vote', 'voting'],
@@ -295,6 +315,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'suggestions',
     label: 'Suggestions',
+    description: 'Let members suggest and vote on ideas that staff accept or deny.',
     icon: 'lightbulb',
     group: 'members',
     aliases: ['suggest', 'feedback', 'ideas', 'upvote'],
@@ -302,6 +323,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'starboard',
     label: 'Starboard',
+    description: 'Repost messages to a board channel once they get enough stars.',
     icon: 'star',
     group: 'members',
     aliases: ['star board', 'highlights', 'best of', 'pins'],
@@ -309,6 +331,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'tempvc',
     label: 'Temporary Voice Channels',
+    description: 'Give members their own voice channel when they join a creator channel.',
     icon: 'speaker-high',
     group: 'members',
     aliases: [
@@ -328,6 +351,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'reminders',
     label: 'Reminders',
+    description: 'Let members schedule a message that pings them later.',
     icon: 'alarm',
     group: 'members',
     aliases: ['remind', 'remindme', 'reminder'],
@@ -335,6 +359,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'counters',
     label: 'Counters',
+    description: 'Show member, role or channel counts in channel names.',
     icon: 'hash',
     group: 'members',
     aliases: ['counter channels', 'member count', 'stats channels', 'count channel'],
@@ -344,6 +369,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'serverlog',
     label: 'Server Logs',
+    description: 'Post member, role, channel and moderation events to log channels.',
     icon: 'scroll',
     group: 'written',
     aliases: ['audit log', 'event log', 'logs', 'log channel', 'mod log', 'individual events'],
@@ -357,6 +383,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'logging',
     label: 'Logging',
+    description: 'Archive message edits and deletions for 30 days.',
     icon: 'database',
     group: 'written',
     aliases: ['message log', 'retention', 'privacy', 'store messages', 'data'],
@@ -366,6 +393,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'branding',
     label: 'Branding',
+    description: 'Set Proton’s nickname, avatar, banner and bio in this server.',
     icon: 'identification-card',
     group: 'server',
     aliases: ['avatar', 'nickname', 'banner', 'bio', 'identity', 'appearance', 'profile'],
@@ -373,6 +401,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'backup',
     label: 'Backup',
+    description: 'Snapshot channels and roles, and recreate missing ones.',
     icon: 'archive',
     group: 'server',
     aliases: ['restore', 'snapshot', 'backups'],
@@ -385,6 +414,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'help',
     label: 'Help',
+    description: 'Reply to /help with what Proton does and where to set it up.',
     icon: 'question',
     group: 'server',
     aliases: ['commands', 'docs', 'documentation'],
@@ -392,6 +422,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'ping',
     label: 'Ping',
+    description: 'Let members run /ping to check Proton is responding.',
     icon: 'pulse',
     group: 'server',
     aliases: ['latency', 'uptime', 'pong', 'alive'],

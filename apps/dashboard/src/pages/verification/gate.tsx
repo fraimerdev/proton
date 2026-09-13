@@ -224,9 +224,7 @@ export function GateArea({ guildId, form, enabled }: AreaProps): ReactElement {
                   { value: 'dm', label: 'By direct message' },
                 ]}
                 value={config.captchaDelivery}
-                onChange={(event) =>
-                  form.set('captchaDelivery', event.currentTarget.value as CaptchaDelivery)
-                }
+                onChange={(value) => form.set('captchaDelivery', value as CaptchaDelivery)}
               />
             </SettingRow>
 
@@ -264,11 +262,8 @@ export function GateArea({ guildId, form, enabled }: AreaProps): ReactElement {
                     { value: 'quarantine', label: 'Add quarantine role' },
                   ]}
                   value={config.failureAction}
-                  onChange={(event) =>
-                    form.set(
-                      'failureAction',
-                      event.currentTarget.value as VerificationFailureAction,
-                    )
+                  onChange={(value) =>
+                    form.set('failureAction', value as VerificationFailureAction)
                   }
                 />
                 {quarantineUnset ? (

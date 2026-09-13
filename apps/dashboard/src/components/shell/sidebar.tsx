@@ -84,53 +84,106 @@ export function Sidebar({
 
   return (
     <nav className={cx('sidebar', open && 'open')} aria-label="Modules">
-      <div className="sidebar-search">
-        <SearchField
-          ref={search}
-          value={query}
-          onChange={setQuery}
-          placeholder="Search settings…"
-          label="Search modules and settings"
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') setQuery('');
-          }}
-        />
-      </div>
+      <div className="sidebar-inner">
+        <div className="sidebar-search">
+          <SearchField
+            ref={search}
+            value={query}
+            onChange={setQuery}
+            placeholder="Search settings…"
+            label="Search modules and settings"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') setQuery('');
+            }}
+          />
+        </div>
 
-      <div className="sidebar-scroll scroll-y">
-        {searching ? (
-          <>
-            {hits.modules.length === 0 && hits.records.length === 0 ? (
-              <p className="sidebar-empty">No matching modules or settings for “{query.trim()}”</p>
-            ) : null}
+        <div className="sidebar-scroll scroll-y">
+          {searching ? (
+            <>
+              {hits.modules.length === 0 && hits.records.length === 0 ? (
+                <p className="sidebar-empty">
+                  No matching modules or settings for “{query.trim()}”
+                </p>
+              ) : null}
 
-            {hits.modules.length > 0 ? (
+              {hits.modules.length > 0 ? (
+                <div className="sidebar-group">
+                  <p className="sidebar-group-label">Modules</p>
+                  {hits.modules.map(({ meta, hint }) => (
+                    <ModuleNavItem
+                      key={meta.id}
+                      guildId={guildId}
+                      moduleId={meta.id}
+                      label={meta.label}
+                      icon={meta.icon}
+                      hint={hint}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              ) : null}
+
+              {hits.records.length > 0 ? (
+                <div className="sidebar-group">
+                  <p className="sidebar-group-label">Records</p>
+                  {hits.records.map(({ link }) => (
+                    <ModuleLink
+                      key={link.id}
+                      guildId={guildId}
+                      moduleId={link.moduleId}
+                      search={{ area: link.area }}
+                      className="sidebar-item"
+                      onClick={onNavigate}
+                    >
+                      <Icon name={link.icon} size={16} className="sidebar-item-icon" />
+                      <span className="sidebar-item-label">{link.label}</span>
+                    </ModuleLink>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <>
               <div className="sidebar-group">
-                <p className="sidebar-group-label">Modules</p>
-                {hits.modules.map(({ meta, hint }) => (
-                  <ModuleNavItem
-                    key={meta.id}
-                    guildId={guildId}
-                    moduleId={meta.id}
-                    label={meta.label}
-                    icon={meta.icon}
-                    hint={hint}
-                    onNavigate={onNavigate}
-                  />
-                ))}
+                <Link
+                  to="/dashboard/$guildId"
+                  params={{ guildId }}
+                  className="sidebar-item"
+                  activeOptions={{ exact: true }}
+                  onClick={onNavigate}
+                >
+                  <Icon name="squares-four" size={16} className="sidebar-item-icon" />
+                  <span className="sidebar-item-label">Overview</span>
+                </Link>
               </div>
-            ) : null}
 
-            {hits.records.length > 0 ? (
+              {NAV_GROUPS.filter((group) => group.id !== 'records').map((group) => (
+                <div className="sidebar-group" key={group.id}>
+                  <p className="sidebar-group-label">{group.label}</p>
+                  {(grouped.get(group.id) ?? []).map((meta) => (
+                    <ModuleNavItem
+                      key={meta.id}
+                      guildId={guildId}
+                      moduleId={meta.id}
+                      label={meta.label}
+                      icon={meta.icon}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              ))}
+
               <div className="sidebar-group">
                 <p className="sidebar-group-label">Records</p>
-                {hits.records.map(({ link }) => (
+                {RECORD_LINKS.map((link) => (
                   <ModuleLink
                     key={link.id}
                     guildId={guildId}
                     moduleId={link.moduleId}
                     search={{ area: link.area }}
                     className="sidebar-item"
+                    activeOptions={{ exact: true, includeSearch: true }}
                     onClick={onNavigate}
                   >
                     <Icon name={link.icon} size={16} className="sidebar-item-icon" />
@@ -138,58 +191,9 @@ export function Sidebar({
                   </ModuleLink>
                 ))}
               </div>
-            ) : null}
-          </>
-        ) : (
-          <>
-            <div className="sidebar-group">
-              <Link
-                to="/dashboard/$guildId"
-                params={{ guildId }}
-                className="sidebar-item"
-                activeOptions={{ exact: true }}
-                onClick={onNavigate}
-              >
-                <Icon name="squares-four" size={16} className="sidebar-item-icon" />
-                <span className="sidebar-item-label">Overview</span>
-              </Link>
-            </div>
-
-            {NAV_GROUPS.filter((group) => group.id !== 'records').map((group) => (
-              <div className="sidebar-group" key={group.id}>
-                <p className="sidebar-group-label">{group.label}</p>
-                {(grouped.get(group.id) ?? []).map((meta) => (
-                  <ModuleNavItem
-                    key={meta.id}
-                    guildId={guildId}
-                    moduleId={meta.id}
-                    label={meta.label}
-                    icon={meta.icon}
-                    onNavigate={onNavigate}
-                  />
-                ))}
-              </div>
-            ))}
-
-            <div className="sidebar-group">
-              <p className="sidebar-group-label">Records</p>
-              {RECORD_LINKS.map((link) => (
-                <ModuleLink
-                  key={link.id}
-                  guildId={guildId}
-                  moduleId={link.moduleId}
-                  search={{ area: link.area }}
-                  className="sidebar-item"
-                  activeOptions={{ exact: true, includeSearch: true }}
-                  onClick={onNavigate}
-                >
-                  <Icon name={link.icon} size={16} className="sidebar-item-icon" />
-                  <span className="sidebar-item-label">{link.label}</span>
-                </ModuleLink>
-              ))}
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );

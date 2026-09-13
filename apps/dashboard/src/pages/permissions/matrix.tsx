@@ -211,9 +211,7 @@ export function CommandMatrix({
           width="md"
           options={moduleOptions}
           value={moduleFilter ?? 'all'}
-          onChange={(event) =>
-            go({ id: event.currentTarget.value === 'all' ? undefined : event.currentTarget.value })
-          }
+          onChange={(value) => go({ id: value === 'all' ? undefined : value })}
         />
       </div>
 

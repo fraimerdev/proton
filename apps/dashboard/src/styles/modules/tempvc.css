@@ -26,7 +26,6 @@
   gap: 14px;
   min-height: 40px;
   padding: 4px 14px;
-  border-top: 1px solid var(--border-subtle);
   transition: background var(--motion-fast) var(--ease-standard);
 }
 
@@ -39,7 +38,7 @@
   min-width: 0;
 }
 
-@media (max-width: 860px) {
+@container workspace (max-width: 860px) {
   .tempvc-allow-grid {
     grid-template-columns: minmax(0, 1fr);
   }

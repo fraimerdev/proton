@@ -1,36 +1,53 @@
 .shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh above is the fallback for this */
+  min-height: 100dvh;
+}
+
+/* One centred column for the navbar row and the sidebar-plus-content row, so their edges line up. */
+.shell-container {
+  width: 100%;
+  max-width: calc(var(--shell-max-width) + var(--shell-gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--shell-gutter);
+}
+
+.shell-body {
+  flex: 1 0 auto;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: var(--topbar-height) minmax(0, 1fr);
-  height: 100vh;
-  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh above is the fallback for this */
-  height: 100dvh;
+  column-gap: var(--shell-gap);
 }
 
 /* ---------------------------------------------------------------- topbar */
 
 .topbar {
-  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
   z-index: var(--z-topbar);
+  height: var(--topbar-height);
+  background: var(--app-topbar);
+}
+
+.topbar-inner {
   display: flex;
   align-items: center;
   gap: 14px;
-  height: var(--topbar-height);
-  padding: 0 12px 0 14px;
-  background: var(--app-topbar);
-  border-bottom: 1px solid var(--border-subtle);
+  height: 100%;
 }
 
 .topbar-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 4px 6px 4px 2px;
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: var(--text-row-title);
-  font-weight: var(--weight-semibold);
-  letter-spacing: -0.012em;
+  font-size: 18px;
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.02em;
 }
 
 .topbar-brand:hover {
@@ -53,13 +70,6 @@
   .topbar-brand:hover .topbar-mark {
     transform: scale(1.12);
   }
-}
-
-.topbar-divider {
-  width: 1px;
-  height: 18px;
-  background: var(--border-default);
-  flex: none;
 }
 
 .topbar-spacer {
@@ -91,6 +101,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   max-width: 260px;
   height: 30px;
   padding: 0 8px;
@@ -102,8 +113,7 @@
   font-weight: var(--weight-medium);
   transition:
     background var(--motion-fast) var(--ease-standard),
-    color var(--motion-fast) var(--ease-standard),
-    border-color var(--motion-fast) var(--ease-standard);
+    color var(--motion-fast) var(--ease-standard);
 }
 
 .topbar-trigger:hover {
@@ -113,7 +123,6 @@
 
 .topbar-trigger[aria-expanded="true"] {
   background: var(--surface-selected);
-  border-color: var(--border-default);
   color: var(--text-primary);
 }
 
@@ -152,40 +161,117 @@
 }
 
 .topbar-user {
-  gap: 5px;
-  padding: 0 5px 0 3px;
+  max-width: 220px;
+  padding: 0 8px 0 4px;
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
 }
 
-.topbar-user .topbar-avatar {
-  width: 24px;
-  height: 24px;
+@media (max-width: 560px) {
+  .topbar-inner {
+    gap: 8px;
+  }
+
+  .topbar-user-name {
+    display: none;
+  }
 }
 
 .menu-account {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  padding: 8px 10px;
+}
+
+.menu-account .avatar-fallback {
+  font-size: 14px;
+}
+
+.menu-account-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
   min-width: 0;
-  padding: 7px 8px;
+}
+
+.menu-account-name {
   color: var(--text-primary);
-  font-size: var(--text-secondary-size);
+  font-size: var(--text-body);
   font-weight: var(--weight-semibold);
 }
 
-.menu-account .topbar-avatar {
-  width: 28px;
-  height: 28px;
+.menu-account-detail {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.account-menu .menu-item {
+  gap: 11px;
+  min-height: 36px;
+  padding: 0 10px;
+  font-size: var(--text-body);
+}
+
+.account-menu .menu-item svg {
+  flex: none;
+  color: var(--text-muted);
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.account-menu .menu-item:hover svg {
+  color: var(--text-primary);
+}
+
+.account-menu .menu-item:focus-visible {
+  box-shadow: none;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.account-menu .menu-item:focus-visible svg {
+  color: var(--text-primary);
+}
+
+.account-menu .menu-item-danger:focus-visible {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.account-menu .menu-item-danger svg,
+.account-menu .menu-item-danger:hover svg,
+.account-menu .menu-item-danger:focus-visible svg {
+  color: var(--danger);
 }
 
 /* --------------------------------------------------------------- sidebar */
 
 .sidebar {
-  grid-row: 2;
+  position: relative;
+  min-width: 0;
+  background: var(--app-sidebar);
+}
+
+.sidebar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 100%;
+  bottom: 0;
+  width: 100vw;
+  background: inherit;
+  pointer-events: none;
+}
+
+/* The panel stretches with the page; its contents stay in view while the page scrolls. */
+.sidebar-inner {
+  position: sticky;
+  top: var(--topbar-height);
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  background: var(--app-sidebar);
-  border-right: 1px solid var(--border-subtle);
+  height: calc(100vh - var(--topbar-height));
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh above is the fallback for this */
+  height: calc(100dvh - var(--topbar-height));
 }
 
 .sidebar-search {
@@ -305,21 +391,12 @@
 /* ------------------------------------------------------------- workspace */
 
 .workspace {
-  grid-row: 2;
   min-width: 0;
-  min-height: 0;
-  position: relative;
-  background: var(--app-canvas);
-}
-
-.workspace-scroll {
-  height: 100%;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  container: workspace / inline-size;
 }
 
 .page {
-  padding: var(--content-padding-top) var(--content-padding-x) var(--content-padding-bottom);
+  padding: var(--content-padding-top) 0 var(--content-padding-bottom);
 }
 
 /* ----------------------------------------------------------- page header */
@@ -381,7 +458,7 @@
 /* ------------------------------------------------------------- responsive */
 
 @media (max-width: 900px) {
-  .shell {
+  .shell-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -406,6 +483,11 @@
     transition: transform var(--motion-slow) var(--ease-enter);
   }
 
+  .sidebar-inner {
+    position: static;
+    height: 100%;
+  }
+
   .sidebar-scrim {
     position: fixed;
     inset: var(--topbar-height) 0 0;
@@ -418,15 +500,10 @@
     pointer-events: none;
     animation: motion-fade-out var(--motion-fast) var(--ease-exit) forwards;
   }
-
-  .page {
-    --content-padding-x: 20px;
-  }
 }
 
 @media (max-width: 560px) {
   .page {
-    --content-padding-x: 16px;
     --content-padding-top: 18px;
   }
 

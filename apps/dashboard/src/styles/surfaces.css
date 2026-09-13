@@ -5,7 +5,6 @@
   align-items: flex-start;
   gap: 11px;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-1);
   color: var(--text-secondary);
@@ -51,7 +50,6 @@
 
 .banner-warning {
   background: var(--warning-soft);
-  border-color: var(--warning-border);
 }
 
 .banner-warning .banner-icon {
@@ -60,7 +58,6 @@
 
 .banner-danger {
   background: var(--danger-soft);
-  border-color: var(--danger-border);
 }
 
 .banner-danger .banner-icon {
@@ -69,7 +66,6 @@
 
 .banner-info {
   background: var(--info-soft);
-  border-color: var(--info-border);
 }
 
 .banner-info .banner-icon {
@@ -78,7 +74,6 @@
 
 .banner-success {
   background: var(--success-soft);
-  border-color: var(--success-border);
 }
 
 .banner-success .banner-icon {
@@ -143,7 +138,6 @@
 
 .empty.inset {
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 
@@ -168,7 +162,6 @@
   margin-inline: auto;
   padding: 10px 10px 10px 20px;
   background: var(--app-topbar);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-popover);
   --enter-y: 28px;
@@ -255,6 +248,7 @@
   place-items: center;
   padding: 24px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* The overlay fades on its own layer, so the panel's opacity never compounds with it. */
@@ -275,7 +269,6 @@
   width: 100%;
   max-width: 440px;
   background: var(--surface-1);
-  border: 1px solid var(--border-default);
   border-radius: var(--radius-dialog);
   box-shadow: var(--shadow-dialog);
   --enter-y: 16px;
@@ -364,13 +357,13 @@
 
 .table-wrap {
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .table-scroll {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
 }
 
 .table {
@@ -384,7 +377,6 @@
   z-index: var(--z-sticky);
   padding: 8px 14px;
   background: var(--surface-2);
-  border-bottom: 1px solid var(--border-subtle);
   color: var(--text-muted);
   font-size: var(--text-micro);
   font-weight: var(--weight-semibold);
@@ -413,14 +405,9 @@
 
 .table td {
   padding: 9px 14px;
-  border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   vertical-align: middle;
   transition: background-color var(--motion-fast) var(--ease-standard);
-}
-
-.table tbody tr:last-child td {
-  border-bottom: none;
 }
 
 .table tbody tr:hover td {
@@ -475,7 +462,6 @@
   align-items: center;
   gap: 12px;
   padding: 9px 14px;
-  border-top: 1px solid var(--border-subtle);
   background: var(--surface-2);
   color: var(--text-muted);
   font-size: var(--text-micro);
@@ -537,7 +523,7 @@
 
 .editor-preview {
   position: sticky;
-  top: 0;
+  top: calc(var(--topbar-height) + 16px);
   min-width: 0;
 }
 
@@ -557,7 +543,7 @@
   text-transform: uppercase;
 }
 
-@media (max-width: 1100px) {
+@container workspace (max-width: 860px) {
   .editor {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -604,7 +590,7 @@
   gap: 12px;
   padding: 10px 14px;
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
 }
 
@@ -682,14 +668,12 @@
 
 .panel {
   background: var(--surface-1);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 16px;
 }
 
 .panel-sunken {
   background: var(--surface-2);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
 }

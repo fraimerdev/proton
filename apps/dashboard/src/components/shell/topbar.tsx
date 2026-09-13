@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouter } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { guildIconUrl, type SessionGuild } from '../../lib/guild-access.ts';
+import { SUPPORT_INVITE } from '../../lib/site-meta.ts';
 import { cx, SearchField } from '../ui/controls.tsx';
 import { Icon } from '../ui/icon.tsx';
 import { Popover } from '../ui/overlay.tsx';
@@ -16,7 +17,7 @@ function initials(name: string): string {
   return name.slice(0, 2);
 }
 
-export function ProtonMark({ size = 20 }: { size?: number }): ReactElement {
+export function ProtonMark({ size = 28 }: { size?: number }): ReactElement {
   return (
     <img
       src="/brand/proton-mark-128.png"
@@ -58,6 +59,7 @@ function Avatar({
         width={size}
         height={size}
         className={cx('topbar-avatar', round && 'round')}
+        style={{ width: size, height: size }}
         onError={() => setFailed(src)}
       />
     );
@@ -74,8 +76,14 @@ function Avatar({
   );
 }
 
-function GuildAvatar({ guild, size = 20 }: { guild: SessionGuild; size?: number }): ReactElement {
-  return <Avatar src={guildIconUrl(guild, size > 64 ? 256 : 64)} name={guild.name} size={size} />;
+export function GuildAvatar({
+  guild,
+  size = 20,
+}: {
+  guild: SessionGuild;
+  size?: number;
+}): ReactElement {
+  return <Avatar src={guildIconUrl(guild, size > 32 ? 256 : 64)} name={guild.name} size={size} />;
 }
 
 function ServerPicker({
@@ -188,6 +196,16 @@ function ServerPicker({
   );
 }
 
+function menuItemFor(items: HTMLElement[], key: string): HTMLElement | undefined {
+  const current = items.indexOf(document.activeElement as HTMLElement);
+
+  if (key === 'ArrowDown') return items[(current + 1) % items.length];
+  if (key === 'ArrowUp') return items[current <= 0 ? items.length - 1 : current - 1];
+  if (key === 'Home') return items[0];
+  if (key === 'End') return items[items.length - 1];
+  return undefined;
+}
+
 export function UserMenu({
   viewer,
   onSignOut,
@@ -196,7 +214,14 @@ export function UserMenu({
   onSignOut: () => void;
 }): ReactElement {
   const anchor = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const close = (): void => setOpen(false);
+
+  useEffect(() => {
+    if (!open) return;
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus({ preventScroll: true });
+  }, [open]);
 
   return (
     <>
@@ -208,40 +233,87 @@ export function UserMenu({
         aria-expanded={open}
         aria-label={`Account menu for ${viewer.name}`}
         onClick={() => setOpen((value) => !value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+          event.preventDefault();
+          setOpen(true);
+        }}
       >
-        <Avatar src={viewer.image} name={viewer.name} size={24} round />
+        <Avatar src={viewer.image} name={viewer.name} size={22} round />
+        <span className="topbar-user-name truncate">{viewer.name}</span>
         <Icon name="caret-down" size={12} weight="fill" className="chevron" />
       </button>
 
       <Popover
         anchor={anchor}
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={close}
         align="end"
-        minWidth={208}
+        minWidth={248}
+        maxWidth={300}
+        className="account-menu"
       >
         <div className="menu-account">
-          <Avatar src={viewer.image} name={viewer.name} size={28} round />
-          <span className="truncate">{viewer.name}</span>
+          <Avatar src={viewer.image} name={viewer.name} size={40} round />
+          <span className="menu-account-text">
+            <span className="menu-account-name truncate">{viewer.name}</span>
+            <span className="menu-account-detail truncate">Signed in with Discord</span>
+          </span>
         </div>
         <div className="menu-separator" />
-        <div role="menu" aria-label="Account">
-          <Link
-            to="/dashboard"
-            role="menuitem"
-            className="menu-item"
-            onClick={() => setOpen(false)}
-          >
-            <Icon name="list" size={15} />
+        <div
+          ref={menu}
+          role="menu"
+          aria-label="Account"
+          onKeyDown={(event) => {
+            if (event.key === 'Tab') {
+              event.preventDefault();
+              close();
+              return;
+            }
+
+            const items = [
+              ...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []),
+            ];
+            const target = menuItemFor(items, event.key);
+            if (!target) return;
+            event.preventDefault();
+            target.focus();
+          }}
+        >
+          <Link to="/dashboard" role="menuitem" className="menu-item" onClick={close}>
+            <Icon name="squares-four" size={17} />
             Your servers
           </Link>
-          <Link to="/commands" role="menuitem" className="menu-item" onClick={() => setOpen(false)}>
-            <Icon name="list-checks" size={15} />
-            Command reference
+          <div className="menu-separator" />
+          <a
+            href={SUPPORT_INVITE}
+            target="_blank"
+            rel="noreferrer"
+            role="menuitem"
+            className="menu-item"
+            onClick={close}
+          >
+            <Icon name="discord-logo" size={17} />
+            Support server
+            <span className="visually-hidden"> (opens in a new tab)</span>
+          </a>
+          <Link to="/commands" role="menuitem" className="menu-item" onClick={close}>
+            <Icon name="book-open" size={17} />
+            Commands
+          </Link>
+          <Link to="/faq" role="menuitem" className="menu-item" onClick={close}>
+            <Icon name="question" size={17} />
+            FAQ
           </Link>
           <div className="menu-separator" />
-          <button type="button" role="menuitem" className="menu-item" onClick={onSignOut}>
-            <Icon name="sign-out" size={15} />
+          <button
+            type="button"
+            role="menuitem"
+            className="menu-item menu-item-danger"
+            onClick={onSignOut}
+          >
+            <Icon name="sign-out" size={17} />
             Sign out
           </button>
         </div>
@@ -271,32 +343,30 @@ export function Topbar({
 
   return (
     <header className="topbar">
-      {onToggleNav ? (
-        <button
-          type="button"
-          className="topbar-nav-toggle"
-          aria-label={navOpen === true ? 'Close navigation' : 'Open navigation'}
-          aria-expanded={navOpen === true}
-          onClick={onToggleNav}
-        >
-          <Icon name="list" size={18} />
-        </button>
-      ) : null}
+      <div className="shell-container topbar-inner">
+        {onToggleNav ? (
+          <button
+            type="button"
+            className="topbar-nav-toggle"
+            aria-label={navOpen === true ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={navOpen === true}
+            onClick={onToggleNav}
+          >
+            <Icon name="list" size={18} />
+          </button>
+        ) : null}
 
-      <Link to="/" className="topbar-brand">
-        <ProtonMark />
-        Proton
-      </Link>
+        <Link to="/" className="topbar-brand">
+          <ProtonMark />
+          Proton
+        </Link>
 
-      <span className="topbar-divider" aria-hidden />
+        <ServerPicker guilds={guilds} current={current} presenceKnown={presenceKnown} />
 
-      <ServerPicker guilds={guilds} current={current} presenceKnown={presenceKnown} />
+        <span className="topbar-spacer" />
 
-      <span className="topbar-spacer" />
-
-      <UserMenu viewer={viewer} onSignOut={onSignOut} />
+        <UserMenu viewer={viewer} onSignOut={onSignOut} />
+      </div>
     </header>
   );
 }
-
-export { cx, GuildAvatar };

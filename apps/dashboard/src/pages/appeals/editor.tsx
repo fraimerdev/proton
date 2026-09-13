@@ -250,8 +250,8 @@ export function PanelEditor({
                 aria-label="Action"
                 options={OUTCOME_OPTIONS}
                 value={panel.onApprove}
-                onChange={(event) => {
-                  const next = event.currentTarget.value as ApproveAction;
+                onChange={(value) => {
+                  const next = value as ApproveAction;
                   // Cleared rather than kept hidden: a rejoin link is still appended to an accepted
                   // appeal's DM whatever this is set to, so leaving one behind sends it invisibly.
                   patch((current) =>
