@@ -59,6 +59,8 @@ describe('migrations', () => {
       'blocked_members',
       'appeals',
       'appeal_answers',
+      'afk_statuses',
+      'afk_pings',
     ]) {
       expect(tables).toContain(expected);
     }

@@ -105,20 +105,21 @@ export const appealPanelsSchema = z
   });
 
 const settings = {
-  enabled: z.boolean().default(false).register(protonFields, { label: 'Appeals enabled' }),
+  enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
   reviewChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Default review channel',
-    description: 'Where an appeal lands when its form names no channel of its own',
+    description: 'Where appeals are posted when their form has no review channel.',
 
     channelTypes: [0, 5, 11, 12],
   }),
 
   reviewerRoleIds: z.array(snowflakeSchema).max(25).default([]).register(protonFields, {
     field: 'role-id',
-    label: 'Default reviewers',
-    description: 'Who may accept or turn down an appeal, unless the form names its own',
+    label: 'Reviewer roles',
+    description:
+      'Members with these roles or Manage Server can accept or turn down appeals on every form.',
   }),
 };
 

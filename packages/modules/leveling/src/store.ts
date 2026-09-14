@@ -74,4 +74,6 @@ export interface MemberXpStore {
   get(guildId: string, userId: string): Promise<MemberXpRecord | null>;
 
   leaderboard(guildId: string, options: LeaderboardOptions): Promise<LeaderboardEntry[]>;
+
+  countRanked(guildId: string): Promise<number>;
 }

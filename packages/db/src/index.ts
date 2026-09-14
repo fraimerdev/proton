@@ -1,4 +1,5 @@
 export { DrizzleBlockedMemberStore } from './blocked-member-store.ts';
+export { DrizzleBrandingNameStyleStore, toNameStyleState } from './branding-name-style-store.ts';
 export { DrizzleCaseRecorder } from './case-recorder.ts';
 export { createDb, type DbHandle } from './client.ts';
 export {

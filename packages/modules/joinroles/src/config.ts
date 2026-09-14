@@ -25,11 +25,11 @@ export const joinrolesConfigSchema = z.object({
   }),
 
   memberRoleIds: roleIdArray().max(MAX_MEMBER_ROLES).default([]).register(protonFields, {
-    label: 'Roles for people',
+    label: 'Member roles',
   }),
 
   botRoleIds: roleIdArray().max(MAX_BOT_ROLES).default([]).register(protonFields, {
-    label: 'Roles for bots',
+    label: 'Bot roles',
   }),
 
   grantWhenScreeningPasses: z.boolean().default(true).register(protonFields, {
@@ -41,8 +41,8 @@ export const joinrolesConfigSchema = z.object({
   }),
 
   stickyRoleIds: roleIdArray().max(MAX_STICKY_ROLES).default([]).register(protonFields, {
-    label: 'Roles eligible for restoring',
-    description: 'Empty restores every role the member had',
+    label: 'Roles to restore',
+    description: 'Leave empty to restore every role the member had.',
   }),
 });
 

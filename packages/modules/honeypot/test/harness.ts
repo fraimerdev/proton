@@ -545,11 +545,12 @@ export function harness(
     blocked?: boolean;
     dms?: boolean;
     link?: boolean;
+    now?: number;
   } = {},
 ): Harness {
   const botPermissions = options.botPermissions ?? BOT_PERMISSIONS;
 
-  let clock = Date.now();
+  let clock = options.now ?? Date.now();
 
   const pending = new MemoryPendingStore();
   const blocked = new MemoryBlockedStore();

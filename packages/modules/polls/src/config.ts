@@ -9,17 +9,17 @@ export const POLL_DEFAULT_DURATION_HOURS = 24;
 export const pollsConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Who may run /poll is set in the Permissions module',
+    description: 'Set who can use /poll in Permissions.',
   }),
 
   announceResults: z.boolean().default(true).register(protonFields, {
-    label: 'Announce when a poll closes',
+    label: 'Announce results',
   }),
 
   announceChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
-    label: 'Announce in',
-    description: 'Empty announces in the channel the poll was started in',
+    label: 'Announcement channel',
+    description: 'Where Proton announces closed polls.',
 
     channelTypes: [0, 5, 11, 12],
   }),
@@ -31,7 +31,7 @@ export const pollsConfigSchema = z.object({
     .max(POLL_MAX_DURATION_HOURS)
     .default(POLL_DEFAULT_DURATION_HOURS)
     .register(protonFields, {
-      label: 'Default length in hours',
+      label: 'Default duration',
     }),
 });
 

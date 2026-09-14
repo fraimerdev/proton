@@ -102,7 +102,7 @@ async function act(
   if (payload === null) {
     ctx.logger.error(
       `phishing could not act on ${authorId}: '${ctx.config.timeoutDuration}' is not a ` +
-        'readable timeout length. Fix the Timeout length setting in the Proton dashboard.',
+        'readable duration. Fix the Timeout duration setting in the Proton dashboard.',
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
     return;
@@ -177,7 +177,7 @@ async function alert(
     `Link host: \`${verdict.host}\`, matching \`${verdict.domain}\` on ${listed}.\n` +
     `Message: https://discord.com/channels/${ctx.guildId}/${message.channelId}/${message.messageId} ` +
     '— still up; delete it manually.\n' +
-    `${taken} If this was wrong, add \`${verdict.domain}\` to Never blocked in the Proton ` +
+    `${taken} If this was wrong, add \`${verdict.domain}\` to Allowed domains in the Proton ` +
     'dashboard.';
 
   const result = await ctx.executor.execute({

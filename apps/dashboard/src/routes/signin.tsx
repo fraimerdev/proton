@@ -2,9 +2,10 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { zodValidator } from '@tanstack/zod-adapter';
 import type { ReactElement } from 'react';
 import { z } from 'zod';
-import { Icon } from '../components/shell/icon.tsx';
-import { ProtonMark } from '../components/shell/mark.tsx';
+import { ProtonMark } from '../components/shell/topbar.tsx';
 import { OAUTH_SCOPES } from '../components/site/catalogue.ts';
+import { StatusBanner } from '../components/ui/feedback.tsx';
+import { Icon } from '../components/ui/icon.tsx';
 import { DEFAULT_CALLBACK } from '../lib/callback-url.ts';
 import { documentTitle } from '../lib/document-title.ts';
 
@@ -29,40 +30,42 @@ function SignIn(): ReactElement {
   const href = `/api/auth/signin/discord?redirect=${encodeURIComponent(redirect ?? DEFAULT_CALLBACK)}`;
 
   return (
-    <main className="plain-page">
-      <section className="signin-card">
-        <span className="signin-mark">
-          <ProtonMark size={52} />
-        </span>
+    <main className="centred">
+      <section className="centred-card">
+        <ProtonMark size={34} />
 
-        <h1>Sign in to the dashboard</h1>
-        <p className="signin-lede">
-          Proton asks Discord who you are and which servers you manage, so it can list the ones you
-          can configure. It asks for nothing else — the exact scopes are at the foot of this card.
+        <h1 style={{ marginTop: 16 }}>Sign in</h1>
+        <p>
+          Proton asks Discord who you are and which servers you manage, and nothing else. The exact
+          scopes are listed below.
         </p>
 
         {error ? (
-          <div className="alert-banner signin-alert" role="alert">
-            <Icon name="warning-circle" weight="fill" />
-            <span className="alert-banner-text">
+          <div style={{ marginTop: 16 }}>
+            <StatusBanner tone="danger" live="assertive">
               Discord did not finish signing you in, so nothing was shared
-              {description ? `: ${description.replace(/\.$/, '')}` : ''}. Try again below; if it
-              keeps failing, check which Discord account this browser is signed in to.
-            </span>
+              {description ? `: ${description.replace(/\.$/, '')}` : ''}. Try again. If it keeps
+              failing, check which Discord account this browser is signed in to.
+            </StatusBanner>
           </div>
         ) : null}
 
-        <a className="button button-discord signin-cta" href={href}>
-          <Icon name="discord-logo" weight="fill" />
+        <a
+          className="button button-primary button-lg button-block"
+          href={href}
+          style={{ marginTop: 20 }}
+        >
+          <Icon name="discord-logo" size={17} weight="fill" />
           Continue with Discord
         </a>
-        <Link to="/" className="button button-quiet signin-back">
+
+        <Link to="/" className="button button-ghost button-block" style={{ marginTop: 8 }}>
           Back to the site
         </Link>
 
-        <p className="signin-scopes">
-          <span className="sr-only">Scopes requested: </span>
-          {OAUTH_SCOPES.join(' · ')}
+        <p className="text-xs text-muted" style={{ marginTop: 20, textAlign: 'center' }}>
+          <span className="visually-hidden">Scopes requested: </span>
+          <span className="mono">{OAUTH_SCOPES.join(' · ')}</span>
         </p>
       </section>
     </main>

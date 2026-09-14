@@ -113,7 +113,7 @@ export const verificationConfigSchema = z.object({
     .enum(VERIFICATION_MODES)
     .default('button')
     .register(protonFields, {
-      label: 'How members verify',
+      label: 'Verification method',
       optionLabels: {
         button: 'Press a button',
         captcha: 'Solve a captcha',
@@ -124,7 +124,7 @@ export const verificationConfigSchema = z.object({
   panelChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Panel channel',
-    description: 'Where Proton posts the message new members press',
+    description: 'Where Proton posts the panel members use to verify.',
 
     channelTypes: [0, 5],
   }),
@@ -165,7 +165,8 @@ export const verificationConfigSchema = z.object({
   unverifiedRoleId: snowflakeSchema.optional().register(protonFields, {
     field: 'role-id',
     label: 'Unverified role',
-    description: 'New members are briefly ungated until Proton applies it',
+    description:
+      'Removed when a member verifies. Until Proton adds it, new members briefly have full access.',
   }),
 
   verifiedRoleId: snowflakeSchema
@@ -181,11 +182,11 @@ export const verificationConfigSchema = z.object({
     .enum(CAPTCHA_DELIVERIES)
     .default('channel')
     .register(protonFields, {
-      label: 'Send the captcha',
-      description: 'A member with DMs closed is always answered in the channel instead',
+      label: 'Send captcha',
+      description: 'Members with DMs closed always get it in the channel.',
 
       optionLabels: {
-        channel: 'In the channel, where only they can see it',
+        channel: 'Privately in the channel',
         dm: 'By direct message',
       },
       showWhen: captchaOnly,
@@ -209,7 +210,7 @@ export const verificationConfigSchema = z.object({
 
   captchaExpiry: durationStringSchema.default('5m').register(protonFields, {
     field: 'duration',
-    label: 'Captcha expires after',
+    label: 'Expires after',
     showWhen: captchaOnly,
   }),
 
@@ -217,22 +218,23 @@ export const verificationConfigSchema = z.object({
     .enum(VERIFICATION_FAILURE_ACTIONS)
     .default('none')
     .register(protonFields, {
-      label: 'When a member runs out of attempts',
+      label: 'Action',
+      description: 'What Proton does when a member runs out of attempts.',
 
       optionLabels: {
         none: 'Nothing — let them try again',
-        kick: 'Kick them',
-        ban: 'Ban them',
-        timeout: 'Time them out',
-        quarantine: 'Give them the quarantine role',
+        kick: 'Kick',
+        ban: 'Ban',
+        timeout: 'Timeout',
+        quarantine: 'Add quarantine role',
       },
       showWhen: captchaOnly,
     }),
 
   failureTimeout: durationStringSchema.default('1h').register(protonFields, {
     field: 'duration',
-    label: 'Timeout length',
-    description: 'Discord caps timeouts at 28 days',
+    label: 'Timeout duration',
+    description: 'Discord caps timeouts at 28 days.',
 
     showWhen: { path: 'failureAction', equals: ['timeout'] },
   }),

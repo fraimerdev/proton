@@ -1,89 +1,100 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
-import { Icon } from '../components/shell/icon.tsx';
 import { SitePage } from '../components/site/chrome.tsx';
-import { FAQ, QuestionList } from '../components/site/faq.tsx';
 import { documentTitle } from '../lib/document-title.ts';
-import { SUPPORT_INVITE } from '../lib/site-meta.ts';
 
 export const Route = createFileRoute('/faq')({
-  head: () => ({
-    meta: [
-      { title: documentTitle('Questions') },
-      {
-        name: 'description',
-        content:
-          'What Proton stores, which permissions it asks Discord for, what happens when it cannot run, and who on your staff can configure it.',
-      },
-    ],
-  }),
-  component: FaqPage,
+  head: () => ({ meta: [{ title: documentTitle('FAQ') }] }),
+  component: Faq,
 });
 
-function FaqPage(): ReactElement {
+const GROUPS: readonly {
+  title: string;
+  items: readonly { question: string; answer: string }[];
+}[] = [
+  {
+    title: 'Getting started',
+    items: [
+      {
+        question: 'What permissions does Proton ask for?',
+        answer:
+          'The invite asks for exactly the union of what the installed modules need, computed from the modules themselves rather than a hardcoded list. If a module needs a permission Proton does not have, its page says which one and where to grant it, instead of failing quietly.',
+      },
+      {
+        question: 'Which privileged intents does it need?',
+        answer:
+          'Server Members and Message Content. Server Members is how join roles, verification and welcome messages see anybody arriving. Message Content is how automod, the phishing filter and the honeypot read a message to decide whether to act. Presence is not used.',
+      },
+      {
+        question: 'Nothing happened when I switched a module on.',
+        answer:
+          'Open that module in the dashboard. If Proton cannot run it, a banner at the top of the page names the missing intent or permission and where it is missing. The server overview marks it Cannot run.',
+      },
+    ],
+  },
+  {
+    title: 'Moderation',
+    items: [
+      {
+        question: 'Does Proton actually perform destructive actions?',
+        answer:
+          'Yes. Every action is performed for real in every environment. The only preview is the one you ask for: restoring a backup shows you the exact changes and waits for you to confirm.',
+      },
+      {
+        question: 'How do warnings turn into a timeout or a ban?',
+        answer:
+          'Moderation has a warn escalation ladder. You set the rungs — three warnings becomes a one hour timeout, five becomes a day, and so on — and Proton counts within the window you choose. The ladder only acts while Moderation is switched on.',
+      },
+      {
+        question: 'Can members appeal?',
+        answer:
+          'Yes. Appeals are forms you build: your own questions, your own eligibility window, delivered to a review channel. A member gets a link rather than having to DM a moderator.',
+      },
+    ],
+  },
+  {
+    title: 'Data and privacy',
+    items: [
+      {
+        question: 'Does Proton store our messages?',
+        answer:
+          'Only if you switch it on. Message logging and ticket transcripts are off by default, and anything stored is deleted after 30 days. Reading a message to filter it does not store it.',
+      },
+      {
+        question: 'Who can see what changed in the dashboard?',
+        answer:
+          'Every dashboard change is written to an audit record with who made it, when, and the before and after values.',
+      },
+    ],
+  },
+];
+
+function Faq(): ReactElement {
   return (
     <SitePage>
-      <div className="doc-page doc-page-wide">
-        <header className="doc-head">
-          <h1 className="doc-title">What Proton does, and what it will not do.</h1>
-          <p className="doc-lede">
-            Answers to the things worth knowing before you add a bot to a server other people are in
-            — what it reads, what it writes down, and what happens when Discord will not let it act.
-          </p>
-        </header>
+      <div className="site-section" style={{ paddingTop: 56, paddingBottom: 72 }}>
+        <h1 className="site-heading">Questions</h1>
+        <p className="site-lede">
+          The things administrators ask before and just after adding Proton.
+        </p>
 
-        <div className="doc-split">
-          <nav className="doc-nav" aria-label="Sections">
-            <span className="doc-nav-title">On this page</span>
-            <ul>
-              {FAQ.map((group) => (
-                <li key={group.id}>
-                  <a href={`#${group.id}`}>{group.label}</a>
-                </li>
+        {GROUPS.map((group) => (
+          <section className="section" key={group.title}>
+            <h2 className="section-label">{group.title}</h2>
+            <div className="rows">
+              {group.items.map((item) => (
+                <div className="row stacked" key={item.question}>
+                  <div className="row-main">
+                    <h3 className="row-title">{item.question}</h3>
+                    <p className="row-description" style={{ maxWidth: '78ch', marginTop: 5 }}>
+                      {item.answer}
+                    </p>
+                  </div>
+                </div>
               ))}
-            </ul>
-
-            <div className="doc-nav-foot">
-              <Link to="/privacy">Privacy policy</Link>
-              <Link to="/terms">Terms of Service</Link>
-              <a href={SUPPORT_INVITE} rel="noreferrer noopener" target="_blank">
-                Support server
-              </a>
             </div>
-          </nav>
-
-          <div className="doc-body">
-            {FAQ.map((group) => (
-              <section className="faq-group" id={group.id} key={group.id}>
-                <h2 className="faq-group-title">{group.label}</h2>
-                <QuestionList questions={group.questions} />
-              </section>
-            ))}
-
-            <div className="doc-tail">
-              <p>
-                Nothing here answers it? Ask in the support server. The{' '}
-                <Link to="/privacy">privacy policy</Link> is the complete list of what Proton
-                stores, and the <Link to="/terms">Terms of Service</Link> cover what you are
-                agreeing to when you add it.
-              </p>
-              <div className="doc-tail-actions">
-                <a
-                  className="button button-quiet"
-                  href={SUPPORT_INVITE}
-                  rel="noreferrer noopener"
-                  target="_blank"
-                >
-                  Support server
-                </a>
-                <a className="button button-discord" href="/invite">
-                  <Icon name="discord-logo" weight="fill" />
-                  Add to Discord
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
+          </section>
+        ))}
       </div>
     </SitePage>
   );

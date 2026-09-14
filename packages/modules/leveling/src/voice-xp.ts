@@ -2,6 +2,8 @@ import type { EventListener, EventType, ModuleContext, ProtonEvent } from '@prot
 import type { LevelingConfig } from './config.ts';
 import { bindVoice, describeUnbound, type LevelingDeps } from './deps.ts';
 import { applyLevelUp } from './level-up.ts';
+import { channelChainFor, xpEventsBetween } from './multiplier-lookup.ts';
+import { staticXpCandidates, voiceXpPayout } from './multipliers.ts';
 import { MODULE_ID } from './perform.ts';
 import type { MemberXpStore } from './store.ts';
 import { MAX_PAID_SESSION_MS, type VoiceSession } from './voice-session.ts';
@@ -18,6 +20,8 @@ export interface VoiceState {
   serverDeaf: boolean;
 
   isBot: boolean | null;
+
+  roleIds: string[] | null;
 }
 
 export function readVoiceState(payload: unknown): VoiceState | null {
@@ -27,10 +31,14 @@ export function readVoiceState(payload: unknown): VoiceState | null {
   const userId = typeof raw.user_id === 'string' ? raw.user_id : null;
   if (userId === null) return null;
 
-  const member = typeof raw.member === 'object' && raw.member !== null ? raw.member : null;
-  const user = member === null ? null : (member as Record<string, unknown>).user;
+  const member =
+    typeof raw.member === 'object' && raw.member !== null
+      ? (raw.member as Record<string, unknown>)
+      : null;
+  const user = member === null ? null : member.user;
   const bot =
     typeof user === 'object' && user !== null ? (user as Record<string, unknown>).bot : undefined;
+  const roles = member === null ? null : member.roles;
 
   return {
     userId,
@@ -38,6 +46,44 @@ export function readVoiceState(payload: unknown): VoiceState | null {
     selfDeaf: raw.self_deaf === true,
     serverDeaf: raw.deaf === true,
     isBot: typeof bot === 'boolean' ? bot : null,
+    roleIds: Array.isArray(roles)
+      ? roles.filter((role): role is string => typeof role === 'string')
+      : null,
+  };
+}
+
+function field(value: unknown, key: string): unknown {
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)[key]
+    : undefined;
+}
+
+function readMembers(members: unknown): Map<string, VoiceState> {
+  const states = new Map<string, VoiceState>();
+  if (!Array.isArray(members)) return states;
+
+  for (const member of members) {
+    const state = readVoiceState({ user_id: field(field(member, 'user'), 'id'), member });
+    if (state !== null) states.set(state.userId, state);
+  }
+
+  return states;
+}
+
+function sameRoles(held: readonly string[] | undefined, fresh: readonly string[]): boolean {
+  if (held === undefined || held.length !== fresh.length) return false;
+
+  const holding = new Set(held);
+  return fresh.every((roleId) => holding.has(roleId));
+}
+
+function sessionFor(guildId: string, state: VoiceState, channelId: string, joinedAt: number) {
+  return {
+    guildId,
+    userId: state.userId,
+    channelId,
+    joinedAt,
+    ...(state.roleIds === null ? {} : { roleIds: state.roleIds }),
   };
 }
 
@@ -74,20 +120,22 @@ export function createVoiceXpListener(deps: LevelingDeps): EventListener<Levelin
 
       if (active) {
         const open = await bound.sessions.get(event.guildId, state.userId);
-        if (open && open.channelId === state.channelId) return;
+
+        if (open && open.channelId === state.channelId) {
+          if (state.roleIds !== null && !sameRoles(open.roleIds, state.roleIds)) {
+            await bound.sessions.open({ ...open, roleIds: state.roleIds });
+          }
+          return;
+        }
       }
 
       const closed = await bound.sessions.close(event.guildId, state.userId);
-      if (closed) await payout(ctx, bound.xp, event, closed);
+      if (closed) await payout(ctx, deps, bound.xp, event, closed);
 
       if (active && state.channelId !== null) {
-        await bound.sessions.open({
-          guildId: event.guildId,
-          userId: state.userId,
-          channelId: state.channelId,
-
-          joinedAt: event.occurredAt,
-        });
+        await bound.sessions.open(
+          sessionFor(event.guildId, state, state.channelId, event.occurredAt),
+        );
       }
     },
   };
@@ -103,6 +151,7 @@ function isEarning(config: LevelingConfig, state: VoiceState): boolean {
 
 async function payout(
   ctx: ModuleContext<LevelingConfig>,
+  deps: LevelingDeps,
   xp: MemberXpStore,
   event: ProtonEvent,
   session: VoiceSession,
@@ -111,7 +160,32 @@ async function payout(
   const minutes = Math.floor(elapsed / MINUTE_MS);
   if (minutes <= 0) return;
 
-  const amount = minutes * ctx.config.voiceXpPerMinute;
+  const paidUntil = session.joinedAt + minutes * MINUTE_MS;
+
+  const amount = voiceXpPayout({
+    joinedAt: session.joinedAt,
+    minutes,
+    voiceXpPerMinute: ctx.config.voiceXpPerMinute,
+    staticCandidates: staticXpCandidates(ctx.config, {
+      guildId: session.guildId,
+      roleIds: session.roleIds ?? [],
+      channelChain: await channelChainFor(ctx, deps, session.guildId, session.channelId),
+    }),
+    events: await xpEventsBetween(ctx, deps, session.guildId, session.joinedAt, paidUntil),
+  });
+
+  if (amount <= 0) {
+    ctx.logger.info(
+      `voice session of ${minutes} minute(s) earned no XP: a 0× multiplier applied to it`,
+      {
+        guildId: ctx.guildId,
+        moduleId: MODULE_ID,
+        userId: session.userId,
+        channelId: session.channelId,
+      },
+    );
+    return;
+  }
 
   let result: Awaited<ReturnType<typeof xp.creditVoice>>;
   try {
@@ -139,14 +213,19 @@ async function payout(
     channelId: session.channelId,
   });
 
-  await applyLevelUp(ctx, {
-    userId: session.userId,
-    previousLevel: result.previousLevel,
-    level: result.level,
-    xp: result.xp,
-    source: 'voice',
-    idempotencyRoot: `leveling:${event.id}`,
-  });
+  await applyLevelUp(
+    ctx,
+    {
+      userId: session.userId,
+      previousLevel: result.previousLevel,
+      level: result.level,
+      xp: result.xp,
+      source: 'voice',
+      idempotencyRoot: `leveling:${event.id}`,
+      gained: amount,
+    },
+    deps,
+  );
 }
 
 async function reconcile(
@@ -163,21 +242,27 @@ async function reconcile(
   const guildId = event.guildId;
   if (guildId === null) return;
 
+  // GUILD_CREATE voice states carry no member, so roles and the bot flag come from its members list.
+  const members = readMembers((payload as Record<string, unknown>).members);
+
   let adopted = 0;
   for (const entry of raw) {
-    const state = readVoiceState(entry);
-    if (state === null || state.isBot === true) continue;
+    const read = readVoiceState(entry);
+    if (read === null) continue;
+
+    const member = members.get(read.userId);
+    const state: VoiceState = {
+      ...read,
+      isBot: read.isBot ?? member?.isBot ?? null,
+      roleIds: read.roleIds ?? member?.roleIds ?? null,
+    };
+
+    if (state.isBot === true) continue;
     if (!isEarning(ctx.config, state) || state.channelId === null) continue;
 
     if (await sessions.get(guildId, state.userId)) continue;
 
-    await sessions.open({
-      guildId,
-      userId: state.userId,
-      channelId: state.channelId,
-
-      joinedAt: event.occurredAt,
-    });
+    await sessions.open(sessionFor(guildId, state, state.channelId, event.occurredAt));
     adopted++;
   }
 

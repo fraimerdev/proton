@@ -9,8 +9,9 @@ import {
 } from './config.ts';
 import type { LevelingDeps } from './deps.ts';
 import { createMessageXpListener } from './message-xp.ts';
+import { levelingTemplates } from './placeholders.ts';
 import { createLevelingProviders } from './providers.ts';
-import { createPruneHandler, PRUNE_JOB_ID } from './prune.ts';
+import { createPruneHandler, createPruneListener, PRUNE_JOB_ID } from './prune.ts';
 import { createVoiceXpListener } from './voice-xp.ts';
 
 export {
@@ -35,6 +36,9 @@ export {
 } from './commands.ts';
 export { LEVEL_UP_ACTION, levelUpCustomId } from './component-id.ts';
 export {
+  type ChannelMultiplier,
+  channelMultiplierSchema,
+  channelMultipliersSchema,
   DEFAULT_LEVEL_UP,
   DEFAULT_LEVEL_UP_MESSAGE,
   isSilentLevelUp,
@@ -48,14 +52,41 @@ export {
   levelingFormSchema,
   levelUpMessageSchema,
   liftLevelUpMessage,
+  MULTIPLIER_CHANNEL_TYPES,
   REWARD_MODES,
   type RewardMode,
+  type RoleMultiplier,
   type RoleReward,
   readSettings,
+  roleMultiplierSchema,
+  roleMultipliersSchema,
   roleRewardSchema,
   roleRewardsSchema,
   rollMessageXp,
   type SettingsResult,
+  XP_EVENT_MAX_DURATION_MS,
+  XP_EVENT_MAX_LEAD_MS,
+  XP_EVENT_MAX_PENDING,
+  XP_EVENT_MIN_DURATION_MS,
+  XP_EVENT_MULTIPLIER_MAX,
+  XP_EVENT_MULTIPLIER_MIN,
+  XP_EVENT_RETENTION_MS,
+  XP_EVENT_START_GRACE_MS,
+  XP_EVENT_STATUSES,
+  XP_MULTIPLIER_LIST_MAX,
+  XP_MULTIPLIER_MAX,
+  XP_MULTIPLIER_MIN,
+  XP_MULTIPLIER_STEP,
+  type XpEventBoundsIssue,
+  type XpEventCreate,
+  type XpEventStatus,
+  type XpEventView,
+  xpEventBoundsIssue,
+  xpEventCreateSchema,
+  xpEventCreateSchemaAt,
+  xpEventMultiplierSchema,
+  xpEventViewSchema,
+  xpMultiplierSchema,
 } from './config.ts';
 export {
   type LevelProgress,
@@ -68,24 +99,67 @@ export {
   xpForLevel,
   xpForStep,
 } from './curve.ts';
-export { bindVoice, bindXp, clockOf, describeUnbound, type LevelingDeps } from './deps.ts';
+export {
+  bindVoice,
+  bindXp,
+  bindXpEvents,
+  clockOf,
+  describeUnbound,
+  type LevelingDeps,
+  type XpEventBinding,
+} from './deps.ts';
+export { XP_EVENT_GROUP, xpEventId } from './event-commands.ts';
 export {
   applyLevelUp,
+  type LevelingRenderDeps,
   type LevelUp,
   type LevelUpBody,
   type LevelUpRender,
   type LevelUpSource,
-  type LevelUpValues,
   renderLevelUpMessage,
 } from './level-up.ts';
 export {
+  type AuthorFacts,
   createMessageXpListener,
   MESSAGE_XP_EVENT_TYPES,
+  readAuthorFacts,
   readMessage,
   type XpMessage,
 } from './message-xp.ts';
+export {
+  activeXpEvents,
+  channelChain,
+  type MessageCandidateInput,
+  type MultiplierRules,
+  messageXpCandidates,
+  resolveXpMultiplier,
+  type StaticCandidateInput,
+  scaleMessageXp,
+  staticXpCandidates,
+  type VoicePayoutInput,
+  voiceXpPayout,
+  type XpEventWindow,
+} from './multipliers.ts';
+export {
+  LEVEL_UP_BASE_PATH,
+  LEVEL_UP_RANK_KEYS,
+  LEVEL_UP_RANKED_COUNT_KEY,
+  LEVEL_UP_SURFACE,
+  type LevelUpPlaceholderFacts,
+  type LevelUpRank,
+  type LevelUpRewards,
+  levelingTemplates,
+} from './placeholders.ts';
 export { createLevelingProviders, LEVELING_MODULE_ID } from './providers.ts';
-export { createPruneHandler, PRUNE_JOB_ID } from './prune.ts';
+export {
+  armPrune,
+  createPruneHandler,
+  createPruneListener,
+  PRUNE_EVENT_TYPES,
+  PRUNE_INTERVAL_MS,
+  PRUNE_JOB_ID,
+  PRUNE_KEY,
+} from './prune.ts';
 export { RedisVoiceSessionStore } from './redis-session-store.ts';
 export {
   planRoleRewards,
@@ -110,6 +184,22 @@ export {
   VOICE_XP_EVENT_TYPES,
   type VoiceState,
 } from './voice-xp.ts';
+export {
+  CachedXpEventStore,
+  type CachedXpEventStoreOptions,
+  XP_EVENT_CACHE_TTL_MS,
+} from './xp-event-cache.ts';
+export {
+  type CreateXpEventInput,
+  type CreateXpEventResult,
+  createXpEvent,
+  type EndXpEventAudit,
+  type EndXpEventResult,
+  toXpEventView,
+  type XpEvent,
+  type XpEventStore,
+  xpEventStatus,
+} from './xp-events.ts';
 
 export function createLevelingModule(
   deps: LevelingDeps = {},
@@ -131,10 +221,14 @@ export function createLevelingModule(
     ],
 
     requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
-    actionKinds: ['add_role', 'remove_role', 'send', 'interaction_reply'],
+    actionKinds: ['add_role', 'remove_role', 'send', 'interaction_reply', 'interaction_followup'],
 
     commands: levelingCommands(deps),
-    listeners: [createMessageXpListener(deps), createVoiceXpListener(deps)],
+    listeners: [
+      createMessageXpListener(deps),
+      createVoiceXpListener(deps),
+      ...(deps.activity ? [createPruneListener(deps)] : []),
+    ],
 
     ...(deps.activity ? { providers: createLevelingProviders(deps.activity) } : {}),
 
@@ -143,11 +237,15 @@ export function createLevelingModule(
     ...(deps.activity
       ? {
           schedules: [PRUNE_JOB_ID],
-          scheduledHandlers: { [PRUNE_JOB_ID]: createPruneHandler(deps.activity, deps.now) },
+          scheduledHandlers: {
+            [PRUNE_JOB_ID]: createPruneHandler(deps.activity, deps.now, deps.xpEvents),
+          },
         }
       : {}),
 
     emits: ['xp.level_gained'],
+
+    templates: levelingTemplates,
 
     dashboard: {
       icon: 'trending-up',
@@ -172,6 +270,11 @@ export function createLevelingModule(
           fields: ['xpPerMessageMin', 'xpPerMessageMax', 'messageCooldown'],
         },
         { id: 'voice', title: 'Voice XP', fields: ['voiceXpPerMinute', 'afkChannelId'] },
+        {
+          id: 'multipliers',
+          title: 'XP multipliers',
+          fields: ['roleMultipliers', 'channelMultipliers'],
+        },
         { id: 'announce', title: 'Level-up announcement', fields: ['levelUpChannelId'] },
         {
           id: 'exclusions',

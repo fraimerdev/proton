@@ -1,7 +1,7 @@
 import type { Logger } from '../modules/manifest.ts';
 import type { CaseRecorder } from './case-recorder.ts';
 import type { DedupeStore } from './dedupe.ts';
-import { type ActionKind, isNeverRecorded, reversalOf } from './kinds.ts';
+import { type ActionKind, exposesUpstreamOnFailure, isNeverRecorded, reversalOf } from './kinds.ts';
 import { type PrecheckInput, runPrechecks } from './prechecks.ts';
 import type { RestProxyClient } from './rest-client.ts';
 import { toRestCall } from './rest-mapping.ts';
@@ -119,6 +119,9 @@ export class DefaultActionExecutor implements ActionExecutor {
             code: `discord_${response.status}`,
             humanReason: describeDiscordError(response.status),
           },
+          ...(exposesUpstreamOnFailure(request.kind)
+            ? { upstream: { status: response.status, body: response.body } }
+            : {}),
         };
       }
 

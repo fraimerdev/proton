@@ -1,18 +1,16 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { CHANNEL_ICON_NAMES } from '../src/components/form/fields.tsx';
-import { AREA_ICON_NAMES } from '../src/components/module/area-index.ts';
-import {
-  ACTION_ICON_NAMES,
-  BROWSE_VIEWS,
-  CATEGORY_ICONS,
-  MODULE_ICON_NAMES,
-} from '../src/components/shell/module-meta.ts';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { MODULE_ICON_NAMES, RECORD_ICON_NAMES } from '../src/lib/modules/catalogue.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const SRC = join(ROOT, 'src');
-const ASSETS = join(ROOT, 'node_modules', '@phosphor-icons', 'core', 'assets');
-export const GENERATED_PATH = join(SRC, 'components', 'shell', 'icon-set.gen.ts');
+
+// Resolved, not joined onto node_modules: bun links workspace dependencies from a content store.
+const require = createRequire(import.meta.url);
+const ASSETS = join(dirname(require.resolve('@phosphor-icons/core/package.json')), 'assets');
+
+export const GENERATED_PATH = join(SRC, 'components', 'ui', 'icon-set.gen.ts');
 
 const WEIGHTS = ['regular', 'fill'] as const;
 
@@ -27,27 +25,15 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/**
- * Every name an <Icon> can be handed. The JSX literals have to be scraped rather than imported —
- * they are spelled inline at the call site — but a name this misses becomes a type error at the
- * call site rather than a blank square in the browser, because Icon takes IconName, not string.
- */
 export function renderableNames(): string[] {
-  // The closed tables that turn something else's vocabulary into an icon. A table added without
-  // being listed here fails `bun run typecheck`, because its values stop being an IconName.
-  const names = new Set<string>([
-    ...Object.values(CATEGORY_ICONS),
-    ...MODULE_ICON_NAMES,
-    ...ACTION_ICON_NAMES,
-    ...CHANNEL_ICON_NAMES,
-    ...AREA_ICON_NAMES,
-    ...BROWSE_VIEWS.map((view) => view.icon),
-  ]);
+  const names = new Set<string>([...MODULE_ICON_NAMES, ...RECORD_ICON_NAMES]);
 
   for (const file of sourceFiles(SRC)) {
     if (file === GENERATED_PATH) continue;
 
-    for (const tag of readFileSync(file, 'utf8').matchAll(/<Icon\b[\s\S]*?\/>/g)) {
+    const source = readFileSync(file, 'utf8');
+
+    for (const tag of source.matchAll(/<Icon\b[\s\S]*?\/>/g)) {
       const prop = /name=(\{[\s\S]*?\}|"[a-z0-9-]+")/.exec(tag[0]);
       if (!prop?.[1]) throw new Error(`an <Icon> in ${file} has no name prop this can read`);
 
@@ -58,20 +44,36 @@ export function renderableNames(): string[] {
         continue;
       }
 
-      // A ternary picking an icon by comparing something to a string puts that something's value
-      // in the same expression: name={sort.direction === 'asc' ? 'caret-up' : 'caret-down'}.
+      // Drop the compared value in name={sort === 'asc' ? 'sort-ascending' : 'sort-descending'}.
       const branches = expression
         .replace(/[=!]==?\s*'[a-z0-9-]+'/g, '')
         .replace(/'[a-z0-9-]+'\s*[=!]==?/g, '');
 
       for (const literal of branches.matchAll(/'([a-z0-9-]+)'/g)) names.add(literal[1] ?? '');
     }
+
+    for (const entry of source.matchAll(
+      /\b(?:icon|trailingIcon|glyph)=(?:"([a-z0-9-]+)"|\{'([a-z0-9-]+)'\})/g,
+    )) {
+      names.add(entry[1] ?? entry[2] ?? '');
+    }
+
+    for (const entry of source.matchAll(/\b(?:icon|glyph):\s*'([a-z0-9-]+)'/g)) {
+      names.add(entry[1] ?? '');
+    }
+
+    for (const table of source.matchAll(
+      /:\s*(?:readonly\s+)?(?:Record<[^>]*?,\s*IconName>|IconName\[\])\s*=\s*([[{][\s\S]*?^\s*[\]}])/gm,
+    )) {
+      for (const literal of (table[1] ?? '').matchAll(/'([a-z0-9-]+)'/g))
+        names.add(literal[1] ?? '');
+    }
   }
 
   return [...names].filter(Boolean).sort();
 }
 
-function glyph(name: string, weight: (typeof WEIGHTS)[number]): string {
+function glyph(name: string, weight: (typeof WEIGHTS)[number]): string[] {
   const file = join(ASSETS, weight, weight === 'fill' ? `${name}-fill.svg` : `${name}.svg`);
 
   let svg: string;
@@ -85,19 +87,20 @@ function glyph(name: string, weight: (typeof WEIGHTS)[number]): string {
 
   const paths = [...svg.matchAll(/<path d="([^"]+)"\s*\/>/g)].map((match) => match[1] ?? '');
 
-  // Every Phosphor glyph in this set is one path, so the generated module can hold path data
-  // rather than markup and Icon can render a <path> instead of setting innerHTML.
-  if (paths.length !== 1 || !paths[0]) {
-    throw new Error(`${file} is not the single <path> this generator emits (${paths.length})`);
-  }
+  if (paths.length === 0) throw new Error(`${file} has no <path> this generator can read`);
 
-  return paths[0];
+  return paths;
 }
 
 export function generate(): string {
   const body = renderableNames()
     .map((name) => {
-      const weights = WEIGHTS.map((w) => `    ${w}: '${glyph(name, w)}',`).join('\n');
+      const weights = WEIGHTS.map(
+        (w) =>
+          `    ${w}: [${glyph(name, w)
+            .map((d) => `'${d}'`)
+            .join(', ')}],`,
+      ).join('\n');
 
       return `  '${name}': {\n${weights}\n  },`;
     })
@@ -105,10 +108,18 @@ export function generate(): string {
 
   const header = [
     '// Generated by scripts/build-icons.ts from @phosphor-icons/core. Do not edit by hand.',
-    '// Re-run with `bun run build:icons` after adding an <Icon name> or a module-meta entry.',
+    '// Re-run with `bun run build:icons` after adding an <Icon name> or a catalogue entry.',
   ].join('\n');
 
-  return `${header}\n\nexport const ICONS = {\n${body}\n} as const;\n\nexport type IconName = keyof typeof ICONS;\n`;
+  return [
+    header,
+    '',
+    `export const ICONS = {\n${body}\n} as const;`,
+    '',
+    'export type IconName = keyof typeof ICONS;',
+    "export type IconWeight = 'regular' | 'fill';",
+    '',
+  ].join('\n');
 }
 
 if (import.meta.main) {

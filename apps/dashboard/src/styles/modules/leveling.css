@@ -1,0 +1,48 @@
+/* leveling page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.leveling-swatch {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+
+.leveling-swatch span {
+  width: 7px;
+  height: 13px;
+  border-radius: 2px;
+}
+
+/* Two rewards on the same level is legal, so this sits where .rung-error sits without its colour. */
+.leveling-rung-note {
+  padding: 0 14px 10px 48px;
+  margin-top: -4px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+/* A standing sentence underneath a surface, not an intro above one: .section-intro pulls itself
+   up by 2px and would sit on the thing it follows. */
+.leveling-note {
+  margin: 12px 0 0;
+  max-width: 72ch;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.leveling-stepper {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.leveling-event-failure {
+  margin: -4px 0 0;
+  padding: 0 14px 10px 46px;
+  color: var(--danger);
+  font-size: var(--text-secondary-size);
+}
+
+.leveling-composer-status > :first-child {
+  margin-top: 0;
+}

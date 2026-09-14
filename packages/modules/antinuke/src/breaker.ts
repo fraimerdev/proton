@@ -51,7 +51,10 @@ export async function tripBreaker(
   const state = await deps.guildState.get(ctx.guildId);
 
   if (state?.ownerId === input.actorId) {
-    const summary = `Anti-nuke detected ${forAlert(input)}, and that member owns this server.`;
+    const summary =
+      `Anti-nuke detected ${forAlert(input)}, and that member owns this server. Discord does ` +
+      "not let any bot remove the owner's roles, ban them or kick them, so I have done nothing " +
+      'and cannot. Recover the account, then transfer ownership or enable server-wide 2FA.';
 
     ctx.logger.warn(summary, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: input.actorId });
 

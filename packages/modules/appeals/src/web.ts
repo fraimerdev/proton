@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { ANSWER_MAX, type AppealPanel, type AppealsConfig, panelFor } from './config.ts';
+import {
+  APPEAL_DECISION_SURFACE,
+  appealDecisionFacts,
+  renderAppealDecision,
+} from './placeholders.ts';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -77,6 +82,15 @@ export function appealView(input: AppealViewInput): AppealView {
       existing.status === 'denied' &&
       now - (existing.decidedAt ?? existing.filedAt) >= panel.cooldownDays * DAY_MS;
 
+    const lookup = APPEAL_DECISION_SURFACE.build(appealDecisionFacts(existing, panel), { now });
+
+    const verdict = renderAppealDecision(
+      existing.status === 'approved' ? panel.approvedMessage : panel.deniedMessage,
+      lookup,
+      'plain_text',
+      now,
+    ).output;
+
     return {
       state: 'decided',
       panel,
@@ -84,10 +98,10 @@ export function appealView(input: AppealViewInput): AppealView {
       resubmit,
       humanReason:
         existing.status === 'approved'
-          ? panel.approvedMessage
+          ? verdict
           : resubmit
-            ? `${panel.deniedMessage} You may send another one now.`
-            : panel.deniedMessage,
+            ? `${verdict} You may send another one now.`
+            : verdict,
     };
   }
 

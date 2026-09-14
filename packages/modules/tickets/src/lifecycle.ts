@@ -7,16 +7,25 @@ import {
   parseDuration,
   type TicketPriority,
 } from '@proton/core';
+import { clipGraphemes } from '@proton/core/placeholders';
 import {
   MODULE_ID,
-  renderChannelName,
   staffRolesFor,
   TEXT_CHANNEL_TYPE,
   type TicketsConfig,
   type TicketType,
   typeFor,
 } from './config.ts';
-import { clockOf, type TicketsDeps } from './deps.ts';
+import {
+  clockOf,
+  isProtonActor,
+  placeholderReads,
+  readBot,
+  readProfile,
+  readServer,
+  type TicketsDeps,
+  ticketFacts,
+} from './deps.ts';
 import { buildRatingComponents, buildWelcomeComponents, type TicketView } from './interface.ts';
 import {
   OVERWRITE_MEMBER,
@@ -25,8 +34,19 @@ import {
   TICKET_MEMBER_ALLOW,
   ticketOverwrites,
 } from './overwrites.ts';
+import {
+  renderTicketChannelName,
+  renderTicketText,
+  TICKET_BLACKLIST_SURFACE,
+  TICKET_CLOSE_SURFACE,
+  TICKET_NAME_SURFACE,
+  TICKET_TEXT_MAX,
+  TICKET_WELCOME_SURFACE,
+  ticketSourcesFor,
+} from './placeholders.ts';
 import { armTicketTimers, cancelTicketTimers } from './schedule.ts';
 import {
+  type BlacklistEntry,
   closeCycle,
   openCycle,
   type Ticket,
@@ -88,25 +108,51 @@ export interface GateInput {
   type: TicketType;
   openerId: string;
   now: Date;
+  deps?: TicketsDeps | undefined;
+  priority?: TicketPriority | undefined;
 }
 
 export type GateOutcome = { ok: true } | { ok: false; humanReason: string };
+
+async function blacklistRefusal(input: GateInput, entry: BlacklistEntry): Promise<string> {
+  const { ctx, type, openerId } = input;
+  const template = ctx.config.blacklistMessage;
+  const reads = placeholderReads(
+    ctx,
+    input.deps ?? {},
+    ticketSourcesFor(TICKET_BLACKLIST_SURFACE, [template]),
+  );
+
+  const message = renderTicketText(
+    TICKET_BLACKLIST_SURFACE,
+    template,
+    {
+      ticket: null,
+      typeName: type.name,
+      priority: input.priority ?? type.defaultPriority,
+      ownerId: openerId,
+      owner: await readProfile(reads, openerId, reads.sources.owner),
+      blacklist: { reason: entry.reason, expiresAt: entry.expiresAt },
+      server: await readServer(reads),
+      bot: await readBot(reads),
+    },
+    input.now.getTime(),
+  );
+
+  const suffix =
+    (entry.reason ? `\n\n**Reason**\n${entry.reason}` : '') +
+    (entry.expiresAt
+      ? `\n\nThis lifts <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>.`
+      : '');
+
+  return clipGraphemes(message, Math.max(0, TICKET_TEXT_MAX - suffix.length)) + suffix;
+}
 
 export async function mayOpen(input: GateInput): Promise<GateOutcome> {
   const { ctx, store, type, openerId } = input;
 
   const entry = await store.blacklistEntry(ctx.guildId, openerId, input.now);
-  if (entry) {
-    return {
-      ok: false,
-      humanReason:
-        `${ctx.config.blacklistMessage}` +
-        (entry.reason ? `\n\n**Reason**\n${entry.reason}` : '') +
-        (entry.expiresAt
-          ? `\n\nThis lifts <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>.`
-          : ''),
-    };
-  }
+  if (entry) return { ok: false, humanReason: await blacklistRefusal(input, entry) };
 
   const tier = checkLimit(
     ctx.tier ?? 'free',
@@ -218,6 +264,8 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     type,
     openerId: input.openerId,
     now: clockOf(deps),
+    deps,
+    priority: input.priority,
   });
 
   if (!gate.ok) return { status: 'refused', humanReason: gate.humanReason };
@@ -249,6 +297,17 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     botUserId: deps.botUserId,
   });
 
+  const namePattern = type.namePattern ?? ctx.config.namePattern;
+  const naming = placeholderReads(ctx, deps, ticketSourcesFor(TICKET_NAME_SURFACE, [namePattern]));
+  const nameFacts = {
+    number: ticket.number,
+    typeName: type.name,
+    ownerId: input.openerId,
+    legacyUserName: input.openerName,
+    owner: await readProfile(naming, input.openerId, naming.sources.owner),
+    server: await readServer(naming),
+  };
+
   let created: ActionResult;
   try {
     created = await ctx.executor.execute({
@@ -261,12 +320,7 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
       dryRun: false,
       record: false,
       payload: {
-        name: renderChannelName(
-          type.namePattern ?? ctx.config.namePattern,
-          ticket.number,
-          input.openerName,
-          type.name,
-        ),
+        name: renderTicketChannelName(namePattern, nameFacts, clockOf(deps).getTime()),
         type: TEXT_CHANNEL_TYPE,
         ...(type.categoryId ? { parentId: type.categoryId } : {}),
         ...(input.subject ? { topic: input.subject.slice(0, 1024) } : {}),
@@ -361,9 +415,19 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     staffRoleIds,
     answers: input.answers ?? [],
     participants: [],
+    facts: await ticketFacts({
+      ctx,
+      deps,
+      store,
+      surface: TICKET_WELCOME_SURFACE,
+      template: type.welcomeMessage,
+      ticket: attached,
+      typeName: type.name,
+      answers: input.answers ?? [],
+    }),
   };
 
-  const welcome = buildWelcomeComponents(view, type.welcomeMessage);
+  const welcome = buildWelcomeComponents(view, type.welcomeMessage, clockOf(deps).getTime());
 
   if (welcome.ok) {
     const mention = type.mentionStaffOnOpen
@@ -496,6 +560,21 @@ export async function closeTicket(input: CloseInput): Promise<CloseOutcome> {
     actorId: input.closedBy,
   });
 
+  const closerId =
+    isProtonActor(input.closedBy) && deps.botUserId ? deps.botUserId : input.closedBy;
+
+  const closing = await ticketFacts({
+    ctx,
+    deps,
+    store,
+    surface: TICKET_CLOSE_SURFACE,
+    template: ctx.config.closeConfirmation,
+    ticket: closed,
+    typeName: type?.name ?? closed.typeId,
+    close: { closedById: closerId, reason: input.reason },
+    actor: { id: closerId },
+  });
+
   await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -506,7 +585,12 @@ export async function closeTicket(input: CloseInput): Promise<CloseOutcome> {
     record: false,
     payload: {
       channelId: closed.channelId,
-      content: ctx.config.closeConfirmation,
+      content: renderTicketText(
+        TICKET_CLOSE_SURFACE,
+        ctx.config.closeConfirmation,
+        closing,
+        clockOf(deps).getTime(),
+      ),
       allowedMentions: { parse: [] },
     },
   });

@@ -294,6 +294,7 @@ describe('the tables every action kind is read out of', () => {
       'add_role',
       'remove_role',
       'move_member',
+      'set_member_nickname',
     ]);
   });
 
@@ -325,11 +326,14 @@ describe('the tables every action kind is read out of', () => {
       // Not for noise: their payload carries an image as a data URI, and cases.payload is jsonb.
       'set_bot_nickname',
       'set_bot_profile',
-      // Proton putting its own colour role on and off itself, on every reconnect. The role's own
-      // creation is recorded; wearing it is bookkeeping.
-      'add_bot_role',
-      'remove_bot_role',
+      'set_bot_name_style',
     ]);
+  });
+
+  test('keeps no kind that only the retired role colour used', () => {
+    for (const retired of ['edit_role', 'add_bot_role', 'remove_bot_role']) {
+      expect(ACTION_KINDS as readonly string[]).not.toContain(retired);
+    }
   });
 
   test('keeps ledger-only and never-recorded kinds disjoint, so warn is still a case', () => {
@@ -375,11 +379,13 @@ describe('the tables every action kind is read out of', () => {
       'add_role',
       'remove_role',
       'create_role',
+      'delete_role',
       'create_channel',
       'warn',
       'automod_rule_create',
       'automod_rule_update',
       'automod_rule_delete',
+      'set_member_nickname',
     ] as const) {
       expect(isChannelScoped(kind)).toBe(false);
     }
@@ -690,5 +696,46 @@ describe('which kinds Discord ranks', () => {
   test('a kind that names no member is never ranked', () => {
     expect(hierarchyApplies('create_channel')).toBe(false);
     expect(hierarchyApplies('send')).toBe(false);
+  });
+});
+
+describe('set_member_nickname', () => {
+  test('needs Manage Nicknames and nothing else, inside a thread or out', () => {
+    expect(requiredPermissionsFor('set_member_nickname')).toBe(Permissions.ManageNicknames);
+    expect(requiredPermissionsFor('set_member_nickname', { nickname: null }, true)).toBe(
+      Permissions.ManageNicknames,
+    );
+  });
+
+  test('is ranked, so the owner and anyone at or above Proton are refused before Discord is asked', () => {
+    expect(targetsMember('set_member_nickname')).toBe(true);
+    expect(hierarchyApplies('set_member_nickname')).toBe(true);
+  });
+
+  test('is judged across the server, recorded like any action, and has no reversal', () => {
+    expect(isChannelScoped('set_member_nickname')).toBe(false);
+    expect(isNeverRecorded('set_member_nickname')).toBe(false);
+    expect(isLedgerOnly('set_member_nickname')).toBe(false);
+    expect(reversalOf('set_member_nickname')).toBeUndefined();
+  });
+});
+
+describe('a reply', () => {
+  const REPLY = { channelId: CHANNEL, content: 'hi', replyToMessageId: MESSAGE };
+
+  test('asks for Read Message History, which Discord requires to reply', () => {
+    expect(has(requiredPermissionsFor('send', REPLY), Permissions.ReadMessageHistory)).toBe(true);
+  });
+
+  test('still asks for it inside a thread', () => {
+    expect(has(requiredPermissionsFor('send', REPLY, true), Permissions.ReadMessageHistory)).toBe(
+      true,
+    );
+  });
+
+  test('a message that replies to nothing does not', () => {
+    const required = requiredPermissionsFor('send', { channelId: CHANNEL, content: 'hi' });
+
+    expect(has(required, Permissions.ReadMessageHistory)).toBe(false);
   });
 });

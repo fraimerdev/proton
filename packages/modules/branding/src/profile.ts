@@ -1,6 +1,8 @@
+import type { BotNameStyle } from '@proton/core';
 import type { BrandingConfig } from './config.ts';
 import { dataUri } from './image.ts';
 import type { AssetKind } from './kinds.ts';
+import { readDisplayNameStyles } from './name-style-apply.ts';
 import type { BrandingAssetStore } from './store.ts';
 
 export interface DesiredProfile {
@@ -37,6 +39,8 @@ export interface ObservedProfile {
   nickname: string | null;
   hasAvatar: boolean;
   hasBanner: boolean;
+  // null is a member wearing no style; undefined is a payload that never said. Never merge the two.
+  displayNameStyle?: BotNameStyle | null | undefined;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -62,6 +66,7 @@ export function observedProfile(payload: unknown, botUserId: string): ObservedPr
       nickname: str(member?.nick),
       hasAvatar: str(member?.avatar) !== null,
       hasBanner: str(member?.banner) !== null,
+      displayNameStyle: readDisplayNameStyles(member),
     };
   }
 

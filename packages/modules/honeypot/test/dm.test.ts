@@ -1,6 +1,28 @@
 import { describe, expect, test } from 'bun:test';
+import { type ContainerChild, type ModuleContext, substitute } from '@proton/core';
+import {
+  type PlaceholderEnvironment,
+  PROTON_SUPPORT_URL,
+  SAMPLE_NOW,
+} from '@proton/core/placeholders';
+import type { HoneypotConfig, HoneypotLayout } from '../src/config.ts';
+import { directMessageFacts } from '../src/dm.ts';
+import { DM_BODY } from '../src/layout.ts';
+import { DM_ACTION_WORD } from '../src/notice.ts';
 import { DM_ATTEMPTS_MAX } from '../src/store.ts';
-import { armed, DM_CHANNEL, GUILD, harness, LOG, MEMBER, MESSAGE, TRAP } from './harness.ts';
+import {
+  armed,
+  BOT,
+  config,
+  DM_CHANNEL,
+  GUILD,
+  type Harness,
+  harness,
+  LOG,
+  MEMBER,
+  MESSAGE,
+  TRAP,
+} from './harness.ts';
 
 const TELLS = armed({ sendDirectMessage: true });
 
@@ -250,8 +272,9 @@ describe('the appeal link', () => {
   // A RESUME redelivery must mint the same link, or one ban hands the member two different ones
   // and the appeal filed under the second is a second appeal.
   test('is byte-identical when the same catch is redelivered', async () => {
-    const first = harness();
-    const second = harness();
+    const now = Date.now();
+    const first = harness({ now });
+    const second = harness({ now });
 
     await first.trip({ config: BANS });
     await second.trip({ config: BANS });
@@ -260,5 +283,217 @@ describe('the appeal link', () => {
       buttons((h.sentIn(DM_CHANNEL)[0]?.components ?? []) as Record<string, unknown>[])[0]?.url;
 
     expect(urlOf(first)).toBe(urlOf(second) as string);
+  });
+});
+
+function layout(...children: ContainerChild[]): HoneypotLayout {
+  return {
+    mentions: { everyone: false, roles: false, users: false },
+    embeds: [],
+    components: [],
+    v2: [{ kind: 'container', children }],
+  };
+}
+
+function said(h: Harness): string {
+  return texts((h.sentIn(DM_CHANNEL)[0]?.components ?? []) as Record<string, unknown>[]).join('\n');
+}
+
+function profiles(h: Harness, read?: PlaceholderEnvironment['user']): { looked: string[] } {
+  const looked: string[] = [];
+
+  h.deps.placeholders = {
+    applicationId: BOT,
+    bot: async () => ({
+      id: BOT,
+      name: 'Proton',
+      avatarHash: null,
+      supportUrl: PROTON_SUPPORT_URL,
+    }),
+    server: async (guildId) => ({ id: guildId }),
+    user: async (userId) => {
+      looked.push(userId);
+      return read
+        ? read(userId)
+        : { id: userId, username: 'tester', globalName: 'Tester', avatarHash: null };
+    },
+    now: () => SAMPLE_NOW,
+  };
+
+  return { looked };
+}
+
+describe('placeholders in the direct message', () => {
+  test('{server} is still the name the server was given, byte for byte', async () => {
+    const h = harness();
+    const name = '**Proton** <@&1> [a](b) {action} # not a heading';
+    h.deps.guildName = async () => name;
+
+    await h.trip({ config: TELLS });
+
+    expect(said(h)).toContain(
+      substitute(DM_BODY, { server: name, action: DM_ACTION_WORD.softban }) as string,
+    );
+  });
+
+  test('a paying guild’s message reads the member’s profile only when it uses it', async () => {
+    const quiet = harness();
+    const unused = profiles(quiet);
+
+    await quiet.trip({ config: TELLS, tier: 'plus' });
+
+    expect(unused.looked).toEqual([]);
+
+    const h = harness();
+    const used = profiles(h);
+
+    await h.trip({
+      config: {
+        ...TELLS,
+        dmLayout: layout({ kind: 'text', content: 'Hi {user.global_name}, this is {bot.name}.' }),
+      },
+      tier: 'plus',
+    });
+
+    expect(used.looked).toEqual([MEMBER]);
+    expect(said(h)).toContain('Hi Tester, this is Proton.');
+  });
+
+  test('a profile that cannot be read still sends, with the name left empty', async () => {
+    const h = harness();
+    profiles(h, async () => {
+      throw new Error('rate limited');
+    });
+
+    await h.trip({
+      config: { ...TELLS, dmLayout: layout({ kind: 'text', content: 'Hi {user.global_name}!' }) },
+      tier: 'plus',
+    });
+
+    expect(said(h)).toContain('Hi !');
+    expect(h.said('warn').join(' ')).toContain('rate limited');
+  });
+
+  test('{honeypot.appeal_url} is the same link the Appeal button carries', async () => {
+    const h = harness();
+
+    await h.trip({
+      config: {
+        ...TELLS,
+        action: 'ban',
+        appealPanelId: 'ban-form',
+        dmLayout: layout({ kind: 'text', content: 'Appeal here: {honeypot.appeal_url}' }),
+      },
+      tier: 'plus',
+    });
+
+    const nodes = (h.sentIn(DM_CHANNEL)[0]?.components ?? []) as Record<string, unknown>[];
+    const url = String(buttons(nodes)[0]?.url);
+
+    expect(url).toStartWith('https://prtn.xyz/appeal/');
+    expect(texts(nodes)).toContain(`Appeal here: ${url}`);
+  });
+
+  test('{now:date} is the moment Proton sent it', async () => {
+    const h = harness();
+    profiles(h);
+
+    await h.trip({
+      config: { ...TELLS, dmLayout: layout({ kind: 'text', content: 'Sent {now:date}.' }) },
+      tier: 'plus',
+    });
+
+    expect(said(h)).toContain(`Sent <t:${Math.floor(SAMPLE_NOW / 1000)}:d>.`);
+  });
+
+  test('a paying guild’s message that cannot be filled in is replaced by Proton’s own', async () => {
+    const h = harness();
+
+    await h.trip({
+      config: {
+        ...TELLS,
+        dmLayout: layout(
+          { kind: 'text', content: 'Come back.' },
+          {
+            kind: 'row',
+            row: {
+              kind: 'buttons',
+              buttons: [
+                { key: 'back', style: 'link', label: 'Rejoin', url: '{honeypot.invite_url}' },
+              ],
+            },
+          },
+        ),
+      },
+      tier: 'plus',
+    });
+
+    expect(h.sentIn(DM_CHANNEL)).toHaveLength(1);
+    expect(said(h)).toContain('Honeypot triggered');
+
+    const error = h.said('error').join(' ');
+    expect(error).toContain('built-in one instead');
+    expect(error).toContain('dmLayout.v2.0.children.1.row.buttons.0.url');
+    expect(error).toContain('{honeypot.invite_url}');
+  });
+});
+
+describe('the facts a direct message is filled in from', () => {
+  function counted(h: Harness, name: string | undefined): { state: number; name: number } {
+    const store = h.deps.guildState;
+    if (!store) throw new Error('the harness has no server state');
+    const reads = { state: 0, name: 0 };
+
+    h.deps.guildState = {
+      ...store,
+      get: async (guildId) => {
+        reads.state += 1;
+        const state = await store.get(guildId);
+        return state !== null && name !== undefined ? { ...state, name } : state;
+      },
+    };
+    h.deps.guildName = async () => {
+      reads.name += 1;
+      return 'Test Guild';
+    };
+
+    return reads;
+  }
+
+  function context(settings: Partial<HoneypotConfig> = {}): ModuleContext<HoneypotConfig> {
+    return {
+      guildId: GUILD,
+      config: config({ ...TELLS, ...settings }),
+      tier: 'plus',
+      executor: { execute: async () => ({ status: 'executed' }) },
+      logger: { info() {}, warn() {}, error() {} },
+    };
+  }
+
+  test('this server is read once, for both its name and its placeholders', async () => {
+    const h = harness();
+    const reads = counted(h, 'Proton HQ');
+
+    const facts = await directMessageFacts(
+      context({
+        dmLayout: layout({ kind: 'text', content: '{server} has {server.member_count} members' }),
+      }),
+      h.deps,
+      MEMBER,
+    );
+
+    expect(reads).toEqual({ state: 1, name: 0 });
+    expect(facts.guildName).toBe('Proton HQ');
+    expect(facts.server?.name).toBe('Proton HQ');
+  });
+
+  test('the server name is asked for separately only when the stored details have none', async () => {
+    const h = harness();
+    const reads = counted(h, undefined);
+
+    const facts = await directMessageFacts(context(), h.deps, MEMBER);
+
+    expect(reads).toEqual({ state: 1, name: 1 });
+    expect(facts.guildName).toBe('Test Guild');
   });
 });

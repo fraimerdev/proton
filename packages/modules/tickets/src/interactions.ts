@@ -46,7 +46,7 @@ import {
   setPriority,
   unclaim,
 } from './controls.ts';
-import { bindButton, type TicketsDeps } from './deps.ts';
+import { bindButton, clockOf, type TicketsDeps, ticketFacts } from './deps.ts';
 import {
   ADD_ACTION,
   ASSIGN_ACTION,
@@ -93,6 +93,7 @@ import {
   RENAME_ACTION,
   readIntakeAnswers,
 } from './modal.ts';
+import { TICKET_WELCOME_SURFACE } from './placeholders.ts';
 import type { Ticket, TicketStore } from './store.ts';
 import { buildTranscript } from './transcript-delivery.ts';
 
@@ -281,9 +282,24 @@ async function refresh(session: Session, ticket: Ticket): Promise<void> {
   const controls = buildControlRows(view);
   if (!controls.ok) return;
 
+  const template = typeFor(session.ctx.config, ticket.typeId)?.welcomeMessage ?? '';
+
+  const facts = await ticketFacts({
+    ctx: session.ctx,
+    deps: session.deps,
+    store: session.store,
+    surface: TICKET_WELCOME_SURFACE,
+    template,
+    ticket,
+    typeName: view.typeName,
+    answers: view.answers,
+    participants: view.participants,
+  });
+
   const welcome = buildWelcomeComponents(
-    view,
-    typeFor(session.ctx.config, ticket.typeId)?.welcomeMessage ?? '',
+    { ...view, facts },
+    template,
+    clockOf(session.deps).getTime(),
   );
 
   if (!welcome.ok) return;
@@ -896,7 +912,7 @@ async function pressRename(session: Session): Promise<PressOutcome> {
     return { action: 'refused', reason: 'not permitted' };
   }
 
-  const modal = buildRenameModal(defaultName(session.ctx, ticket));
+  const modal = buildRenameModal(await defaultName(session.ctx, ticket, session.deps));
   if (!modal) return { action: 'refused', reason: 'the rename form could not be built' };
 
   await session.ctx.executor.execute(openModal(session.to, modal));

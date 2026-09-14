@@ -11,6 +11,7 @@ import {
 } from './config.ts';
 import type { TempVcDeps } from './deps.ts';
 import { createTempVcInteractionListener } from './interactions.ts';
+import { tempvcTemplates } from './placeholders.ts';
 import { createTempVcListener } from './voice.ts';
 
 export {
@@ -129,6 +130,16 @@ export {
   ROLE_OVERWRITE,
 } from './permissions.ts';
 export {
+  renderTempVcName,
+  TEMPVC_CREATE_EVENT,
+  TEMPVC_GUILD_KEYS,
+  TEMPVC_NAME_SURFACE,
+  TEMPVC_OWNER_KEYS,
+  type TempVcNameFacts,
+  type TempVcOwner,
+  tempvcTemplates,
+} from './placeholders.ts';
+export {
   RedisCooldownGate,
   RedisPresenceStore,
   type RedisPresenceStoreOptions,
@@ -214,6 +225,8 @@ export function createTempVcModule(
     ],
 
     configLimits: [{ key: 'tempVcHubs', path: 'hubs' }],
+
+    templates: tempvcTemplates,
 
     commands: tempVcCommands(deps),
     listeners: [createTempVcListener(deps), createTempVcInteractionListener(deps)],

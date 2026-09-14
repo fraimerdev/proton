@@ -9,8 +9,8 @@ export const helpConfigSchema = z.object({
   }),
 
   ephemeral: z.boolean().default(true).register(protonFields, {
-    label: 'Show the reply only to whoever ran it',
-    description: 'Turn this off to post the overview into the channel, where everyone can read it.',
+    label: 'Reply privately',
+    description: 'Only the member who used /help sees the reply.',
   }),
 });
 

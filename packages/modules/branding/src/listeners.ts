@@ -1,57 +1,50 @@
 import {
+  type BotNameStyle,
   type EventListener,
   type EventType,
   type ModuleContext,
+  type NameStyleState,
   type ProtonEvent,
   protonConfigChangedSchema,
 } from '@proton/core';
-import { colourFingerprint, coloursFor, describeColourFailure, ROLE_NAME } from './colour.ts';
 import { BRANDING_ACTOR, type BrandingConfig, MODULE_ID } from './config.ts';
 import { type BrandingDeps, describeUnbound } from './deps.ts';
+import {
+  nameStyleWriteIssues,
+  sameWireStyle,
+  toWireStyle,
+  wireStyleFingerprint,
+} from './name-style.ts';
+import { applyNameStyle, fetchBotNameStyle, UNVERIFIED_RETRY_MS } from './name-style-apply.ts';
 import { impersonationReason } from './names.ts';
 import {
   CLEARED,
   type DesiredProfile,
+  type Divergence,
   desiredProfile,
   diverges,
   fingerprint,
+  type ObservedProfile,
   observedProfile,
   readImage,
 } from './profile.ts';
-import { applyTypeface, fitsNickname, nicknameBudget } from './typeface.ts';
 
 export const BRANDING_EVENT_TYPES: EventType[] = ['proton.config_changed', 'guild.available'];
 
 const REASON = 'Server branding, set in the Proton dashboard';
 
-interface Legs {
-  nickname: boolean;
-  profile: boolean;
-  colour: boolean;
-}
+const STYLE_KEYS: ReadonlySet<string> = new Set<keyof BrandingConfig>([
+  'displayNameStyle',
+  'nameStyleNative',
+]);
 
-const ALL: Legs = { nickname: true, profile: true, colour: true };
+const ALL: Divergence = { nickname: true, profile: true };
 
 async function pushNickname(
   ctx: ModuleContext<BrandingConfig>,
   desired: DesiredProfile,
   key: string,
 ): Promise<void> {
-  // Styled here rather than at save time: the typeface is a presentation of the stored name, so
-  // the admin's own words stay in config and a face swap never rewrites them.
-  const styled =
-    desired.nickname === null ? null : applyTypeface(desired.nickname, ctx.config.typeface);
-
-  if (styled !== null && !fitsNickname(styled)) {
-    ctx.logger.warn(
-      `Proton did not take the nickname '${desired.nickname}' in this server: in the ` +
-        `${ctx.config.typeface} typeface it is past Discord's 32-character limit, which allows ` +
-        `${nicknameBudget(ctx.config.typeface)} characters in this face. Shorten it or pick Default.`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID },
-    );
-    return;
-  }
-
   if (desired.nickname !== null) {
     const refusal = impersonationReason(desired.nickname);
     if (refusal) {
@@ -70,7 +63,7 @@ async function pushNickname(
     kind: 'set_bot_nickname',
     actorId: BRANDING_ACTOR,
     reason: REASON,
-    payload: { nickname: styled },
+    payload: { nickname: desired.nickname },
     dryRun: false,
     record: false,
     idempotencyKey: `${key}:nickname`,
@@ -146,113 +139,42 @@ async function pushProfile(
   }
 }
 
-async function pushColour(
+async function deleteColourRole(
   ctx: ModuleContext<BrandingConfig>,
   deps: BrandingDeps,
-  key: string,
 ): Promise<void> {
-  if (!deps.roles || !deps.botUserId) return;
+  const roles = deps.roles;
+  if (!roles) return;
 
-  const colours = coloursFor(ctx.config);
-  const held = await deps.roles.get(ctx.guildId);
+  const roleId = await roles.get(ctx.guildId);
+  if (roleId === null) return;
 
-  if (colours === null) {
-    // The role is left in place rather than deleted: an admin may have given it to somebody else,
-    // and deleting a role takes its colour off every one of them.
-    if (held) {
-      await ctx.executor.execute({
-        guildId: ctx.guildId,
-        moduleId: MODULE_ID,
-        kind: 'remove_bot_role',
-        actorId: BRANDING_ACTOR,
-        reason: REASON,
-        payload: { userId: deps.botUserId, roleId: held },
-        dryRun: false,
-        record: false,
-        idempotencyKey: `${key}:colour:off`,
-      });
-    }
+  const result = await ctx.executor.execute({
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    kind: 'delete_role',
+    actorId: BRANDING_ACTOR,
+    reason: 'Proton no longer colours its name with a role',
+    payload: { roleId },
+    dryRun: false,
+    record: false,
+    // The role id, never the event or audit id: a reconnect and a save must dedupe as one deletion.
+    idempotencyKey: `branding:${ctx.guildId}:colour-role:${roleId}`,
+  });
+
+  if (result.status === 'skipped_duplicate') return;
+
+  if (result.status === 'executed' || result.failure?.code === 'discord_404') {
+    await roles.forget(ctx.guildId);
     return;
   }
 
-  const print = colourFingerprint(colours);
-
-  let roleId = held;
-
-  if (roleId === null) {
-    const created = await ctx.executor.execute({
-      guildId: ctx.guildId,
-      moduleId: MODULE_ID,
-      kind: 'create_role',
-      actorId: BRANDING_ACTOR,
-      reason: REASON,
-      payload: { name: ROLE_NAME, colors: colours },
-      dryRun: false,
-      record: false,
-      idempotencyKey: `${key}:colour:create`,
-    });
-
-    if (created.failure) {
-      ctx.logger.warn(
-        `Proton could not make the role that carries its name colour in this server: ${describeColourFailure(ctx.config.nameEffect, created.failure.humanReason)}`,
-        { guildId: ctx.guildId, moduleId: MODULE_ID },
-      );
-      return;
-    }
-
-    const id = (created.body as { id?: unknown } | undefined)?.id;
-    if (typeof id !== 'string') {
-      ctx.logger.error(
-        'Discord accepted the colour role but returned no id, so Proton cannot find it again.',
-        { guildId: ctx.guildId, moduleId: MODULE_ID },
-      );
-      return;
-    }
-
-    roleId = id;
-    await deps.roles.put(ctx.guildId, roleId);
-  } else {
-    const edited = await ctx.executor.execute({
-      guildId: ctx.guildId,
-      moduleId: MODULE_ID,
-      kind: 'edit_role',
-      actorId: BRANDING_ACTOR,
-      reason: REASON,
-      payload: { roleId, colors: colours },
-      dryRun: false,
-      record: false,
-      idempotencyKey: `${key}:colour:${print}`,
-    });
-
-    if (edited.failure) {
-      ctx.logger.warn(
-        `Proton could not recolour its name in this server: ${describeColourFailure(ctx.config.nameEffect, edited.failure.humanReason)}`,
-        { guildId: ctx.guildId, moduleId: MODULE_ID },
-      );
-      return;
-    }
-  }
-
-  // Always, not only on create: an admin who took the role off the bot gets it back on the next
-  // reconcile, and Discord treats the PUT as idempotent.
-  const worn = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'add_bot_role',
-    actorId: BRANDING_ACTOR,
-    reason: REASON,
-    payload: { userId: deps.botUserId, roleId },
-    dryRun: false,
-    record: false,
-    idempotencyKey: `${key}:colour:wear:${print}`,
-  });
-
-  if (worn.failure) {
-    ctx.logger.warn(
-      `Proton coloured its role but could not put it on itself in this server: ${worn.failure.humanReason}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID },
-    );
-  }
+  ctx.logger.warn(
+    'Proton could not delete the role it made for its name colour in this server: ' +
+      `${result.failure?.humanReason ?? `it ${result.status}.`} It will try again the next time ` +
+      'it reconnects here or Branding is saved.',
+    { guildId: ctx.guildId, moduleId: MODULE_ID, roleId },
+  );
 }
 
 async function apply(
@@ -260,13 +182,135 @@ async function apply(
   desired: DesiredProfile,
   deps: BrandingDeps,
   key: string,
-  legs: Legs,
+  legs: Divergence,
 ): Promise<void> {
   // Profile first. A guild that has stripped Change Nickname fails the nickname leg at its
   // precheck, and doing that leg second means the images and bio have already landed.
   if (legs.profile) await pushProfile(ctx, desired, deps, key);
   if (legs.nickname) await pushNickname(ctx, desired, key);
-  if (legs.colour) await pushColour(ctx, deps, key);
+}
+
+async function pushNameStyle(
+  ctx: ModuleContext<BrandingConfig>,
+  deps: BrandingDeps,
+  key: string,
+): Promise<void> {
+  const store = deps.nameStyles;
+  if (!store) return;
+
+  const issues = nameStyleWriteIssues(ctx.config.displayNameStyle);
+  if (issues.length > 0) {
+    ctx.logger.warn(
+      `Proton did not send its display name style in this server: ${issues.map((issue) => issue.message).join(' ')} Choose another in the Branding module.`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+    return;
+  }
+
+  const requested = toWireStyle(ctx.config.displayNameStyle);
+  if (requested === null && (await store.get(ctx.guildId)) === null) return;
+
+  await applyNameStyle(ctx, { ...deps, nameStyles: store }, requested, key);
+}
+
+async function resetNameStyle(
+  ctx: ModuleContext<BrandingConfig>,
+  deps: BrandingDeps,
+  key: string,
+): Promise<void> {
+  const store = deps.nameStyles;
+  if (!store || (await store.get(ctx.guildId)) === null) return;
+
+  await applyNameStyle(ctx, { ...deps, nameStyles: store }, null, key);
+}
+
+function retryDue(held: NameStyleState, now: number): boolean {
+  return (
+    held.outcome === 'unverified' &&
+    (held.attemptedAt === null || now - held.attemptedAt >= UNVERIFIED_RETRY_MS)
+  );
+}
+
+function shouldApply(
+  held: NameStyleState | null,
+  requested: BotNameStyle | null,
+  now: number,
+): boolean {
+  if (held === null || !sameWireStyle(held.requested, requested)) return true;
+  // Confirmed yet not what Discord shows: a kick and re-invite reset the member under the record.
+  if (held.outcome === 'confirmed') return true;
+  return retryDue(held, now);
+}
+
+function alreadyConfirmed(held: NameStyleState | null, style: BotNameStyle | null): boolean {
+  return (
+    held !== null &&
+    held.outcome === 'confirmed' &&
+    held.confirmedAt !== null &&
+    sameWireStyle(held.confirmed, style) &&
+    sameWireStyle(held.requested, style)
+  );
+}
+
+async function reconcileNameStyle(
+  ctx: ModuleContext<BrandingConfig>,
+  deps: BrandingDeps,
+  botUserId: string,
+  observed: BotNameStyle | null | undefined,
+): Promise<void> {
+  const store = deps.nameStyles;
+  if (!store || nameStyleWriteIssues(ctx.config.displayNameStyle).length > 0) return;
+
+  const requested = toWireStyle(ctx.config.displayNameStyle);
+  const held = await store.get(ctx.guildId);
+  if (requested === null && held === null) return;
+
+  const now = Date.now();
+  let seen = observed;
+
+  if (seen === undefined) {
+    if (held && sameWireStyle(held.requested, requested) && !retryDue(held, now)) return;
+    if (deps.rest) seen = await fetchBotNameStyle(deps.rest, ctx.guildId, botUserId);
+  }
+
+  if (seen !== undefined) {
+    if (held && held.confirmedAt !== null && !sameWireStyle(held.confirmed, seen)) {
+      await store.forgetConfirmed(ctx.guildId, now);
+    }
+
+    if (sameWireStyle(seen, requested)) {
+      if (!alreadyConfirmed(held, requested)) {
+        await store.confirmObserved(ctx.guildId, requested, now);
+      }
+      return;
+    }
+  }
+
+  if (!shouldApply(held, requested, now)) return;
+
+  const key = `branding:${ctx.guildId}:name-style:${wireStyleFingerprint(requested)}:${held?.attemptedAt ?? 'never'}`;
+  await applyNameStyle(ctx, { ...deps, nameStyles: store }, requested, key);
+}
+
+async function reconcileProfile(
+  ctx: ModuleContext<BrandingConfig>,
+  deps: BrandingDeps,
+  observed: ObservedProfile,
+): Promise<void> {
+  const desired = desiredProfile(ctx.config);
+  const legs = diverges(desired, observed);
+  if (!legs.nickname && !legs.profile) return;
+
+  // guild.available's event id is the bare guild id and never changes, so it cannot seed the
+  // key. What Discord currently holds can, and it is exactly what makes a re-invite push again.
+  const key = `branding:${ctx.guildId}:${fingerprint(desired)}:${fingerprint({
+    nickname: observed.nickname,
+    avatarHash: observed.hasAvatar ? 'set' : null,
+    bannerHash: observed.hasBanner ? 'set' : null,
+    bio: null,
+  })}`;
+
+  await apply(ctx, desired, deps, key, legs);
 }
 
 export function createBrandingListener(deps: BrandingDeps = {}): EventListener<BrandingConfig> {
@@ -286,46 +330,42 @@ export function createBrandingListener(deps: BrandingDeps = {}): EventListener<B
         const parsed = protonConfigChangedSchema.safeParse(event.payload);
         if (!parsed.success || parsed.data.moduleId !== MODULE_ID) return;
 
+        const { auditId, changedKeys, enabledBefore, enabledAfter } = parsed.data;
+        const key = `branding:${ctx.guildId}:${auditId}`;
+
         // The listener runtime delivers config_changed to a module that has just been switched
         // off, which is the only moment branding can take its own face back off again.
         if (!ctx.config.enabled) {
-          if (!parsed.data.enabledBefore || !ctx.config.restoreOnDisable) return;
+          if (!enabledBefore || !ctx.config.restoreOnDisable) return;
 
-          await apply(ctx, CLEARED, deps, `branding:${ctx.guildId}:${parsed.data.auditId}`, ALL);
+          await apply(ctx, CLEARED, deps, key, ALL);
+          await resetNameStyle(ctx, deps, `${key}:name-style`);
           return;
         }
 
+        const switched = enabledBefore !== enabledAfter;
+        const styleOnly =
+          !switched && changedKeys.length > 0 && changedKeys.every((k) => STYLE_KEYS.has(k));
+
         // The audit id is unique per save, so a redelivered save dedupes and a new save never
         // collides with the executor's 24-hour window.
-        await apply(
-          ctx,
-          desiredProfile(ctx.config),
-          deps,
-          `branding:${ctx.guildId}:${parsed.data.auditId}`,
-          ALL,
-        );
+        if (!styleOnly) await apply(ctx, desiredProfile(ctx.config), deps, key, ALL);
+
+        if (switched || changedKeys.length === 0 || changedKeys.includes('displayNameStyle')) {
+          await pushNameStyle(ctx, deps, `${key}:name-style`);
+        }
+
+        await deleteColourRole(ctx, deps);
         return;
       }
 
       if (!ctx.config.enabled || !deps.botUserId) return;
 
       const observed = observedProfile(event.payload, deps.botUserId);
-      if (!observed) return;
+      if (observed) await reconcileProfile(ctx, deps, observed);
 
-      const desired = desiredProfile(ctx.config);
-      const legs = { ...diverges(desired, observed), colour: true };
-      if (!legs.nickname && !legs.profile && ctx.config.nameEffect === 'none') return;
-
-      // guild.available's event id is the bare guild id and never changes, so it cannot seed the
-      // key. What Discord currently holds can, and it is exactly what makes a re-invite push again.
-      const key = `branding:${ctx.guildId}:${fingerprint(desired)}:${fingerprint({
-        nickname: observed.nickname,
-        avatarHash: observed.hasAvatar ? 'set' : null,
-        bannerHash: observed.hasBanner ? 'set' : null,
-        bio: null,
-      })}`;
-
-      await apply(ctx, desired, deps, key, legs);
+      await reconcileNameStyle(ctx, deps, deps.botUserId, observed?.displayNameStyle);
+      await deleteColourRole(ctx, deps);
     },
   };
 }

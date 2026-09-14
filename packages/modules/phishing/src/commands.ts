@@ -124,7 +124,7 @@ async function describeStats(
       }. ` +
         `${config.blockDomains.length} extra blocked domain${
           config.blockDomains.length === 1 ? '' : 's'
-        }, ${config.allowDomains.length} never blocked.`,
+        }, ${config.allowDomains.length} allowed.`,
     );
   }
 

@@ -5,7 +5,23 @@ import {
   snowflakeSchema,
   TICKET_PRIORITIES,
 } from '@proton/core';
+import { mentionsAny } from '@proton/core/placeholders';
 import { z } from 'zod';
+import { CHANNEL_NAME_MAX } from './channel-name.ts';
+import { NUMBER_PLACEHOLDER, TYPE_PLACEHOLDER, USER_PLACEHOLDER } from './constants.ts';
+import {
+  renderTicketChannelName,
+  renderTicketWelcome,
+  TICKET_NAME_SURFACE,
+} from './placeholders.ts';
+
+export { CHANNEL_NAME_MAX, sanitiseChannelName } from './channel-name.ts';
+export {
+  NUMBER_PLACEHOLDER,
+  PRIORITY_LABELS,
+  TYPE_PLACEHOLDER,
+  USER_PLACEHOLDER,
+} from './constants.ts';
 
 export const MODULE_ID = 'tickets';
 
@@ -17,17 +33,20 @@ export const PANEL_ID_MAX = 32;
 
 export const TYPE_ID_MAX = 32;
 
-export const CHANNEL_NAME_MAX = 100;
-
 export const TEXT_CHANNEL_TYPE = 0;
 
 export const CATEGORY_CHANNEL_TYPE = 4;
 
-export const NUMBER_PLACEHOLDER = '{number}';
-export const USER_PLACEHOLDER = '{user}';
-export const TYPE_PLACEHOLDER = '{type}';
-
 export const DEFAULT_NAME_PATTERN = `ticket-${NUMBER_PLACEHOLDER}`;
+
+const UNIQUE_NAME_KEYS = [
+  'ticket.number',
+  'user.id',
+  'user.mention',
+  'user.username',
+  'user.global_name',
+  'user.display_name',
+];
 
 // Discord takes at most five components in a modal, so a longer form could never be shown and is
 // refused where the admin can still see why.
@@ -52,13 +71,6 @@ export type TranscriptDestination = (typeof TRANSCRIPT_DESTINATIONS)[number];
 export const PANEL_STYLES = ['buttons', 'select'] as const;
 
 export type PanelStyle = (typeof PANEL_STYLES)[number];
-
-export const PRIORITY_LABELS: Record<(typeof TICKET_PRIORITIES)[number], string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  urgent: 'Urgent',
-};
 
 // Priority is carried by the container accent and the word, never by an emoji: Proton ships no
 // stock unicode emoji of its own. A guild that wants a glyph puts a custom one on the ticket type.
@@ -265,12 +277,18 @@ const settings = {
     .min(1)
     .max(CHANNEL_NAME_MAX)
     .default(DEFAULT_NAME_PATTERN)
-    .refine((value) => value.includes(NUMBER_PLACEHOLDER) || value.includes(USER_PLACEHOLDER), {
-      message: `a ticket name needs ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} in it, or every ticket channel would share one name.`,
-    })
+    .refine(
+      (value) =>
+        value.includes(NUMBER_PLACEHOLDER) ||
+        value.includes(USER_PLACEHOLDER) ||
+        mentionsAny(TICKET_NAME_SURFACE, value, UNIQUE_NAME_KEYS),
+      {
+        message: `a ticket name needs ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} in it, or every ticket channel would share one name.`,
+      },
+    )
     .register(protonFields, {
-      label: 'Ticket channel name',
-      description: `Used when a ticket type does not set its own. ${NUMBER_PLACEHOLDER}, ${USER_PLACEHOLDER} and ${TYPE_PLACEHOLDER} are replaced.`,
+      label: 'Name pattern',
+      description: `How new ticket channels are named, using ${NUMBER_PLACEHOLDER}, ${USER_PLACEHOLDER} and ${TYPE_PLACEHOLDER}. Ticket types can set their own.`,
     }),
 
   closeConfirmation: z
@@ -280,39 +298,43 @@ const settings = {
     .default('This ticket is closed. Staff can reopen it, and it will be tidied up later.')
     .register(protonFields, {
       label: 'Closing message',
+      description: 'Posted in the ticket channel when it closes.',
     }),
 
   maxOpenPerUser: z.number().int().min(1).max(100).default(3).register(protonFields, {
     label: 'Open tickets per member',
-    description: 'A ticket type may set a lower limit of its own. Your plan caps this too.',
+    description: 'Ticket types can set a lower limit. Your plan caps this too.',
   }),
 
   maxOpenPerGuild: z.number().int().min(1).max(500).default(200).register(protonFields, {
-    label: 'Open tickets in the whole server',
-    description: 'A ceiling on the queue. Discord allows 500 channels in a server in total.',
+    label: 'Total open tickets',
+    description:
+      'How many tickets can be open at once. Discord allows up to 500 channels in a server.',
   }),
 
-  creationCooldown: durationStringSchema
-    .default('5s')
-    .register(protonFields, { field: 'duration', label: 'Wait between opening tickets' }),
+  creationCooldown: durationStringSchema.default('5s').register(protonFields, {
+    field: 'duration',
+    label: 'Creation cooldown',
+    description: 'How long a member must wait before opening another ticket.',
+  }),
 
   logChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
-    label: 'Ticket log channel',
+    label: 'Log channel',
     channelTypes: [TEXT_CHANNEL_TYPE],
   }),
 
   transcriptChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Transcript channel',
-    description: 'Used when a ticket type does not name one of its own.',
+    description: 'Where Proton posts ticket transcripts. Ticket types can set their own.',
     channelTypes: [TEXT_CHANNEL_TYPE],
   }),
 
   staffRoleIds: z.array(snowflakeSchema).max(20).default([]).register(protonFields, {
     field: 'role-id',
-    label: 'Support roles',
-    description: 'Reach every ticket. A ticket type can add roles that reach only its own.',
+    label: 'Staff roles',
+    description: 'Roles that can access every ticket. Each ticket type can add more.',
   }),
 
   blacklistMessage: z
@@ -320,7 +342,11 @@ const settings = {
     .min(1)
     .max(500)
     .default('You cannot open tickets in this server.')
-    .register(protonFields, { label: 'Message for blacklisted members' }),
+    .register(protonFields, {
+      label: 'Blacklist message',
+      description:
+        'Shown to blacklisted members when they try to open a ticket. Use /ticket blacklist in Discord to add or remove members.',
+    }),
 };
 
 export const ticketsConfigSchema = z.object({
@@ -465,29 +491,17 @@ export function renderChannelName(
   opener: string,
   typeName = '',
 ): string {
-  return sanitiseChannelName(
-    pattern
-      .split(NUMBER_PLACEHOLDER)
-      .join(String(number))
-      .split(USER_PLACEHOLDER)
-      .join(opener)
-      .split(TYPE_PLACEHOLDER)
-      .join(typeName),
+  return renderTicketChannelName(
+    pattern,
+    { number, typeName, ownerId: '', legacyUserName: opener, server: null },
+    Date.now(),
   );
 }
 
-export function sanitiseChannelName(raw: string): string {
-  const cleaned = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, CHANNEL_NAME_MAX);
-
-  // Discord refuses an empty name, and a pattern of nothing but punctuation sanitises to one.
-  return cleaned === '' ? 'ticket' : cleaned;
-}
-
 export function renderOpeningMessage(template: string, userId: string): string {
-  return template.split(USER_PLACEHOLDER).join(`<@${userId}>`).slice(0, 2000);
+  return renderTicketWelcome(
+    template,
+    { ticket: null, typeName: '', ownerId: userId, server: null, bot: null },
+    Date.now(),
+  );
 }

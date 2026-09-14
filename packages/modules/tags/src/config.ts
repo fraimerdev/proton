@@ -43,16 +43,16 @@ export function normaliseTagName(raw: string): TagNameResult {
 export const tagsConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Who may create and edit tags is set in the Permissions module',
+    description: 'Set who can use /tags in Permissions.',
   }),
 
   ephemeral: z.boolean().default(false).register(protonFields, {
-    label: 'Show tags only to whoever asked',
+    label: 'Reply privately',
   }),
 
   allowMentions: z.boolean().default(false).register(protonFields, {
-    label: 'Let tag text ping people',
-    description: 'A stored @everyone becomes pingable by any member',
+    label: 'Allow pings',
+    description: 'A stored @everyone becomes pingable by any member.',
   }),
 });
 

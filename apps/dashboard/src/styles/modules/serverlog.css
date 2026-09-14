@@ -1,0 +1,53 @@
+/* serverlog page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.serverlog-route-row {
+  flex-wrap: wrap;
+}
+
+.serverlog-route-row .matrix-row-control {
+  width: 340px;
+  gap: 10px;
+  align-items: center;
+}
+
+.serverlog-route-note {
+  flex-basis: 100%;
+  margin: 0 0 2px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.serverlog-event-row .matrix-row-control {
+  width: 250px;
+  gap: 8px;
+  align-items: center;
+}
+
+.serverlog-caret {
+  flex: none;
+  transition: transform var(--motion-normal) var(--ease-standard);
+}
+
+.serverlog-caret.closed {
+  transform: rotate(-90deg);
+}
+
+.serverlog-chip-field {
+  min-width: 252px;
+}
+
+.serverlog-unknown {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.serverlog-unknown li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}

@@ -7,6 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./env": "./src/env.ts",
+    "./placeholder-runtime": "./src/placeholder-runtime/index.ts",
+    "./placeholders": "./src/placeholders/index.ts",
     "./redis": "./src/redis.ts"
   },
   "scripts": {

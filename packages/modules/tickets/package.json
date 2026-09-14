@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
+    "./placeholders": "./src/placeholders.ts",
     "./query": "./src/query.ts",
     "./table": "./src/table.ts"
   },

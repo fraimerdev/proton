@@ -3,6 +3,7 @@ import { armPatrol } from './cleanup.ts';
 import { hubFor, MODULE_ID, type TempVcConfig, type TempVcHub } from './config.ts';
 import { planReconcile, planTransition, type TempSide, type TempVcStep } from './decide.ts';
 import { bindService, describeUnbound, type TempVcDeps } from './deps.ts';
+import type { TempVcOwner } from './placeholders.ts';
 import type { TempVoiceRepository } from './repository.ts';
 import type { TemporaryVoiceService } from './service.ts';
 import type { PresenceStore } from './store.ts';
@@ -38,11 +39,8 @@ export const TEMPVC_EVENT_TYPES: EventType[] = [
 /** Reservations older than this never became a channel and never will. */
 export const STALE_RESERVATION_MS = 60_000;
 
-export interface VoiceMember {
-  userId: string;
+export interface VoiceMember extends TempVcOwner {
   channelId: string | null;
-  displayName: string;
-  username: string;
   isBot: boolean;
 }
 
@@ -70,6 +68,7 @@ export function readVoiceMember(payload: unknown): VoiceMember | null {
     channelId: str(raw.channel_id),
     displayName: str(member?.nick) ?? str(user?.global_name) ?? username,
     username,
+    globalName: str(user?.global_name),
     isBot: user?.bot === true,
   };
 }

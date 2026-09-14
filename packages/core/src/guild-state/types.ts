@@ -27,7 +27,23 @@ export interface GuildState {
   name?: string;
   memberCount?: number;
 
+  iconHash?: string | null;
+  bannerHash?: string | null;
+  description?: string | null;
+  boostCount?: number | null;
+  boostTier?: number;
+  profileAt?: number;
+
   updatedAt: number;
+}
+
+export interface GuildProfile {
+  name?: string;
+  iconHash?: string | null;
+  bannerHash?: string | null;
+  description?: string | null;
+  boostCount?: number | null;
+  boostTier?: number;
 }
 
 export type GuildStatePatch =
@@ -38,12 +54,13 @@ export type GuildStatePatch =
   | { kind: 'bot.roles'; roleIds: string[] }
   // GUILD_CREATE's member_count is a point-in-time reading, so joins and leaves nudge it rather
   // than re-fetching. It re-baselines on every reconnect, which is what keeps the drift bounded.
-  | { kind: 'member.count'; delta: number };
+  | { kind: 'member.count'; delta: number }
+  | { kind: 'guild.profile'; at: number; profile: GuildProfile };
 
 export interface GuildStateStore {
   get(guildId: string): Promise<GuildState | null>;
   put(state: GuildState): Promise<void>;
-  patch(guildId: string, patch: GuildStatePatch): Promise<void>;
+  patch(guildId: string, patch: GuildStatePatch, options?: { dedupeKey?: string }): Promise<void>;
   delete(guildId: string): Promise<void>;
 }
 

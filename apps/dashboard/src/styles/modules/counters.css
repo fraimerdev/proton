@@ -1,0 +1,32 @@
+/* counters page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.counter-token {
+  background: var(--badge-brand-bg);
+  border-radius: var(--radius-xs);
+  color: var(--badge-brand-text);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  padding: 0 4px;
+}
+
+.counter-preview {
+  align-items: center;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  display: flex;
+  font-size: var(--text-body);
+  gap: 8px;
+  max-width: 420px;
+  min-height: 34px;
+  padding: 6px 10px;
+}
+
+.counter-preview > svg {
+  color: var(--text-muted);
+  flex: none;
+}
+
+.counter-preview-name {
+  overflow-wrap: anywhere;
+}

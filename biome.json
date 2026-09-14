@@ -47,10 +47,25 @@
   },
   "overrides": [
     {
-      "includes": ["tooling/tsconfig/*.json"],
+      "includes": [
+        "tooling/tsconfig/*.json"
+      ],
       "json": {
         "parser": {
           "allowComments": true
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/dashboard/src/components/ui/**",
+        "apps/dashboard/src/components/discord/**"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "useSemanticElements": "off"
+          }
         }
       }
     }

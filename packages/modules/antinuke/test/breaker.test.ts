@@ -124,8 +124,11 @@ describe('the guild owner', () => {
 
     expect(h.callPaths()).toEqual([`POST /channels/${ALERT_CHANNEL}/messages`]);
     expect(h.cases().map((recorded) => recorded.kind)).toEqual(['send']);
-    expect(h.alertContent()).toContain('owns this server');
-    expect(h.logged('warn', 'Discord does not let')).toBe(true);
+    const alert = h.alertContent() ?? '';
+    expect(alert).toContain('owns this server');
+    expect(alert).toContain('Discord does not let');
+    expect(alert).toContain('done nothing');
+    expect(h.logged('warn', 'owns this server')).toBe(true);
   });
 });
 

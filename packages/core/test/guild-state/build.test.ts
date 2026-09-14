@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { buildGuildState, parseChannel } from '../../src/guild-state/build.ts';
+import { buildGuildState, parseChannel, parseGuildProfile } from '../../src/guild-state/build.ts';
 import { CHANNEL_TYPES, isThreadChannel } from '../../src/guild-state/channel-types.ts';
 import { Permissions } from '../../src/permissions/bits.ts';
 import { computeChannelPermissions } from '../../src/permissions/compute.ts';
@@ -174,5 +174,166 @@ describe('the deletion this whole fix was measured against', () => {
 
   test('and is held inside a thread under #support, which used to compute with no overwrites', () => {
     expect(permissionsIn(THREAD) & Permissions.ManageMessages).toBe(Permissions.ManageMessages);
+  });
+});
+
+const ICON = 'a_0123456789abcdef0123456789abcdef';
+const BANNER = '0123456789abcdef0123456789abcdef';
+const PROFILE_KEYS = ['iconHash', 'bannerHash', 'description', 'boostCount', 'boostTier'];
+
+describe('the server profile GUILD_CREATE carries', () => {
+  test('is kept, so server placeholders can show the icon, banner, description and boosts', () => {
+    const state = buildGuildState(
+      {
+        ...guildCreate(),
+        icon: ICON,
+        banner: BANNER,
+        description: 'A place for testing',
+        premium_subscription_count: 14,
+        premium_tier: 2,
+      },
+      BOT,
+    );
+
+    expect(state).toMatchObject({
+      iconHash: ICON,
+      bannerHash: BANNER,
+      description: 'A place for testing',
+      boostCount: 14,
+      boostTier: 2,
+    });
+  });
+
+  test('is stamped with the time it was read, which an older GUILD_UPDATE is measured against', () => {
+    expect(buildGuildState(guildCreate(), BOT, 1_800_000_000_000)?.profileAt).toBe(
+      1_800_000_000_000,
+    );
+  });
+
+  test('keeps Discord’s null as null, so "none set" stays distinct from "never seen"', () => {
+    const state = buildGuildState(
+      { ...guildCreate(), icon: null, banner: null, description: null },
+      BOT,
+    );
+
+    expect(state?.iconHash).toBeNull();
+    expect(state?.bannerHash).toBeNull();
+    expect(state?.description).toBeNull();
+  });
+
+  test('leaves out what the payload did not carry, rather than inventing an empty value', () => {
+    const state = buildGuildState(guildCreate(), BOT);
+    if (!state) throw new Error('expected buildGuildState to yield state');
+
+    for (const key of PROFILE_KEYS) expect(key in state).toBe(false);
+  });
+
+  test('still reads the name and member count exactly as before', () => {
+    const state = buildGuildState(guildCreate(), BOT);
+
+    expect(state?.name).toBe('Proton Test Guild');
+    expect(state?.memberCount).toBe(3);
+    expect(buildGuildState({ ...guildCreate(), name: '' }, BOT)?.name).toBeUndefined();
+  });
+});
+
+describe('parseGuildProfile, which reads GUILD_UPDATE', () => {
+  test('reads every profile field a guild object carries', () => {
+    expect(
+      parseGuildProfile({
+        id: GUILD,
+        name: 'Renamed',
+        icon: ICON,
+        banner: null,
+        description: 'Now with a description',
+        premium_subscription_count: 15,
+        premium_tier: 3,
+      }),
+    ).toEqual({
+      name: 'Renamed',
+      iconHash: ICON,
+      bannerHash: null,
+      description: 'Now with a description',
+      boostCount: 15,
+      boostTier: 3,
+    });
+  });
+
+  test('returns only what it read, so an absent field cannot clear a stored one', () => {
+    const profile = parseGuildProfile({ id: GUILD, premium_tier: 0 });
+
+    expect(Object.keys(profile)).toEqual(['boostTier']);
+  });
+
+  test('an empty name is left out rather than blanking the stored one', () => {
+    expect(Object.keys(parseGuildProfile({ name: '' }))).toEqual([]);
+  });
+
+  test('a boost count and tier of zero are kept, since zero is a real reading', () => {
+    expect(parseGuildProfile({ premium_subscription_count: 0, premium_tier: 0 })).toEqual({
+      boostCount: 0,
+      boostTier: 0,
+    });
+  });
+
+  test('a null boost count is kept as none, not dropped as unread', () => {
+    expect(parseGuildProfile({ premium_subscription_count: null })).toEqual({ boostCount: null });
+  });
+
+  test.each([
+    ['a path', '../../avatars/1/abc'],
+    ['a query string', 'abc?size=4096'],
+    ['a whole URL', 'https://example.com/x.png'],
+    ['spaced', 'abc def'],
+    ['empty', ''],
+    ['longer than any hash', 'a'.repeat(65)],
+    ['a number', 42],
+  ])('an image hash that is %s is ignored, so it can never steer a CDN link', (_label, hash) => {
+    expect(Object.keys(parseGuildProfile({ icon: hash, banner: hash }))).toEqual([]);
+  });
+
+  test.each([
+    ['negative', -1],
+    ['fractional', 1.5],
+    ['beyond the safe integers', 2 ** 53],
+    ['NaN', Number.NaN],
+    ['infinite', Number.POSITIVE_INFINITY],
+    ['text', '14'],
+  ])('a boost count or tier that is %s is ignored', (_label, value) => {
+    expect(
+      Object.keys(parseGuildProfile({ premium_subscription_count: value, premium_tier: value })),
+    ).toEqual([]);
+  });
+
+  test('a description that is not text is ignored', () => {
+    expect(Object.keys(parseGuildProfile({ description: { text: 'hi' } }))).toEqual([]);
+  });
+
+  test('a description is stored as written; escaping mentions and markdown is the renderer’s job', () => {
+    const description = '@everyone <@&410000000000000005> **{server.name}**';
+
+    expect(parseGuildProfile({ description }).description).toBe(description);
+  });
+
+  test('reads only the payload’s own keys, so a polluted prototype cannot supply a profile', () => {
+    const inherited = Object.create({
+      name: 'Injected',
+      icon: ICON,
+      premium_tier: 3,
+    }) as Record<string, unknown>;
+
+    expect(Object.keys(parseGuildProfile(inherited))).toEqual([]);
+  });
+
+  test('a __proto__ key in the JSON neither pollutes objects nor enters the profile', () => {
+    const payload = JSON.parse(
+      '{"__proto__":{"polluted":true,"name":"Injected"},"constructor":{"prototype":{"polluted":true}},"premium_tier":1}',
+    ) as Record<string, unknown>;
+
+    const profile = parseGuildProfile(payload);
+
+    expect(Object.keys(profile)).toEqual(['boostTier']);
+    expect(profile.name).toBeUndefined();
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });

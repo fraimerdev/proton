@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
-import { RoutePending } from './components/shell/pending.tsx';
+import { RoutePending } from './components/ui/pending.tsx';
 import { makeQueryClient } from './lib/query-client.ts';
 import { routeTree } from './routeTree.gen';
 

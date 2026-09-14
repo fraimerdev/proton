@@ -19,13 +19,18 @@ import {
   describeUnbound,
   type HoneypotDeps,
 } from './deps.ts';
-import { appealUrlFor, DM_RESULT_LABEL, type DmOutcome, sendDirectMessage } from './dm.ts';
+import {
+  appealUrlFor,
+  DM_RESULT_LABEL,
+  type DmOutcome,
+  directMessageFacts,
+  sendDirectMessage,
+} from './dm.ts';
 import { buildIncidentEmbed, type Incident, quoteForLog } from './embed.ts';
 import { EXEMPT_LABEL, exemptReason, type HoneypotExemptReason } from './exempt.ts';
 import { ignoreReason, readMessage, type TrapMessage } from './message.ts';
 import { type Punishment, planTrap, type TrapPlan } from './plan.ts';
 import { schedulePunishment } from './punish.ts';
-import type { DmFacts } from './render.ts';
 import { refreshNoticeCount } from './service.ts';
 import { HONEYPOT_LOCK_TTL_MS } from './store.ts';
 
@@ -219,7 +224,7 @@ export async function spring(
     message.authorId,
     root,
     {
-      ...(await dmFacts(ctx, rawDeps)),
+      ...(await directMessageFacts(ctx, rawDeps, message.authorId)),
 
       // A real ban only. A softban bans and lifts it in the same breath, so an appeal button there
       // invites somebody to argue about something that is not stopping them.
@@ -373,10 +378,6 @@ async function deleteTrigger(
       { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
     );
   }
-}
-
-async function dmFacts(ctx: ModuleContext<HoneypotConfig>, deps: HoneypotDeps): Promise<DmFacts> {
-  return { guildName: (await deps.guildName?.(ctx.guildId)) ?? 'this server' };
 }
 
 function incidentOf(

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import fc from 'fast-check';
 import { type AppealPanel, appealsConfigSchema } from '../src/config.ts';
+import { decisionMessage } from '../src/notify.ts';
+import { APPEAL_DECISION_SURFACE, appealDecisionFacts } from '../src/placeholders.ts';
 import {
   type AppealViewInput,
   appealView,
@@ -171,6 +173,70 @@ describe('a link that has already been used', () => {
     );
 
     expect(view.state === 'decided' && view.resubmit).toBe(false);
+  });
+});
+
+describe('the decision, once its placeholders are filled in', () => {
+  function decided(form: Partial<AppealPanel>, appeal: FiledAppeal, now = NOW): string | false {
+    const config = appealsConfigSchema.parse({ enabled: true, panels: [panel(form)] });
+    const view = appealView(input({ config, existing: appeal, now }));
+
+    return view.state === 'decided' && view.humanReason;
+  }
+
+  test('shows the appeal and its form, in the words the direct message uses', () => {
+    const approvedMessage = 'Appeal #{appeal.number} for {appeal.form_name} was approved.';
+    const appeal = filed({ number: 12, status: 'approved', decidedAt: NOW });
+
+    expect(decided({ approvedMessage }, appeal)).toBe('Appeal #12 for Ban appeal was approved.');
+
+    const form = panel({ approvedMessage });
+    const lookup = APPEAL_DECISION_SURFACE.build(appealDecisionFacts(appeal, form), { now: NOW });
+
+    expect(decisionMessage(appeal, form, lookup, NOW)).toBe(
+      '**Appeal #12**\nAppeal #12 for Ban appeal was approved.',
+    );
+  });
+
+  test('a turned-down appeal that may be sent again keeps the offer after its placeholders', () => {
+    const view = decided(
+      {
+        allowResubmit: true,
+        cooldownDays: 7,
+        deniedMessage: 'Appeal #{appeal.number} was turned down.',
+      },
+      filed({ number: 12, status: 'denied', decidedAt: NOW }),
+      NOW + 8 * DAY_MS,
+    );
+
+    expect(view).toBe('Appeal #12 was turned down. You may send another one now.');
+  });
+
+  test('a name the page cannot know is shown as written', () => {
+    const view = decided(
+      { deniedMessage: '{nope} from {server.name}.' },
+      filed({ status: 'denied', decidedAt: NOW }),
+    );
+
+    expect(view).toBe('{nope} from {server.name}.');
+  });
+
+  test('never shows who decided it, or what was answered', () => {
+    const view = decided(
+      { approvedMessage: 'Decided by {appeal.decided_by}{appeal.answer.why}.' },
+      filed({ status: 'approved', decidedAt: NOW }),
+    );
+
+    expect(view).toBe('Decided by .');
+  });
+
+  test('a date reads as a date on the page, never as Discord markup', () => {
+    const view = decided(
+      { approvedMessage: 'Decided {appeal.decided_at:date}.' },
+      filed({ status: 'approved', decidedAt: NOW }),
+    );
+
+    expect(view).toBe('Decided Nov 14, 2023.');
   });
 });
 

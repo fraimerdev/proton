@@ -204,7 +204,7 @@ describe('normalise', () => {
     expect(events[0]?.type).toBe('poll.voted');
     expect(events[0]?.guildId).toBe('900000000000000001');
     expect(events[0]?.id).toBe(
-      'poll.voted:500000000000000001:1400000000000000021:100000000000000002:2',
+      'poll.voted:500000000000000001:1400000000000000021:100000000000000002:2:61',
     );
   });
 
@@ -215,7 +215,7 @@ describe('normalise', () => {
     expect(events[0]?.type).toBe('poll.vote_removed');
     expect(events[0]?.guildId).toBe('900000000000000001');
     expect(events[0]?.id).toBe(
-      'poll.vote_removed:500000000000000001:1400000000000000021:100000000000000002:2',
+      'poll.vote_removed:500000000000000001:1400000000000000021:100000000000000002:2:62',
     );
   });
 
@@ -226,10 +226,9 @@ describe('normalise', () => {
   });
 
   test('a poll vote redelivered on RESUME keeps its id, so a recount runs once', () => {
-    const replayed = dispatch('messagePollVoteAdd');
-    replayed.s = 9999;
-
-    expect(normalise(replayed)[0]?.id).toBe(normalise(dispatch('messagePollVoteAdd'))[0]?.id);
+    expect(normalise(dispatch('messagePollVoteAdd'), { now: () => 2_000_000 })[0]?.id).toBe(
+      normalise(dispatch('messagePollVoteAdd'), { now: () => 1 })[0]?.id,
+    );
   });
 
   test('poll vote ids distinguish the answers of one poll', () => {
@@ -251,7 +250,9 @@ describe('normalise', () => {
     zero.d.answer_id = 0;
 
     expect(normalise(zero)).toHaveLength(1);
-    expect(normalise(zero)[0]?.id).toEndWith(':0');
+    expect(normalise(zero)[0]?.id).toBe(
+      'poll.voted:500000000000000001:1400000000000000021:100000000000000002:0:61',
+    );
   });
 
   test('a poll vote outside a guild is emitted with a null guildId', () => {
@@ -497,6 +498,132 @@ describe('normalise', () => {
     test('has no duplicates', () => {
       expect(new Set(NORMALISED_EVENT_TYPES).size).toBe(NORMALISED_EVENT_TYPES.length);
     });
+  });
+});
+
+describe('member removals', () => {
+  const SESSION = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+  const NEXT_SESSION = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+  function removal(s: number): RawDispatch {
+    return {
+      t: 'GUILD_MEMBER_REMOVE',
+      s,
+      op: 0,
+      d: { guild_id: '900000000000000001', user: { id: '400000000000000001' } },
+    };
+  }
+
+  test('keys on the guild, the member, the session and the sequence number', () => {
+    expect(normalise(removal(41), { sessionId: SESSION })[0]?.id).toBe(
+      `member.left:900000000000000001:400000000000000001:${SESSION}:41`,
+    );
+  });
+
+  test('a removal replayed on RESUME keeps its id, so the goodbye is sent once', () => {
+    const first = normalise(removal(41), { sessionId: SESSION, now: () => 1 })[0];
+    const replayed = normalise(removal(41), { sessionId: SESSION, now: () => 2_000_000 })[0];
+
+    expect(first?.type).toBe('member.left');
+    expect(replayed?.id).toBe(first?.id);
+  });
+
+  test('a leave after a re-identify that lands on the same sequence number is a new event', () => {
+    expect(normalise(removal(41), { sessionId: NEXT_SESSION })[0]?.id).not.toBe(
+      normalise(removal(41), { sessionId: SESSION })[0]?.id,
+    );
+  });
+
+  test('two leaves by the same member in one session are two events', () => {
+    expect(normalise(removal(97), { sessionId: SESSION })[0]?.id).not.toBe(
+      normalise(removal(41), { sessionId: SESSION })[0]?.id,
+    );
+  });
+
+  test('with no session known the key falls back to the sequence number alone', () => {
+    expect(normalise(removal(41))[0]?.id).toBe(
+      'member.left:900000000000000001:400000000000000001:41',
+    );
+  });
+
+  test('the session id changes no other arm, and no other arm changed its id', () => {
+    const pinned: Record<
+      Exclude<
+        DispatchName,
+        | 'messageReactionAdd'
+        | 'messageReactionRemove'
+        | 'messagePollVoteAdd'
+        | 'messagePollVoteRemove'
+      >,
+      string[]
+    > = {
+      ready: [],
+      guildCreate: ['guild.available:900000000000000001'],
+      guildMemberAdd: [
+        'member.joined:900000000000000001:100000000000000002:2026-08-14T09:00:00.000000+00:00',
+      ],
+      guildMemberAddBot: [
+        'member.joined:900000000000000001:100000000000000003:2026-08-14T09:05:00.000000+00:00',
+      ],
+      guildMemberAddPending: [
+        'member.joined:900000000000000001:100000000000000004:2026-08-14T09:10:00.000000+00:00',
+      ],
+      messageCreate: ['message.created:1400000000000000001'],
+      messageUpdate: ['message.updated:1400000000000000001:2026-08-14T09:02:30.000000+00:00'],
+      messageDelete: ['message.deleted:1400000000000000001'],
+      messageDeleteBulk: ['message.bulk_deleted:500000000000000001:3:2q5gbfqcwskc7'],
+      interactionCreatePing: ['interaction.command:1300000000000000001'],
+      interactionCreateComponent: ['interaction.component:1500000000000000002'],
+      interactionCreateModal: ['interaction.modal:1500000000000000003'],
+      interactionCreateAutocomplete: ['interaction.autocomplete:1500000000000000004'],
+      channelObfuscated: ['guild.available:900000000000000001'],
+      auditLogChannelDelete: [
+        'channel.deleted:1537750759112835075',
+        'audit.entry:1537750759112835075',
+      ],
+      guildMemberUpdate: ['member.updated:900000000000000001:100000000000000002:3ccqfck9cufob'],
+      guildMemberUpdateScreened: [
+        'member.updated:900000000000000001:100000000000000004:310gmm7vbfczt',
+      ],
+      voiceStateJoin: [
+        'voice.state_updated:900000000000000001:100000000000000001:a1b2c3d4e5f60718293a4b5c6d7e8f90:500000000000000009',
+      ],
+      automodExecution: [
+        'automod.executed:900000000000000001:800000000000000001:100000000000000002:1400000000000000005',
+      ],
+      automodExecutionBlocked: [
+        'automod.executed:900000000000000001:800000000000000002:100000000000000002:18mnhxveskrue',
+      ],
+      voiceStateLeave: [
+        'voice.state_updated:900000000000000001:100000000000000001:a1b2c3d4e5f60718293a4b5c6d7e8f90:disconnect',
+      ],
+      guildUpdate: ['entity.guild_updated:900000000000000001:2keakwe1bm55l'],
+      channelCreate: ['entity.channel_created:500000000000000021'],
+      channelUpdate: ['entity.channel_updated:500000000000000021:u6g04h8huo5n'],
+      channelDelete: ['entity.channel_deleted:500000000000000021'],
+      channelPinsUpdate: [
+        'entity.channel_pins_updated:500000000000000001:2026-08-16T12:00:00.000000+00:00',
+      ],
+      threadCreate: ['entity.thread_created:600000000000000001'],
+      threadUpdate: ['entity.thread_updated:600000000000000001:20gssqwsx7ty6'],
+      threadDelete: ['entity.thread_deleted:600000000000000001'],
+      guildRoleCreate: ['entity.role_created:700000000000000011'],
+      guildRoleUpdate: ['entity.role_updated:700000000000000011:1o15sxu7a69p9'],
+      guildRoleDelete: ['entity.role_deleted:700000000000000011'],
+      guildBanAdd: ['entity.ban_added:900000000000000001:100000000000000007'],
+      guildBanRemove: ['entity.ban_removed:900000000000000001:100000000000000007'],
+      inviteCreate: ['entity.invite_created:protonInv'],
+      inviteDelete: ['entity.invite_deleted:protonInv'],
+    };
+
+    const names = Object.keys(pinned) as DispatchName[];
+    const ids = (sessionId?: string) =>
+      Object.fromEntries(
+        names.map((name) => [name, normalise(dispatch(name), { sessionId }).map((e) => e.id)]),
+      );
+
+    expect(ids(SESSION)).toEqual(pinned);
+    expect(ids()).toEqual(pinned);
   });
 });
 
@@ -866,10 +993,7 @@ describe('the modal, autocomplete and poll-vote dispatches', () => {
   });
 
   test.each(added)('%s keeps its id across a replay under a different clock', (name) => {
-    const replayed = dispatch(name);
-    replayed.s = 9999;
-
-    expect(normalise(replayed, { now: () => 1 })[0]?.id).toBe(
+    expect(normalise(dispatch(name), { now: () => 1 })[0]?.id).toBe(
       normalise(dispatch(name), { now: () => 2_000_000 })[0]?.id,
     );
   });
@@ -913,5 +1037,91 @@ describe('the modal, autocomplete and poll-vote dispatches', () => {
     reaction.d.emoji = { id: null, name: String(vote.d.answer_id) };
 
     expect(normalise(reaction)[0]?.id).not.toBe(normalise(vote)[0]?.id);
+  });
+});
+
+describe('reactions and poll votes', () => {
+  const SESSION = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+  const NEXT_SESSION = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+  const arms = [
+    [
+      'messageReactionAdd',
+      'reaction.added:500000000000000001:1400000000000000001:100000000000000002:⭐',
+      21,
+    ],
+    [
+      'messageReactionRemove',
+      'reaction.removed:500000000000000001:1400000000000000001:100000000000000002:⭐',
+      22,
+    ],
+    [
+      'messagePollVoteAdd',
+      'poll.voted:500000000000000001:1400000000000000021:100000000000000002:2',
+      61,
+    ],
+    [
+      'messagePollVoteRemove',
+      'poll.vote_removed:500000000000000001:1400000000000000021:100000000000000002:2',
+      62,
+    ],
+  ] as const;
+
+  function atSequence(name: DispatchName, s: number): RawDispatch {
+    const raw = dispatch(name);
+    raw.s = s;
+    return raw;
+  }
+
+  test.each(arms)(
+    '%s keys on what happened, the session and the sequence number',
+    (name, key, s) => {
+      expect(normalise(dispatch(name), { sessionId: SESSION })[0]?.id).toBe(
+        `${key}:${SESSION}:${s}`,
+      );
+    },
+  );
+
+  test.each(arms)('%s replayed on RESUME keeps its id', (name) => {
+    expect(normalise(dispatch(name), { sessionId: SESSION, now: () => 2_000_000 })[0]?.id).toBe(
+      normalise(dispatch(name), { sessionId: SESSION, now: () => 1 })[0]?.id,
+    );
+  });
+
+  test.each(arms)('%s done again later in the same session is a new event', (name, _key, s) => {
+    expect(normalise(atSequence(name, s + 2), { sessionId: SESSION })[0]?.id).not.toBe(
+      normalise(atSequence(name, s), { sessionId: SESSION })[0]?.id,
+    );
+  });
+
+  test.each(arms)(
+    '%s after a re-identify that reuses the sequence number is a new event',
+    (name) => {
+      expect(normalise(dispatch(name), { sessionId: NEXT_SESSION })[0]?.id).not.toBe(
+        normalise(dispatch(name), { sessionId: SESSION })[0]?.id,
+      );
+    },
+  );
+
+  test.each(arms)('%s with no session known falls back to the sequence number', (name, key, s) => {
+    expect(normalise(dispatch(name))[0]?.id).toBe(`${key}:${s}`);
+  });
+});
+
+describe('a member join with no joined_at', () => {
+  function joinWithoutTimestamp(): RawDispatch {
+    const raw = dispatch('guildMemberAdd');
+
+    delete raw.d.joined_at;
+
+    return raw;
+  }
+
+  test('keys on a fixed token rather than the clock, so a replay keeps its id', () => {
+    const first = normalise(joinWithoutTimestamp(), { now: () => 1 })[0];
+    const replayed = normalise(joinWithoutTimestamp(), { now: () => 2_000_000 })[0];
+
+    expect(first?.id).toBe('member.joined:900000000000000001:100000000000000002:nojoin');
+    expect(replayed?.id).toBe(first?.id);
   });
 });

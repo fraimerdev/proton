@@ -5,6 +5,7 @@ import {
   type GuildStateStore,
   type Logger,
   parseChannel,
+  parseGuildProfile,
   type Subscription,
 } from '@proton/core';
 
@@ -35,6 +36,7 @@ const LIFECYCLE_BY_TYPE: ReadonlyMap<string, ChannelLifecycle> = new Map(Object.
 const TYPES: EventType[] = [
   'guild.available',
   'guild.unavailable',
+  'entity.guild_updated',
   // Only to keep member_count current. GUILD_CREATE's reading is a point in time, and a welcome
   // message that says "#0" is the visible cost of not tracking it.
   'member.joined',
@@ -98,8 +100,16 @@ export class GuildStateConsumer {
     await this.#store.patch(guildId, { kind: 'channel.upsert', channel });
   }
 
-  async handle(event: { type: string; guildId: string | null; payload: unknown }): Promise<void> {
+  async handle(event: {
+    id: string;
+    type: string;
+    guildId: string | null;
+    occurredAt?: number;
+    payload: unknown;
+  }): Promise<void> {
     const payload = (event.payload ?? {}) as Record<string, unknown>;
+    // Gateway time, not ours: per-type streams can hand us a GUILD_UPDATE after a staler GUILD_CREATE.
+    const occurredAt = event.occurredAt ?? Date.now();
 
     const lifecycle = LIFECYCLE_BY_TYPE.get(event.type);
     if (lifecycle) {
@@ -107,12 +117,23 @@ export class GuildStateConsumer {
       return;
     }
 
-    if (event.type === 'member.joined' || event.type === 'member.left') {
+    if (event.type === 'entity.guild_updated') {
       if (!event.guildId) return;
       await this.#store.patch(event.guildId, {
-        kind: 'member.count',
-        delta: event.type === 'member.joined' ? 1 : -1,
+        kind: 'guild.profile',
+        at: occurredAt,
+        profile: parseGuildProfile(payload),
       });
+      return;
+    }
+
+    if (event.type === 'member.joined' || event.type === 'member.left') {
+      if (!event.guildId) return;
+      await this.#store.patch(
+        event.guildId,
+        { kind: 'member.count', delta: event.type === 'member.joined' ? 1 : -1 },
+        { dedupeKey: event.id },
+      );
       return;
     }
 
@@ -126,7 +147,7 @@ export class GuildStateConsumer {
       return;
     }
 
-    const state = buildGuildState(event.payload as Record<string, unknown>, this.#botUserId);
+    const state = buildGuildState(payload, this.#botUserId, occurredAt);
     if (!state) {
       this.#logger.warn('guild.available payload did not yield usable state', {
         guildId: event.guildId,

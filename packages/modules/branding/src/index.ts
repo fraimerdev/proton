@@ -10,19 +10,11 @@ import {
 } from './config.ts';
 import type { BrandingDeps } from './deps.ts';
 import { createBrandingListener } from './listeners.ts';
+import { nameStyleWriteIssues, sameDisplayNameStyle } from './name-style.ts';
 
-export {
-  colourFingerprint,
-  coloursFor,
-  ENHANCED_COLOURS_HINT,
-  type NameEffect,
-  ROLE_NAME,
-} from './colour.ts';
 export { createBrandingCommand } from './commands.ts';
 export {
   BIO_MAX,
-  BRAND_CYAN,
-  BRAND_VIOLET,
   BRANDING_ACTOR,
   BRANDING_SCHEMA_VERSION,
   type BrandingConfig,
@@ -32,6 +24,7 @@ export {
   isBlank,
   liftStoredConfig,
   MODULE_ID as BRANDING_MODULE_ID,
+  NICKNAME_MAX,
 } from './config.ts';
 export { type BrandingDeps, describeUnbound } from './deps.ts';
 export {
@@ -52,6 +45,54 @@ export {
   maxBytesFor,
 } from './kinds.ts';
 export { BRANDING_EVENT_TYPES, createBrandingListener } from './listeners.ts';
+export {
+  type DisplayNameStyle,
+  displayNameStyleSchema,
+  hexColourSchema,
+  isEffectAvailable,
+  isFontAvailable,
+  isSendableNameStyle,
+  NAME_STYLE_COLOURS,
+  NAME_STYLE_DEFAULT_COLOUR,
+  NAME_STYLE_EFFECT_CATALOGUE,
+  NAME_STYLE_EFFECT_LABELS,
+  NAME_STYLE_EFFECTS,
+  NAME_STYLE_FONT_CATALOGUE,
+  NAME_STYLE_FONT_LABELS,
+  NAME_STYLE_FONTS,
+  NAME_STYLE_MAX_COLOURS,
+  NAME_STYLE_UNAVAILABLE_NOTE,
+  type NameStyleEffect,
+  type NameStyleEffectEntry,
+  type NameStyleFont,
+  type NameStyleFontEntry,
+  type NameStyleIssue,
+  nameStyleWriteIssues,
+  parseHexColour,
+  sameDisplayNameStyle,
+  toHexColour,
+  toWireStyle,
+  wireStyleFingerprint,
+} from './name-style.ts';
+export {
+  applyNameStyle,
+  fetchBotNameStyle,
+  type NameStyleVerdict,
+  readDisplayNameStyles,
+  sameWireStyle,
+  UNVERIFIED_RETRY_MS,
+  verifyNameStyle,
+} from './name-style-apply.ts';
+export {
+  describeNameStyleStatus,
+  fromWireStyle,
+  NAME_STYLE_STATUS_STATES,
+  type NameStyleStatus,
+  type NameStyleStatusState,
+  type NameStyleView,
+  nameStyleStatusSchema,
+  nameStyleViewSchema,
+} from './name-style-status.ts';
 export { impersonationReason, normaliseName } from './names.ts';
 export {
   CLEARED,
@@ -77,16 +118,6 @@ export {
   brandingAssets,
   brandingRoles,
 } from './table.ts';
-export {
-  applyTypeface,
-  fitsNickname,
-  isTypeface,
-  NICKNAME_MAX_UNITS,
-  nicknameBudget,
-  TYPEFACE_LABELS,
-  TYPEFACES,
-  type Typeface,
-} from './typeface.ts';
 
 export function createBrandingModule(
   deps: BrandingDeps = {},
@@ -101,22 +132,26 @@ export function createBrandingModule(
     schemaVersion: BRANDING_SCHEMA_VERSION,
     liftStoredConfig,
 
+    // An unchanged stored style, even one Discord no longer offers, never blocks saving the rest.
+    refineWrite(next, before) {
+      return sameDisplayNameStyle(next.displayNameStyle, before.displayNameStyle)
+        ? []
+        : nameStyleWriteIssues(next.displayNameStyle);
+    },
+
     // Guilds alone. Reconciliation reads the bot's own member off GUILD_CREATE, which arrives
     // under this intent; GuildMembers would only add drift Proton has decided not to chase.
     requiredIntents: [GatewayIntentBits.Guilds],
 
     // Only the nickname needs a bit, and this one is what the invite asks for. The avatar, banner
     // and bio still land in a guild that has stripped it — the two legs are separate actions.
-    requiredPermissions: [Permissions.ChangeNickname, Permissions.ManageRoles],
-    // create_role/edit_role/add_role are the colour half: Discord has no way to colour a bot's
-    // name directly, so Proton makes a role, colours it, and wears it.
+    requiredPermissions: [Permissions.ChangeNickname],
+    // Manage Roles is not required: lacking it only defers deleting the old colour role.
     actionKinds: [
       'set_bot_nickname',
       'set_bot_profile',
-      'create_role',
-      'edit_role',
-      'add_bot_role',
-      'remove_bot_role',
+      'set_bot_name_style',
+      'delete_role',
       'interaction_reply',
       'interaction_followup',
     ],
@@ -129,11 +164,7 @@ export function createBrandingModule(
       sections: [
         { id: 'general', title: 'General', fields: ['enabled', 'restoreOnDisable'] },
         { id: 'identity', title: 'Identity', fields: ['nickname', 'bio'] },
-        {
-          id: 'style',
-          title: 'Display name style',
-          fields: ['typeface', 'nameEffect', 'primaryColor', 'secondaryColor'],
-        },
+        { id: 'style', title: 'Display name style', fields: ['displayNameStyle'] },
       ],
     },
   };

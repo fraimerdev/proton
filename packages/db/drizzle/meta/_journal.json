@@ -225,6 +225,34 @@
       "when": 1787003100000,
       "tag": "0031_appeals",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1787003200000,
+      "tag": "0032_escalation_into_moderation",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1787003300000,
+      "tag": "0033_afk",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1787003400000,
+      "tag": "0034_xp_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1787003500000,
+      "tag": "0035_branding_name_styles",
+      "breakpoints": true
     }
   ]
 }

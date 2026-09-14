@@ -1,8 +1,10 @@
 import type { GuildStateStore } from '@proton/core';
+import type { PlaceholderEnvironment } from '@proton/core/placeholders';
 import type { CounterChannelStore } from './store.ts';
 
 export interface CountersDeps {
   guildState?: GuildStateStore;
+  placeholders?: PlaceholderEnvironment;
 
   // Only the counters whose channel Proton makes itself need this; one pointed at an existing
   // channel refreshes without it.

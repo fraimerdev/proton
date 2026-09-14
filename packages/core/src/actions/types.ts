@@ -39,6 +39,8 @@ export interface ActionResult {
   body?: unknown;
 
   failure?: ActionFailure;
+  // On failed_api for UPSTREAM_ON_FAILURE_KINDS only; every other kind keeps its old result shape.
+  upstream?: { status: number; body: unknown };
 }
 
 export interface ActionExecutor {

@@ -27,8 +27,7 @@ export const brandingAssets = pgTable(
 
 export type BrandingAssetRow = typeof brandingAssets.$inferSelect;
 
-// The colour role Proton made for itself here. Guild state carries role ids, permissions and
-// positions but not names, so there is no way to find this role again without writing its id down.
+// Nothing writes here any more: a row is a colour role an earlier Proton made and has yet to delete.
 export const brandingRoles = pgTable('branding_roles', {
   guildId: text('guild_id')
     .primaryKey()

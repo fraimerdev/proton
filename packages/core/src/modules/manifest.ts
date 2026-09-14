@@ -5,6 +5,7 @@ import type { ScheduleOptions, ScheduleOutcome } from '../actions/scheduled-acti
 import type { ActionExecutor } from '../actions/types.ts';
 import type { LimitKey } from '../entitlements/limits.ts';
 import type { EventType, ProtonEvent } from '../events/types.ts';
+import type { ModuleTemplates } from '../placeholders/config-templates.ts';
 import type { Provider } from '../providers/types.ts';
 import type { EntitlementTier } from '../rules/facts.ts';
 import type { RuleDefinition, ScheduledJob } from '../rules/types.ts';
@@ -51,6 +52,9 @@ export interface CommandContext<C = unknown> extends ModuleContext<C> {
   // them must still work when they are absent, because a test context may not build them.
   actorRoleIds?: string[];
   actorPermissions?: bigint;
+  // null is a member with no nickname; undefined is a nickname nobody read. Never merge the two.
+  actorNick?: string | null;
+  actorDisplayName?: string;
 
   options: CommandOptions;
   interaction: { id: string; token: string };
@@ -77,6 +81,11 @@ export interface ConfigLimit {
   key: LimitKey;
 
   path: string;
+}
+
+export interface ConfigWriteIssue {
+  path: string;
+  message: string;
 }
 
 export interface SectionDescriptor {
@@ -139,7 +148,10 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   // Run over a stored config before it is parsed, for a module that has renamed a key. configSchema
   // has to stay a ZodObject for the form generator, so the lift cannot be a z.preprocess wrapped
   // around it — and without one, Zod strips the old key and the next write persists the loss.
-  liftStoredConfig?(raw: unknown): unknown;
+  liftStoredConfig?(raw: unknown, current?: Record<string, unknown>): unknown;
+
+  // Writes only, never reads: a rule tightened here must not stop an older stored config loading.
+  refineWrite?(next: z.infer<C>, before: z.infer<C>): ConfigWriteIssue[];
 
   /**
    * The messages this module puts in a channel and can put there again — a ticket panel, a role
@@ -151,6 +163,8 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
    * client and must not acquire one.
    */
   postables?(config: z.infer<C>): Postable[];
+
+  templates?: ModuleTemplates;
 
   jobs?: ScheduledJob[];
   dashboard?: { icon: string; sections: SectionDescriptor[] };

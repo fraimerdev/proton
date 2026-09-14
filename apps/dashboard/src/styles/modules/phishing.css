@@ -1,0 +1,93 @@
+/* phishing page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.phishing-list-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.phishing-filter {
+  width: 200px;
+}
+
+.phishing-help {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.46;
+  max-width: 72ch;
+}
+
+.phishing-domain {
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.phishing-domain:hover {
+  background: var(--surface-hover);
+}
+
+.phishing-domain-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 8px 0 14px;
+}
+
+.phishing-domain-open {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 0;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.phishing-domain-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 14px;
+}
+
+.phishing-domain-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.9285em;
+}
+
+.phishing-domain-error {
+  padding: 0 14px 9px;
+  color: var(--danger);
+  font-size: var(--text-secondary-size);
+}
+
+.phishing-domain-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 0 14px 9px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.4;
+}
+
+.phishing-domain-warning > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--warning);
+}
+
+.phishing-domain-empty {
+  padding: 14px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  max-width: 72ch;
+}

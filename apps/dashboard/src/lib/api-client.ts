@@ -27,10 +27,30 @@ import {
   panelRequestResultSchema,
   verificationRequestResultSchema,
 } from '@proton/core';
+import {
+  type NameStyleStatus,
+  nameStyleStatusSchema,
+} from '@proton/module-branding/name-style-status';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
 import type { TicketQuery, TicketSearchResult } from '@proton/module-tickets/query';
 import type { z } from 'zod';
+import { z as zod } from 'zod';
 import type { AuditStamp } from '../server/audit.ts';
+
+const maintenanceViewSchema = zod.object({
+  window: zod
+    .object({
+      guildId: zod.string(),
+      enabledBy: zod.string(),
+      reason: zod.string().nullable(),
+      startedAt: zod.number(),
+      expiresAt: zod.number(),
+    })
+    .nullable(),
+  now: zod.number().optional(),
+});
+
+export type MaintenanceView = zod.infer<typeof maintenanceViewSchema>;
 
 function queryString(query: Record<string, unknown>): string {
   const params = new URLSearchParams();
@@ -130,6 +150,17 @@ export class ApiClient {
     });
   }
 
+  getMaintenance(guildId: string): Promise<MaintenanceView> {
+    return this.#parsed(`/guilds/${guildId}/antinuke/maintenance`, maintenanceViewSchema);
+  }
+
+  endMaintenance(guildId: string, actorId: string): Promise<MaintenanceView> {
+    return this.#parsed(`/guilds/${guildId}/antinuke/maintenance`, maintenanceViewSchema, {
+      method: 'DELETE',
+      headers: { 'x-proton-actor': actorId },
+    });
+  }
+
   searchCases(guildId: string, query: CaseQuery): Promise<CaseSearchResult> {
     return this.#request(`/guilds/${guildId}/cases?${queryString(query)}`);
   }
@@ -188,6 +219,10 @@ export class ApiClient {
     return fetch(`${this.#baseUrl}/guilds/${guildId}/cards/preview?${queryString(query)}`, {
       headers: { 'x-proton-secret': this.#secret },
     });
+  }
+
+  getNameStyleStatus(guildId: string): Promise<NameStyleStatus> {
+    return this.#parsed(`/guilds/${guildId}/branding/name-style/status`, nameStyleStatusSchema);
   }
 
   brandingAsset(guildId: string, kind: string): Promise<Response> {

@@ -8,8 +8,11 @@
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
     "./curve": "./src/curve.ts",
+    "./placeholders": "./src/placeholders.ts",
     "./activity-store": "./src/activity-store.ts",
-    "./activity-table": "./src/activity-table.ts"
+    "./activity-table": "./src/activity-table.ts",
+    "./xp-event-store": "./src/xp-event-store.ts",
+    "./xp-event-table": "./src/xp-event-table.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

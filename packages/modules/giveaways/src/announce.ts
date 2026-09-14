@@ -1,4 +1,10 @@
 import { describeMultipliers, describeRequirements, type ProviderRegistry } from '@proton/core';
+import {
+  type BotFacts,
+  type PlaceholderEnvironment,
+  PROTON_SUPPORT_URL,
+  type ServerFacts,
+} from '@proton/core/placeholders';
 import { cardFor, renderCard } from './embed.ts';
 import type { DrawSummary } from './end.ts';
 import { publishDrawn } from './events.ts';
@@ -12,12 +18,159 @@ import {
   notifyHost,
   recordDrawCase,
 } from './perform.ts';
+import { type GiveawayWinFacts, renderWinMessage, winMessageKeys } from './placeholders.ts';
 import { describePrizes, parsePrizes, prizesForWinners } from './prizes.ts';
 import type { Giveaway, GiveawayStore } from './store.ts';
 
 export interface PublishDeps {
   store: GiveawayStore;
   providers: ProviderRegistry;
+  placeholders?: PlaceholderEnvironment;
+}
+
+interface WinMessageSources {
+  template: string;
+  now: number;
+  endedAt: Date;
+  server: ServerFacts | null;
+  bot: BotFacts | null;
+  deadlines: ReadonlyMap<string, Date | null> | null;
+}
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function readServer(
+  ctx: Ctx,
+  env: PlaceholderEnvironment | undefined,
+  giveaway: Giveaway,
+): Promise<ServerFacts | null> {
+  if (!env) return null;
+
+  try {
+    return await env.server(giveaway.guildId);
+  } catch (error) {
+    ctx.logger.warn(
+      `Proton could not read this server's details, so the server placeholders in the winner ` +
+        `message for '${giveaway.title}' render as nothing: ${reasonOf(error)}`,
+      { guildId: ctx.guildId, giveawayId: giveaway.id },
+    );
+    return { id: giveaway.guildId };
+  }
+}
+
+async function readBot(
+  ctx: Ctx,
+  env: PlaceholderEnvironment | undefined,
+  giveaway: Giveaway,
+): Promise<BotFacts | null> {
+  if (!env) return null;
+
+  try {
+    return await env.bot();
+  } catch (error) {
+    ctx.logger.warn(
+      `Proton could not read its own profile, so its name and avatar render as nothing in the ` +
+        `winner message for '${giveaway.title}': ${reasonOf(error)}`,
+      { guildId: ctx.guildId, giveawayId: giveaway.id },
+    );
+    return { id: env.applicationId, name: null, supportUrl: PROTON_SUPPORT_URL };
+  }
+}
+
+async function readDeadlines(
+  ctx: Ctx,
+  store: GiveawayStore,
+  giveaway: Giveaway,
+  drawId: string,
+): Promise<ReadonlyMap<string, Date | null> | null> {
+  try {
+    const wins = await store.winners(giveaway.id);
+    return new Map(
+      wins
+        .filter((win) => win.drawId === drawId)
+        .map((win): [string, Date | null] => [win.userId, win.claimDeadline]),
+    );
+  } catch (error) {
+    ctx.logger.warn(
+      `The claim deadlines for '${giveaway.title}' could not be read, so ` +
+        `{giveaway.claim_deadline} renders as nothing in its winner message: ${reasonOf(error)}`,
+      { guildId: ctx.guildId, giveawayId: giveaway.id },
+    );
+    return null;
+  }
+}
+
+async function winMessageSources(
+  ctx: Ctx,
+  deps: PublishDeps,
+  input: PublishInput,
+  template: string,
+): Promise<WinMessageSources> {
+  const { giveaway, summary } = input;
+  const keys = [...winMessageKeys(template)];
+  const env = deps.placeholders;
+
+  const [server, bot, deadlines] = await Promise.all([
+    keys.some((key) => key.startsWith('server.')) ? readServer(ctx, env, giveaway) : null,
+    keys.some((key) => key.startsWith('bot.')) ? readBot(ctx, env, giveaway) : null,
+    giveaway.claimWindowSeconds && keys.includes('giveaway.claim_deadline')
+      ? readDeadlines(ctx, deps.store, giveaway, summary.drawId)
+      : null,
+  ]);
+
+  const now = env?.now() ?? Date.now();
+
+  // A reroll reopens the giveaway, which clears endedAt and leaves endsAt at the first deadline.
+  const endedAt = input.reroll ? new Date(now) : (giveaway.endedAt ?? giveaway.endsAt);
+
+  return { template, now, endedAt, server, bot, deadlines };
+}
+
+function winFacts(
+  giveaway: Giveaway,
+  summary: DrawSummary,
+  sources: WinMessageSources,
+  winner: { index: number; prize: string; userId: string },
+): GiveawayWinFacts {
+  return {
+    giveaway: {
+      title: giveaway.title,
+      prize: winner.prize,
+      winnerIndex: winner.index,
+      winnerCount: summary.winnerIds.length,
+      endsAt: sources.endedAt,
+      messageUrl:
+        giveaway.messageId === null
+          ? null
+          : `https://discord.com/channels/${giveaway.guildId}/${giveaway.channelId}/${giveaway.messageId}`,
+      hostId: giveaway.hostId,
+      claimDeadline: giveaway.claimWindowSeconds ? sources.deadlines?.get(winner.userId) : null,
+    },
+    winner: { userId: winner.userId },
+    server: sources.server,
+    bot: sources.bot,
+  };
+}
+
+function personalMessage(
+  ctx: Ctx,
+  giveaway: Giveaway,
+  sources: WinMessageSources,
+  facts: GiveawayWinFacts,
+  standard: string,
+): string {
+  const rendered = renderWinMessage(sources.template, facts, sources.now);
+  if (rendered.output.trim().length > 0) return rendered.output;
+
+  const problems = rendered.diagnostics.map((diagnostic) => diagnostic.message).join(' ');
+  ctx.logger.warn(
+    `The winner message for '${giveaway.title}' came out empty once its placeholders were ` +
+      `filled in, so the default message was sent instead.${problems ? ` ${problems}` : ''}`,
+    { guildId: ctx.guildId, giveawayId: giveaway.id },
+  );
+  return standard;
 }
 
 async function describeBoth(
@@ -227,16 +380,28 @@ export async function publishResult(
       giveaway.title,
     );
 
+    const sources =
+      giveaway.winMessage === null
+        ? null
+        : await winMessageSources(ctx, deps, input, giveaway.winMessage);
+
     let closed = 0;
     for (const [index, userId] of summary.winnerIds.entries()) {
       const won = prizes[index] ?? giveaway.title;
+      const standard = `You won **${won}**! Congratulations.${link}`;
 
-      const outcome = await dmWinner(
-        ctx,
-        userId,
-        giveaway.winMessage ?? `You won **${won}**! Congratulations.${link}`,
-        `giveaways:${root}:${userId}`,
-      );
+      const content =
+        sources === null
+          ? standard
+          : personalMessage(
+              ctx,
+              giveaway,
+              sources,
+              winFacts(giveaway, summary, sources, { index, prize: won, userId }),
+              standard,
+            );
+
+      const outcome = await dmWinner(ctx, userId, content, `giveaways:${root}:${userId}`);
 
       if (outcome !== 'sent') closed += 1;
     }

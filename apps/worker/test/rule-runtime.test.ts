@@ -38,7 +38,7 @@ const CHANNEL = '500000000000000001';
 
 const configSchema = z.object({ enabled: z.boolean() });
 
-function manifest(id: string, rules: RuleDefinition[]): ModuleManifest {
+function manifest(id: string, rules?: RuleDefinition[]): ModuleManifest {
   return {
     id,
     name: id,
@@ -48,7 +48,7 @@ function manifest(id: string, rules: RuleDefinition[]): ModuleManifest {
     schemaVersion: 1,
     requiredIntents: [],
     requiredPermissions: [Permissions.ViewChannel],
-    rules,
+    ...(rules === undefined ? {} : { rules }),
   } as unknown as ModuleManifest;
 }
 
@@ -114,13 +114,23 @@ interface StoreCall {
 function fakeStore(
   rules: GuildRule[],
   options: { cron?: GuildRule[]; throws?: Error } = {},
-): { store: GuildRuleStore; reads: StoreCall[]; seeded: Array<[string, string, number]> } {
+): {
+  store: GuildRuleStore;
+  reads: StoreCall[];
+  seeded: Array<[string, string, string[]]>;
+  replaced: Array<[string, string, string[]]>;
+  rows: Set<string>;
+} {
   const reads: StoreCall[] = [];
-  const seeded: Array<[string, string, number]> = [];
+  const seeded: Array<[string, string, string[]]> = [];
+  const replaced: Array<[string, string, string[]]> = [];
+  const rows = new Set<string>();
 
   return {
     reads,
     seeded,
+    replaced,
+    rows,
     store: {
       listForEvent: async (guildId, eventType) => {
         reads.push({ guildId, eventType });
@@ -130,11 +140,25 @@ function fakeStore(
       listCron: async () => options.cron ?? [],
       seedPresets: async (guildId, moduleId, presets) => {
         if (options.throws) throw options.throws;
-        seeded.push([guildId, moduleId, presets.length]);
-        return presets.length;
+        seeded.push([guildId, moduleId, presets.map((p) => p.id)]);
+
+        let inserted = 0;
+        for (const preset of presets) {
+          const id = `${guildId}:${moduleId}:${preset.id}`;
+          if (rows.has(id)) continue;
+          rows.add(id);
+          inserted += 1;
+        }
+        return inserted;
       },
-      // Config-driven recompiles come from the API, not the worker; the runtime never calls this.
-      replaceModuleRules: async (_guildId, _moduleId, compiled) => compiled.length,
+      replaceModuleRules: async (guildId, moduleId, compiled) => {
+        if (options.throws) throw options.throws;
+        replaced.push([guildId, moduleId, compiled.map((r) => r.id)]);
+
+        for (const id of rows) if (id.startsWith(`${guildId}:${moduleId}:`)) rows.delete(id);
+        for (const rule of compiled) rows.add(`${guildId}:${moduleId}:${rule.id}`);
+        return compiled.length;
+      },
     },
   };
 }
@@ -197,7 +221,7 @@ describe('which events the engine listens for', () => {
   test('the union of every manifest rule that triggers on an event, deduped', () => {
     const registry = new ModuleRegistry();
     registry.register(
-      manifest('cases', [
+      manifest('moderation', [
         {
           id: 'a',
           trigger: { kind: 'event', event: 'moderation.warned' },
@@ -358,6 +382,19 @@ describe('dispatch', () => {
     expect(requests).toEqual([]);
     expect(lines[0]?.level).toBe('warn');
     expect(lines[0]?.message).toContain('no module with that id is loaded');
+  });
+
+  test('a rule stored for a module that no longer ships any is named, not run', async () => {
+    const { runtime, requests, lines } = build({
+      manifests: [manifest('moderation', []), manifest('cases')],
+      rules: [rule({ moduleId: 'cases' })],
+    });
+
+    await runtime.handle(event());
+
+    expect(requests).toEqual([]);
+    expect(lines[0]?.level).toBe('warn');
+    expect(lines[0]?.message).toContain('ships no rules');
   });
 
   test("another guild's rule is reported and never dispatched", async () => {
@@ -541,19 +578,60 @@ describe('destructive rule actions', () => {
 });
 
 describe('preset seeding', () => {
-  const cases = manifest('cases', [
-    {
-      id: 'escalate-at-3',
+  function rung(atWarnings: number): RuleDefinition {
+    return {
+      id: `escalate-at-${atWarnings}`,
       trigger: { kind: 'event', event: 'moderation.warned' },
-      conditions: [{ kind: 'rate-over-window', limit: 3, window: '24h' }],
+      conditions: [{ kind: 'rate-over-window', limit: atWarnings, window: '24h' }],
       actions: [{ kind: 'timeout', duration: '1h' }],
+      enabled: true,
+      priority: atWarnings,
+    };
+  }
+
+  const ladderSchema = z.object({
+    enabled: z.boolean(),
+    ladder: z.array(z.number().int()).default([3, 5]),
+  });
+
+  const moderation = {
+    ...manifest('moderation', [rung(3), rung(5)]),
+    configSchema: ladderSchema,
+    formSchema: z.object({ enabled: z.boolean() }),
+    defaultConfig: { enabled: true, ladder: [3, 5] },
+    compileRules: (config: z.infer<typeof ladderSchema>) => config.ladder.map(rung),
+  } as unknown as ModuleManifest;
+
+  const autorole = manifest('autorole', [
+    {
+      id: 'grant-member',
+      trigger: { kind: 'event', event: 'member.joined' },
+      conditions: [],
+      actions: [{ kind: 'add_role', payload: { roleId: '1' } }],
       enabled: true,
       priority: 0,
     },
   ]);
 
+  const available: ProtonEvent = {
+    id: 'guild.available:1',
+    type: 'guild.available',
+    guildId: GUILD,
+    occurredAt: 1,
+    payload: {},
+  };
+
+  function ladderOf(ladder: unknown): ConfigProvider {
+    return {
+      async get() {
+        return { enabled: true, config: { enabled: true, ladder } };
+      },
+    };
+  }
+
   function seeder(options: {
     manifests: ModuleManifest[];
+    config?: ConfigProvider;
     cron?: { register(guildId: string): Promise<number> };
     storeThrows?: Error;
   }) {
@@ -562,7 +640,7 @@ describe('preset seeding', () => {
 
     const { logger, lines } = collectingLogger();
     const { bus, calls } = recordingBus();
-    const { store, seeded } = fakeStore([], {
+    const { store, seeded, replaced, rows } = fakeStore([], {
       ...(options.storeThrows ? { throws: options.storeThrows } : {}),
     });
 
@@ -570,10 +648,14 @@ describe('preset seeding', () => {
       lines,
       calls,
       seeded,
+      replaced,
+      rows,
+      store,
       seeder: new RulePresetSeeder({
         bus,
         registry,
         store,
+        config: options.config ?? allEnabled,
         logger,
         ...(options.cron ? { cron: options.cron } : {}),
       }),
@@ -581,7 +663,7 @@ describe('preset seeding', () => {
   }
 
   test('subscribes to guild.available in its own group', () => {
-    const { seeder: s, calls } = seeder({ manifests: [cases] });
+    const { seeder: s, calls } = seeder({ manifests: [moderation] });
 
     s.start();
 
@@ -595,24 +677,173 @@ describe('preset seeding', () => {
       seeded,
       lines,
     } = seeder({
-      manifests: [cases, manifest('ping', [])],
+      manifests: [autorole, manifest('ping', [])],
     });
 
-    await s.handle({
-      id: 'guild.available:1',
-      type: 'guild.available',
-      guildId: GUILD,
-      occurredAt: 1,
-      payload: {},
-    });
+    await s.handle(available);
 
-    expect(seeded).toEqual([[GUILD, 'cases', 1]]);
+    expect(seeded).toEqual([[GUILD, 'autorole', ['grant-member']]]);
     expect(lines[0]?.message).toContain('seeded 1 preset rule(s)');
+  });
+
+  test('a module with no compiler seeds what it ships, without reading config', async () => {
+    const { seeder: s, seeded } = seeder({
+      manifests: [autorole],
+      config: {
+        async get() {
+          throw new Error('config should not have been read');
+        },
+      },
+    });
+
+    await s.handle(available);
+
+    expect(seeded).toEqual([[GUILD, 'autorole', ['grant-member']]]);
+  });
+
+  test('a guild that never edited its ladder gets the shipped rungs', async () => {
+    const { seeder: s, replaced, rows } = seeder({ manifests: [moderation] });
+
+    await s.handle(available);
+
+    expect(replaced).toEqual([[GUILD, 'moderation', ['escalate-at-3', 'escalate-at-5']]]);
+    expect([...rows]).toEqual([
+      `${GUILD}:moderation:escalate-at-3`,
+      `${GUILD}:moderation:escalate-at-5`,
+    ]);
+  });
+
+  test('a rung the guild removed is not seeded back when the gateway reconnects', async () => {
+    const { seeder: s, store, rows } = seeder({ manifests: [moderation], config: ladderOf([4]) });
+
+    await s.handle(available);
+    await store.replaceModuleRules(GUILD, 'moderation', [rung(4)]);
+    await s.handle({ ...available, id: 'guild.available:2' });
+
+    expect([...rows]).toEqual([`${GUILD}:moderation:escalate-at-4`]);
+  });
+
+  test('a rung an earlier seeding put back is removed when the gateway reconnects', async () => {
+    const { seeder: s, store, rows } = seeder({ manifests: [moderation], config: ladderOf([4]) });
+
+    await store.seedPresets(GUILD, 'moderation', [rung(3), rung(4), rung(5)]);
+    await s.handle(available);
+
+    expect([...rows]).toEqual([`${GUILD}:moderation:escalate-at-4`]);
+  });
+
+  test('a save that lands while the rules are rebuilt is read back and wins', async () => {
+    const ladders = [[3, 5], [4]];
+    const {
+      seeder: s,
+      replaced,
+      rows,
+    } = seeder({
+      manifests: [moderation],
+      config: {
+        async get() {
+          return { enabled: true, config: { enabled: true, ladder: ladders.shift() ?? [4] } };
+        },
+      },
+    });
+
+    await s.handle(available);
+
+    expect(replaced.map(([, , ids]) => ids)).toEqual([
+      ['escalate-at-3', 'escalate-at-5'],
+      ['escalate-at-4'],
+    ]);
+    expect([...rows]).toEqual([`${GUILD}:moderation:escalate-at-4`]);
+  });
+
+  test('settings that keep changing are rebuilt a few times, then redelivered', async () => {
+    let saves = 1;
+    const { seeder: s, replaced } = seeder({
+      manifests: [moderation],
+      config: {
+        async get() {
+          saves += 1;
+          return { enabled: true, config: { enabled: true, ladder: [saves] } };
+        },
+      },
+    });
+
+    await expect(s.handle(available)).rejects.toThrow('redelivered');
+    expect(replaced).toHaveLength(3);
+  });
+
+  test('a permanent config failure skips that module with a remedy and seeds the rest', async () => {
+    const {
+      seeder: s,
+      seeded,
+      lines,
+    } = seeder({
+      manifests: [moderation, autorole],
+      config: {
+        async get(guildId, moduleId) {
+          throw new ConfigUnavailableError({
+            message: `api returned 400 for ${moduleId} in ${guildId}`,
+            permanent: true,
+            status: 400,
+            guildId,
+            moduleId,
+          });
+        },
+      },
+    });
+
+    await s.handle(available);
+
+    expect(seeded).toEqual([[GUILD, 'autorole', ['grant-member']]]);
+    const failure = lines.find((l) => l.level === 'error');
+    expect(failure?.message).toContain('moderation');
+    expect(failure?.message).toContain('retrying will not help');
+    expect(failure?.message).toContain('save them once');
+  });
+
+  test('a transient config failure rethrows, so guild.available is redelivered', async () => {
+    const { seeder: s, seeded } = seeder({
+      manifests: [moderation],
+      config: {
+        async get(guildId, moduleId) {
+          throw new ConfigUnavailableError({
+            message: 'api returned 503',
+            permanent: false,
+            status: 503,
+            guildId,
+            moduleId,
+          });
+        },
+      },
+    });
+
+    await expect(s.handle(available)).rejects.toThrow('503');
+    expect(seeded).toEqual([]);
+  });
+
+  test('a stored config this build cannot read seeds nothing for it and says so', async () => {
+    const {
+      seeder: s,
+      seeded,
+      replaced,
+      lines,
+    } = seeder({
+      manifests: [moderation],
+      config: ladderOf('three'),
+    });
+
+    await s.handle(available);
+
+    expect(seeded).toEqual([]);
+    expect(replaced).toEqual([]);
+    expect(lines[0]?.level).toBe('error');
+    expect(lines[0]?.message).toContain('moderation');
+    expect(lines[0]?.message).toContain('not valid');
   });
 
   test('a seeding failure rethrows rather than leaving the guild unseeded', async () => {
     const { seeder: s } = seeder({
-      manifests: [cases],
+      manifests: [moderation],
       storeThrows: new Error('violates foreign key constraint "rules_guild_id_guilds_id_fk"'),
     });
 
@@ -629,7 +860,7 @@ describe('preset seeding', () => {
 
   test('a cron registration failure is shouted about, not thrown', async () => {
     const { seeder: s, lines } = seeder({
-      manifests: [cases],
+      manifests: [moderation],
       cron: {
         register: async () => {
           throw new Error('redis refused the connection');

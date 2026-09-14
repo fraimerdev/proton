@@ -1,0 +1,218 @@
+/* antiraid page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.antiraid-rule {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.antiraid-rule-line {
+  margin: 0;
+  max-width: 74ch;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.55;
+}
+
+.antiraid-rule-line strong {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.antiraid-rule-note {
+  margin: 12px 0 0;
+  max-width: 74ch;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  line-height: 1.5;
+}
+
+.antiraid-rule-note-warning {
+  color: var(--warning);
+}
+
+.antiraid-paths-label {
+  margin: 14px 0 6px;
+  color: var(--text-muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.antiraid-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.antiraid-path {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 0;
+}
+
+.antiraid-path-terms {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.antiraid-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+}
+
+.antiraid-term-plus {
+  margin-right: 2px;
+  color: var(--text-muted);
+}
+
+.antiraid-term-weight {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.antiraid-path-equals {
+  margin-right: 5px;
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.antiraid-path-total {
+  flex: none;
+  min-width: 34px;
+  color: var(--text-primary);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.antiraid-rate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.antiraid-rate-word {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.antiraid-ages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.antiraid-age-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+}
+
+.antiraid-age-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.antiraid-age-label {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.antiraid-band {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  max-width: 620px;
+}
+
+.antiraid-band-seg {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border-top: 2px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.antiraid-band-seg:first-child {
+  border-top-left-radius: var(--radius-sm);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.antiraid-band-seg:last-child {
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.antiraid-band-heavy {
+  border-top-color: var(--warning);
+  color: var(--text-secondary);
+}
+
+.antiraid-band-light {
+  border-top-color: var(--warning-border);
+  color: var(--text-secondary);
+}
+
+.antiraid-band-void {
+  border-top-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.antiraid-band-range {
+  font-size: var(--text-secondary-size);
+  overflow-wrap: anywhere;
+}
+
+.antiraid-band-weight {
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 720px) {
+  .antiraid-band {
+    flex-direction: column;
+  }
+
+  .antiraid-band-seg {
+    border-top-width: 1px;
+    border-left: 1px solid var(--border-subtle);
+  }
+
+  .antiraid-band-heavy {
+    border-left-color: var(--warning);
+  }
+
+  .antiraid-band-light {
+    border-left-color: var(--warning-border);
+  }
+}

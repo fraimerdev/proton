@@ -46,21 +46,19 @@ export const antiraidConfigSchema = z
       .default(MIN_ACTIONABLE_SCORE)
       .register(protonFields, { label: 'Score to act' }),
 
-    response: z
-      .enum(RAID_RESPONSES)
-      .default('verify')
-      .register(protonFields, { label: 'Response' }),
+    response: z.enum(RAID_RESPONSES).default('verify').register(protonFields, { label: 'Action' }),
 
     verificationRoleId: snowflakeSchema.optional().register(protonFields, {
       field: 'role-id',
       label: 'Verification role',
-      description: 'Gates nothing unless the role’s own permissions deny access',
+      description:
+        'Given to flagged members. It restricts nothing unless its permissions deny access.',
     }),
 
     quarantineRoleId: snowflakeSchema.optional().register(protonFields, {
       field: 'role-id',
       label: 'Quarantine role',
-      description: 'Stays on until a staff member takes it off',
+      description: 'Given to flagged members. It stays until a moderator removes it.',
     }),
 
     alertChannelId: snowflakeSchema.optional().register(protonFields, {

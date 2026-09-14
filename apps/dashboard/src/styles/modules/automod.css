@@ -1,0 +1,154 @@
+/* automod page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.automod-tally {
+  margin: -10px 0 16px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.automod-tally strong {
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.automod-intro {
+  margin-bottom: 20px;
+}
+
+.automod-link {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.automod-link:hover {
+  color: var(--link-hover);
+}
+
+.automod-detail-wide {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.automod-explain {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 74ch;
+}
+
+.automod-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.automod-add > .input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.automod-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.automod-issues li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.45;
+  max-width: 74ch;
+}
+
+.automod-issues li > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--warning);
+}
+
+.automod-issue-token {
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.automod-pattern {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.automod-pattern > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.automod-note {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 74ch;
+}
+
+.ladder + .automod-note {
+  margin-top: 12px;
+}
+
+.automod-rung-note {
+  margin: 4px 0 0 16px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  max-width: 74ch;
+}
+
+.automod-rung-note.warning {
+  color: var(--warning);
+}
+
+.automod-rung-label {
+  flex: none;
+  width: 78px;
+}
+
+.automod-plan-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.automod-plan-name {
+  flex: none;
+  width: 210px;
+  color: var(--text-primary);
+  font-size: var(--text-secondary-size);
+  overflow-wrap: anywhere;
+}
+
+.automod-plan-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .automod-plan-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .automod-plan-name {
+    width: auto;
+  }
+}

@@ -1,460 +1,480 @@
-import { MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging/config';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { zodValidator } from '@tanstack/zod-adapter';
-import type { ReactElement } from 'react';
-import { z } from 'zod';
-import { Icon } from '../components/shell/icon.tsx';
-import { ProtonMark } from '../components/shell/mark.tsx';
-import { moduleArt } from '../components/shell/module-meta.ts';
+import { type ReactElement, type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
+import { SitePage, useSignedIn } from '../components/site/chrome.tsx';
+import { COMMAND_SET } from '../components/site/command-set.gen.ts';
+import { DashboardShot } from '../components/site/landing-dashboard.tsx';
 import {
-  COMMAND_COUNT,
-  LOG_CATEGORY_COUNT,
-  LOG_EVENT_COUNT,
-  MODULE_COUNT,
-  moduleNames,
-  REPLACES,
-} from '../components/site/catalogue.ts';
-import { SitePage } from '../components/site/chrome.tsx';
-import { landingCommands } from '../components/site/commands.ts';
-import { FAQ, featured, QuestionList } from '../components/site/faq.tsx';
-import {
-  ModerationScene,
-  RefusalScene,
-  ServerLogScene,
-  TicketPanelScene,
-} from '../components/site/scene.tsx';
-import { CaseFigure, LogRoutingFigure, TicketPanelFigure } from '../components/site/surface.tsx';
-import { capitalised, inWords } from '../components/site/words.ts';
-import { SITE_DESCRIPTION } from '../lib/site-meta.ts';
-
-// Better Auth redirects a failed OAuth callback back here with these two, and until it had a route
-// to land on the whole failure was a not-found page.
-const doorSearchSchema = z.object({
-  error: z.string().optional(),
-  error_description: z.string().optional(),
-  notice: z.literal('invite-unavailable').optional(),
-});
+  ChannelList,
+  ChatButton,
+  ChatCode,
+  ChatCodeBlock,
+  ChatContainer,
+  ChatEmbed,
+  ChatHeader,
+  ChatHeading,
+  ChatLink,
+  ChatMessage,
+  ChatRow,
+  ChatSeparator,
+  ChatText,
+  ChatTime,
+  ChatWindow,
+  Composer,
+  Mention,
+  ServerRail,
+} from '../components/site/landing-discord.tsx';
+import { cx } from '../components/ui/controls.tsx';
+import { Icon } from '../components/ui/icon.tsx';
+import { MODULE_BY_ID, MODULES, NAV_GROUPS } from '../lib/modules/catalogue.ts';
 
 export const Route = createFileRoute('/')({
-  validateSearch: zodValidator(doorSearchSchema),
-  head: () => ({
-    meta: [
-      { title: 'Proton: the all-in-one Discord bot' },
-      { name: 'description', content: SITE_DESCRIPTION },
-    ],
-  }),
-  component: Home,
+  component: Landing,
 });
 
-const SIGN_IN_FAILURES: Record<string, string> = {
-  access_denied: 'Discord did not grant Proton access, so nothing was shared.',
-  no_code: 'Discord sent you back without a sign-in code, so you are not signed in. Try again.',
-  invalid_code:
-    'Discord would not accept the sign-in code, which usually means it expired. Try signing in again.',
-  unable_to_get_user_info:
-    'Discord approved the sign-in but did not return your account, so you are not signed in. Try again.',
-  no_callback_url:
-    'The sign-in lost track of where to send you back. Start again from Login with Discord.',
-};
+let heroEntered = false;
 
-export function signInFailure(code: string, description?: string): string {
-  if (Object.hasOwn(SIGN_IN_FAILURES, code)) {
-    const line = SIGN_IN_FAILURES[code];
-    if (line) return line;
-  }
-
-  // A crafted link can put anything in this red banner, so only a short description is echoed.
-  if (description && description.length <= 200) return description;
-
-  return `Discord sign-in did not finish (${code}), so you are not signed in.`;
+function Actions({ signedIn }: { signedIn: boolean | null }): ReactElement {
+  return (
+    <div className="landing-actions">
+      <a href="/invite" className="landing-cta">
+        <Icon name="discord-logo" size={18} weight="fill" />
+        Add to Discord
+      </a>
+      <Link
+        to={signedIn === true ? '/dashboard' : '/signin'}
+        className="button button-secondary button-lg landing-secondary"
+      >
+        Open the dashboard
+      </Link>
+    </div>
+  );
 }
 
-const MODULES_IN_WORDS = inWords(MODULE_COUNT);
-
-const QUESTION_COUNT = FAQ.reduce((total, group) => total + group.questions.length, 0);
-
-function Home(): ReactElement {
-  const { error, error_description: description, notice } = Route.useSearch();
-
+function HeroShot({ figureRef }: { figureRef: Ref<HTMLElement> }): ReactElement {
   return (
-    <SitePage>
-      <section className="hero">
-        <div className="hero-inner">
-          <div className="hero-copy">
-            <h1 className="hero-title">
-              {capitalised(MODULES_IN_WORDS)} modules.
-              <span className="hero-title-line">Every action gets a case number.</span>
-            </h1>
-
-            <p className="hero-sub">
-              Moderation, anti-raid, tickets, levels and logs — {MODULES_IN_WORDS} modules and{' '}
-              {COMMAND_COUNT} slash commands in one bot. Every module arrives switched off, and the
-              case Proton writes names the moderator, the reason they typed and the time.
-            </p>
-
-            {error ? (
-              <div className="alert-banner hero-alert" role="alert">
-                <Icon name="warning-circle" weight="fill" />
-                <span className="alert-banner-text">{signInFailure(error, description)}</span>
-              </div>
-            ) : null}
-
-            {notice ? (
-              <div className="alert-banner hero-alert" role="alert">
-                <Icon name="warning-circle" weight="fill" />
-                <span className="alert-banner-text">
-                  Proton could not reach its own API to ask which permissions the invite should
-                  request, so no invite was started and nothing was added to your server. Try again
-                  in a minute.
-                </span>
-              </div>
-            ) : null}
-
-            <div className="hero-actions">
-              <a className="button button-discord button-xl" href="/invite">
-                <Icon name="discord-logo" weight="fill" />
-                Add to Discord
-              </a>
-            </div>
-
-            <p className="hero-fine">You need Manage Server in the server you are adding it to.</p>
-
-            <p className="hero-links">
-              <Link to="/faq" hash="permissions-asked">
-                Why the invite asks for so many permissions
-              </Link>
-              <Link to="/dashboard">Already added it? Open the dashboard</Link>
-            </p>
+    <figure className="landing-shot" ref={figureRef}>
+      <div className="dc landing-window landing-window-main">
+        <ServerRail active="Northwind" />
+        <ChannelList
+          server="Northwind"
+          user={{ name: 'mira', tone: 'pink' }}
+          groups={[
+            { name: 'Information', channels: [{ name: 'rules' }, { name: 'announcements' }] },
+            {
+              name: 'Community',
+              channels: [{ name: 'general', active: true }, { name: 'roles' }, { name: 'clips' }],
+            },
+            { name: 'Support', channels: [{ name: 'tickets' }] },
+            { name: 'Staff', channels: [{ name: 'mod-log' }] },
+          ]}
+        />
+        <div className="landing-chat">
+          <ChatHeader channel="general" topic="Say hi. Keep it kind." />
+          <div className="landing-messages">
+            <ChatMessage proton time="Today at 9:41 PM">
+              <ChatText>
+                Welcome to <strong>Northwind</strong>, <Mention>@kai</Mention>. Grab your roles in{' '}
+                <Mention>#roles</Mention>.
+              </ChatText>
+            </ChatMessage>
+            <ChatMessage author="kai" tone="green" time="Today at 9:42 PM">
+              <ChatText>hey everyone, glad to be here</ChatText>
+            </ChatMessage>
+            <ChatMessage proton time="Today at 9:44 PM">
+              <ChatText>
+                <Mention>@ren</Mention> reached level 12.
+              </ChatText>
+            </ChatMessage>
           </div>
-
-          <CaseFigure />
+          <Composer channel="general" />
         </div>
-      </section>
+      </div>
 
-      <Showcases />
+      <ChatWindow channel="mod-log" className="landing-window-log">
+        <ChatMessage proton time="Today at 9:43 PM">
+          <ChatEmbed
+            color="#4fcf95"
+            title="🍯 Honeypot triggered"
+            description={<ChatLink>Jump to the message</ChatLink>}
+            fields={[
+              {
+                name: 'Member',
+                value: (
+                  <>
+                    <Mention>@nitro.drop</Mention>
+                    {'\n'}
+                    <ChatCode>1150384920117248</ChatCode>
+                  </>
+                ),
+                inline: true,
+              },
+              { name: 'Channel', value: <Mention>#welcome-bonus</Mention>, inline: true },
+              { name: 'Action', value: 'Softban', inline: true },
+              { name: 'Messages deleted', value: 'the last day', inline: true },
+              { name: 'Result', value: 'Done', inline: true },
+            ]}
+            footer="Today at 9:43 PM"
+          />
+        </ChatMessage>
+        <ChatMessage proton continued>
+          <ChatText>
+            <strong>Raid mode.</strong> 14 accounts joined within 10s, at or above this server's
+            threshold of 10. Joins scoring 4/5 or higher are being given the verification role.
+          </ChatText>
+        </ChatMessage>
+      </ChatWindow>
 
-      <ModulePages />
+      <figcaption className="landing-caption">
+        An illustrative server. Names and messages are examples.
+      </figcaption>
+    </figure>
+  );
+}
 
-      <Commands />
+function SecurityShot(): ReactElement {
+  return (
+    <ChatWindow channel="mod-log" className="landing-window-card">
+      <ChatMessage proton time="Today at 3:12 AM">
+        <ChatText>
+          Anti-nuke tripped: 6 channel deletions within 10s by 1150384920117248 (limit 5 per 10s).
+          {'\n'}
+          Removed 3 of their 3 roles first: <Mention>@Admin</Mention>, <Mention>@Moderator</Mention>
+          , <Mention>@Helper</Mention>. Every removal is recorded as a Proton case carrying the full
+          set, so their roles can be restored exactly.{'\n'}
+          They were then banned from this server.
+        </ChatText>
+      </ChatMessage>
+      <ChatMessage proton time="Today at 3:40 AM">
+        <ChatText>
+          Phishing link detected in <Mention>#general</Mention>.{'\n'}
+          Author: <Mention>@free.gifts</Mention>
+          {'\n'}
+          Link host: <ChatCode>gift.example</ChatCode>, matching <ChatCode>gift.example</ChatCode>{' '}
+          on the community phishing blocklist.{'\n'}
+          Message: <ChatLink>https://discord.com/channels/1204/5531/8812</ChatLink> — still up;
+          delete it manually.{'\n'}
+          Action: timed out for 1d. If this was wrong, add <ChatCode>gift.example</ChatCode> to
+          Allowed domains in the Proton dashboard.
+        </ChatText>
+      </ChatMessage>
+    </ChatWindow>
+  );
+}
 
-      <Replaces />
+function ModerationShot(): ReactElement {
+  return (
+    <ChatWindow channel="staff" className="landing-window-card">
+      <ChatMessage
+        proton
+        time="Today at 6:02 PM"
+        command={{ user: 'mira', name: 'warn', tone: 'pink' }}
+      >
+        <ChatText>
+          Warned <Mention>@kai</Mention>.
+        </ChatText>
+      </ChatMessage>
+      <ChatMessage proton time="Today at 7:15 PM">
+        <ChatContainer accent="#f0b752">
+          <ChatHeading level={2}>Appeal #12</ChatHeading>
+          <ChatText>
+            <strong>Ban appeal</strong> · <Mention>@drift</Mention>
+          </ChatText>
+          <ChatText>
+            <strong>Why should the ban be lifted?</strong>
+          </ChatText>
+          <ChatCodeBlock>
+            My account was taken over and posted a scam link. It’s secured now.
+          </ChatCodeBlock>
+          <ChatSeparator />
+          <ChatRow>
+            <ChatButton tone="success">Accept</ChatButton>
+            <ChatButton tone="danger">Turn down</ChatButton>
+          </ChatRow>
+        </ChatContainer>
+      </ChatMessage>
+    </ChatWindow>
+  );
+}
 
-      <section className="lp questions" id="questions">
-        <div className="questions-split">
-          <div className="questions-aside">
-            <h2 className="lp-title">Questions worth asking before you add it</h2>
-            <Link to="/faq" className="button button-quiet">
-              Read all {QUESTION_COUNT} questions
-              <Icon name="arrow-right" />
-            </Link>
+function CommunityShot(): ReactElement {
+  return (
+    <ChatWindow channel="giveaways" className="landing-window-card">
+      <ChatMessage proton time="Today at 12:00 PM">
+        <ChatContainer accent="#5865f2">
+          <ChatHeading level={1}>🎉 Custom role colour</ChatHeading>
+          <ChatSeparator />
+          <ChatText>
+            🏆 <strong>Winners</strong>
+            {'\n'}2{'\n\n'}⏰ <strong>Ends</strong>
+            {'\n'}
+            <ChatTime>in 2 days</ChatTime>
+            {'\n\n'}🎫 <strong>Entries</strong>
+            {'\n'}148{'\n\n'}👤 <strong>Hosted by</strong>
+            {'\n'}
+            <Mention>@mira</Mention>
+          </ChatText>
+          <ChatSeparator />
+          <ChatRow>
+            <ChatButton emoji="🎉">Enter giveaway</ChatButton>
+            <ChatButton tone="secondary" emoji="🚪">
+              Leave
+            </ChatButton>
+          </ChatRow>
+        </ChatContainer>
+      </ChatMessage>
+    </ChatWindow>
+  );
+}
+
+const FEATURES: readonly {
+  id: string;
+  title: string;
+  lede: string;
+  modules: readonly string[];
+  shot: () => ReactNode;
+}[] = [
+  {
+    id: 'security',
+    title: 'Acts on spam, raids and nukes as they happen',
+    lede: 'Automod filters spam, Anti-Raid scores every join, Anti-Nuke strips roles from members making destructive changes too quickly, and Honeypot catches spam bots and hacked accounts that post in bait channels.',
+    modules: ['automod', 'antiraid', 'antinuke', 'phishing', 'honeypot'],
+    shot: SecurityShot,
+  },
+  {
+    id: 'moderation',
+    title: 'Every action on the record',
+    lede: 'Warnings, timeouts, kicks and bans each become a numbered case. Repeat warnings climb a ladder you set, and members appeal through a form instead of a DM.',
+    modules: ['moderation', 'cases', 'appeals', 'permissions'],
+    shot: ModerationShot,
+  },
+  {
+    id: 'community',
+    title: 'Something for members to use',
+    lede: 'Tickets, role menus, levels, giveaways, polls, suggestions, a starboard, and voice channels members create for themselves.',
+    modules: [
+      'tickets',
+      'rolemenu',
+      'leveling',
+      'giveaways',
+      'polls',
+      'suggestions',
+      'starboard',
+      'tempvc',
+    ],
+    shot: CommunityShot,
+  },
+];
+
+function Features(): ReactElement {
+  return (
+    <section className="landing-section landing-features" aria-label="What Proton does">
+      {FEATURES.map((feature, index) => (
+        <div className={cx('landing-feature', index % 2 === 1 && 'flip')} key={feature.id}>
+          <div className="landing-feature-copy">
+            <h2 className="landing-heading">{feature.title}</h2>
+            <p className="landing-sub">{feature.lede}</p>
+            <ul className="landing-modules">
+              {feature.modules.map((moduleId) => {
+                const meta = MODULE_BY_ID.get(moduleId);
+                if (!meta) return null;
+
+                return (
+                  <li key={moduleId}>
+                    <Icon name={meta.icon} size={15} />
+                    {meta.label}
+                  </li>
+                );
+              })}
+            </ul>
           </div>
-
-          <QuestionList questions={featured()} />
+          <figure className="landing-feature-figure">
+            <feature.shot />
+            <figcaption className="landing-caption">Illustrative example.</figcaption>
+          </figure>
         </div>
-      </section>
-
-      <section className="closer">
-        <div className="closer-inner">
-          <p className="closer-line">
-            {capitalised(MODULES_IN_WORDS)} modules, none of them on until you say so. One consent
-            screen in Discord, then the dashboard.
-          </p>
-          <a className="button button-discord" href="/invite">
-            <Icon name="discord-logo" weight="fill" />
-            Add to Discord
-          </a>
-        </div>
-      </section>
-    </SitePage>
-  );
-}
-
-function browse(to: '/commands' | '/faq', label: string): ReactElement {
-  return (
-    <Link to={to} className="button button-quiet">
-      {label}
-      <Icon name="arrow-right" />
-    </Link>
-  );
-}
-
-function ModuleArt({ id }: { id: string }): ReactElement | null {
-  const art = moduleArt(id);
-
-  if (!art) return null;
-
-  return (
-    <img
-      className="show-art"
-      src={art}
-      alt=""
-      width={32}
-      height={32}
-      loading="lazy"
-      decoding="async"
-    />
-  );
-}
-
-function Points({ points }: { points: readonly string[] }): ReactElement {
-  return (
-    <ul className="show-list">
-      {points.map((point) => (
-        <li key={point}>
-          <Icon name="check-circle" weight="fill" />
-          <span>{point}</span>
-        </li>
       ))}
-    </ul>
+    </section>
   );
 }
 
-const MODERATION_POINTS: readonly string[] = [
-  'The case id is stamped on the reply, and the case log takes it as a filter.',
-  'An unban or a lifted timeout lands back on the case it undoes, rather than rewriting it.',
-  'Actions Proton takes on its own are written down the same way.',
-];
-
-const TICKET_POINTS: readonly string[] = [
-  'Each ticket type carries its own staff roles, intake form and claim rules.',
-  'Transcripts are off until you turn them on, and kept for 30 days after that.',
-  'Claiming, transferring and closing are all recorded.',
-];
-
-const LOG_POINTS: readonly string[] = [
-  'Who did it is resolved and printed, not left as an id to look up.',
-  `Message edits and deletions are opt-in, and archived for ${MESSAGE_LOG_RETENTION_DAYS} days.`,
-  'Proton’s own actions are logged beside Discord’s.',
-];
-
-const HONESTY_POINTS: readonly string[] = [
-  'A module that cannot run is never greyed out — its switch stays live.',
-  'Every state colour has a word beside it saying the same thing.',
-  'Through a Discord outage Proton queues the work rather than dropping it.',
-];
-
-function Showcases(): ReactElement {
+function Everything(): ReactElement {
   return (
-    <section className="features" id="features">
-      <div className="features-head">
-        <div>
-          <h2 className="lp-title">Three of the {MODULES_IN_WORDS}, up close.</h2>
-        </div>
-        <p className="features-lede">
-          Switch on the ones your server needs. The rest stay off, and stay out of the way.
+    <section className="landing-section" aria-labelledby="modules">
+      <h2 className="landing-heading landing-modules-heading" id="modules">
+        All {MODULES.length} modules in one bot
+      </h2>
+      <p className="landing-sub">Each one starts off. Switch on what your server needs.</p>
+
+      <div className="landing-index">
+        {NAV_GROUPS.map((group) => {
+          const members = MODULES.filter((meta) => meta.group === group.id);
+          if (members.length === 0) return null;
+
+          return (
+            <div className="landing-index-group" key={group.id}>
+              <h3 className="landing-index-label">{group.label}</h3>
+              <ul>
+                {members.map((meta) => (
+                  <li className="landing-index-item" key={meta.id}>
+                    <Icon name={meta.icon} size={16} className="landing-index-icon" />
+                    <span>
+                      <span className="landing-index-name">{meta.label}</span>
+                      <span className="landing-index-desc">{meta.description}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ signedIn }: { signedIn: boolean | null }): ReactElement {
+  return (
+    <section className="landing-section landing-split" aria-labelledby="landing-dashboard">
+      <div className="landing-feature-copy">
+        <h2 className="landing-heading" id="landing-dashboard">
+          Set it all up in one dashboard
+        </h2>
+        <p className="landing-sub">
+          Every module is set up in the same dashboard, with one save bar and one case log. When
+          Proton can’t act, the page names the missing permission or intent.
         </p>
-      </div>
-
-      <div className="show-rows">
-        <section className="show show-caption" id="moderation">
-          <figure className="scene">
-            <ModerationScene />
-            <figcaption>
-              What /ban posts in the channel it was run in. The case id in the subtext is the one
-              the log keeps.
-            </figcaption>
-          </figure>
-
-          <div className="show-copy">
-            <ModuleArt id="moderation" />
-            <h3 className="show-title">Read a ban back six months later</h3>
-            <p className="show-lede">
-              A ban is not a message that scrolls away. Proton writes one numbered case per action —
-              the moderator, the target, the reason they typed and the time — and keeps it.
-            </p>
-            <Points points={MODERATION_POINTS} />
-          </div>
-        </section>
-
-        <section className="show show-pair" id="tickets">
-          <div className="show-copy">
-            <ModuleArt id="tickets" />
-            <h3 className="show-title">Support that stays private, and gets written down</h3>
-            <p className="show-lede">
-              Post a panel and a member opens a ticket by pressing it: a channel only they and your
-              support team can read. You set the panel up here, they press it in Discord.
-            </p>
-            <Points points={TICKET_POINTS} />
-          </div>
-
-          <div className="show-pair-figures">
-            <TicketPanelFigure />
-            <figure className="scene">
-              <TicketPanelScene />
-              <figcaption>
-                What lands in Discord. Proton composes it from the settings beside it, so you know
-                what the panel says before anybody presses it.
-              </figcaption>
-            </figure>
-          </div>
-        </section>
-
-        <section className="show show-stack" id="logs">
-          <div className="show-copy">
-            <ModuleArt id="serverlog" />
-            <h3 className="show-title">Every audit event, in the channel you choose</h3>
-            <p className="show-lede">
-              Discord’s own audit log, read and printed as it happens: {inWords(LOG_EVENT_COUNT)}{' '}
-              events across {inWords(LOG_CATEGORY_COUNT)} categories, and any one of them can go
-              somewhere of its own.
-            </p>
-          </div>
-
-          <figure className="scene">
-            <ServerLogScene />
-            <figcaption>
-              One of the {LOG_EVENT_COUNT}, as it arrives in the channel its category routes to.
-            </figcaption>
-          </figure>
-
-          <Points points={LOG_POINTS} />
-        </section>
-      </div>
-
-      <section className="honesty" id="honesty">
-        <div className="honesty-copy">
-          <h3 className="honesty-title">When it cannot act, it says which permission is missing</h3>
-          <p className="honesty-lede">
-            Discord will not tell a bot what it is allowed to do, so Proton checks first — and when
-            the answer is no it says so in the channel, naming the permission under the name your
-            own server settings use.
-          </p>
-          <ul className="honesty-points">
-            {HONESTY_POINTS.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-          <div className="honesty-cta">{browse('/faq', 'How it handles failure')}</div>
-        </div>
-
-        <figure className="scene">
-          <RefusalScene />
-          <figcaption>What Proton replies instead of going quiet</figcaption>
-        </figure>
-      </section>
-    </section>
-  );
-}
-
-function ModulePages(): ReactElement {
-  return (
-    <section className="preview" id="dashboard">
-      <div className="preview-head">
-        <div>
-          <h2 className="lp-title">Every module gets its own page.</h2>
-          <p className="preview-lede">
-            Sign in with Discord, pick a server, and a module opens on controls built for that
-            module: a routing table for logs, a ladder of consequences for warnings, a panel builder
-            for tickets. Settings live here; the buttons and commands live in Discord.
-          </p>
-        </div>
-
-        <Link to="/dashboard" className="button button-quiet">
+        <Link to={signedIn === true ? '/dashboard' : '/signin'} className="landing-link">
           Open the dashboard
-          <Icon name="arrow-right" />
+          <Icon name="caret-right" size={13} weight="fill" />
         </Link>
       </div>
 
-      <div className="preview-figure">
-        <LogRoutingFigure />
-      </div>
+      <figure className="landing-dash-figure">
+        <DashboardShot />
+        <figcaption className="landing-caption">Illustrative settings.</figcaption>
+      </figure>
     </section>
   );
 }
 
-function Commands(): ReactElement {
+const STORED: readonly { title: string; body: string }[] = [
+  {
+    title: 'Logging is opt-in',
+    body: 'Message logging and ticket transcripts stay off until you switch them on.',
+  },
+  {
+    title: 'Deleted after 30 days',
+    body: 'Stored message content is deleted after 30 days.',
+  },
+  {
+    title: 'Reading isn’t storing',
+    body: 'Automod, the phishing filter and Honeypot read messages to decide whether to act. Reading a message doesn’t store it.',
+  },
+];
+
+function Stored(): ReactElement {
   return (
-    <section className="strip" id="commands">
-      <div className="strip-head">
-        <h2 className="lp-title">{COMMAND_COUNT} commands, every one documented</h2>
-        <Link to="/commands" className="button button-quiet">
-          Browse the commands
-          <Icon name="arrow-right" />
-        </Link>
+    <section className="landing-section landing-split" aria-labelledby="landing-stored">
+      <div className="landing-feature-copy">
+        <h2 className="landing-heading" id="landing-stored">
+          Message content is only kept if you switch it on
+        </h2>
+        <div className="landing-stored-links">
+          <Link to="/privacy" className="landing-link">
+            What Proton stores
+            <Icon name="caret-right" size={13} weight="fill" />
+          </Link>
+          <Link to="/faq" className="landing-link">
+            Common questions
+            <Icon name="caret-right" size={13} weight="fill" />
+          </Link>
+        </div>
       </div>
 
-      <ul className="cmd-list strip-list">
-        {landingCommands().map((command) => (
-          <li className="cmd-row" key={command.usage}>
-            <code className="cmd-usage">
-              <b>{command.usage}</b>
-              {command.args.map((arg) => (
-                <span key={arg.name} className={arg.required ? 'cmd-arg cmd-arg-req' : 'cmd-arg'}>
-                  {arg.required ? `<${arg.name}>` : `[${arg.name}]`}
-                </span>
-              ))}
-            </code>
-            <p className="cmd-desc">{command.description}</p>
-            {command.permission ? (
-              <span className="chip cmd-perm">
-                <Icon name="lock-key" />
-                {command.permission}
-              </span>
-            ) : null}
+      <ul className="landing-stored">
+        {STORED.map((item) => (
+          <li key={item.title}>
+            <span className="landing-stored-title">{item.title}</span>
+            <span className="landing-stored-body">{item.body}</span>
           </li>
         ))}
       </ul>
-
-      <p className="strip-note">
-        Ten of {COMMAND_COUNT}. Required arguments are written <code>&lt;like this&gt;</code> and
-        optional ones <code>[like this]</code>, the way Discord shows them while you type. A command
-        a role may not run is refused with the reason, not ignored.
-      </p>
     </section>
   );
 }
 
-function Replaces(): ReactElement {
+function Landing(): ReactElement {
+  const signedIn = useSignedIn();
+  // State, not the flag: re-reading it on a later render would cut the entrance off mid-flight.
+  const [enter] = useState(() => !heroEntered);
+  const [live, setLive] = useState(false);
+  const shot = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    heroEntered = true;
+
+    const target = shot.current?.querySelector('.landing-window-main .landing-messages');
+    if (!enter || !target) return;
+
+    const rect = target.getBoundingClientRect();
+    const shown = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
+    if (shown / rect.height >= 0.6 || typeof IntersectionObserver === 'undefined') {
+      setLive(true);
+      return;
+    }
+
+    // The ratio, not isIntersecting: the first callback reports any overlap, which would start the
+    // sequence while most of the messages are still below the fold.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.intersectionRatio >= 0.6)) return;
+        setLive(true);
+        observer.disconnect();
+      },
+      { threshold: 0.6 },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [enter]);
+
   return (
-    <section className="compare" id="compare">
-      <header className="compare-head">
-        <h2 className="lp-title" id="compare-title">
-          What you would otherwise install
-        </h2>
-        <p className="compare-lede">
-          Servers reach this list one bot at a time. All {MODULES_IN_WORDS} of Proton’s modules are
-          filed below under the bot you would otherwise add for that job — one install, one consent
-          screen, one record.
-        </p>
-      </header>
+    <SitePage>
+      <div className={cx('landing', enter && 'landing-enter', live && 'landing-live')}>
+        <noscript>
+          <style>
+            {
+              '.landing-enter:not(.landing-live) .landing-window-main::before, .landing-enter:not(.landing-live) .landing-shot .landing-msg, .landing-enter:not(.landing-live) .landing-shot .landing-msg-proton::before { animation-play-state: running; }'
+            }
+          </style>
+        </noscript>
+        <section className="landing-hero">
+          <h1 className="landing-title">One bot for the whole server.</h1>
+          <p className="landing-lede">
+            Moderation, security and community tools in {MODULES.length} modules, set up from one
+            dashboard. Nothing runs until you switch it on.
+          </p>
+          <Actions signedIn={signedIn} />
+          <Link to="/commands" className="landing-link landing-hero-link">
+            Browse {COMMAND_SET.length} commands
+            <Icon name="caret-right" size={13} weight="fill" />
+          </Link>
+          <HeroShot figureRef={shot} />
+        </section>
 
-      <div className="compare-panel">
-        <table className="compare-table" aria-labelledby="compare-title">
-          <thead>
-            <tr>
-              <th scope="col">Instead of</th>
-              <th scope="col">
-                <span className="compare-brand">
-                  <ProtonMark size={18} />
-                  Proton
-                </span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {REPLACES.map((row) => (
-              <tr key={row.job}>
-                <th scope="row">
-                  {row.job}
-                  <span className="compare-note">{row.note}</span>
-                </th>
-                <td data-label="Proton">
-                  <span className="compare-modules">{moduleNames(row.modules).join(', ')}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Features />
+        <Everything />
+        <Dashboard signedIn={signedIn} />
+        <Stored />
+
+        <section className="landing-close" aria-labelledby="landing-close">
+          <h2 className="landing-heading" id="landing-close">
+            Add Proton to your server
+          </h2>
+          <p className="landing-sub">Invite it, open the dashboard and switch on what you need.</p>
+          <Actions signedIn={signedIn} />
+        </section>
       </div>
-
-      <p className="compare-plans">
-        Three plan tiers — free, plus and pro — set the ceiling on how many entries some of those
-        lists hold: ticket panels, tags, counters, saved templates. No module is gated by tier, and
-        no prices are published yet.{' '}
-        <Link to="/faq" hash="plans">
-          What the tiers cap
-        </Link>
-      </p>
-    </section>
+    </SitePage>
   );
 }

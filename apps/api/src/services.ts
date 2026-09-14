@@ -11,6 +11,14 @@ export { CaseQueryService } from './cases/service.ts';
 export { loadEnv } from './env.ts';
 export { LeaderboardService } from './leveling/service.ts';
 export {
+  auditTrailWriter,
+  type EndXpEventInput,
+  type StartXpEventInput,
+  XpEventError,
+  XpEventService,
+  xpEventStartBodySchema,
+} from './leveling/xp-events.ts';
+export {
   BlockedMemberError,
   BlockedMemberService,
   type LiftInput,

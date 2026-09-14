@@ -1,172 +1,96 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { zodValidator } from '@tanstack/zod-adapter';
-import type { ReactElement } from 'react';
-import { useId } from 'react';
-import { z } from 'zod';
-import { Icon } from '../components/shell/icon.tsx';
-import { CATEGORY_LABELS, CATEGORY_ORDER } from '../components/shell/module-meta.ts';
-import { blurbFor, COMMAND_COUNT } from '../components/site/catalogue.ts';
+import { createFileRoute } from '@tanstack/react-router';
+import { type ReactElement, useMemo, useState } from 'react';
 import { SitePage } from '../components/site/chrome.tsx';
-import { groupCommands } from '../components/site/commands.ts';
+import { COMMAND_SET } from '../components/site/command-set.gen.ts';
+import { SearchField } from '../components/ui/controls.tsx';
+import { EmptyState } from '../components/ui/feedback.tsx';
+import { Icon } from '../components/ui/icon.tsx';
 import { documentTitle } from '../lib/document-title.ts';
-
-const commandSearchSchema = z.object({
-  q: z.string().optional(),
-  category: z.enum([...CATEGORY_ORDER, 'all']).optional(),
-});
+import { MODULE_BY_ID } from '../lib/modules/catalogue.ts';
 
 export const Route = createFileRoute('/commands')({
-  validateSearch: zodValidator(commandSearchSchema),
-  head: () => ({
-    meta: [
-      { title: documentTitle('Commands') },
-      {
-        name: 'description',
-        content: `Every one of Proton's ${COMMAND_COUNT} slash commands, what each one does, the arguments it takes and the Discord permission it needs.`,
-      },
-    ],
-  }),
-  component: CommandsPage,
+  head: () => ({ meta: [{ title: documentTitle('Commands') }] }),
+  component: Commands,
 });
 
-function CommandsPage(): ReactElement {
-  const { q = '', category = 'all' } = Route.useSearch();
-  const navigate = Route.useNavigate();
-  const searchId = useId();
+function Commands(): ReactElement {
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
 
-  const groups = groupCommands(q, category);
-  const shown = groups.reduce((total, group) => total + group.commands.length, 0);
+  const groups = useMemo(() => {
+    const matched = COMMAND_SET.filter(
+      (command) =>
+        needle === '' ||
+        command.usage.toLowerCase().includes(needle) ||
+        command.description.toLowerCase().includes(needle) ||
+        (MODULE_BY_ID.get(command.module)?.label ?? command.module).toLowerCase().includes(needle),
+    );
 
-  // replace, not push: a back button that walks a search box back one character at a time is
-  // worse than no history at all, and the URL still carries the filter so it can be sent.
-  function setSearch(next: { q?: string; category?: typeof category }): void {
-    void navigate({
-      search: (prev) => ({ ...prev, ...next }),
-      replace: true,
-      resetScroll: false,
-    });
-  }
+    const byModule = new Map<string, typeof matched>();
+    for (const command of matched) {
+      byModule.set(command.module, [...(byModule.get(command.module) ?? []), command]);
+    }
+
+    return [...byModule.entries()].sort((a, b) =>
+      (MODULE_BY_ID.get(a[0])?.label ?? a[0]).localeCompare(MODULE_BY_ID.get(b[0])?.label ?? b[0]),
+    );
+  }, [needle]);
 
   return (
     <SitePage>
-      <div className="doc-page doc-page-wide">
-        <header className="doc-head">
-          <h1 className="doc-title">Every command Proton registers.</h1>
-          <p className="doc-lede">
-            All {COMMAND_COUNT} of them, with the arguments each one takes and the Discord
-            permission it asks for. Required arguments are written <code>&lt;like this&gt;</code>{' '}
-            and optional ones <code>[like this]</code>, the way Discord shows them while you type.
-          </p>
-        </header>
+      <div className="site-section" style={{ paddingTop: 56, paddingBottom: 72 }}>
+        <h1 className="site-heading">Commands</h1>
+        <p className="site-lede">
+          Every slash command Proton registers, generated from the modules themselves. A command
+          only appears in your server once its module is switched on.
+        </p>
 
-        <div className="cmd-bar">
-          <div className="cmd-search">
-            <Icon name="magnifying-glass" />
-            <input
-              id={searchId}
-              type="search"
-              value={q}
-              placeholder="Search commands"
-              aria-label="Search commands"
-              onChange={(event) => setSearch({ q: event.target.value })}
-            />
-          </div>
-
-          {/* Links, not buttons: a filtered view of a reference page is a place, and this way it
-              can be opened in a tab and sent to somebody. */}
-          <nav className="cmd-filters" aria-label="Filter by category">
-            <Link
-              to="/commands"
-              search={(prev) => ({ ...prev, category: 'all' as const })}
-              replace
-              resetScroll={false}
-              className="cmd-filter"
-              aria-current={category === 'all' ? 'true' : undefined}
-            >
-              All
-            </Link>
-            {CATEGORY_ORDER.map((key) => (
-              <Link
-                key={key}
-                to="/commands"
-                search={(prev) => ({ ...prev, category: key })}
-                replace
-                resetScroll={false}
-                className="cmd-filter"
-                aria-current={category === key ? 'true' : undefined}
-              >
-                {CATEGORY_LABELS[key]}
-              </Link>
-            ))}
-          </nav>
+        <div style={{ margin: '24px 0 20px', maxWidth: 360 }}>
+          <SearchField
+            value={query}
+            onChange={setQuery}
+            placeholder={`Search ${COMMAND_SET.length} commands…`}
+          />
         </div>
 
-        <p className="cmd-count" role="status">
-          {shown === COMMAND_COUNT
-            ? `${COMMAND_COUNT} commands`
-            : `${shown} of ${COMMAND_COUNT} commands`}
-        </p>
-
         {groups.length === 0 ? (
-          <div className="card empty-state">
-            <span className="tile">
-              <Icon name="magnifying-glass" />
-            </span>
-            <span className="empty-state-title">No command matches that.</span>
-            <p className="status">
-              Try the name of the thing you want to do — <code>ban</code>, <code>ticket</code>,{' '}
-              <code>xp</code> — or clear the category filter.
-            </p>
-          </div>
-        ) : (
-          <div className="cmd-groups">
-            {groups.map((group) => (
-              <section className="cmd-group" id={group.module.id} key={group.module.id}>
-                <div className="cmd-group-head">
-                  <i>
-                    <Icon name={group.module.icon} />
-                  </i>
-                  <div>
-                    <h2 className="cmd-group-title">{group.module.name}</h2>
-                    <p className="cmd-group-blurb">{blurbFor(group.module)}</p>
-                  </div>
-                  <span className="mono num cmd-group-count">{group.commands.length}</span>
-                </div>
+          <EmptyState icon="magnifying-glass" title="No command matches that" inset />
+        ) : null}
 
-                <ul className="cmd-list">
-                  {group.commands.map((command) => (
-                    <li className="cmd-row" key={command.usage}>
-                      <code className="cmd-usage">
-                        <b>{command.usage}</b>
+        {groups.map(([moduleId, commands]) => {
+          const meta = MODULE_BY_ID.get(moduleId);
+
+          return (
+            <section key={moduleId} className="section">
+              <h2 className="section-label">
+                {meta ? <Icon name={meta.icon} size={13} /> : null}
+                {meta?.label ?? moduleId}
+              </h2>
+              <div className="rows">
+                {commands.map((command) => (
+                  <div className="row" key={command.usage}>
+                    <div className="row-main">
+                      <div className="row-title mono">
+                        {command.usage}
                         {command.args.map((arg) => (
-                          <span
-                            key={arg.name}
-                            className={arg.required ? 'cmd-arg cmd-arg-req' : 'cmd-arg'}
-                          >
-                            {arg.required ? `<${arg.name}>` : `[${arg.name}]`}
+                          <span key={arg.name} className="text-muted">
+                            {arg.required ? ` <${arg.name}>` : ` [${arg.name}]`}
                           </span>
                         ))}
-                      </code>
-                      <p className="cmd-desc">{command.description}</p>
-                      {command.permission ? (
-                        <span className="chip cmd-perm">
-                          <Icon name="lock-key" />
-                          {command.permission}
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
-
-        <p className="cmd-foot">
-          A command a role may not run is refused with the reason, not ignored. Which roles may run
-          what is set per server in the Permissions module, on top of the Discord permission listed
-          here.
-        </p>
+                      </div>
+                      <p className="row-description">{command.description}</p>
+                    </div>
+                    {command.permission !== null ? (
+                      <div className="row-control">
+                        <span className="badge badge-neutral">{command.permission}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
     </SitePage>
   );

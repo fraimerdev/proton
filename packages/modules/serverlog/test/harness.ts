@@ -15,6 +15,7 @@ import { type DispatchName, dispatch } from '@proton/fixtures';
 import { normalise } from '@proton/gateway/normaliser';
 import { type ServerlogConfig, serverlogConfigSchema } from '../src/config.ts';
 import { emojiSet } from '../src/emoji.ts';
+import type { ScreeningStore } from '../src/screening.ts';
 
 export const GUILD = '900000000000000001';
 export const LOG_CHANNEL = '500000000000000099';
@@ -69,6 +70,22 @@ export class MemoryCorrelationStore implements CorrelationStore {
     const value = this.pendings.get(key) ?? null;
     this.pendings.delete(key);
     return value;
+  }
+}
+
+export class MemoryScreeningStore implements ScreeningStore {
+  readonly marks = new Map<string, string>();
+
+  async mark(guildId: string, userId: string, joinedAt: string): Promise<void> {
+    this.marks.set(`${guildId}:${userId}`, joinedAt);
+  }
+
+  async read(guildId: string, userId: string): Promise<string | null> {
+    return this.marks.get(`${guildId}:${userId}`) ?? null;
+  }
+
+  async clear(guildId: string, userId: string): Promise<void> {
+    this.marks.delete(`${guildId}:${userId}`);
   }
 }
 

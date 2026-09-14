@@ -1,0 +1,108 @@
+/* logging page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.logging-ledger {
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.logging-store {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 14px 16px;
+}
+
+.logging-store-rail {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 132px;
+}
+
+.logging-store-name {
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
+}
+
+.logging-store-figure {
+  color: var(--highlight);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.logging-store-figure.empty {
+  color: var(--text-muted);
+  font-weight: var(--weight-regular);
+}
+
+.logging-store-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.logging-store-lede {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  max-width: 70ch;
+}
+
+.logging-outcomes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.logging-outcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.45;
+  max-width: 70ch;
+}
+
+.logging-outcome.muted {
+  color: var(--text-muted);
+}
+
+.logging-outcome > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-disabled);
+}
+
+.logging-outcome.kept > svg {
+  color: var(--highlight);
+}
+
+.logging-ledger-foot {
+  margin: 0;
+  padding: 10px 16px;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .logging-store {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .logging-store-rail {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+    width: auto;
+  }
+}

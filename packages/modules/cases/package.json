@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./config": "./src/config.ts",
     "./store": "./src/history-store.ts"
   },
   "scripts": {

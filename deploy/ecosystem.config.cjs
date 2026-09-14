@@ -2,8 +2,8 @@
 const ROOT = '/srv/proton';
 const BUN = '/home/proton/.bun/bin/bun';
 
-// No entry for the gateway on purpose: Discord caps session starts at 1000/day and every gateway
-// boot spends one, so it must never be restarted by a threshold nobody is watching.
+// No entry for the gateway on purpose: a restart pauses event intake, and one that cannot resume
+// spends one of Discord's 1000 daily session starts, so no unwatched threshold may restart it.
 const MEMORY_LIMIT = {
   'rest-proxy': '400M',
   api: '600M',

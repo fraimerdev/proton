@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { Permissions } from '@proton/core';
+import { SAMPLE_NOW } from '@proton/core/placeholders';
 import {
   blankPanel,
   blankType,
   liftTicketsConfig,
   panelFor,
-  renderChannelName,
-  renderOpeningMessage,
   sanitiseChannelName,
   staffRolesFor,
   ticketPanelSchema,
@@ -34,6 +33,7 @@ import {
   withoutParticipant,
   withParticipant,
 } from '../src/overwrites.ts';
+import { renderTicketChannelName, renderTicketWelcome } from '../src/placeholders.ts';
 import { autoCloseAt, autoDeleteAt, closeRequestAt, warnAt } from '../src/schedule.ts';
 import type { Ticket } from '../src/store.ts';
 import { GUILD, HELPER, MEMBER, PANEL_CHANNEL, SUPPORT_ROLE, TYPE } from './harness.ts';
@@ -79,15 +79,27 @@ function ticket(overrides: Partial<Ticket> = {}): Ticket {
   };
 }
 
+function channelName(pattern: string, number: number, opener: string, typeName = ''): string {
+  return renderTicketChannelName(
+    pattern,
+    { number, typeName, ownerId: MEMBER, legacyUserName: opener, server: null },
+    SAMPLE_NOW,
+  );
+}
+
 describe('channel naming', () => {
   test('replaces every placeholder, so a pattern using all three is fully rendered', () => {
-    expect(renderChannelName('{type}-{number}-{user}', 7, 'Fraimer', 'Billing')).toBe(
+    expect(channelName('{type}-{number}-{user}', 7, 'Fraimer', 'Billing')).toBe(
       'billing-7-fraimer',
     );
   });
 
   test('collapses punctuation a member controls, so a nickname cannot break the channel name', () => {
-    expect(renderChannelName('ticket-{user}', 1, 'a!!!b   c')).toBe('ticket-a-b-c');
+    expect(channelName('ticket-{user}', 1, 'a!!!b   c')).toBe('ticket-a-b-c');
+  });
+
+  test('changed with placeholders: a name of {type} is written once, where split-and-join gave ticket-billing', () => {
+    expect(channelName('ticket-{user}', 3, '{type}', 'Billing')).toBe('ticket-type');
   });
 
   test('falls back to a real name when a pattern sanitises to nothing, which Discord refuses', () => {
@@ -96,13 +108,17 @@ describe('channel naming', () => {
   });
 
   test('trims to Discord’s hundred-character ceiling rather than being refused at the API', () => {
-    expect(renderChannelName(`${'a'.repeat(200)}-{number}`, 1, 'x').length).toBeLessThanOrEqual(
-      100,
-    );
+    expect(channelName(`${'a'.repeat(200)}-{number}`, 1, 'x').length).toBeLessThanOrEqual(100);
   });
 
   test('renders the opener as a real mention, so the welcome message pings them', () => {
-    expect(renderOpeningMessage('hello {user}', MEMBER)).toBe(`hello <@${MEMBER}>`);
+    expect(
+      renderTicketWelcome(
+        'hello {user}',
+        { ticket: null, typeName: '', ownerId: MEMBER, server: null, bot: null },
+        SAMPLE_NOW,
+      ),
+    ).toBe(`hello <@${MEMBER}>`);
   });
 });
 

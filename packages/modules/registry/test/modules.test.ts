@@ -39,6 +39,7 @@ const SHIPPED_MODULE_IDS = [
   'counters',
   'suggestions',
   'branding',
+  'afk',
 ];
 
 describe('shipped module registry', () => {
@@ -117,6 +118,7 @@ describe('shipped module registry', () => {
       // Branding widened the consent screen. Every guild installed before it keeps the older
       // grant, so this is the line that says the invite link itself has to change.
       ['ChangeNickname', Permissions.ChangeNickname],
+      ['ManageNicknames', Permissions.ManageNicknames],
     ];
 
     expect(named.filter(([, bit]) => (invited & bit) === 0n).map(([name]) => name)).toEqual([]);

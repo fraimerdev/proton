@@ -16,7 +16,7 @@ export const backupConfigSchema = z.object({
     .default(10)
     .register(protonFields, {
       label: 'Snapshots to keep',
-      description: 'A new snapshot deletes the oldest beyond this count',
+      description: 'Each new snapshot deletes the oldest ones beyond this number.',
     }),
 });
 

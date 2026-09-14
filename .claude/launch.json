@@ -5,6 +5,16 @@
       "name": "dashboard",
       "url": "http://localhost:3000",
       "port": 3000
+    },
+    {
+      "name": "api",
+      "url": "http://localhost:3002",
+      "port": 3002
+    },
+    {
+      "name": "rest-proxy",
+      "url": "http://localhost:3001",
+      "port": 3001
     }
   ]
 }

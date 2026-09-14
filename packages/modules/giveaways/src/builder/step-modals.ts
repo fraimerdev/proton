@@ -1,4 +1,5 @@
 import { encodeCustomId, type Modal, tryParseDuration } from '@proton/core';
+import { validateTemplate } from '@proton/core/placeholders';
 import { ComponentType, TextInputStyle } from 'discord-api-types/v10';
 import {
   DESCRIPTION_MAX,
@@ -9,6 +10,7 @@ import {
   WINNER_COUNT_MAX,
 } from '../config.ts';
 import { ENTRY_BUTTON_STYLES } from '../message.ts';
+import { GIVEAWAY_WIN_SURFACE } from '../placeholders.ts';
 import { formatColour, parseColour } from './modal.ts';
 import type { BuilderStep, GiveawayDraft } from './state.ts';
 
@@ -145,7 +147,8 @@ export function stepModal(step: BuilderStep, draft: GiveawayDraft): ModalResult 
             }),
             text('winMessage', 'Message sent to winners', {
               value: draft.winMessage,
-              description: 'Leave empty for the default.',
+              description:
+                'Empty for the default. Try {giveaway.prize} or {user.mention}; {{ is a literal {.',
               maxLength: 1000,
               paragraph: true,
             }),
@@ -272,8 +275,26 @@ export function applyStepModal(
       draft.claimWindowSeconds = null;
     }
 
+    const winMessage = optional(fields.winMessage);
+    if (winMessage !== null) {
+      const result = validateTemplate(winMessage, {
+        registry: GIVEAWAY_WIN_SURFACE.registry,
+        field: 'discord_text',
+        event: GIVEAWAY_WIN_SURFACE.event,
+        audience: GIVEAWAY_WIN_SURFACE.audience,
+      });
+      const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+
+      if (errors.length > 0) {
+        return {
+          ok: false,
+          humanReason: `The winner message was not saved: ${errors.map((error) => error.message).join(' ')}`,
+        };
+      }
+    }
+
     draft.winnerCount = winners;
-    draft.winMessage = optional(fields.winMessage);
+    draft.winMessage = winMessage;
 
     return { ok: true };
   }

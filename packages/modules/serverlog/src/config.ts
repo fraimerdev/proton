@@ -6,6 +6,8 @@ export const SERVERLOG_SCHEMA_VERSION = 1;
 
 export const LOG_TEXT_CHANNEL_TYPES = [0, 5];
 
+export const IGNORABLE_CHANNEL_TYPES = [0, 2, 4, 5, 10, 11, 12, 13, 15, 16];
+
 const CHANNEL_REF = /^(\d{17,20})?$/;
 
 // A plain string with a permissive pattern, not a union with z.literal(''): the v1 form generator
@@ -72,7 +74,7 @@ export const serverlogConfigSchema = z.object({
   defaultChannelId: channelRef().register(protonFields, {
     field: 'channel-id',
     label: 'Default log channel',
-    description: 'Category and per-event channels override this',
+    description: 'Used for events without a category or event channel.',
     channelTypes: LOG_TEXT_CHANNEL_TYPES,
   }),
 
@@ -120,7 +122,7 @@ export const serverlogConfigSchema = z.object({
     .max(100)
     .default([])
     .register(protonFields, {
-      label: 'Ignored user ids',
+      label: 'Ignored user IDs',
     }),
 
   ignoreBots: z.boolean().default(false).register(protonFields, {

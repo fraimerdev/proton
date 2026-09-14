@@ -13,6 +13,8 @@ import {
 import type { DbHandle, GuildRuleStore } from '@proton/db';
 import { auditTrail, guildModules, guilds } from '@proton/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { assertWriteRefinements } from './refine-write.ts';
+import { assertTemplatesValid } from './templates.ts';
 
 export interface ModuleConfigView {
   moduleId: string;
@@ -85,8 +87,12 @@ export function overLimit(
 // A module that has renamed a config key lifts the old shape here, before Zod sees it and strips
 // the key it no longer knows. Applied on read and on write, so a caller posting the old shape is
 // migrated rather than silently emptied.
-function lift(manifest: { liftStoredConfig?(raw: unknown): unknown }, raw: unknown): unknown {
-  return manifest.liftStoredConfig ? manifest.liftStoredConfig(raw) : raw;
+function lift(
+  manifest: { liftStoredConfig?(raw: unknown, current?: Record<string, unknown>): unknown },
+  raw: unknown,
+  current?: Record<string, unknown>,
+): unknown {
+  return manifest.liftStoredConfig ? manifest.liftStoredConfig(raw, current) : raw;
 }
 
 /**
@@ -302,6 +308,28 @@ export class ModuleConfigService {
     return { auditId, name: found.name };
   }
 
+  /**
+   * Closing an anti-nuke maintenance window early re-arms the breaker, which is exactly the kind
+   * of security decision the audit trail exists for. Recorded here rather than in the route
+   * because this service is the one that owns the database handle.
+   */
+  async recordMaintenanceEnded(
+    guildId: string,
+    actorId: string,
+    before: { enabledBy: string; reason: string | null; expiresAt: number } | null,
+  ): Promise<void> {
+    await this.#db.db.insert(auditTrail).values({
+      id: newId(),
+      guildId,
+      actorId,
+      source: 'dashboard',
+      action: 'module.antinuke.maintenance.end',
+      before: before === null ? null : { ...before },
+      after: null,
+      ipHash: null,
+    });
+  }
+
   async update(input: UpdateModuleConfigInput): Promise<{
     before: ModuleConfigView;
     after: ModuleConfigView;
@@ -318,7 +346,7 @@ export class ModuleConfigService {
         ? (input.config ?? before.config)
         : { ...(input.config ?? before.config), enabled: input.enabled };
 
-    const parsed = manifest.configSchema.safeParse(lift(manifest, nextConfigRaw));
+    const parsed = manifest.configSchema.safeParse(lift(manifest, nextConfigRaw, before.config));
     if (!parsed.success) {
       throw new ModuleConfigError(
         'invalid_config',
@@ -330,6 +358,8 @@ export class ModuleConfigService {
 
     const nextConfig = parsed.data as Record<string, unknown>;
 
+    assertWriteRefinements(manifest, nextConfig, before.config);
+
     const exceeded = overLimit(manifest.configLimits ?? [], nextConfig, before.tier);
     if (exceeded) {
       throw new ModuleConfigError(
@@ -337,6 +367,8 @@ export class ModuleConfigService {
         `Those ${manifest.name} settings were not saved: ${exceeded}`,
       );
     }
+
+    assertTemplatesValid(manifest, nextConfig, before.config);
 
     const nextEnabled = input.enabled ?? before.enabled;
 

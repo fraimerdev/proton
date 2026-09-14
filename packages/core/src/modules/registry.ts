@@ -30,7 +30,11 @@ export interface RegistryEnvironment {
 const TIER_RANK: Record<'free' | 'plus' | 'pro', number> = { free: 0, plus: 1, pro: 2 };
 
 const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
-  send: Permissions.SendPolls | Permissions.EmbedLinks | Permissions.AttachFiles,
+  send:
+    Permissions.SendPolls |
+    Permissions.EmbedLinks |
+    Permissions.AttachFiles |
+    Permissions.ReadMessageHistory,
   edit_message: 0n,
   delete_message: 0n,
   add_reaction: 0n,
@@ -51,13 +55,14 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   unlock: 0n,
   create_channel: Permissions.ManageRoles,
   create_role: 0n,
-  edit_role: 0n,
+  delete_role: 0n,
   delete_channel: 0n,
   edit_channel: Permissions.ManageRoles,
   set_channel_overwrite: 0n,
   delete_channel_overwrite: 0n,
   create_thread: Permissions.CreatePublicThreads | Permissions.CreatePrivateThreads,
   move_member: 0n,
+  set_member_nickname: 0n,
   end_poll: 0n,
   pin_message: 0n,
   automod_rule_create: 0n,
@@ -67,8 +72,7 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   create_dm: 0n,
   set_bot_nickname: 0n,
   set_bot_profile: 0n,
-  add_bot_role: 0n,
-  remove_bot_role: 0n,
+  set_bot_name_style: 0n,
 };
 
 // Not requiredPermissionsFor(kind, payload): a rung carries no channelId until the engine merges

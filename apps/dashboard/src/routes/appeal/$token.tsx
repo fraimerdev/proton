@@ -1,10 +1,13 @@
 import type { AppealPanel } from '@proton/module-appeals/config';
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router';
 import { type ReactElement, useState } from 'react';
-import { Icon } from '../../components/shell/icon.tsx';
+import { ProtonMark } from '../../components/shell/topbar.tsx';
+import { Button, TextArea } from '../../components/ui/controls.tsx';
+import { Icon } from '../../components/ui/icon.tsx';
 import { documentTitle } from '../../lib/document-title.ts';
 import { sessionQuery } from '../../lib/queries.ts';
 import { type AppealOutcome, openAppeal, submitAppeal } from '../../server/appeals.ts';
+import { LinkCard } from '../verify/$token.tsx';
 
 type AppealState = AppealOutcome | { ok: false; signIn: string };
 
@@ -33,73 +36,58 @@ function AppealPage(): ReactElement {
   const state = Route.useLoaderData();
   const { token } = Route.useParams();
 
-  return (
-    <div className="plain-page">
-      <div className="page verify-page">
-        <Link to="/" className="back-link">
-          <Icon name="arrow-left" />
-          Proton
-        </Link>
+  const open = state.ok && state.view.state === 'open';
+  const [startedOnForm] = useState(open);
+  const entering = startedOnForm && !open;
 
-        {!state.ok && 'signIn' in state ? <SignIn href={state.signIn} /> : null}
-        {!state.ok && 'reason' in state ? <Refused reason={state.reason} /> : null}
-        {state.ok ? <Resolved state={state} token={token} /> : null}
-      </div>
-    </div>
-  );
-}
-
-function SignIn({ href }: { href: string }): ReactElement {
-  return (
-    <section className="verify-card">
-      <h1>Appeal a moderation action</h1>
-      <p>
+  if (!state.ok && 'signIn' in state) {
+    return (
+      <LinkCard
+        entering={entering}
+        title="Appeal a moderation action"
+        action={
+          <a className="button button-primary button-block" href={state.signIn}>
+            <Icon name="discord-logo" size={16} weight="fill" />
+            Continue with Discord
+          </a>
+        }
+      >
         Sign in with Discord so Proton can confirm this link belongs to you. Proton reads your
         account name and the servers you are in, and nothing else.
-      </p>
-      <a className="button button-discord" href={href}>
-        <Icon name="discord-logo" weight="fill" />
-        Continue with Discord
-      </a>
-    </section>
-  );
-}
+      </LinkCard>
+    );
+  }
 
-function Refused({ reason }: { reason: string }): ReactElement {
-  return (
-    <section className="verify-card">
-      <h1>That didn&rsquo;t work</h1>
-      <p>{reason}</p>
-    </section>
-  );
-}
+  if (!state.ok) {
+    return (
+      <LinkCard entering={entering} title="Could not open this link" tone="danger">
+        {state.reason}
+      </LinkCard>
+    );
+  }
 
-function Resolved({
-  state,
-  token,
-}: {
-  state: Extract<AppealOutcome, { ok: true }>;
-  token: string;
-}): ReactElement {
   const { view } = state;
 
-  if (view.state === 'open') return <Form panel={view.panel} token={token} />;
+  if (view.state === 'open') return <AppealForm panel={view.panel} token={token} />;
 
   return (
-    <section className="verify-card">
-      <h1>
-        {view.state === 'filed'
-          ? 'Your appeal is with the moderators'
+    <LinkCard
+      entering={entering}
+      title={
+        view.state === 'filed'
+          ? 'Appeal sent'
           : view.state === 'decided'
             ? `Appeal #${view.appeal.number}`
-            : 'This appeal is closed'}
-      </h1>
-      <p>{view.humanReason}</p>
-    </section>
+            : 'This appeal is closed'
+      }
+      tone={view.state === 'filed' ? 'success' : 'neutral'}
+    >
+      {view.humanReason}
+    </LinkCard>
   );
 }
 
-function Form({ panel, token }: { panel: AppealPanel; token: string }): ReactElement {
+function AppealForm({ panel, token }: { panel: AppealPanel; token: string }): ReactElement {
   const router = useRouter();
 
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -125,49 +113,62 @@ function Form({ panel, token }: { panel: AppealPanel; token: string }): ReactEle
   }
 
   return (
-    <section className="verify-card appeal-card">
-      <h1>{panel.name}</h1>
-      {panel.blurb ? <p>{panel.blurb}</p> : null}
+    <main className="centred">
+      <section className="centred-card wide">
+        <Link to="/" className="topbar-brand" style={{ marginBottom: 18 }}>
+          <ProtonMark size={22} />
+          Proton
+        </Link>
 
-      <form
-        className="appeal-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send();
-        }}
-      >
-        {panel.questions.map((question) => (
-          <label className="appeal-question" key={question.key}>
-            <span>
-              {question.label}
-              {question.required ? null : <em> (optional)</em>}
-            </span>
-            <textarea
-              maxLength={question.maxLength}
-              placeholder={question.placeholder ?? ''}
-              required={question.required}
-              rows={4}
-              value={answers[question.key] ?? ''}
-              onChange={(event) =>
-                setAnswers((held) => ({ ...held, [question.key]: event.target.value }))
-              }
-            />
-            <small>
-              {(answers[question.key] ?? '').length}/{question.maxLength}
-            </small>
-          </label>
-        ))}
+        <h1>{panel.name}</h1>
+        {panel.blurb ? <p>{panel.blurb}</p> : null}
 
-        {problem ? (
-          <p className="field-error" role="alert">
-            {problem}
-          </p>
-        ) : null}
+        <form
+          className="stack stack-16"
+          style={{ marginTop: 22 }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send();
+          }}
+        >
+          {panel.questions.map((question) => {
+            const answer = answers[question.key] ?? '';
 
-        <button className="button button-primary" disabled={sending || incomplete} type="submit">
-          {sending ? 'Sending…' : 'Send appeal'}
-        </button>
-      </form>
-    </section>
+            return (
+              <div className="field" key={question.key}>
+                <label className="field-label" htmlFor={`q-${question.key}`}>
+                  {question.label}
+                  {question.required ? null : <span className="text-muted"> (optional)</span>}
+                </label>
+                <TextArea
+                  id={`q-${question.key}`}
+                  maxLength={question.maxLength}
+                  placeholder={question.placeholder ?? ''}
+                  required={question.required}
+                  rows={4}
+                  value={answer}
+                  onChange={(event) =>
+                    setAnswers((held) => ({ ...held, [question.key]: event.target.value }))
+                  }
+                />
+                <span className="field-hint" style={{ textAlign: 'right' }}>
+                  {answer.length} / {question.maxLength}
+                </span>
+              </div>
+            );
+          })}
+
+          {problem !== null ? (
+            <p className="field-error" role="alert">
+              {problem}
+            </p>
+          ) : null}
+
+          <Button tone="primary" size="lg" type="submit" busy={sending} disabled={incomplete}>
+            Send appeal
+          </Button>
+        </form>
+      </section>
+    </main>
   );
 }

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import groups from 'unicode-emoji-json/data-by-group.json' with { type: 'json' };
 
 const ROOT = join(import.meta.dir, '..');
-export const GENERATED_PATH = join(ROOT, 'src', 'components', 'emoji', 'emoji-set.gen.ts');
+export const GENERATED_PATH = join(ROOT, 'src', 'components', 'discord', 'emoji-set.gen.ts');
 
 interface SourceEmoji {
   emoji: string;

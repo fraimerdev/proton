@@ -26,7 +26,8 @@ export const scheduledModulePayloadSchema = z.object({
   jobId: z.string().min(1),
   guildId: z.string().min(1),
 
-  data: z.unknown(),
+  // jsonb drops an undefined data key, and zod 4 rejects a missing key even under z.unknown()
+  data: z.unknown().optional(),
 });
 
 export const scheduledActionPayloadSchema = z.preprocess(

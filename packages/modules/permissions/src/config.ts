@@ -21,7 +21,7 @@ export type CommandOverrides = z.infer<typeof commandOverridesSchema>;
 export const permissionsConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
-    description: 'Off falls back to Discord’s own command permissions',
+    description: 'Switch off to use Discord’s own command permissions instead.',
   }),
 
   overrides: commandOverridesSchema.default({}),
@@ -89,7 +89,7 @@ export function commandOverridesFormSchema(
           .register(protonFields, {
             field: 'role-id',
             label: `/${name}`,
-            description: 'Empty falls back to Discord’s own command permissions',
+            description: 'Leave empty to use Discord’s own command permissions.',
           }),
       ]),
     ),

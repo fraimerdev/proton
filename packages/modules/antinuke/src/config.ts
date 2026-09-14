@@ -20,24 +20,24 @@ export type AfterStripAction = (typeof AFTER_STRIP_ACTIONS)[number];
 export const antinukeConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, { label: 'Enabled' }),
 
-  channelDeleteLimit: limitField('Channel deletions per member', 3),
+  channelDeleteLimit: limitField('Channel deletions', 3),
   channelDeleteWindow: windowField('Channel deletion window', '30s'),
 
-  roleDeleteLimit: limitField('Role deletions per member', 3),
+  roleDeleteLimit: limitField('Role deletions', 3),
   roleDeleteWindow: windowField('Role deletion window', '30s'),
 
-  webhookDeleteLimit: limitField('Webhook deletions per member', 5),
+  webhookDeleteLimit: limitField('Webhook deletions', 5),
   webhookDeleteWindow: windowField('Webhook deletion window', '30s'),
 
-  emojiDeleteLimit: limitField('Emoji deletions per member', 10),
+  emojiDeleteLimit: limitField('Emoji deletions', 10),
   emojiDeleteWindow: windowField('Emoji deletion window', '1m'),
 
-  memberRemoveLimit: limitField('Bans and kicks per moderator', 5),
+  memberRemoveLimit: limitField('Bans and kicks', 5),
   memberRemoveWindow: windowField('Ban and kick window', '30s'),
 
   afterStrip: z.enum(AFTER_STRIP_ACTIONS).default('none').register(protonFields, {
     label: 'After stripping roles',
-    description: 'Roles are stripped first whatever this is set to',
+    description: 'Roles are always removed first, whatever this is set to.',
   }),
 
   alertChannelId: z.string().optional().register(protonFields, {
@@ -49,7 +49,7 @@ export const antinukeConfigSchema = z.object({
   maintenanceMaxDuration: durationStringSchema.default('1h').register(protonFields, {
     field: 'duration',
     label: 'Longest maintenance window',
-    description: 'Maintenance leaves the server unguarded for this long',
+    description: 'Maintenance mode leaves the server unprotected for up to this long.',
   }),
 });
 

@@ -10,6 +10,7 @@ type RecordRow = {
   voice_seconds: number;
 };
 type LeaderRow = { user_id: string; xp: number };
+type CountRow = { ranked: number };
 
 export interface MemberXpStoreOptions {
   levelForXp(xp: number): number;
@@ -227,6 +228,16 @@ export class DrizzleMemberXpStore {
       level: this.#levelForXp(row.xp),
       rank: options.offset + index + 1,
     }));
+  }
+
+  async countRanked(guildId: string): Promise<number> {
+    const rows = await this.#handle.client<CountRow[]>`
+      select count(*)::int as ranked
+        from members
+       where guild_id = ${guildId} and xp > 0
+    `;
+
+    return rows[0]?.ranked ?? 0;
   }
 
   #clamp(xp: number): number {

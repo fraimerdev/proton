@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { CORE_PROVIDER_IDS, ProviderRegistry, protonFields, zodToDescriptors } from '@proton/core';
+import { validateTemplate } from '@proton/core/placeholders';
 import { ComponentType, TextInputStyle } from 'discord-api-types/v10';
 import { z } from 'zod';
 import {
@@ -16,8 +17,17 @@ import {
   BUILDER_REMOVE,
   ITEM_MODAL,
 } from '../src/builder/screens.ts';
-import { type DraftStore, draftKey, emptyDraft, MemoryDraftStore } from '../src/builder/state.ts';
+import {
+  BUILDER_STEPS,
+  type DraftStore,
+  draftKey,
+  emptyDraft,
+  type GiveawayDraft,
+  MemoryDraftStore,
+} from '../src/builder/state.ts';
+import { applyStepModal, STEP_MODAL, stepModal } from '../src/builder/step-modals.ts';
 import { BUILDER_EDIT_STEP, stepScreen } from '../src/builder/steps.ts';
+import { GIVEAWAY_WIN_SURFACE } from '../src/placeholders.ts';
 import { createGiveawayProviders } from '../src/providers.ts';
 import { MemoryGiveawayStore } from './memory-store.ts';
 
@@ -506,5 +516,137 @@ describe('builder interactions', () => {
 
     expect(reply.kind).toBe('message');
     if (reply.kind === 'message') expect(reply.content).toContain('switched off');
+  });
+});
+
+describe('the winner message step', () => {
+  const WIN_HINT =
+    'Empty for the default. Try {giveaway.prize} or {user.mention}; {{ is a literal {.';
+
+  function winnersDraft(over: Partial<GiveawayDraft> = {}): GiveawayDraft {
+    return { ...emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW), ...over };
+  }
+
+  test('a placeholder with a bad argument is refused by name, and nothing is saved', async () => {
+    const { deps, drafts } = await seeded();
+
+    const reply = await handleBuilderModal(deps, {
+      action: STEP_MODAL,
+      args: ['winners'],
+      guildId: GUILD,
+      userId: HOST,
+      fields: { winnerCount: '2', winMessage: 'You won {giveaway.prize:upper(3)}' },
+      values: {},
+    });
+
+    expect(reply.kind).toBe('message');
+    if (reply.kind === 'message') {
+      expect(reply.content).toStartWith('The winner message was not saved: ');
+      expect(reply.content).toContain('{giveaway.prize:upper(3)}');
+      expect(reply.content).toContain(':upper');
+    }
+
+    const draft = await drafts.get(draftKey(GUILD, HOST));
+    expect(draft?.winMessage).toBeNull();
+    expect(draft?.winnerCount).toBe(1);
+  });
+
+  test('the refusal carries the engine’s argument error', () => {
+    const [problem] = validateTemplate('{giveaway.prize:upper(3)}', {
+      registry: GIVEAWAY_WIN_SURFACE.registry,
+      field: 'discord_text',
+      event: GIVEAWAY_WIN_SURFACE.event,
+      audience: GIVEAWAY_WIN_SURFACE.audience,
+    }).diagnostics;
+
+    const applied = applyStepModal('winners', winnersDraft(), {
+      winnerCount: '1',
+      winMessage: '{giveaway.prize:upper(3)}',
+    });
+
+    expect(problem?.code).toBe('invalid_argument');
+    expect(applied).toEqual({
+      ok: false,
+      humanReason: `The winner message was not saved: ${problem?.message}`,
+    });
+  });
+
+  test('a message using placeholders is stored exactly as typed, trimmed', () => {
+    const draft = winnersDraft();
+
+    const applied = applyStepModal('winners', draft, {
+      winnerCount: '3',
+      winMessage: '  You won {giveaway.prize}! {{ and }} stay.  ',
+    });
+
+    expect(applied.ok).toBe(true);
+    expect(draft.winMessage).toBe('You won {giveaway.prize}! {{ and }} stay.');
+    expect(draft.winnerCount).toBe(3);
+  });
+
+  test('a name Proton does not know only warns, so the message is saved', () => {
+    const draft = winnersDraft();
+
+    expect(
+      applyStepModal('winners', draft, { winnerCount: '1', winMessage: 'Hi {nobody}' }),
+    ).toEqual({ ok: true });
+    expect(draft.winMessage).toBe('Hi {nobody}');
+  });
+
+  test('an empty message goes back to the default', () => {
+    const draft = winnersDraft({ winMessage: 'You won {giveaway.prize}' });
+
+    expect(applyStepModal('winners', draft, { winnerCount: '1', winMessage: '   ' }).ok).toBe(true);
+    expect(draft.winMessage).toBeNull();
+  });
+
+  test('the winner message hint names the placeholders and doubled braces', () => {
+    const modal = stepModal('winners', winnersDraft());
+    if (!modal.ok) throw new Error(modal.humanReason);
+
+    const label = modal.modal.components.find(
+      (component) => (component.component as { custom_id?: unknown })?.custom_id === 'winMessage',
+    );
+
+    expect(label?.description).toBe(WIN_HINT);
+    expect(WIN_HINT).toHaveLength(81);
+  });
+
+  test('every Label in every step modal fits Discord’s caps, empty or filled in', () => {
+    const full = winnersDraft({
+      title: 'Nitro for a month',
+      description: 'Have fun',
+      durationMs: 12 * 60 * 60 * 1000,
+      startsInMs: 2 * 60 * 60 * 1000,
+      color: 0x5865f2,
+      emoji: '🎉',
+      bannerUrl: 'https://example.com/banner.png',
+      buttonStyle: 3,
+      winnerCount: 3,
+      maxEntriesPerUser: 5,
+      claimWindowSeconds: 3600,
+      winMessage: 'You won {giveaway.prize}',
+    });
+
+    let labels = 0;
+
+    for (const draft of [winnersDraft(), full]) {
+      for (const step of BUILDER_STEPS) {
+        const modal = stepModal(step, draft);
+        if (!modal.ok) continue;
+
+        for (const component of flatten(modal.modal.components)) {
+          if (component.type !== ComponentType.Label) continue;
+          labels += 1;
+
+          expect(String(component.label).length).toBeLessThanOrEqual(45);
+          if (component.description !== undefined) {
+            expect(String(component.description).length).toBeLessThanOrEqual(100);
+          }
+        }
+      }
+    }
+
+    expect(labels).toBeGreaterThan(0);
   });
 });

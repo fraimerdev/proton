@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { DiscordUserGuild } from './guild-access.ts';
 
 const inFlight = new Map<string, Promise<DiscordUserGuild[]>>();
@@ -137,8 +138,7 @@ const CDN = 'https://cdn.discordapp.com';
 
 // Verified against docs.discord.com/developers/reference: a per-guild avatar lives under the guild,
 // a global one under the user, and a member with neither gets the default indexed by their own id.
-function avatarUrl(guildId: string, user: RawUser, memberAvatar: string | null): string | null {
-  if (memberAvatar) return `${CDN}/guilds/${guildId}/users/${user.id}/avatars/${memberAvatar}.png`;
+function userAvatarUrl(user: RawUser): string {
   if (user.avatar) return `${CDN}/avatars/${user.id}/${user.avatar}.png`;
 
   if (user.discriminator && user.discriminator !== '0') {
@@ -146,6 +146,11 @@ function avatarUrl(guildId: string, user: RawUser, memberAvatar: string | null):
   }
 
   return `${CDN}/embed/avatars/${(BigInt(user.id) >> 22n) % 6n}.png`;
+}
+
+function avatarUrl(guildId: string, user: RawUser, memberAvatar: string | null): string | null {
+  if (memberAvatar) return `${CDN}/guilds/${guildId}/users/${user.id}/avatars/${memberAvatar}.png`;
+  return userAvatarUrl(user);
 }
 
 interface RawUser {
@@ -162,6 +167,35 @@ interface RawMember {
   nick?: string | null;
   avatar?: string | null;
   roles?: string[];
+}
+
+export interface DiscordProfile {
+  id: string;
+  name: string | null;
+  avatarUrl: string;
+}
+
+// Read live: the avatar hash Better Auth stored at sign-in 404s once the member changes it.
+export async function fetchCurrentUser(
+  restProxyUrl: string,
+  accessToken: string,
+): Promise<DiscordProfile | null> {
+  try {
+    const response = await fetch(`${restProxyUrl.replace(/\/$/, '')}/api/users/@me`, {
+      headers: { 'x-proton-authorization': `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return null;
+
+    const user = (await response.json()) as RawUser;
+
+    return {
+      id: user.id,
+      name: user.global_name ?? user.username ?? null,
+      avatarUrl: userAvatarUrl(user),
+    };
+  } catch {
+    return null;
+  }
 }
 
 // Discord has no batch endpoint for a known set of ids, so this is one request each, six at a time
@@ -223,6 +257,96 @@ export async function fetchGuildMembers(
   if (found.length === 0 && refusal !== 0) throw unreadable('members', refusal);
 
   return found;
+}
+
+const protonMemberSchema = z.object({
+  nick: z.string().nullish(),
+  user: z.object({
+    id: z.string(),
+    username: z.string(),
+    discriminator: z.string().optional(),
+    global_name: z.string().nullish(),
+    avatar: z.string().nullish(),
+  }),
+  display_name_styles: z.unknown().optional(),
+});
+
+const wireNameStyleSchema = z
+  .object({
+    font_id: z.number().int(),
+    effect_id: z.number().int(),
+    colors: z.array(z.number().int()),
+  })
+  .nullable();
+
+const accountNameStyleSchema = z.object({
+  fontId: z.number().int(),
+  effectId: z.number().int(),
+  colours: z.array(z.number().int()),
+});
+
+export const protonAccountSchema = z.object({
+  username: z.string(),
+  discriminator: z.string().nullable(),
+  globalName: z.string().nullable(),
+  nickname: z.string().nullable(),
+  avatarUrl: z.string(),
+  displayNameStyle: accountNameStyleSchema.nullable().optional(),
+});
+
+export type ProtonAccount = z.infer<typeof protonAccountSchema>;
+
+// Parsed apart from the member, so a style in a shape Proton does not know cannot fail the account read.
+function accountNameStyle(raw: unknown): Pick<ProtonAccount, 'displayNameStyle'> {
+  if (raw === undefined) return {};
+
+  const parsed = wireNameStyleSchema.safeParse(raw);
+  if (!parsed.success) return {};
+
+  const style = parsed.data;
+
+  return {
+    displayNameStyle:
+      style === null
+        ? null
+        : { fontId: style.font_id, effectId: style.effect_id, colours: style.colors },
+  };
+}
+
+export async function fetchProtonAccount(
+  restProxyUrl: string,
+  guildId: string,
+  botUserId: string,
+): Promise<ProtonAccount> {
+  const response = await fetch(
+    `${restProxyUrl.replace(/\/$/, '')}/api/guilds/${guildId}/members/${botUserId}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Proton could not read its own account in this server — Discord answered ${response.status}.`,
+    );
+  }
+
+  const parsed = protonMemberSchema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) {
+    throw new Error(
+      'Proton could not read its own account in this server — Discord answered with no user.',
+    );
+  }
+
+  const { nick, user, display_name_styles } = parsed.data;
+  const discriminator = user.discriminator ?? '0';
+
+  // The member's own avatar is ignored: it is what Branding uploads, and this is what shows without one.
+  return protonAccountSchema.parse({
+    username: user.username,
+    discriminator: discriminator === '0' ? null : discriminator,
+    globalName: user.global_name ?? null,
+    nickname: nick ?? null,
+    avatarUrl: userAvatarUrl({ id: user.id, avatar: user.avatar ?? null, discriminator }),
+    ...accountNameStyle(display_name_styles),
+  });
 }
 
 const CATEGORY_TYPE = 4;

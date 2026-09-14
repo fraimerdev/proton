@@ -1,0 +1,34 @@
+/* honeypot page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.honeypot-sequence {
+  list-style: none;
+  counter-reset: none;
+}
+
+.honeypot-sequence .rung-body {
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+}
+
+.honeypot-collection-note {
+  margin: 0 0 10px;
+}
+
+.honeypot-state {
+  display: inline-flex;
+}
+
+.honeypot-row-error {
+  padding: 0 14px 10px 44px;
+  margin-top: -6px;
+}
+
+.honeypot-layout-error {
+  margin-bottom: 10px;
+}
+
+.honeypot-foot-note {
+  margin-top: 12px;
+  max-width: 62ch;
+}

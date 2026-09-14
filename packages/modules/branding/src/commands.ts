@@ -7,10 +7,23 @@ import {
 import { SlashCommandBuilder } from 'discord.js';
 import { BRANDING_ACTOR, type BrandingConfig, isBlank, MODULE_ID } from './config.ts';
 import type { BrandingDeps } from './deps.ts';
+import {
+  NAME_STYLE_EFFECT_LABELS,
+  NAME_STYLE_FONT_LABELS,
+  nameStyleWriteIssues,
+  toWireStyle,
+} from './name-style.ts';
+import { applyNameStyle } from './name-style-apply.ts';
 import { impersonationReason } from './names.ts';
 import { desiredProfile, readImage } from './profile.ts';
 
 const DESCRIPTION = 'Re-apply how Proton looks in this server, and report what Discord said.';
+
+function describeStyle(config: BrandingConfig): string {
+  const style = config.displayNameStyle;
+  if (style === null) return 'No style';
+  return `${NAME_STYLE_FONT_LABELS[style.font]} · ${NAME_STYLE_EFFECT_LABELS[style.effect]}`;
+}
 
 function summarise(config: BrandingConfig): string {
   return [
@@ -18,6 +31,7 @@ function summarise(config: BrandingConfig): string {
     `Avatar: ${config.avatarHash ? 'set' : 'not set'}`,
     `Banner: ${config.bannerHash ? 'set' : 'not set'}`,
     `Bio: ${config.bio ? 'set' : 'not set'}`,
+    `Display name style: ${describeStyle(config)}`,
   ].join('\n');
 }
 
@@ -36,6 +50,34 @@ function replyNow(ctx: CommandContext<BrandingConfig>, content: string): Promise
       ephemeral: true,
     },
   });
+}
+
+async function nameStyleProblem(
+  ctx: CommandContext<BrandingConfig>,
+  deps: BrandingDeps,
+): Promise<string | null> {
+  const [issue] = nameStyleWriteIssues(ctx.config.displayNameStyle);
+  if (issue) return `Display name style: ${issue.message}`;
+
+  const store = deps.nameStyles;
+  if (!store) return 'Display name style: Proton cannot apply it right now.';
+
+  const requested = toWireStyle(ctx.config.displayNameStyle);
+  if (requested === null && (await store.get(ctx.guildId)) === null) return null;
+
+  const verdict = await applyNameStyle(
+    ctx,
+    { ...deps, nameStyles: store },
+    requested,
+    `${ctx.idempotencyKey}:name-style`,
+  );
+
+  if (verdict === null || verdict.outcome === 'confirmed') return null;
+  if (verdict.reason === 'missing_change_nickname') {
+    return 'Display name style: Proton needs Change Nickname in this server.';
+  }
+  if (verdict.outcome === 'unverified') return 'Display name style: Couldn’t confirm with Discord.';
+  return 'Display name style: Discord didn’t accept this style.';
 }
 
 export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinition<BrandingConfig> {
@@ -61,8 +103,8 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
       if (isBlank(ctx.config)) {
         await replyNow(
           ctx,
-          'Branding is on but nothing is set yet. Add a nickname, avatar, banner or bio in the ' +
-            'Proton dashboard.',
+          'Branding is on but nothing is set yet. Add a nickname, avatar, banner, bio or display ' +
+            'name style in the Proton dashboard.',
         );
         return;
       }
@@ -156,6 +198,9 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
 
         if (nickname.failure) problems.push(`Nickname: ${nickname.failure.humanReason}`);
       }
+
+      const style = await nameStyleProblem(ctx, deps);
+      if (style) problems.push(style);
 
       const head = summarise(ctx.config);
 

@@ -112,6 +112,8 @@ interface PressOptions {
   roles?: string[];
   values?: string[];
   componentType?: number;
+  member?: Record<string, unknown>;
+  user?: Record<string, unknown>;
 }
 
 function pressEvent(options: PressOptions): ProtonEvent {
@@ -127,7 +129,11 @@ function pressEvent(options: PressOptions): ProtonEvent {
       token: 'component-token',
       guild_id: GUILD,
       channel_id: CHANNEL,
-      member: { user: { id: MEMBER }, roles: options.roles ?? [] },
+      member: {
+        user: { id: MEMBER, ...options.user },
+        roles: options.roles ?? [],
+        ...options.member,
+      },
       message: { id: MESSAGE },
       data: {
         custom_id: options.customId,
@@ -431,5 +437,115 @@ describe('embeds component presses', () => {
 
     expect(outcome).toMatchObject({ action: 'refused' });
     expect(h.lastSaid()).toContain('Manage Roles');
+  });
+});
+
+function replyMessage(content: string, placeholders?: boolean): unknown {
+  return {
+    name: 'roles',
+    ...(placeholders === undefined ? {} : { placeholders }),
+    content: 'Pick a colour',
+    components: [
+      {
+        kind: 'buttons',
+        buttons: [
+          {
+            key: 'help',
+            style: 'secondary',
+            label: 'Help',
+            action: { kind: 'reply', content, ephemeral: true },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+const PRESSER = { username: 'fraimer', global_name: 'Fraimer' };
+
+const WITH_PLACEHOLDERS: MessagesDeps = {
+  applicationId: APPLICATION,
+  placeholders: {
+    applicationId: APPLICATION,
+    bot: async () => ({ id: APPLICATION, name: 'Proton', supportUrl: 'https://discord.gg/x' }),
+    server: async (guildId) => ({ id: guildId, name: 'Proton HQ' }),
+    user: async () => null,
+    now: () => Date.UTC(2026, 8, 14, 9),
+  },
+};
+
+describe('a reply that fills in placeholders', () => {
+  test('names the member who pressed from the interaction itself, with no extra read', async () => {
+    const h = harness(WITH_PLACEHOLDERS);
+
+    const outcome = await h.press(
+      pressEvent({ customId: helpButton, user: PRESSER, member: { nick: 'Fraim' } }),
+      {
+        config: {
+          templates: templates(
+            replyMessage('Thanks, {user.display_name}, from {server.name}!', true),
+          ),
+        },
+      },
+    );
+
+    expect(outcome).toMatchObject({ action: 'applied', replies: 1 });
+    expect(h.followUps()[0]?.content).toBe('Thanks, Fraim, from Proton HQ!');
+    expect(h.rest.calls.every((call) => call.method === 'POST')).toBe(true);
+  });
+
+  test('uses the account display name when the member has no nickname', async () => {
+    const h = harness(WITH_PLACEHOLDERS);
+
+    await h.press(pressEvent({ customId: helpButton, user: PRESSER, member: { nick: null } }), {
+      config: { templates: templates(replyMessage('Thanks, {user.display_name}!', true)) },
+    });
+
+    expect(h.followUps()[0]?.content).toBe('Thanks, Fraimer!');
+  });
+
+  test('a reply that has not opted in posts its braces as written', async () => {
+    const h = harness(WITH_PLACEHOLDERS);
+
+    await h.press(pressEvent({ customId: helpButton, user: PRESSER }), {
+      config: { templates: templates(replyMessage('Thanks, {user.display_name}!')) },
+    });
+
+    expect(h.followUps()[0]?.content).toBe('Thanks, {user.display_name}!');
+  });
+
+  test('a reply that fills in past 2000 characters is cut on a whole emoji, and the cut is logged', async () => {
+    const h = harness(WITH_PLACEHOLDERS);
+    const name = '🙂'.repeat(16);
+
+    await h.press(pressEvent({ customId: helpButton, user: PRESSER, member: { nick: name } }), {
+      config: {
+        templates: templates(replyMessage(`${'a'.repeat(1981)}{user.display_name}`, true)),
+      },
+    });
+
+    const content = h.followUps()[0]?.content ?? '';
+    expect(name).toHaveLength(32);
+    expect(content.length).toBeLessThanOrEqual(2000);
+    expect(content).toBe(`${'a'.repeat(1981)}${'🙂'.repeat(9)}`);
+    expect(
+      h.logs.some(
+        ({ level, message }) =>
+          level === 'warn' && message.includes("'roles' (help)") && message.includes('2000'),
+      ),
+    ).toBe(true);
+  });
+
+  test('a reply that comes out empty is not sent, and the log says why', async () => {
+    const h = harness(WITH_PLACEHOLDERS);
+
+    const outcome = await h.press(
+      pressEvent({ customId: helpButton, user: PRESSER, member: { nick: null } }),
+      { config: { templates: templates(replyMessage('{user.nickname}', true)) } },
+    );
+
+    expect(outcome).toMatchObject({ action: 'applied', replies: 0 });
+    expect(h.followUps()).toHaveLength(0);
+    expect(h.logs.some(({ message }) => message.includes('came out empty'))).toBe(true);
   });
 });

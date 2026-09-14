@@ -1,0 +1,53 @@
+.welcome-areas {
+  margin-bottom: 24px;
+}
+
+.welcome-preview-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.welcome-attachment {
+  margin-top: 12px;
+}
+
+.welcome-attachment-name {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+}
+
+.welcome-swatch {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+
+.welcome-swatch span {
+  width: 7px;
+  height: 13px;
+  border-radius: 2px;
+}
+
+/* The card is 1100x370: beside a column of five settings it reads as a thumbnail, so the image
+   takes the wide half and the settings the narrow one. */
+.welcome-card-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+.welcome-card-main {
+  min-width: 0;
+}
+
+@container workspace (max-width: 860px) {
+  .welcome-card-area {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

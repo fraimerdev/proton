@@ -1,15 +1,24 @@
-import { queryOptions } from '@tanstack/react-query';
+import { mutationOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
+import { getNameStyleStatus } from '../server/branding.ts';
 import {
+  getAntinukeMaintenance,
   getGuildChannels,
   getGuildEmojis,
   getGuildMembers,
   getGuildOverview,
   getGuildRoles,
   getModuleConfig,
+  getProtonAccount,
   getViewer,
   listGuilds,
   listModules,
 } from '../server/modules.ts';
+import {
+  endXpEvent,
+  listXpEvents,
+  type StartXpEventInput,
+  startXpEvent,
+} from '../server/xp-events.ts';
 import { LIVE, queryKeys, STALE } from './query-keys.ts';
 
 export function sessionQuery() {
@@ -60,6 +69,17 @@ export function moduleConfigQuery(guildId: string, moduleId: string) {
   });
 }
 
+// Polled: the window expires on a clock, and a page still saying "suspended" is worse than nothing.
+export function maintenanceQuery(guildId: string) {
+  return queryOptions({
+    queryKey: [...queryKeys.guild(guildId), 'antinuke', 'maintenance'] as const,
+    queryFn: () => getAntinukeMaintenance({ data: { guildId } }),
+    refetchInterval: 30_000,
+    retry: false,
+    ...LIVE,
+  });
+}
+
 export function channelsQuery(guildId: string) {
   return queryOptions({
     queryKey: queryKeys.channels(guildId),
@@ -87,19 +107,31 @@ export function emojisQuery(guildId: string) {
   });
 }
 
-// Discord has no batch endpoint for a known set of ids, so the server reads one member per id. This
-// is the ceiling it accepts, and the number the page says out loud when it is holding more.
+export function protonAccountQuery(guildId: string) {
+  return queryOptions({
+    queryKey: queryKeys.protonAccount(guildId),
+    queryFn: () => getProtonAccount({ data: { guildId } }),
+    staleTime: STALE.guildShape,
+    ...LIVE,
+  });
+}
+
+export const NAME_STYLE_POLL_MS = 3_000;
+
+export function nameStyleStatusQuery(guildId: string) {
+  return queryOptions({
+    queryKey: queryKeys.nameStyleStatus(guildId),
+    queryFn: () => getNameStyleStatus({ data: { guildId } }),
+    staleTime: 0,
+    retry: false,
+    ...LIVE,
+  });
+}
+
+// Discord has no batch member endpoint, so the server reads one member per id up to this ceiling.
 export const MEMBER_LOOKUP_MAX = 100;
 
-/**
- * The members behind the snowflakes on one page. Keyed on the ids themselves rather than on the
- * page, because the next page of a case log asks for most of the same accounts — and because
- * react-query hashes the key structurally, so two callers that happen to want the same set share
- * one entry. Sorted and deduplicated here for that reason and no other.
- *
- * Built off queryKeys.guild rather than a key of its own, so leaving the server clears it with
- * everything else the guild owns.
- */
+// Sorted ids under queryKeys.guild: pages share entries, and leaving the server clears them.
 export function membersQuery(guildId: string, userIds: readonly string[]) {
   const ids = [...new Set(userIds)].sort().slice(0, MEMBER_LOOKUP_MAX);
 
@@ -109,5 +141,31 @@ export function membersQuery(guildId: string, userIds: readonly string[]) {
     staleTime: STALE.guildShape,
     enabled: ids.length > 0,
     ...LIVE,
+  });
+}
+
+export function xpEventsQuery(guildId: string) {
+  return queryOptions({
+    queryKey: queryKeys.xpEvents(guildId),
+    queryFn: () => listXpEvents({ data: { guildId } }),
+    staleTime: STALE.browse,
+    refetchInterval: (query) => ((query.state.data?.events.length ?? 0) > 0 ? 30_000 : false),
+    ...LIVE,
+  });
+}
+
+// onSettled, not onSuccess: a start refused for a full server must still refresh the list it was refused against.
+export function startXpEventMutation(queryClient: QueryClient, guildId: string) {
+  return mutationOptions({
+    mutationFn: (input: Omit<StartXpEventInput, 'guildId'>) =>
+      startXpEvent({ data: { ...input, guildId } }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.xpEvents(guildId) }),
+  });
+}
+
+export function endXpEventMutation(queryClient: QueryClient, guildId: string) {
+  return mutationOptions({
+    mutationFn: (eventId: string) => endXpEvent({ data: { guildId, eventId } }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.xpEvents(guildId) }),
   });
 }

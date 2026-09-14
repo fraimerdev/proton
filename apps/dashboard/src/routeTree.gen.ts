@@ -22,6 +22,7 @@ import { Route as DashboardGuildIdRouteImport } from './routes/dashboard/$guildI
 import { Route as VerifyTokenRouteImport } from './routes/verify/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as DashboardGuildIdIndexRouteImport } from './routes/dashboard/$guildId/index'
+import { Route as DashboardGuildIdAfkRouteImport } from './routes/dashboard/$guildId/afk'
 import { Route as DashboardGuildIdAntinukeRouteImport } from './routes/dashboard/$guildId/antinuke'
 import { Route as DashboardGuildIdAntiraidRouteImport } from './routes/dashboard/$guildId/antiraid'
 import { Route as DashboardGuildIdAppealsRouteImport } from './routes/dashboard/$guildId/appeals'
@@ -31,7 +32,6 @@ import { Route as DashboardGuildIdBrandingRouteImport } from './routes/dashboard
 import { Route as DashboardGuildIdCasesRouteImport } from './routes/dashboard/$guildId/cases'
 import { Route as DashboardGuildIdCountersRouteImport } from './routes/dashboard/$guildId/counters'
 import { Route as DashboardGuildIdGiveawaysRouteImport } from './routes/dashboard/$guildId/giveaways'
-import { Route as DashboardGuildIdHelpRouteImport } from './routes/dashboard/$guildId/help'
 import { Route as DashboardGuildIdHoneypotRouteImport } from './routes/dashboard/$guildId/honeypot'
 import { Route as DashboardGuildIdJoinrolesRouteImport } from './routes/dashboard/$guildId/joinroles'
 import { Route as DashboardGuildIdLevelingRouteImport } from './routes/dashboard/$guildId/leveling'
@@ -40,9 +40,6 @@ import { Route as DashboardGuildIdMessagesRouteImport } from './routes/dashboard
 import { Route as DashboardGuildIdModerationRouteImport } from './routes/dashboard/$guildId/moderation'
 import { Route as DashboardGuildIdPermissionsRouteImport } from './routes/dashboard/$guildId/permissions'
 import { Route as DashboardGuildIdPhishingRouteImport } from './routes/dashboard/$guildId/phishing'
-import { Route as DashboardGuildIdPingRouteImport } from './routes/dashboard/$guildId/ping'
-import { Route as DashboardGuildIdPollsRouteImport } from './routes/dashboard/$guildId/polls'
-import { Route as DashboardGuildIdRemindersRouteImport } from './routes/dashboard/$guildId/reminders'
 import { Route as DashboardGuildIdRolemenuRouteImport } from './routes/dashboard/$guildId/rolemenu'
 import { Route as DashboardGuildIdServerlogRouteImport } from './routes/dashboard/$guildId/serverlog'
 import { Route as DashboardGuildIdStarboardRouteImport } from './routes/dashboard/$guildId/starboard'
@@ -121,6 +118,11 @@ const DashboardGuildIdIndexRoute = DashboardGuildIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => DashboardGuildIdRoute,
 } as any)
+const DashboardGuildIdAfkRoute = DashboardGuildIdAfkRouteImport.update({
+  id: '/afk',
+  path: '/afk',
+  getParentRoute: () => DashboardGuildIdRoute,
+} as any)
 const DashboardGuildIdAntinukeRoute =
   DashboardGuildIdAntinukeRouteImport.update({
     id: '/antinuke',
@@ -171,11 +173,6 @@ const DashboardGuildIdGiveawaysRoute =
     path: '/giveaways',
     getParentRoute: () => DashboardGuildIdRoute,
   } as any)
-const DashboardGuildIdHelpRoute = DashboardGuildIdHelpRouteImport.update({
-  id: '/help',
-  path: '/help',
-  getParentRoute: () => DashboardGuildIdRoute,
-} as any)
 const DashboardGuildIdHoneypotRoute =
   DashboardGuildIdHoneypotRouteImport.update({
     id: '/honeypot',
@@ -221,22 +218,6 @@ const DashboardGuildIdPhishingRoute =
   DashboardGuildIdPhishingRouteImport.update({
     id: '/phishing',
     path: '/phishing',
-    getParentRoute: () => DashboardGuildIdRoute,
-  } as any)
-const DashboardGuildIdPingRoute = DashboardGuildIdPingRouteImport.update({
-  id: '/ping',
-  path: '/ping',
-  getParentRoute: () => DashboardGuildIdRoute,
-} as any)
-const DashboardGuildIdPollsRoute = DashboardGuildIdPollsRouteImport.update({
-  id: '/polls',
-  path: '/polls',
-  getParentRoute: () => DashboardGuildIdRoute,
-} as any)
-const DashboardGuildIdRemindersRoute =
-  DashboardGuildIdRemindersRouteImport.update({
-    id: '/reminders',
-    path: '/reminders',
     getParentRoute: () => DashboardGuildIdRoute,
   } as any)
 const DashboardGuildIdRolemenuRoute =
@@ -320,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/dashboard/$guildId/afk': typeof DashboardGuildIdAfkRoute
   '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
   '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
   '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
@@ -329,7 +311,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
   '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
   '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
-  '/dashboard/$guildId/help': typeof DashboardGuildIdHelpRoute
   '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
   '/dashboard/$guildId/joinroles': typeof DashboardGuildIdJoinrolesRoute
   '/dashboard/$guildId/leveling': typeof DashboardGuildIdLevelingRoute
@@ -338,9 +319,6 @@ export interface FileRoutesByFullPath {
   '/dashboard/$guildId/moderation': typeof DashboardGuildIdModerationRoute
   '/dashboard/$guildId/permissions': typeof DashboardGuildIdPermissionsRoute
   '/dashboard/$guildId/phishing': typeof DashboardGuildIdPhishingRoute
-  '/dashboard/$guildId/ping': typeof DashboardGuildIdPingRoute
-  '/dashboard/$guildId/polls': typeof DashboardGuildIdPollsRoute
-  '/dashboard/$guildId/reminders': typeof DashboardGuildIdRemindersRoute
   '/dashboard/$guildId/rolemenu': typeof DashboardGuildIdRolemenuRoute
   '/dashboard/$guildId/serverlog': typeof DashboardGuildIdServerlogRoute
   '/dashboard/$guildId/starboard': typeof DashboardGuildIdStarboardRoute
@@ -367,6 +345,7 @@ export interface FileRoutesByTo {
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/dashboard/$guildId/afk': typeof DashboardGuildIdAfkRoute
   '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
   '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
   '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
@@ -376,7 +355,6 @@ export interface FileRoutesByTo {
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
   '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
   '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
-  '/dashboard/$guildId/help': typeof DashboardGuildIdHelpRoute
   '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
   '/dashboard/$guildId/joinroles': typeof DashboardGuildIdJoinrolesRoute
   '/dashboard/$guildId/leveling': typeof DashboardGuildIdLevelingRoute
@@ -385,9 +363,6 @@ export interface FileRoutesByTo {
   '/dashboard/$guildId/moderation': typeof DashboardGuildIdModerationRoute
   '/dashboard/$guildId/permissions': typeof DashboardGuildIdPermissionsRoute
   '/dashboard/$guildId/phishing': typeof DashboardGuildIdPhishingRoute
-  '/dashboard/$guildId/ping': typeof DashboardGuildIdPingRoute
-  '/dashboard/$guildId/polls': typeof DashboardGuildIdPollsRoute
-  '/dashboard/$guildId/reminders': typeof DashboardGuildIdRemindersRoute
   '/dashboard/$guildId/rolemenu': typeof DashboardGuildIdRolemenuRoute
   '/dashboard/$guildId/serverlog': typeof DashboardGuildIdServerlogRoute
   '/dashboard/$guildId/starboard': typeof DashboardGuildIdStarboardRoute
@@ -416,6 +391,7 @@ export interface FileRoutesById {
   '/verify/$token': typeof VerifyTokenRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/dashboard/$guildId/afk': typeof DashboardGuildIdAfkRoute
   '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
   '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
   '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
@@ -425,7 +401,6 @@ export interface FileRoutesById {
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
   '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
   '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
-  '/dashboard/$guildId/help': typeof DashboardGuildIdHelpRoute
   '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
   '/dashboard/$guildId/joinroles': typeof DashboardGuildIdJoinrolesRoute
   '/dashboard/$guildId/leveling': typeof DashboardGuildIdLevelingRoute
@@ -434,9 +409,6 @@ export interface FileRoutesById {
   '/dashboard/$guildId/moderation': typeof DashboardGuildIdModerationRoute
   '/dashboard/$guildId/permissions': typeof DashboardGuildIdPermissionsRoute
   '/dashboard/$guildId/phishing': typeof DashboardGuildIdPhishingRoute
-  '/dashboard/$guildId/ping': typeof DashboardGuildIdPingRoute
-  '/dashboard/$guildId/polls': typeof DashboardGuildIdPollsRoute
-  '/dashboard/$guildId/reminders': typeof DashboardGuildIdRemindersRoute
   '/dashboard/$guildId/rolemenu': typeof DashboardGuildIdRolemenuRoute
   '/dashboard/$guildId/serverlog': typeof DashboardGuildIdServerlogRoute
   '/dashboard/$guildId/starboard': typeof DashboardGuildIdStarboardRoute
@@ -466,6 +438,7 @@ export interface FileRouteTypes {
     | '/verify/$token'
     | '/dashboard/'
     | '/api/auth/$'
+    | '/dashboard/$guildId/afk'
     | '/dashboard/$guildId/antinuke'
     | '/dashboard/$guildId/antiraid'
     | '/dashboard/$guildId/appeals'
@@ -475,7 +448,6 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/cases'
     | '/dashboard/$guildId/counters'
     | '/dashboard/$guildId/giveaways'
-    | '/dashboard/$guildId/help'
     | '/dashboard/$guildId/honeypot'
     | '/dashboard/$guildId/joinroles'
     | '/dashboard/$guildId/leveling'
@@ -484,9 +456,6 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/moderation'
     | '/dashboard/$guildId/permissions'
     | '/dashboard/$guildId/phishing'
-    | '/dashboard/$guildId/ping'
-    | '/dashboard/$guildId/polls'
-    | '/dashboard/$guildId/reminders'
     | '/dashboard/$guildId/rolemenu'
     | '/dashboard/$guildId/serverlog'
     | '/dashboard/$guildId/starboard'
@@ -513,6 +482,7 @@ export interface FileRouteTypes {
     | '/verify/$token'
     | '/dashboard'
     | '/api/auth/$'
+    | '/dashboard/$guildId/afk'
     | '/dashboard/$guildId/antinuke'
     | '/dashboard/$guildId/antiraid'
     | '/dashboard/$guildId/appeals'
@@ -522,7 +492,6 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/cases'
     | '/dashboard/$guildId/counters'
     | '/dashboard/$guildId/giveaways'
-    | '/dashboard/$guildId/help'
     | '/dashboard/$guildId/honeypot'
     | '/dashboard/$guildId/joinroles'
     | '/dashboard/$guildId/leveling'
@@ -531,9 +500,6 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/moderation'
     | '/dashboard/$guildId/permissions'
     | '/dashboard/$guildId/phishing'
-    | '/dashboard/$guildId/ping'
-    | '/dashboard/$guildId/polls'
-    | '/dashboard/$guildId/reminders'
     | '/dashboard/$guildId/rolemenu'
     | '/dashboard/$guildId/serverlog'
     | '/dashboard/$guildId/starboard'
@@ -561,6 +527,7 @@ export interface FileRouteTypes {
     | '/verify/$token'
     | '/dashboard/'
     | '/api/auth/$'
+    | '/dashboard/$guildId/afk'
     | '/dashboard/$guildId/antinuke'
     | '/dashboard/$guildId/antiraid'
     | '/dashboard/$guildId/appeals'
@@ -570,7 +537,6 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/cases'
     | '/dashboard/$guildId/counters'
     | '/dashboard/$guildId/giveaways'
-    | '/dashboard/$guildId/help'
     | '/dashboard/$guildId/honeypot'
     | '/dashboard/$guildId/joinroles'
     | '/dashboard/$guildId/leveling'
@@ -579,9 +545,6 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/moderation'
     | '/dashboard/$guildId/permissions'
     | '/dashboard/$guildId/phishing'
-    | '/dashboard/$guildId/ping'
-    | '/dashboard/$guildId/polls'
-    | '/dashboard/$guildId/reminders'
     | '/dashboard/$guildId/rolemenu'
     | '/dashboard/$guildId/serverlog'
     | '/dashboard/$guildId/starboard'
@@ -708,6 +671,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardGuildIdIndexRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
+    '/dashboard/$guildId/afk': {
+      id: '/dashboard/$guildId/afk'
+      path: '/afk'
+      fullPath: '/dashboard/$guildId/afk'
+      preLoaderRoute: typeof DashboardGuildIdAfkRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
     '/dashboard/$guildId/antinuke': {
       id: '/dashboard/$guildId/antinuke'
       path: '/antinuke'
@@ -771,13 +741,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardGuildIdGiveawaysRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
-    '/dashboard/$guildId/help': {
-      id: '/dashboard/$guildId/help'
-      path: '/help'
-      fullPath: '/dashboard/$guildId/help'
-      preLoaderRoute: typeof DashboardGuildIdHelpRouteImport
-      parentRoute: typeof DashboardGuildIdRoute
-    }
     '/dashboard/$guildId/honeypot': {
       id: '/dashboard/$guildId/honeypot'
       path: '/honeypot'
@@ -832,27 +795,6 @@ declare module '@tanstack/react-router' {
       path: '/phishing'
       fullPath: '/dashboard/$guildId/phishing'
       preLoaderRoute: typeof DashboardGuildIdPhishingRouteImport
-      parentRoute: typeof DashboardGuildIdRoute
-    }
-    '/dashboard/$guildId/ping': {
-      id: '/dashboard/$guildId/ping'
-      path: '/ping'
-      fullPath: '/dashboard/$guildId/ping'
-      preLoaderRoute: typeof DashboardGuildIdPingRouteImport
-      parentRoute: typeof DashboardGuildIdRoute
-    }
-    '/dashboard/$guildId/polls': {
-      id: '/dashboard/$guildId/polls'
-      path: '/polls'
-      fullPath: '/dashboard/$guildId/polls'
-      preLoaderRoute: typeof DashboardGuildIdPollsRouteImport
-      parentRoute: typeof DashboardGuildIdRoute
-    }
-    '/dashboard/$guildId/reminders': {
-      id: '/dashboard/$guildId/reminders'
-      path: '/reminders'
-      fullPath: '/dashboard/$guildId/reminders'
-      preLoaderRoute: typeof DashboardGuildIdRemindersRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
     '/dashboard/$guildId/rolemenu': {
@@ -943,6 +885,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface DashboardGuildIdRouteChildren {
+  DashboardGuildIdAfkRoute: typeof DashboardGuildIdAfkRoute
   DashboardGuildIdAntinukeRoute: typeof DashboardGuildIdAntinukeRoute
   DashboardGuildIdAntiraidRoute: typeof DashboardGuildIdAntiraidRoute
   DashboardGuildIdAppealsRoute: typeof DashboardGuildIdAppealsRoute
@@ -952,7 +895,6 @@ interface DashboardGuildIdRouteChildren {
   DashboardGuildIdCasesRoute: typeof DashboardGuildIdCasesRoute
   DashboardGuildIdCountersRoute: typeof DashboardGuildIdCountersRoute
   DashboardGuildIdGiveawaysRoute: typeof DashboardGuildIdGiveawaysRoute
-  DashboardGuildIdHelpRoute: typeof DashboardGuildIdHelpRoute
   DashboardGuildIdHoneypotRoute: typeof DashboardGuildIdHoneypotRoute
   DashboardGuildIdJoinrolesRoute: typeof DashboardGuildIdJoinrolesRoute
   DashboardGuildIdLevelingRoute: typeof DashboardGuildIdLevelingRoute
@@ -961,9 +903,6 @@ interface DashboardGuildIdRouteChildren {
   DashboardGuildIdModerationRoute: typeof DashboardGuildIdModerationRoute
   DashboardGuildIdPermissionsRoute: typeof DashboardGuildIdPermissionsRoute
   DashboardGuildIdPhishingRoute: typeof DashboardGuildIdPhishingRoute
-  DashboardGuildIdPingRoute: typeof DashboardGuildIdPingRoute
-  DashboardGuildIdPollsRoute: typeof DashboardGuildIdPollsRoute
-  DashboardGuildIdRemindersRoute: typeof DashboardGuildIdRemindersRoute
   DashboardGuildIdRolemenuRoute: typeof DashboardGuildIdRolemenuRoute
   DashboardGuildIdServerlogRoute: typeof DashboardGuildIdServerlogRoute
   DashboardGuildIdStarboardRoute: typeof DashboardGuildIdStarboardRoute
@@ -977,6 +916,7 @@ interface DashboardGuildIdRouteChildren {
 }
 
 const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
+  DashboardGuildIdAfkRoute: DashboardGuildIdAfkRoute,
   DashboardGuildIdAntinukeRoute: DashboardGuildIdAntinukeRoute,
   DashboardGuildIdAntiraidRoute: DashboardGuildIdAntiraidRoute,
   DashboardGuildIdAppealsRoute: DashboardGuildIdAppealsRoute,
@@ -986,7 +926,6 @@ const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
   DashboardGuildIdCasesRoute: DashboardGuildIdCasesRoute,
   DashboardGuildIdCountersRoute: DashboardGuildIdCountersRoute,
   DashboardGuildIdGiveawaysRoute: DashboardGuildIdGiveawaysRoute,
-  DashboardGuildIdHelpRoute: DashboardGuildIdHelpRoute,
   DashboardGuildIdHoneypotRoute: DashboardGuildIdHoneypotRoute,
   DashboardGuildIdJoinrolesRoute: DashboardGuildIdJoinrolesRoute,
   DashboardGuildIdLevelingRoute: DashboardGuildIdLevelingRoute,
@@ -995,9 +934,6 @@ const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
   DashboardGuildIdModerationRoute: DashboardGuildIdModerationRoute,
   DashboardGuildIdPermissionsRoute: DashboardGuildIdPermissionsRoute,
   DashboardGuildIdPhishingRoute: DashboardGuildIdPhishingRoute,
-  DashboardGuildIdPingRoute: DashboardGuildIdPingRoute,
-  DashboardGuildIdPollsRoute: DashboardGuildIdPollsRoute,
-  DashboardGuildIdRemindersRoute: DashboardGuildIdRemindersRoute,
   DashboardGuildIdRolemenuRoute: DashboardGuildIdRolemenuRoute,
   DashboardGuildIdServerlogRoute: DashboardGuildIdServerlogRoute,
   DashboardGuildIdStarboardRoute: DashboardGuildIdStarboardRoute,

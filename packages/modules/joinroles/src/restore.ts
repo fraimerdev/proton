@@ -42,7 +42,7 @@ export function planRestore(input: {
       skipped.push({
         roleId,
         reason:
-          'it is not on this server’s list of roles eligible for restoring. Add it in the ' +
+          'it is not in this server’s Roles to restore list. Add it in the ' +
           'Proton dashboard if it should come back.',
       });
       continue;

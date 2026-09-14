@@ -1,0 +1,11 @@
+/* giveaways page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.giveaways-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.giveaways-empty code {
+  color: var(--text-secondary);
+}

@@ -2,7 +2,7 @@ import { Permissions } from '@proton/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { ApiClient } from '../../../../lib/api-client.ts';
 import { auth } from '../../../../lib/auth.ts';
-import { fetchUserGuilds } from '../../../../lib/discord.ts';
+import { fetchCurrentUser, fetchUserGuilds } from '../../../../lib/discord.ts';
 import { getDiscordAccessToken } from '../../../../lib/discord-token.ts';
 import { loadEnv } from '../../../../lib/env.ts';
 import { accessGrants, resolveGuildAccess } from '../../../../lib/guild-access.ts';
@@ -38,7 +38,10 @@ export const Route = createFileRoute('/api/guilds/$guildId/card-preview')({
           return forbidden('Your session has ended. Reload this page to sign in again.');
 
         const token = await getDiscordAccessToken(request.headers, session.user.id);
-        const guilds = await fetchUserGuilds(env.REST_PROXY_URL, token);
+        const [guilds, profile] = await Promise.all([
+          fetchUserGuilds(env.REST_PROXY_URL, token),
+          fetchCurrentUser(env.REST_PROXY_URL, token),
+        ]);
         const access = resolveGuildAccess(guilds, params.guildId);
 
         if (!access)
@@ -60,8 +63,9 @@ export const Route = createFileRoute('/api/guilds/$guildId/card-preview')({
 
         // The signed-in user's own face and their server's real name, so the preview is a picture
         // of this guild's settings rather than of placeholder data.
-        if (session.user.image) query.avatar = session.user.image;
-        query.displayName ??= session.user.name;
+        const avatar = profile?.avatarUrl ?? session.user.image;
+        if (avatar) query.avatar = avatar;
+        query.displayName ??= profile?.name ?? session.user.name;
 
         const guildName = guilds.find((guild) => guild.id === params.guildId)?.name;
         if (guildName) query.guildName ??= guildName;

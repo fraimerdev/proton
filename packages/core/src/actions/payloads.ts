@@ -409,48 +409,16 @@ export const createChannelPayloadSchema = z.object({
 
 const colourValue = z.number().int().min(0).max(0xffffff);
 
-// Discord enforces these three exactly when a tertiary colour is sent; anything else is a 400. It
-// is one look, taken whole, not a palette.
-export const HOLOGRAPHIC_PRIMARY = 11127295;
-export const HOLOGRAPHIC_SECONDARY = 16759788;
-export const HOLOGRAPHIC_TERTIARY = 16761760;
-
-// secondary makes the role a gradient, tertiary turns that gradient holographic. Both are refused
-// unless the guild has ENHANCED_ROLE_COLORS, which no gateway dispatch Proton consumes reports —
-// so the request is made and Discord's refusal is what names the missing feature.
-export const roleColoursSchema = z
-  .object({
-    primaryColor: colourValue,
-    secondaryColor: colourValue.nullable().optional(),
-    tertiaryColor: colourValue.nullable().optional(),
-  })
-  .refine(
-    (c) =>
-      c.tertiaryColor === undefined ||
-      c.tertiaryColor === null ||
-      (c.primaryColor === HOLOGRAPHIC_PRIMARY &&
-        c.secondaryColor === HOLOGRAPHIC_SECONDARY &&
-        c.tertiaryColor === HOLOGRAPHIC_TERTIARY),
-    { message: 'a holographic role takes Discord’s three fixed colours and no others' },
-  );
-
-export type RoleColours = z.infer<typeof roleColoursSchema>;
-
 export const createRolePayloadSchema = z.object({
   name: z.string().min(1).max(100),
   // A decimal string, never a number: role permissions exceed Number.MAX_SAFE_INTEGER.
   permissions: z.string().regex(/^\d+$/).optional(),
   color: z.number().int().min(0).max(0xffffff).optional(),
-  colors: roleColoursSchema.optional(),
   hoist: z.boolean().optional(),
   mentionable: z.boolean().optional(),
 });
 
-export const editRolePayloadSchema = z.object({
-  roleId: snowflakeSchema,
-  name: z.string().min(1).max(100).optional(),
-  colors: roleColoursSchema.optional(),
-});
+export const deleteRolePayloadSchema = z.object({ roleId: snowflakeSchema });
 
 export const unlockPayloadSchema = z.object({
   channelId: snowflakeSchema,
@@ -638,6 +606,10 @@ export const setBotNicknamePayloadSchema = z.object({
   nickname: z.string().min(1).max(NICKNAME_MAX).nullable(),
 });
 
+export const setMemberNicknamePayloadSchema = z.object({
+  nickname: z.string().min(1).max(NICKNAME_MAX).nullable(),
+});
+
 export const setBotProfilePayloadSchema = z
   .object({
     avatar: imageDataUriSchema.nullable().optional(),
@@ -647,6 +619,15 @@ export const setBotProfilePayloadSchema = z
   .refine((p) => p.avatar !== undefined || p.banner !== undefined || p.bio !== undefined, {
     message: 'a profile push must carry at least one of avatar, banner or bio',
   });
+
+export const botNameStyleSchema = z.object({
+  fontId: z.number().int().positive(),
+  effectId: z.number().int().positive(),
+  colours: z.array(colourValue).min(1).max(5),
+});
+
+// null is not "leave it alone": it is the reset, sent to Discord as three nulls.
+export const setBotNameStylePayloadSchema = z.object({ style: botNameStyleSchema.nullable() });
 
 export type SendPayload = z.infer<typeof sendPayloadSchema>;
 export type EditMessagePayload = z.infer<typeof editMessagePayloadSchema>;
@@ -664,7 +645,7 @@ export type PurgePayload = z.infer<typeof purgePayloadSchema>;
 export type LockdownPayload = z.infer<typeof lockdownPayloadSchema>;
 export type CreateChannelPayload = z.infer<typeof createChannelPayloadSchema>;
 export type CreateRolePayload = z.infer<typeof createRolePayloadSchema>;
-export type EditRolePayload = z.infer<typeof editRolePayloadSchema>;
+export type DeleteRolePayload = z.infer<typeof deleteRolePayloadSchema>;
 export type DeleteChannelPayload = z.infer<typeof deleteChannelPayloadSchema>;
 export type SetChannelOverwritePayload = z.infer<typeof setChannelOverwritePayloadSchema>;
 export type DeleteChannelOverwritePayload = z.infer<typeof deleteChannelOverwritePayloadSchema>;
@@ -679,4 +660,7 @@ export type AutomodRuleCreatePayload = z.infer<typeof automodRuleCreatePayloadSc
 export type AutomodRuleUpdatePayload = z.infer<typeof automodRuleUpdatePayloadSchema>;
 export type AutomodRuleDeletePayload = z.infer<typeof automodRuleDeletePayloadSchema>;
 export type SetBotNicknamePayload = z.infer<typeof setBotNicknamePayloadSchema>;
+export type SetMemberNicknamePayload = z.infer<typeof setMemberNicknamePayloadSchema>;
 export type SetBotProfilePayload = z.infer<typeof setBotProfilePayloadSchema>;
+export type BotNameStyle = z.infer<typeof botNameStyleSchema>;
+export type SetBotNameStylePayload = z.infer<typeof setBotNameStylePayloadSchema>;

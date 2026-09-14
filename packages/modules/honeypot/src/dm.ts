@@ -1,8 +1,16 @@
 import type { ActionResult, EntitlementTier, ModuleContext } from '@proton/core';
 import { appealLinkUrl, BUTTON_URL_MAX, newAppealLinkClaims, signAppealLink } from '@proton/core';
+import { serverFactsFrom, type UserFacts } from '@proton/core/placeholders';
 import { HONEYPOT_ACTOR, type HoneypotConfig, MODULE_ID } from './config.ts';
-import { describeUnbound, type HoneypotDeps } from './deps.ts';
-import { type DmFacts, renderDirectMessage } from './render.ts';
+import {
+  describeUnbound,
+  type HoneypotDeps,
+  placeholderClock,
+  readBotFacts,
+  readGuildState,
+} from './deps.ts';
+import { usesNamespace } from './placeholders.ts';
+import { type DmFacts, dmPlaceholderKeys, renderDirectMessage } from './render.ts';
 import { DM_ATTEMPTS_MAX } from './store.ts';
 
 export type DmOutcome = 'sent' | 'closed' | 'failed' | 'skipped' | 'gave_up';
@@ -68,6 +76,51 @@ export async function appealUrlFor(
   }
 
   return undefined;
+}
+
+async function profileFor(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+  userId: string,
+  keys: ReadonlySet<string>,
+): Promise<UserFacts | null> {
+  const profiled = [...keys].some(
+    (key) => key.startsWith('user.') && key !== 'user.id' && key !== 'user.mention',
+  );
+
+  if (!profiled || !deps.placeholders) {
+    return { id: userId, username: null, globalName: null, avatarHash: null };
+  }
+
+  try {
+    return await deps.placeholders.user(userId);
+  } catch (error) {
+    ctx.logger.warn(
+      `honeypot could not read ${userId}'s profile, so their name renders as nothing in the ` +
+        `direct message: ${error instanceof Error ? error.message : String(error)}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId },
+    );
+    return null;
+  }
+}
+
+export async function directMessageFacts(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+  userId: string,
+): Promise<DmFacts> {
+  const state = await readGuildState(ctx, deps);
+  const guildName = state?.name ?? (await deps.guildName?.(ctx.guildId)) ?? 'this server';
+  if (!ctx.config.sendDirectMessage) return { guildName };
+
+  const keys = dmPlaceholderKeys(ctx.config, ctx.tier);
+
+  return {
+    guildName,
+    user: await profileFor(ctx, deps, userId, keys),
+    server: usesNamespace(keys, 'server') ? serverFactsFrom(state, ctx.guildId) : null,
+    bot: usesNamespace(keys, 'bot') ? await readBotFacts(ctx, deps) : null,
+  };
 }
 
 export const DM_RESULT_LABEL: Record<DmOutcome, string> = {
@@ -146,7 +199,25 @@ export async function sendDirectMessage(
     await deps.dms?.remember(ctx.guildId, root, channelId);
   }
 
-  const built = renderDirectMessage(ctx.config, tier, facts);
+  const now = placeholderClock(deps);
+  let built = renderDirectMessage(ctx.config, tier, facts, now);
+
+  if (!built.ok && (tier ?? 'free') !== 'free') {
+    ctx.logger.error(
+      `honeypot could not fill in this server's own direct message for ${userId}, so it sent ` +
+        `Proton's built-in one instead: ${built.humanReason}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId },
+    );
+    built = renderDirectMessage(ctx.config, 'free', facts, now);
+  }
+
+  if (!built.ok) {
+    ctx.logger.error(
+      `honeypot opened a direct message with ${userId} but could not write it: ${built.humanReason}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId },
+    );
+    return 'failed';
+  }
 
   const sent = await ctx.executor.execute({
     guildId: ctx.guildId,

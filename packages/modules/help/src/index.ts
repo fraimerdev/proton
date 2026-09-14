@@ -29,11 +29,6 @@ export function createHelpModule(deps: HelpDeps = {}): ModuleManifest<typeof hel
     requiredPermissions: [Permissions.ViewChannel],
     actionKinds: ['interaction_reply'],
     commands: [helpCommand(deps)],
-
-    dashboard: {
-      icon: 'help-circle',
-      sections: [{ id: 'general', title: 'General', fields: ['enabled', 'ephemeral'] }],
-    },
   };
 }
 

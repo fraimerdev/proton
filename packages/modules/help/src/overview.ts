@@ -17,10 +17,11 @@ const CATEGORIES = [
     'repeat warnings.',
   '**Security** — a verification gate for new members, raid and nuke breakers, phishing-link ' +
     'matching, honeypot channels, AutoMod rules and server backups.',
-  '**Engagement** — leveling with role rewards, giveaways, a starboard, suggestions, role menus ' +
-    'and welcome messages.',
-  '**Utility** — tickets, tags, reminders, polls, temporary voice channels, counter channels, ' +
-    'join roles, how Proton looks in this server, and which roles may run each command.',
+  '**Engagement** — leveling with role rewards and XP multipliers, giveaways, a starboard, ' +
+    'suggestions, role menus, and welcome, goodbye and boost messages.',
+  '**Utility** — tickets, tags, reminders, AFK statuses, polls, temporary voice channels, ' +
+    'counter channels, join roles, how Proton looks in this server, and which roles may run each ' +
+    'command.',
   '**Logging** — Discord’s own audit events routed to the channels you pick, and opt-in message ' +
     'logs kept for 30 days.',
 ].join('\n');

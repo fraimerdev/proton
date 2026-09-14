@@ -4,6 +4,10 @@ import { DEFAULT_PRESENCE, loadEnv } from './env.ts';
 import { createGatewayManager } from './manager.ts';
 import { RedisSessionStore } from './session-store.ts';
 
+process.on('unhandledRejection', (reason) => {
+  console.error('gateway: unhandled promise rejection', reason);
+});
+
 const env = loadEnv();
 
 const sessionRedis = createRedisClient(env.REDIS_URL, {
@@ -15,7 +19,7 @@ const busRedis = createRedisClient(env.REDIS_URL, { db: env.REDIS_DB_BUS, label:
 const store = new RedisSessionStore(sessionRedis);
 const bus = new RedisStreamsEventBus(busRedis);
 
-const manager = createGatewayManager({
+const gateway = createGatewayManager({
   token: env.DISCORD_BOT_TOKEN,
   intents: env.GATEWAY_INTENTS,
   presence: DEFAULT_PRESENCE,
@@ -24,16 +28,16 @@ const manager = createGatewayManager({
   bus,
 });
 
-await manager.connect();
-console.log('gateway connected');
-
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     void (async () => {
-      await manager.destroy({ reason: `received ${signal}` });
+      await gateway.shutdown(`received ${signal}`);
       sessionRedis.disconnect();
       busRedis.disconnect();
       process.exit(0);
     })();
   });
 }
+
+await gateway.ws.connect();
+console.log('gateway connected');

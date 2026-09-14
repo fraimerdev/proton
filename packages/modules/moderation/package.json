@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./config": "./src/config.ts",
     "./members": "./src/members.ts",
     "./run-store": "./src/run-store.ts",
     "./store": "./src/store.ts"

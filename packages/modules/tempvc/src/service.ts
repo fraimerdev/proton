@@ -1,4 +1,5 @@
-import type { ModuleContext, PermissionOverwriteSpec } from '@proton/core';
+import type { GuildStateStore, ModuleContext, PermissionOverwriteSpec } from '@proton/core';
+import { type PlaceholderEnvironment, serverFactsFrom, usedKeys } from '@proton/core/placeholders';
 import { SWEEP_JOB_ID } from './cleanup.ts';
 import {
   allows,
@@ -8,13 +9,18 @@ import {
   MODULE_ID,
   type OwnerControl,
   type PrivacyMode,
-  renderChannelName,
   type TempVcConfig,
   type TempVcHub,
   VOICE_CHANNEL_TYPE,
 } from './config.ts';
 import { panelMessage } from './interface.ts';
 import { planOverwrites } from './permissions.ts';
+import {
+  renderTempVcName,
+  TEMPVC_GUILD_KEYS,
+  TEMPVC_NAME_SURFACE,
+  type TempVcNameFacts,
+} from './placeholders.ts';
 import type { TempVoiceRepository } from './repository.ts';
 import type { AccessKind, TempVoiceChannelRow } from './table.ts';
 import type { VoiceMember } from './voice.ts';
@@ -33,6 +39,10 @@ export interface ServiceDeps {
   overwritesOf?(guildId: string, channelId: string): Promise<PermissionOverwriteSpec[] | null>;
 
   botUserId: string;
+
+  guildState?: Pick<GuildStateStore, 'get'> | undefined;
+
+  placeholders?: Pick<PlaceholderEnvironment, 'now'> | undefined;
 
   now?(): Date;
   newId?(): string;
@@ -125,6 +135,8 @@ export class TemporaryVoiceService {
             hub.permissionSync === 'creator' ? hub.channelId : (hub.categoryId ?? hub.channelId),
           )) ?? undefined);
 
+    const name = await this.#channelName(ctx, hub, member);
+
     const created = await ctx.executor.execute({
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
@@ -135,11 +147,7 @@ export class TemporaryVoiceService {
       dryRun: false,
       record: false,
       payload: {
-        name: renderChannelName(hub.nameTemplate, {
-          displayName: member.displayName,
-          username: member.username,
-          userId: member.userId,
-        }),
+        name,
         type: VOICE_CHANNEL_TYPE,
         ...(hub.categoryId ? { parentId: hub.categoryId } : {}),
         ...(hub.userLimit > 0 ? { userLimit: hub.userLimit } : {}),
@@ -180,6 +188,41 @@ export class TemporaryVoiceService {
     }
 
     return { created: { ...row, channelId, status: 'live' } };
+  }
+
+  async #channelName(
+    ctx: ModuleContext<TempVcConfig>,
+    hub: TempVcHub,
+    member: VoiceMember,
+  ): Promise<string> {
+    const facts: TempVcNameFacts = { owner: member, hub: { id: hub.channelId }, server: null };
+    const keys = usedKeys(TEMPVC_NAME_SURFACE, [hub.nameTemplate], { allowedOnly: true });
+
+    if (TEMPVC_GUILD_KEYS.some((key) => keys.has(key))) {
+      try {
+        const state = (await this.#deps.guildState?.get(ctx.guildId)) ?? null;
+        const channel = state?.channels.get(hub.channelId);
+
+        facts.server = serverFactsFrom(state, ctx.guildId);
+        if (channel) {
+          facts.hub = {
+            id: hub.channelId,
+            name: channel.name,
+            type: channel.type,
+            parentId: channel.parentId,
+          };
+        }
+      } catch (error) {
+        ctx.logger.warn(
+          `a temporary voice channel was named without the server or creator channel name, ` +
+            `because Proton could not read them: ${error instanceof Error ? error.message : String(error)}`,
+          { guildId: ctx.guildId, moduleId: MODULE_ID, channelId: hub.channelId },
+        );
+      }
+    }
+
+    const now = this.#deps.placeholders?.now() ?? this.#now().getTime();
+    return renderTempVcName(hub.nameTemplate, facts, now).output;
   }
 
   async move(

@@ -1,7 +1,14 @@
 import type { ActionResult, ModuleContext } from '@proton/core';
 import { MESSAGE_CONTENT_MAX } from '@proton/core';
+import { clipGraphemes, type PlaceholderLookup } from '@proton/core/placeholders';
 import { APPEALS_ACTOR, type AppealPanel, type AppealsConfig, MODULE_ID } from './config.ts';
+import {
+  APPEAL_DECISION_SURFACE,
+  appealDecisionFacts,
+  renderAppealDecision,
+} from './placeholders.ts';
 import type { AppealRecord, AppealStore } from './store.ts';
+import type { FiledAppeal } from './web.ts';
 
 export const DM_ATTEMPTS_MAX = 5;
 
@@ -13,12 +20,24 @@ function channelIdOf(result: ActionResult): string | null {
   return typeof id === 'string' ? id : null;
 }
 
-export function decisionMessage(appeal: AppealRecord, panel: AppealPanel): string {
-  const verdict = appeal.status === 'approved' ? panel.approvedMessage : panel.deniedMessage;
+export function decisionMessage(
+  appeal: Pick<FiledAppeal, 'number' | 'status'>,
+  panel: AppealPanel,
+  lookup: PlaceholderLookup,
+  now: number,
+): string {
+  const approved = appeal.status === 'approved';
 
-  const rejoin = appeal.status === 'approved' && panel.rejoinUrl ? `\n\n${panel.rejoinUrl}` : '';
+  const verdict = renderAppealDecision(
+    approved ? panel.approvedMessage : panel.deniedMessage,
+    lookup,
+    'discord_text',
+    now,
+  ).output;
 
-  return `**Appeal #${appeal.number}**\n${verdict}${rejoin}`.slice(0, MESSAGE_CONTENT_MAX);
+  const rejoin = approved && panel.rejoinUrl ? `\n\n${panel.rejoinUrl}` : '';
+
+  return clipGraphemes(`**Appeal #${appeal.number}**\n${verdict}${rejoin}`, MESSAGE_CONTENT_MAX);
 }
 
 /**
@@ -31,6 +50,7 @@ export async function tellAppellant(
   store: AppealStore,
   appeal: AppealRecord,
   panel: AppealPanel,
+  now: number = Date.now(),
 ): Promise<NotifyOutcome> {
   let channelId = appeal.dmChannelId;
 
@@ -64,6 +84,8 @@ export async function tellAppellant(
     await store.rememberDm(ctx.guildId, appeal.id, channelId);
   }
 
+  const lookup = APPEAL_DECISION_SURFACE.build(appealDecisionFacts(appeal, panel), { now });
+
   const sent = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -75,7 +97,7 @@ export async function tellAppellant(
     record: false,
     payload: {
       channelId,
-      content: decisionMessage(appeal, panel),
+      content: decisionMessage(appeal, panel, lookup, now),
       allowedMentions: { parse: [] },
     },
   });

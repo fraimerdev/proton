@@ -1,19 +1,38 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  type ContainerChild,
   editMessagePayloadSchema,
+  type GuildStateStore,
   MESSAGE_FLAG_IS_COMPONENTS_V2,
   parseCustomId,
   sendPayloadSchema,
 } from '@proton/core';
+import { type PlaceholderEnvironment, PROTON_SUPPORT_URL } from '@proton/core/placeholders';
 import { ButtonStyle, ComponentType } from 'discord-api-types/v10';
-import { HONEYPOT_ACTIONS, type HoneypotAction, MODULE_ID } from '../src/config.ts';
+import {
+  HONEYPOT_ACTIONS,
+  type HoneypotAction,
+  type HoneypotLayout,
+  MODULE_ID,
+} from '../src/config.ts';
 import {
   buildNoticeComponents,
   caughtLabel,
   HONEYPOT_COLOUR,
   STATS_ACTION,
 } from '../src/notice.ts';
-import { armed, config, GUILD, harness, LOUNGE, MEMBER, TRAP, trap } from './harness.ts';
+import {
+  armed,
+  BOT,
+  config,
+  GUILD,
+  type Harness,
+  harness,
+  LOUNGE,
+  MEMBER,
+  TRAP,
+  trap,
+} from './harness.ts';
 
 const REMEMBERED = '700000000000009001';
 
@@ -572,5 +591,170 @@ describe('a guild that may not author its own layout', () => {
 
     expect(config.noticeLayout).toBe(CUSTOM);
     expect(CUSTOM.v2[0]?.children[0]?.content).toBe('Ours.');
+  });
+});
+
+function layout(...children: ContainerChild[]): HoneypotLayout {
+  return {
+    mentions: { everyone: false, roles: false, users: false },
+    embeds: [],
+    components: [],
+    v2: [{ kind: 'container', children }],
+  };
+}
+
+function namedServer(h: Harness, name: string): { reads: () => number } {
+  const store = h.deps.guildState;
+  if (!store) throw new Error('the harness has no guild state');
+
+  let reads = 0;
+  const named: GuildStateStore = {
+    ...store,
+    get: async (guildId) => {
+      reads += 1;
+      const state = await store.get(guildId);
+      return state === null ? null : { ...state, name };
+    },
+  };
+
+  h.deps.guildState = named;
+  return { reads: () => reads };
+}
+
+function protonProfile(h: Harness): { reads: () => number } {
+  let reads = 0;
+  const environment: PlaceholderEnvironment = {
+    applicationId: BOT,
+    bot: async () => {
+      reads += 1;
+      return { id: BOT, name: 'Proton', avatarHash: null, supportUrl: PROTON_SUPPORT_URL };
+    },
+    server: async (guildId) => ({ id: guildId }),
+    user: async (userId) => ({
+      id: userId,
+      username: 'tester',
+      globalName: 'Tester',
+      avatarHash: null,
+    }),
+    now: () => h.now(),
+  };
+
+  h.deps.placeholders = environment;
+  return { reads: () => reads };
+}
+
+describe('placeholders in the warning message', () => {
+  const FILLED = layout({
+    kind: 'text',
+    content:
+      '{server.name} watches {channel.mention} (#{channel.name}), which has caught ' +
+      '{honeypot.caught}. Kept by {bot.name}.',
+  });
+
+  test('a paying guild’s notice fills in the server, the channel, the count and Proton', async () => {
+    const h = harness();
+    namedServer(h, 'Proton HQ');
+    protonProfile(h);
+    h.stats.seed(GUILD, TRAP, [caught(h.now())]);
+
+    await h.saved({ config: { ...armed(), noticeLayout: FILLED }, tier: 'plus' });
+
+    expect(texts(h.componentsIn(TRAP))[0]).toBe(
+      `Proton HQ watches <#${TRAP}> (#do-not-post), which has caught 1. Kept by Proton.`,
+    );
+  });
+
+  test('reads the server and Proton’s profile only when the notice uses them', async () => {
+    const h = harness();
+    const server = namedServer(h, 'Proton HQ');
+    const profile = protonProfile(h);
+
+    await h.saved({ config: armed(), tier: 'plus' });
+
+    expect(server.reads()).toBe(0);
+    expect(profile.reads()).toBe(0);
+  });
+
+  test('the count moving on a catch keeps what the notice filled in', async () => {
+    const h = harness();
+    namedServer(h, 'Proton HQ');
+    protonProfile(h);
+    const settings = { ...armed(), noticeLayout: FILLED };
+
+    await h.saved({ config: settings, tier: 'plus' });
+    await h.trip({ config: settings, tier: 'plus' });
+
+    const edited = h.editedIn(TRAP).at(-1);
+    const nodes = Array.isArray(edited?.components) ? (edited.components as Node[]) : [];
+
+    expect(texts(nodes)[0]).toBe(
+      `Proton HQ watches <#${TRAP}> (#do-not-post), which has caught 1. Kept by Proton.`,
+    );
+    expect(labelOf(nodes)).toBe('Softbans: 1');
+  });
+
+  test('a notice that cannot be filled in is not posted, and the log names the field', async () => {
+    const h = harness();
+    const unnamed = layout(
+      { kind: 'text', content: 'Read the rules.' },
+      {
+        kind: 'row',
+        row: {
+          kind: 'buttons',
+          buttons: [
+            { key: 'rules', style: 'link', label: '{server.name}', url: 'https://example.com/' },
+          ],
+        },
+      },
+    );
+
+    const outcome = await h.saved({ config: { ...armed(), noticeLayout: unnamed }, tier: 'plus' });
+
+    expect(outcome).toEqual({
+      action: 'reconciled',
+      changes: [{ channelId: TRAP, did: 'failed' }],
+    });
+    expect(h.rest.posted).toEqual([]);
+
+    const said = h.said('error').join(' ');
+    expect(said).toContain('noticeLayout.v2.0.children.1.row.buttons.0.label');
+    expect(said).toContain('{server.name}');
+  });
+
+  test('an appeal link typed into the notice posts nothing, and no link is minted for it', async () => {
+    const h = harness();
+    let secretReads = 0;
+
+    Object.defineProperty(h.deps, 'linkSecret', {
+      configurable: true,
+      enumerable: true,
+      get: () => {
+        secretReads += 1;
+        return 'a'.repeat(32);
+      },
+    });
+
+    await h.saved({
+      config: {
+        ...armed({ action: 'ban', appealPanelId: 'ban-form' }),
+        noticeLayout: layout({ kind: 'text', content: 'Appeal: {honeypot.appeal_url}' }),
+      },
+      tier: 'plus',
+    });
+
+    expect(texts(h.componentsIn(TRAP))[0]).toBe('Appeal: ');
+    expect(secretReads).toBe(0);
+  });
+
+  test('a free guild posts the built-in notice and reads nothing for its stored one', async () => {
+    const h = harness();
+    const server = namedServer(h, 'Proton HQ');
+    const profile = protonProfile(h);
+
+    await h.saved({ config: { ...armed(), noticeLayout: FILLED }, tier: 'free' });
+
+    expect(texts(h.componentsIn(TRAP))[0]).toBe('## 🍯  DO NOT SEND MESSAGES IN THIS CHANNEL');
+    expect(server.reads()).toBe(0);
+    expect(profile.reads()).toBe(0);
   });
 });

@@ -4,11 +4,14 @@ import { channelCommands } from './commands/channel.ts';
 import { memberCommands } from './commands/member.ts';
 import { roleCommand } from './commands/role.ts';
 import {
+  liftStoredConfig,
   MODERATION_SCHEMA_VERSION,
   moderationConfigSchema,
   moderationDefaultConfig,
+  moderationFormSchema,
 } from './config.ts';
 import type { ModerationDeps } from './deps.ts';
+import { escalationRules, moderationPresetRules } from './escalation.ts';
 import { createRoleRunHandler, ROLE_RUN_JOB } from './role-run.ts';
 
 export { channelCommands, lockdownCommand, slowmodeCommand } from './commands/channel.ts';
@@ -21,12 +24,20 @@ export {
 } from './commands/member.ts';
 export { roleCommand } from './commands/role.ts';
 export {
+  ESCALATION_ACTIONS,
+  type EscalationAction,
+  type EscalationRung,
+  escalationLadderSchema,
+  escalationRungSchema,
+  liftStoredConfig,
   MODERATION_SCHEMA_VERSION,
   type ModerationConfig,
   moderationConfigSchema,
   moderationDefaultConfig,
+  moderationFormSchema,
 } from './config.ts';
 export type { ModerationDeps } from './deps.ts';
+export { escalationRuleId, escalationRules, moderationPresetRules } from './escalation.ts';
 export {
   type GuildMemberLister,
   type GuildMemberSummary,
@@ -69,8 +80,11 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
   name: 'Moderation',
   category: 'moderation',
   configSchema: moderationConfigSchema,
+
+  formSchema: moderationFormSchema,
   defaultConfig: moderationDefaultConfig,
   schemaVersion: MODERATION_SCHEMA_VERSION,
+  liftStoredConfig,
 
   requiredIntents: [GatewayIntentBits.Guilds],
 
@@ -108,6 +122,8 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
   scheduledHandlers: { [ROLE_RUN_JOB]: createRoleRunHandler({}) },
 
   emits: ['moderation.warned'],
+  rules: moderationPresetRules,
+  compileRules: (config) => escalationRules(config),
   dashboard: {
     icon: 'shield',
     sections: [
@@ -116,6 +132,11 @@ export const moderationModule: ModuleManifest<typeof moderationConfigSchema> = {
         id: 'policy',
         title: 'Policy',
         fields: ['requireReason', 'defaultTimeoutDuration', 'defaultBanDeleteDays'],
+      },
+      {
+        id: 'escalation',
+        title: 'Warn escalation',
+        fields: ['escalationWindow', 'escalationLadder'],
       },
     ],
   },

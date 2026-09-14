@@ -8,6 +8,7 @@ const TARGET = '400000000000000000';
 const CHANNEL = '500000000000000000';
 const THREAD = '500000000000000009';
 const GUILD = '900000000000000001';
+const ROLE = '410000000000000077';
 
 function input(overrides: Partial<PrecheckInput> = {}): PrecheckInput {
   return {
@@ -132,6 +133,46 @@ describe('runPrechecks', () => {
 
   test('allows a target below the bot', () => {
     expect(runPrechecks(input({ target: { id: TARGET, highestRolePosition: 9 } }))).toBeNull();
+  });
+
+  test('refuses a role at or above the bot’s highest role, and names the role', () => {
+    for (const position of [10, 11]) {
+      const failure = runPrechecks(
+        guildScoped({
+          botChannelPermissions: Permissions.ManageRoles,
+          requiredPermissions: Permissions.ManageRoles,
+          role: { id: ROLE, position },
+        }),
+      );
+
+      expect(failure?.code).toBe('role_hierarchy');
+      expect(failure?.humanReason).toContain(ROLE);
+      expect(failure?.humanReason).toContain('Server Settings → Roles');
+    }
+  });
+
+  test('allows a role below the bot’s highest role', () => {
+    expect(
+      runPrechecks(
+        guildScoped({
+          botChannelPermissions: Permissions.ManageRoles,
+          requiredPermissions: Permissions.ManageRoles,
+          role: { id: ROLE, position: 9 },
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  test('names a missing Manage Roles before the rank of the role', () => {
+    const failure = runPrechecks(
+      guildScoped({
+        requiredPermissions: Permissions.ManageRoles,
+        role: { id: ROLE, position: 99 },
+      }),
+    );
+
+    expect(failure?.code).toBe('missing_permission');
+    expect(failure?.humanReason).toContain('Manage Roles');
   });
 
   test('checks permissions before hierarchy, so the more basic problem wins', () => {

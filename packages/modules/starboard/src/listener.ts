@@ -120,7 +120,7 @@ async function apply(decision: StarboardDecision, input: ApplyInput): Promise<vo
       await create(decision.count, input);
       return;
     case 'edit':
-      await edit(decision.boardMessageId, decision.count, input);
+      await edit(decision.boardMessageId, decision.fromCount, decision.count, input);
       return;
     case 'delete':
       await remove(decision.boardMessageId, input);
@@ -182,7 +182,12 @@ async function create(count: number, input: ApplyInput): Promise<void> {
   });
 }
 
-async function edit(boardMessageId: string, count: number, input: ApplyInput): Promise<void> {
+async function edit(
+  boardMessageId: string,
+  fromCount: number,
+  count: number,
+  input: ApplyInput,
+): Promise<void> {
   const { ctx, deps, message, configured, boardChannelId } = input;
 
   const board = buildBoardMessage({ guildId: ctx.guildId, message, count, emoji: configured });
@@ -193,8 +198,8 @@ async function edit(boardMessageId: string, count: number, input: ApplyInput): P
     kind: 'edit_message',
     actorId: MODULE_ID,
     dryRun: false,
-
-    idempotencyKey: `${MODULE_ID}:${ctx.guildId}:${input.event.id}:edit`,
+    // The counts make a skip mean this event already moved the board to this count, so saving it is right.
+    idempotencyKey: `${MODULE_ID}:${ctx.guildId}:${input.event.id}:edit:${fromCount}:${count}`,
     payload: { channelId: boardChannelId, messageId: boardMessageId, ...board },
   });
 

@@ -84,7 +84,7 @@ export function parseGiveawayDuration(raw: string): DurationResult {
 export const giveawaysConfigSchema = z.object({
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
-    description: 'Who may run each /giveaway command is set in the Permissions module',
+    description: 'Set who can use /giveaway in Permissions.',
   }),
 
   defaultWinnerCount: z
@@ -103,30 +103,31 @@ export const giveawaysConfigSchema = z.object({
     .default([])
     .register(protonFields, {
       field: 'role-id',
-      label: 'Giveaway manager roles',
+      label: 'Manager roles',
       description:
-        'May pause, edit, end, cancel and reroll any giveaway, not only their own. ' +
-        'Who may run each command at all is still set in the Permissions module.',
+        'Can pause, edit, end, cancel and reroll any giveaway, not only their own. ' +
+        'Set who can use /giveaway in Permissions.',
     }),
 
   bypassRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
     field: 'role-id',
     label: 'Bypass roles',
-    description: 'Skip every requirement on every giveaway. Multipliers still apply.',
+    description: 'Skip requirements when entering a giveaway. Bonus entries still apply.',
   }),
 
   blacklistRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
     field: 'role-id',
     label: 'Blacklisted roles',
-    description: 'Cannot enter any giveaway here. Checked before any requirement is evaluated.',
+    description:
+      'Cannot enter any giveaway. Proton checks this before requirements and bypass roles.',
   }),
 
   announceInChannel: z.boolean().default(true).register(protonFields, {
-    label: 'Announce the winners in the channel',
+    label: 'Announce winners',
   }),
 
   dmWinners: z.boolean().default(false).register(protonFields, {
-    label: 'Also DM the winners',
+    label: 'Send winners a DM',
   }),
 
   // Off by default: a host who never touches this setting should not ship a giveaway that can
@@ -138,13 +139,14 @@ export const giveawaysConfigSchema = z.object({
     .max(7 * 24 * 60 * 60)
     .optional()
     .register(protonFields, {
-      label: 'Claim window (seconds)',
-      description: 'Unclaimed wins are forfeited and rerolled',
+      label: 'Claim window',
+      description:
+        'Winners must claim their prize in time. Unclaimed wins are forfeited and rerolled.',
     }),
 
   logChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
-    label: 'Giveaway warning channel',
+    label: 'Warning channel',
   }),
 
   embedColor: z.number().int().min(0).max(0xffffff).default(0x5865f2).register(protonFields, {
