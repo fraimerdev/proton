@@ -82,6 +82,12 @@ export {
   logChannelIds,
   resolveDestination,
 } from './routing.ts';
+export {
+  RedisScreeningStore,
+  SCREENING_PREFIX,
+  SCREENING_TTL_MS,
+  type ScreeningStore,
+} from './screening.ts';
 
 export function createServerlogModule(
   deps: ServerlogDeps = {},

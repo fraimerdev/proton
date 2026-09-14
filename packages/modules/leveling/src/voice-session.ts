@@ -19,6 +19,8 @@ export const voiceSessionSchema = z.object({
   channelId: snowflakeSchema,
 
   joinedAt: z.number().int().nonnegative(),
+
+  roleIds: z.array(snowflakeSchema).optional(),
 });
 
 export type VoiceSession = z.infer<typeof voiceSessionSchema>;

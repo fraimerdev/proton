@@ -9,6 +9,7 @@
     "./config": "./src/config.ts",
     "./layout": "./src/layout.ts",
     "./notice": "./src/notice.ts",
+    "./placeholders": "./src/placeholders.ts",
     "./render": "./src/render.ts"
   },
   "scripts": {

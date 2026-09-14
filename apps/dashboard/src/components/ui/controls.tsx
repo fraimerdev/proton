@@ -109,8 +109,6 @@ export function useSlidingIndicator<T extends HTMLElement>(
   return { track, indicator };
 }
 
-/* -------------------------------------------------------------------- button */
-
 type ButtonTone = 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-quiet';
 
 interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> {
@@ -175,8 +173,6 @@ export function IconButton({ icon, label, ...rest }: IconButtonProps): ReactElem
   );
 }
 
-/* -------------------------------------------------------------------- switch */
-
 interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -206,8 +202,6 @@ export function Switch({
   );
 }
 
-/* ------------------------------------------------------------------ checkbox */
-
 interface CheckboxProps {
   checked: boolean | 'mixed';
   onChange: (checked: boolean) => void;
@@ -230,8 +224,6 @@ export function Checkbox({ checked, onChange, disabled, label }: CheckboxProps):
     </button>
   );
 }
-
-/* --------------------------------------------------------------------- input */
 
 interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'className' | 'size'> {
   invalid?: boolean | undefined;
@@ -265,8 +257,6 @@ export function TextArea({ invalid, className, ...rest }: TextAreaProps): ReactE
     />
   );
 }
-
-/* ------------------------------------------------------------------- stepper */
 
 interface NumberStepperProps {
   value: number | null;
@@ -308,7 +298,7 @@ export function NumberStepper({
       <input
         className="input"
         type="number"
-        inputMode="numeric"
+        inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
         value={value ?? ''}
         min={min}
         max={max}
@@ -355,8 +345,6 @@ export function NumberStepper({
     </div>
   );
 }
-
-/* -------------------------------------------------------------------- select */
 
 export interface SelectOption {
   value: string;
@@ -518,13 +506,10 @@ export function Select({
   );
 }
 
-/* ---------------------------------------------------------------- segmented */
-
 export interface SegmentedOption<T extends string> {
   value: T;
   label: string;
   icon?: IconName | undefined;
-  /** Colours the selected end of a scale: 'off' stays neutral, 'warning'/'danger' escalate. */
   tone?: 'off' | 'warning' | 'danger' | undefined;
   disabled?: boolean | undefined;
 }
@@ -534,7 +519,6 @@ interface SegmentedControlProps<T extends string> {
   value: T;
   onChange: (value: T) => void;
   label: string;
-  /** Paints a toned selected option in its tone rather than a neutral raised surface. */
   accent?: boolean | undefined;
   block?: boolean | undefined;
   disabled?: boolean | undefined;
@@ -589,8 +573,6 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-/* ------------------------------------------------------------- search field */
-
 interface SearchFieldProps {
   value: string;
   onChange: (value: string) => void;
@@ -641,8 +623,6 @@ export function SearchField({
   );
 }
 
-/* ---------------------------------------------------------------- chip/badge */
-
 interface ChipProps {
   children: ReactNode;
   onRemove?: (() => void) | undefined;
@@ -690,8 +670,6 @@ export function Badge({
   );
 }
 
-/* --------------------------------------------------------------------- field */
-
 interface FieldProps {
   label: string;
   hint?: ReactNode;
@@ -699,7 +677,6 @@ interface FieldProps {
   children: (props: { id: string; 'aria-describedby': string | undefined }) => ReactNode;
 }
 
-/** A labelled control for dialogs and detail editors, where the row layout does not apply. */
 export function Field({ label, hint, error, children }: FieldProps): ReactElement {
   const id = useId();
   const hintId = hint !== undefined || error !== undefined ? `${id}-hint` : undefined;

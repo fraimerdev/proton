@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { ModuleLink, type ModuleSearch } from '../module/route.tsx';
 import { cx } from './controls.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
@@ -107,10 +106,7 @@ export function PresenceList({ children }: { children: ReactNode }): ReactElemen
   );
 }
 
-/**
- * Ambient, not a paywall: the ceiling is what this server's tier actually allows, shown beside the
- * thing it limits so the number is legible before the Add button refuses.
- */
+// Ambient, never a lock: the ceiling is shown beside what it limits, before Add refuses.
 export function LimitCounter({
   used,
   ceiling,
@@ -187,38 +183,6 @@ function RowInner({ icon, glyph, title, meta, badge, aside }: CollectionRowConte
   );
 }
 
-/**
- * A row that opens its own workspace. It links into the module route rather than taking arbitrary
- * link props: spreading a generic LinkProps made `title` collide with the anchor's own title
- * attribute and lost the typing of `params`.
- */
-export function CollectionLinkRow({
-  guildId,
-  moduleId,
-  search,
-  selected = false,
-  ...content
-}: CollectionRowContent & {
-  guildId: string;
-  moduleId: string;
-  search: ModuleSearch;
-  selected?: boolean | undefined;
-}): ReactElement {
-  return (
-    <ModuleLink
-      guildId={guildId}
-      moduleId={moduleId}
-      search={search}
-      className={cx('collection-row', selected && 'selected')}
-      aria-current={selected ? 'true' : undefined}
-    >
-      <RowInner {...content} />
-      <Icon name="caret-right" size={15} className="nav-row-chevron" />
-    </ModuleLink>
-  );
-}
-
-/** A row that selects into a detail pane beside the list. */
 export function CollectionButtonRow({
   onSelect,
   selected = false,
@@ -240,7 +204,6 @@ export function CollectionButtonRow({
   );
 }
 
-/** A row that is not itself navigational — its actions live on the right. */
 export function CollectionStaticRow(
   content: CollectionRowContent & { className?: string | undefined },
 ): ReactElement {

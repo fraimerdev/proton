@@ -71,7 +71,6 @@ export default function RolemenuPage({ guildId, meta, summary }: ModulePageProps
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -133,6 +132,7 @@ export default function RolemenuPage({ guildId, meta, summary }: ModulePageProps
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         disabled={blocked}
         note={
           blocked

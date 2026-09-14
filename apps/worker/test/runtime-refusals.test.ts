@@ -55,7 +55,7 @@ const configSchema = z.object({
   response: z.string().default('Pong!'),
 });
 
-function manifest(): ModuleManifest {
+function manifest(settingsPage: boolean): ModuleManifest {
   return {
     id: 'ping',
     name: 'Ping',
@@ -66,6 +66,7 @@ function manifest(): ModuleManifest {
     requiredIntents: [GatewayIntentBits.Guilds],
     requiredPermissions: [],
     actionKinds: ['interaction_reply'],
+    ...(settingsPage ? { dashboard: { icon: 'activity', sections: [] } } : {}),
     commands: [
       {
         name: 'ping',
@@ -97,11 +98,14 @@ function commandEvent(): ProtonEvent {
   return event;
 }
 
-function runtimeWith(snapshot: { enabled: boolean; config: unknown } | Error) {
+function runtimeWith(
+  snapshot: { enabled: boolean; config: unknown } | Error,
+  { settingsPage = true }: { settingsPage?: boolean } = {},
+) {
   const executor = new RecordingExecutor();
   const { logger, lines } = collectingLogger();
   const registry = new ModuleRegistry();
-  registry.register(manifest());
+  registry.register(manifest(settingsPage));
 
   const runtime = new ModuleRuntime({
     bus,
@@ -141,7 +145,7 @@ describe('a command that cannot run still answers', () => {
     expect(replyContent(executor)).toBe('handled');
   });
 
-  test('a module switched off at the row level names the module and links the settings', async () => {
+  test('a module switched off at the row level names the module and links its page', async () => {
     const { runtime, executor } = runtimeWith({ enabled: false, config: { enabled: true } });
 
     await runtime.handle(commandEvent());
@@ -149,12 +153,22 @@ describe('a command that cannot run still answers', () => {
     const content = replyContent(executor);
     expect(content).toContain('Ping');
     expect(content).toContain('switched off');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
-
-    // One switch, so the refusal names one place. It used to distinguish "Module enabled" from the
-    // config field's "Enabled", which the dashboard no longer renders.
-    expect(content).toContain('sidebar');
+    expect(content).toContain(`<${DASHBOARD}/dashboard/${GUILD}/ping>`);
+    expect(content).toContain('top of that page');
     expect(content).not.toContain('Module enabled');
+  });
+
+  test('a module with no settings page is switched on from its overview card', async () => {
+    const { runtime, executor } = runtimeWith(
+      { enabled: false, config: { enabled: true } },
+      { settingsPage: false },
+    );
+
+    await runtime.handle(commandEvent());
+
+    const content = replyContent(executor);
+    expect(content).toContain(`<${DASHBOARD}/dashboard/${GUILD}>`);
+    expect(content).toContain('**Ping** card');
   });
 
   test('a module switched off in its own config is refused the same way', async () => {
@@ -211,6 +225,33 @@ describe('a command that cannot run still answers', () => {
     expect(replyContent(executor)).toContain('response');
   });
 
+  test('broken settings on a module with no settings page do not point at a Save that is not there', async () => {
+    const unreadable = runtimeWith(
+      new ConfigUnavailableError({
+        message: 'the module is unknown',
+        permanent: true,
+        guildId: GUILD,
+        moduleId: 'ping',
+        status: 404,
+      }),
+      { settingsPage: false },
+    );
+    const invalid = runtimeWith(
+      { enabled: true, config: { response: 42 } },
+      { settingsPage: false },
+    );
+
+    await unreadable.runtime.handle(commandEvent());
+    await invalid.runtime.handle(commandEvent());
+
+    for (const { executor } of [unreadable, invalid]) {
+      const content = replyContent(executor);
+      expect(content).not.toContain('Save');
+      expect(content).not.toContain('/dashboard/');
+      expect(content).toContain('no settings page');
+    }
+  });
+
   test('a command no module owns is answered rather than left hanging', async () => {
     const { runtime, executor } = runtimeWith({ enabled: true, config: { enabled: true } });
     const event = commandEvent();
@@ -264,5 +305,89 @@ describe('disabledReason', () => {
 
   test('config that will not parse is not reported as disabled', () => {
     expect(disabledReason({ enabled: true, config: { enabled: 'yes' } }, configSchema)).toBeNull();
+  });
+});
+
+describe('the handler is told who invoked it', () => {
+  async function handled(
+    edit: (d: Record<string, unknown>) => void = () => undefined,
+  ): Promise<CommandContext> {
+    const seen: CommandContext[] = [];
+    const base = manifest(true);
+    const registry = new ModuleRegistry();
+    registry.register({
+      ...base,
+      commands: base.commands?.map((command) => ({
+        ...command,
+        handler: async (ctx: CommandContext) => {
+          seen.push(ctx);
+        },
+      })),
+    } as unknown as ModuleManifest);
+
+    const runtime = new ModuleRuntime({
+      bus,
+      registry,
+      executor: new RecordingExecutor(),
+      logger: collectingLogger().logger,
+      config: { get: async () => ({ enabled: true, config: { enabled: true } }) },
+    });
+
+    const event = commandEvent();
+    edit(event.payload as Record<string, unknown>);
+    await runtime.handle(event);
+
+    const ctx = seen[0];
+    if (!ctx) throw new Error('the handler never ran');
+    return ctx;
+  }
+
+  function member(d: Record<string, unknown>): Record<string, unknown> {
+    return d.member as Record<string, unknown>;
+  }
+
+  test('a member with no nickname is told apart from one nobody looked up', async () => {
+    const ctx = await handled((d) => {
+      member(d).nick = null;
+    });
+
+    expect(ctx.actorNick).toBeNull();
+    expect(ctx.actorDisplayName).toBe('Tester');
+  });
+
+  test('a member sent without a nick field has a nickname nobody read', async () => {
+    const ctx = await handled((d) => {
+      delete member(d).nick;
+    });
+
+    expect('actorNick' in ctx).toBe(false);
+    expect(ctx.actorDisplayName).toBe('Tester');
+  });
+
+  test('the nickname arrives as the member has it', async () => {
+    const ctx = await handled((d) => {
+      member(d).nick = 'Tess';
+    });
+
+    expect(ctx.actorNick).toBe('Tess');
+    expect(ctx.actorDisplayName).toBe('Tester');
+  });
+
+  test('a user with no global name is shown by username', async () => {
+    const ctx = await handled((d) => {
+      (member(d).user as Record<string, unknown>).global_name = null;
+    });
+
+    expect(ctx.actorDisplayName).toBe('tester');
+  });
+
+  test('without a member the nickname is unknown and the name comes from the user', async () => {
+    const ctx = await handled((d) => {
+      d.user = { id: '100000000000000001', username: 'dm-tester', global_name: null };
+      d.member = undefined;
+    });
+
+    expect('actorNick' in ctx).toBe(false);
+    expect(ctx.actorDisplayName).toBe('dm-tester');
   });
 });

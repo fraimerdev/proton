@@ -3,8 +3,8 @@ import { MODULE_BY_ID, type ModuleMeta, RECORD_LINKS, type RecordLink } from './
 
 export interface ModuleHit {
   meta: ModuleMeta;
-  /** Why this matched, when it was not the module's own name — a field label, or an alias. */
   hint?: string | undefined;
+  area?: string | undefined;
   score: number;
 }
 
@@ -20,10 +20,7 @@ function normalise(value: string): string {
     .trim();
 }
 
-/**
- * Ranks a whole-word prefix above a mid-word one: typing "role" should offer Role Menus and Join
- * Roles before it offers Moderation, which only matches inside "roles" in a field label.
- */
+// A whole-word prefix outranks a mid-word hit, so "role" offers Role Menus before Moderation.
 function score(haystack: string, needle: string): number {
   const index = haystack.indexOf(needle);
   if (index < 0) return 0;
@@ -44,38 +41,43 @@ export function searchModules(
   const modules: ModuleHit[] = [];
 
   for (const meta of MODULE_BY_ID.values()) {
+    if (meta.switchOnly) continue;
+
     let best = score(normalise(meta.label), needle);
     let hint: string | undefined;
+    let area: string | undefined;
 
     for (const alias of meta.aliases) {
       const aliasScore = score(normalise(alias), needle) - 5;
       if (aliasScore > best) {
         best = aliasScore;
         hint = alias;
+        area = undefined;
       }
     }
 
     if (meta.areas) {
-      for (const area of meta.areas) {
-        const areaScore = score(normalise(area.label), needle) - 15;
+      for (const candidate of meta.areas) {
+        const areaScore = score(normalise(candidate.label), needle) - 15;
         if (areaScore > best) {
           best = areaScore;
-          hint = area.label;
+          hint = candidate.label;
+          area = candidate.id;
         }
       }
     }
 
-    // Every configurable field of every installed module rides the index for exactly this: an
-    // admin who knows the setting's name but not which module owns it.
+    // Field labels are indexed for an admin who knows a setting's name but not its module.
     for (const field of byId.get(meta.id)?.fields ?? []) {
       const fieldScore = score(normalise(field.label), needle) - 25;
       if (fieldScore > best) {
         best = fieldScore;
         hint = field.label;
+        area = undefined;
       }
     }
 
-    if (best > 0) modules.push({ meta, hint, score: best });
+    if (best > 0) modules.push({ meta, hint, area, score: best });
   }
 
   const records: RecordHit[] = [];

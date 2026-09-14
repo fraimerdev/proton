@@ -128,6 +128,9 @@ export const savedMessageSchema = z.preprocess(
       // Absent means the template is only ever posted on request. The schedule is what the
       // retired announcements module used to own.
       schedule: templateScheduleSchema.optional(),
+
+      // Optional outside the default so a SavedMessage literal written before this key still typechecks.
+      placeholders: z.boolean().default(false).optional(),
     })
     .superRefine(refineMessage),
 );

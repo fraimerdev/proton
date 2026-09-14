@@ -1,5 +1,3 @@
-/* cases page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
-
 .table-toolbar .cases-search {
   flex: 0 1 320px;
 }

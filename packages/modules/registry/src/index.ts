@@ -1,4 +1,5 @@
 import { type ModuleManifest, ModuleRegistry, type ModuleRegistryOptions } from '@proton/core';
+import { type AfkDeps, createAfkModule } from '@proton/module-afk';
 import { type AntinukeDeps, createAntinukeModule } from '@proton/module-antinuke';
 import { type AntiraidDeps, createAntiraidModule } from '@proton/module-antiraid';
 import { type AppealsDeps, createAppealsModule } from '@proton/module-appeals';
@@ -62,6 +63,7 @@ export interface ModuleBindings {
   counters?: CountersDeps;
   suggestions?: SuggestionsDeps;
   branding?: BrandingDeps;
+  afk?: AfkDeps;
 }
 
 export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
@@ -99,6 +101,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
     createCountersModule(bindings.counters ?? {}) as ModuleManifest,
     createSuggestionsModule(bindings.suggestions ?? {}) as ModuleManifest,
     createBrandingModule(bindings.branding ?? {}) as ModuleManifest,
+    createAfkModule(bindings.afk ?? {}) as ModuleManifest,
   ];
 }
 

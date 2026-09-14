@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const PHISHING_ACTIONS = ['none', 'timeout', 'kick', 'ban'] as const;
 export type PhishingAction = (typeof PHISHING_ACTIONS)[number];
 
-const GUILD_LIST_MAX = 100;
+export const GUILD_LIST_MAX = 100;
 
 export const phishingConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {

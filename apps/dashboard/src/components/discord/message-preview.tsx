@@ -10,7 +10,12 @@ import type {
 } from '@proton/core';
 import type { ReactElement, ReactNode } from 'react';
 import { Icon } from '../ui/icon.tsx';
-import { DiscordMarkdown } from './markdown.tsx';
+import {
+  DiscordMarkdown,
+  InlineDiscordMarkdown,
+  type MarkdownContext,
+  type MentionNames,
+} from './markdown.tsx';
 
 const BUTTON_CLASS: Record<string, string> = {
   primary: '',
@@ -42,7 +47,13 @@ function colourOf(value: number | undefined): string {
   return `#${value.toString(16).padStart(6, '0')}`;
 }
 
-function EmbedView({ embed }: { embed: Embed }): ReactElement | null {
+function EmbedView({
+  embed,
+  context,
+}: {
+  embed: Embed;
+  context: MarkdownContext;
+}): ReactElement | null {
   const empty =
     !embed.title &&
     !embed.description &&
@@ -68,13 +79,13 @@ function EmbedView({ embed }: { embed: Embed }): ReactElement | null {
 
         {embed.title ? (
           <div className={embed.url ? 'dc-embed-title linked' : 'dc-embed-title'}>
-            {embed.title}
+            <InlineDiscordMarkdown text={embed.title} />
           </div>
         ) : null}
 
         {embed.description ? (
           <div className="dc-embed-description">
-            <DiscordMarkdown text={embed.description} />
+            <DiscordMarkdown text={embed.description} {...context} />
           </div>
         ) : null}
 
@@ -86,9 +97,11 @@ function EmbedView({ embed }: { embed: Embed }): ReactElement | null {
                 key={index}
                 className={field.inline ? 'dc-embed-field inline' : 'dc-embed-field'}
               >
-                <div className="dc-embed-field-name">{field.name}</div>
+                <div className="dc-embed-field-name">
+                  <InlineDiscordMarkdown text={field.name} />
+                </div>
                 <div className="dc-embed-field-value">
-                  <DiscordMarkdown text={field.value} />
+                  <DiscordMarkdown text={field.value} {...context} />
                 </div>
               </div>
             ))}
@@ -163,8 +176,10 @@ function RowsView({ rows }: { rows: readonly ActionRow[] }): ReactElement | null
 
 function V2View({
   components,
+  context,
 }: {
   components: readonly (V2Component | ContainerChild)[];
+  context: MarkdownContext;
 }): ReactElement {
   return (
     <>
@@ -174,7 +189,7 @@ function V2View({
         if (component.kind === 'text') {
           return (
             <div className="dc-content" key={key}>
-              <DiscordMarkdown text={component.content} />
+              <DiscordMarkdown text={component.content} {...context} />
             </div>
           );
         }
@@ -196,7 +211,7 @@ function V2View({
               <div className="dc-section-main">
                 {component.text.map((line) => (
                   <div className="dc-content" key={line}>
-                    <DiscordMarkdown text={line} />
+                    <DiscordMarkdown text={line} {...context} />
                   </div>
                 ))}
               </div>
@@ -236,7 +251,7 @@ function V2View({
               key={key}
               style={{ borderLeftColor: colourOf(component.accentColor) }}
             >
-              <V2View components={component.children} />
+              <V2View components={component.children} context={context} />
             </div>
           );
         }
@@ -247,10 +262,6 @@ function V2View({
   );
 }
 
-/**
- * What Discord will actually show. The colours, radii and the embed's 4px accent bar are Discord's
- * own, deliberately not Proton's chrome: this panel is a picture of the outcome.
- */
 export function DiscordPreview({
   message,
   botName = 'Proton',
@@ -258,6 +269,8 @@ export function DiscordPreview({
   channelName,
   timestamp = 'Today at 00:00',
   empty = 'This message is empty.',
+  mentionNames,
+  now,
 }: {
   message: Partial<ProtonMessage> | undefined;
   botName?: string | undefined;
@@ -265,11 +278,14 @@ export function DiscordPreview({
   channelName?: string | undefined;
   timestamp?: string | undefined;
   empty?: ReactNode;
+  mentionNames?: MentionNames | undefined;
+  now?: number | undefined;
 }): ReactElement {
   const content = message?.content ?? '';
   const embeds = message?.embeds ?? [];
   const rows = message?.components ?? [];
   const v2 = message?.v2 ?? [];
+  const context: MarkdownContext = { mentionNames, now };
 
   const nothing =
     content.trim() === '' && embeds.length === 0 && rows.length === 0 && v2.length === 0;
@@ -302,15 +318,15 @@ export function DiscordPreview({
 
             {content.trim() !== '' ? (
               <div className="dc-content">
-                <DiscordMarkdown text={content} />
+                <DiscordMarkdown text={content} {...context} />
               </div>
             ) : null}
 
-            {v2.length > 0 ? <V2View components={v2} /> : null}
+            {v2.length > 0 ? <V2View components={v2} context={context} /> : null}
 
             {embeds.map((embed, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: an embed's position is its identity
-              <EmbedView embed={embed} key={index} />
+              <EmbedView embed={embed} context={context} key={index} />
             ))}
 
             <RowsView rows={rows} />

@@ -1,5 +1,20 @@
-import type { GuildStateStore } from '@proton/core';
-import type { TicketStore } from './store.ts';
+import type { GuildStateStore, Logger, ModuleContext } from '@proton/core';
+import {
+  type BotFacts,
+  type PlaceholderEnvironment,
+  type ServerFacts,
+  serverFactsFrom,
+  type UserFacts,
+} from '@proton/core/placeholders';
+import { MODULE_ID } from './config.ts';
+import {
+  type TicketCloseFacts,
+  type TicketMessageSurface,
+  type TicketPlaceholderFacts,
+  type TicketSources,
+  ticketSourcesFor,
+} from './placeholders.ts';
+import type { Ticket, TicketFormAnswer, TicketParticipant, TicketStore } from './store.ts';
 
 export interface TicketsDeps {
   store?: TicketStore;
@@ -13,6 +28,8 @@ export interface TicketsDeps {
   displayName?: (userId: string) => Promise<string | null>;
 
   guildName?: (guildId: string) => Promise<string | null>;
+
+  placeholders?: PlaceholderEnvironment;
 
   // Injected so a cooldown measured against a stored timestamp and the stored timestamp itself
   // come from the same clock. Production leaves it unbound and gets the wall clock.
@@ -86,4 +103,145 @@ export async function namesOf(
   const pairs = await Promise.all(unique.map(async (id) => [id, await nameOf(deps, id)] as const));
 
   return new Map(pairs);
+}
+
+export interface PlaceholderReads {
+  deps: TicketsDeps;
+  guildId: string;
+  logger: Logger;
+  sources: TicketSources;
+}
+
+export function placeholderReads(
+  ctx: Pick<ModuleContext<unknown>, 'guildId' | 'logger'>,
+  deps: TicketsDeps,
+  sources: TicketSources,
+): PlaceholderReads {
+  return { deps, guildId: ctx.guildId, logger: ctx.logger, sources };
+}
+
+function unread(reads: PlaceholderReads, what: string, error: unknown): void {
+  reads.logger.warn(
+    `a ticket placeholder was filled in without ${what}, because reading it threw: ` +
+      (error instanceof Error ? error.message : String(error)),
+    { guildId: reads.guildId, moduleId: MODULE_ID },
+  );
+}
+
+export async function readProfile(
+  reads: PlaceholderReads,
+  userId: string,
+  wanted: boolean,
+  known?: UserFacts,
+): Promise<UserFacts | null | undefined> {
+  if (!wanted) return undefined;
+
+  if (isProtonActor(userId)) {
+    return { id: userId, username: null, globalName: 'Proton', avatarHash: null, bot: true };
+  }
+
+  const { deps } = reads;
+
+  try {
+    if (deps.placeholders) return await deps.placeholders.user(userId);
+    if (known !== undefined) return known;
+    if (!deps.displayName) return undefined;
+
+    const name = await deps.displayName(userId);
+    return name === null
+      ? null
+      : { id: userId, username: null, globalName: name, avatarHash: null };
+  } catch (error) {
+    unread(reads, `the profile of ${userId}`, error);
+    return known ?? null;
+  }
+}
+
+export async function readServer(reads: PlaceholderReads): Promise<ServerFacts | null> {
+  if (!reads.sources.server) return null;
+
+  const { deps, guildId } = reads;
+
+  try {
+    if (deps.placeholders) return await deps.placeholders.server(guildId);
+    return deps.guildState ? serverFactsFrom(await deps.guildState.get(guildId), guildId) : null;
+  } catch (error) {
+    unread(reads, "the server's details", error);
+    return { id: guildId };
+  }
+}
+
+export async function readBot(reads: PlaceholderReads): Promise<BotFacts | null> {
+  if (!reads.sources.bot || !reads.deps.placeholders) return null;
+
+  try {
+    return await reads.deps.placeholders.bot();
+  } catch (error) {
+    unread(reads, "Proton's own profile", error);
+    return null;
+  }
+}
+
+async function fromStore<T>(
+  reads: PlaceholderReads,
+  what: string,
+  read: () => Promise<T> | undefined,
+): Promise<T | undefined> {
+  try {
+    return await read();
+  } catch (error) {
+    unread(reads, what, error);
+    return undefined;
+  }
+}
+
+export interface TicketFactsInput {
+  ctx: Pick<ModuleContext<unknown>, 'guildId' | 'logger'>;
+  deps: TicketsDeps;
+  store?: TicketStore | undefined;
+  surface: TicketMessageSurface;
+  template: string;
+  ticket: Ticket;
+  typeName: string;
+  answers?: readonly TicketFormAnswer[] | undefined;
+  participants?: readonly TicketParticipant[] | undefined;
+  close?: TicketCloseFacts | undefined;
+  actor?: { id: string; name?: string | undefined; nick?: string | null | undefined } | undefined;
+}
+
+export async function ticketFacts(input: TicketFactsInput): Promise<TicketPlaceholderFacts> {
+  const { ctx, deps, store, ticket, actor } = input;
+  const reads = placeholderReads(ctx, deps, ticketSourcesFor(input.surface, [input.template]));
+  const { sources } = reads;
+
+  const answers = sources.answers
+    ? (input.answers ??
+      (await fromStore(reads, 'the form answers', () => store?.listAnswers(ticket.id))))
+    : undefined;
+
+  const participants = sources.participants
+    ? (input.participants ??
+      (await fromStore(reads, 'who is in the ticket', () => store?.listParticipants(ticket.id))))
+    : undefined;
+
+  const known: UserFacts | undefined =
+    actor === undefined || actor.name === undefined
+      ? undefined
+      : { id: actor.id, username: null, globalName: actor.name, avatarHash: null };
+
+  return {
+    ticket,
+    typeName: input.typeName,
+    ownerId: ticket.ownerId,
+    owner: await readProfile(reads, ticket.ownerId, sources.owner),
+    answers,
+    participantCount: participants?.length,
+    close: input.close,
+    actorId: actor?.id,
+    actor:
+      actor === undefined ? undefined : await readProfile(reads, actor.id, sources.actor, known),
+    actorMember: actor === undefined || actor.nick === undefined ? undefined : { nick: actor.nick },
+    server: await readServer(reads),
+    bot: await readBot(reads),
+  };
 }

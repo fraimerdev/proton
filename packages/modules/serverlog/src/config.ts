@@ -6,6 +6,8 @@ export const SERVERLOG_SCHEMA_VERSION = 1;
 
 export const LOG_TEXT_CHANNEL_TYPES = [0, 5];
 
+export const IGNORABLE_CHANNEL_TYPES = [0, 2, 4, 5, 10, 11, 12, 13, 15, 16];
+
 const CHANNEL_REF = /^(\d{17,20})?$/;
 
 // A plain string with a permissive pattern, not a union with z.literal(''): the v1 form generator

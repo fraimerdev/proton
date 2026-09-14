@@ -80,8 +80,6 @@ export class DrizzleBrandingAssetStore implements BrandingAssetStore {
 export interface BrandingRoleStore {
   get(guildId: string): Promise<string | null>;
 
-  put(guildId: string, roleId: string): Promise<void>;
-
   forget(guildId: string): Promise<void>;
 }
 
@@ -104,13 +102,6 @@ export class DrizzleBrandingRoleStore implements BrandingRoleStore {
       .limit(1);
 
     return row?.roleId ?? null;
-  }
-
-  async put(guildId: string, roleId: string): Promise<void> {
-    await this.#db
-      .insert(brandingRoles)
-      .values({ guildId, roleId })
-      .onConflictDoUpdate({ target: brandingRoles.guildId, set: { roleId } });
   }
 
   async forget(guildId: string): Promise<void> {

@@ -28,6 +28,7 @@ import type { ServerlogConfig } from './config.ts';
 import type { LogExecutor } from './embed.ts';
 import { DEFAULT_EMOJIS, type EmojiSet } from './emoji.ts';
 import { isIgnored, resolveDestination } from './routing.ts';
+import type { ScreeningStore } from './screening.ts';
 
 export const SERVERLOG_MODULE_ID = 'serverlog';
 
@@ -51,6 +52,7 @@ export interface ServerlogDeps {
   emojis?: EmojiSet;
   botUserId?: string;
   burst?: RateWindowStore;
+  screening?: ScreeningStore;
 
   cache?: MessageContentCache;
   cacheTtlMs?: number;
@@ -173,9 +175,15 @@ async function onEntity(
   if (deps.botUserId && facts.actorId === deps.botUserId) return;
   if (isIgnored(ctx.config, facts)) return;
 
+  if (event.type === 'member.joined' || event.type === 'member.updated') {
+    await onScreening(deps, ctx, event);
+  }
+
   const cached = await readCache(deps, ctx.guildId, event);
 
   for (const spec of specsForEvent(event.type)) {
+    if (spec.key === SCREENING_PASSED) continue;
+
     if (spec.primary === 'immediate') {
       await emit(deps, ctx, spec, {
         entity: event.payload,
@@ -240,6 +248,58 @@ async function onEntity(
       delayMs: deps.graceMs ?? 2_000,
     });
   }
+}
+
+const SCREENING_PASSED = 'members.screening_passed';
+
+const UNBOUND_SCREENING =
+  'a member is waiting on Membership Screening, but no screening store is wired into the ' +
+  'worker, so "Member accepted the rules" will not be logged when they pass.';
+
+async function onScreening(
+  deps: ServerlogDeps,
+  ctx: ModuleContext<ServerlogConfig>,
+  event: ProtonEvent,
+): Promise<void> {
+  const payload = record(event.payload);
+  const userId = str(record(payload?.user)?.id);
+  if (!payload || !userId || typeof payload.pending !== 'boolean') return;
+
+  const spec = specByKey(SCREENING_PASSED);
+  if (!spec) return;
+
+  const joinedAt = str(payload.joined_at) ?? '';
+
+  if (payload.pending) {
+    if (deps.screening) {
+      await deps.screening.mark(ctx.guildId, userId, joinedAt);
+    } else if (resolveDestination(ctx.config, spec)) {
+      ctx.logger.error(UNBOUND_SCREENING, {
+        guildId: ctx.guildId,
+        moduleId: SERVERLOG_MODULE_ID,
+        userId,
+      });
+    }
+    return;
+  }
+
+  if (event.type !== 'member.updated' || !deps.screening) return;
+
+  const marked = await deps.screening.read(ctx.guildId, userId);
+  if (marked === null) return;
+
+  if (marked === joinedAt) {
+    await emit(deps, ctx, spec, {
+      entity: event.payload,
+      audit: null,
+      // Keyed by membership, not event id: joinroles' post-pass role grant can read the same mark.
+      naturalKey: `${userId}:${joinedAt}`,
+      occurredAt: event.occurredAt,
+    });
+  }
+
+  // Cleared after the post, not taken before it: a crash in between replays the same key instead.
+  await deps.screening.clear(ctx.guildId, userId);
 }
 
 export async function flushPending(

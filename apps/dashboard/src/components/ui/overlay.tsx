@@ -4,8 +4,7 @@ import { createPortal } from 'react-dom';
 import { Button, cx } from './controls.tsx';
 import { Icon } from './icon.tsx';
 
-// useLayoutEffect warns during SSR, and the first paint of a popover only ever happens after a
-// click, so the effect that measures it never runs on the server anyway.
+// useLayoutEffect warns during SSR, and a popover is only ever measured after a click.
 const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
 const EXIT_SLACK_MS = 50;
@@ -61,14 +60,11 @@ export function usePresence(
   return { present, leaving, generation, onAnimationEnd };
 }
 
-/* ------------------------------------------------------------------ popover */
-
 interface PopoverProps {
   anchor: RefObject<HTMLElement | null>;
   open: boolean;
   onClose: () => void;
   children: ReactNode;
-  /** Matches the trigger's width, for a select-like picker. */
   matchWidth?: boolean | undefined;
   minWidth?: number | undefined;
   maxWidth?: number | undefined;
@@ -147,6 +143,7 @@ export function Popover({
     place();
   }, [open, place]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the panel remounts under key={generation}, and the new node has to be observed
   useEffect(() => {
     if (!present) return;
 
@@ -155,11 +152,15 @@ export function Popover({
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
 
+    const observer = new ResizeObserver(() => place());
+    if (panel.current) observer.observe(panel.current);
+
     return () => {
       window.removeEventListener('scroll', onScrollOrResize, true);
       window.removeEventListener('resize', onScrollOrResize);
+      observer.disconnect();
     };
-  }, [present, place]);
+  }, [present, place, generation]);
 
   useEffect(() => {
     if (!open) return;
@@ -214,7 +215,17 @@ export function Popover({
   );
 }
 
-/* --------------------------------------------------------------------- menu */
+export const MENU_ITEM = '[role="menuitem"]:not(:disabled)';
+
+export function menuItemFor(items: HTMLElement[], key: string): HTMLElement | undefined {
+  const current = items.indexOf(document.activeElement as HTMLElement);
+
+  if (key === 'ArrowDown') return items[(current + 1) % items.length];
+  if (key === 'ArrowUp') return items[current <= 0 ? items.length - 1 : current - 1];
+  if (key === 'Home') return items[0];
+  if (key === 'End') return items[items.length - 1];
+  return undefined;
+}
 
 export interface MenuAction {
   id: string;
@@ -237,7 +248,13 @@ export function MenuButton({
   size?: 'sm' | 'md' | undefined;
 }): ReactElement {
   const anchor = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    menu.current?.querySelector<HTMLElement>(MENU_ITEM)?.focus({ preventScroll: true });
+  }, [open]);
 
   return (
     <>
@@ -259,7 +276,24 @@ export function MenuButton({
         align={align}
         minWidth={176}
       >
-        <div role="menu">
+        <div
+          ref={menu}
+          role="menu"
+          aria-label={label}
+          onKeyDown={(event) => {
+            if (event.key === 'Tab') {
+              event.preventDefault();
+              setOpen(false);
+              return;
+            }
+
+            const items = [...(menu.current?.querySelectorAll<HTMLElement>(MENU_ITEM) ?? [])];
+            const target = menuItemFor(items, event.key);
+            if (!target) return;
+            event.preventDefault();
+            target.focus();
+          }}
+        >
           {actions.map((action) => (
             <button
               key={action.id}
@@ -282,8 +316,6 @@ export function MenuButton({
   );
 }
 
-/* ------------------------------------------------------------------- dialog */
-
 interface DialogProps {
   open: boolean;
   onClose: () => void;
@@ -292,7 +324,6 @@ interface DialogProps {
   children?: ReactNode;
   footer?: ReactNode;
   size?: 'sm' | 'wide' | 'editor' | undefined;
-  /** Shown at the left of the footer — a limit, a consequence, a count. */
   footerNote?: ReactNode;
 }
 
@@ -319,7 +350,6 @@ export function Dialog({
       }
       if (event.key !== 'Tab') return;
 
-      // A dialog that lets focus walk behind it is a dialog the keyboard cannot leave sensibly.
       const focusable = panel.current?.querySelectorAll<HTMLElement>(
         'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
       );

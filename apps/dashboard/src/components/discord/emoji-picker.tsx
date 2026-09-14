@@ -2,6 +2,7 @@ import type { ComponentEmoji } from '@proton/core';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { lazy, Suspense, useMemo, useRef, useState } from 'react';
+import { readFailure } from '../../lib/errors.ts';
 import { emojisQuery } from '../../lib/queries.ts';
 import { cx, SearchField } from '../ui/controls.tsx';
 import { Spinner } from '../ui/feedback.tsx';
@@ -54,7 +55,11 @@ export function EmojiPicker({
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<'server' | 'unicode'>('server');
 
-  const { data: guildEmojis, isPending } = useQuery({ ...emojisQuery(guildId), enabled: open });
+  const {
+    data: guildEmojis,
+    error,
+    isPending,
+  } = useQuery({ ...emojisQuery(guildId), enabled: open });
 
   const needle = query.trim().toLowerCase();
 
@@ -151,6 +156,8 @@ export function EmojiPicker({
               <p className="picker-note">
                 <Spinner label="Loading emoji…" showLabel status />
               </p>
+            ) : error ? (
+              <p className="picker-note">{readFailure(error, 'this server’s emoji')}</p>
             ) : server.length === 0 ? (
               <p className="picker-note">
                 {needle === '' ? 'No custom emoji.' : 'No matching emoji'}

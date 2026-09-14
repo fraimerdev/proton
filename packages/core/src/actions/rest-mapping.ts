@@ -1,6 +1,5 @@
 import type { z } from 'zod';
 import type { ActionKind } from './kinds.ts';
-import type { RoleColours } from './payloads.ts';
 import {
   type Attachment,
   AUTOMOD_ACTION_BLOCK_MESSAGE,
@@ -20,9 +19,9 @@ import {
   deleteChannelOverwritePayloadSchema,
   deleteChannelPayloadSchema,
   deleteMessagePayloadSchema,
+  deleteRolePayloadSchema,
   editChannelPayloadSchema,
   editMessagePayloadSchema,
-  editRolePayloadSchema,
   endPollPayloadSchema,
   giveawayDrawPayloadSchema,
   INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT,
@@ -40,10 +39,13 @@ import {
   purgePayloadSchema,
   roleChangePayloadSchema,
   sendPayloadSchema,
+  setBotNameStylePayloadSchema,
   setBotNicknamePayloadSchema,
   setBotProfilePayloadSchema,
   setChannelOverwritePayloadSchema,
+  setMemberNicknamePayloadSchema,
   slowmodePayloadSchema,
+  snowflakeSchema,
   timeoutPayloadSchema,
   unbanPayloadSchema,
   unlockPayloadSchema,
@@ -163,16 +165,6 @@ function interactionCallbackData(
 
 // snake_case at the edge, like every other body here. Null is kept and undefined dropped, because
 // null is how a gradient is taken back off a role and undefined is how it is left alone.
-function roleColours(colours: RoleColours | undefined): Record<string, unknown> | undefined {
-  if (!colours) return undefined;
-
-  return present({
-    primary_color: colours.primaryColor,
-    secondary_color: colours.secondaryColor,
-    tertiary_color: colours.tertiaryColor,
-  });
-}
-
 function auditHeaders(request: ActionRequest): Record<string, string> | undefined {
   if (!request.reason) return undefined;
 
@@ -506,7 +498,6 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             name: p.data.name,
             permissions: p.data.permissions,
             color: p.data.color,
-            colors: roleColours(p.data.colors),
             hoist: p.data.hoist,
             mentionable: p.data.mentionable,
           }),
@@ -514,15 +505,11 @@ export function toRestCall(request: ActionRequest): PayloadResult {
       };
     }
 
-    case 'edit_role': {
-      const p = editRolePayloadSchema.safeParse(request.payload);
+    case 'delete_role': {
+      const p = deleteRolePayloadSchema.safeParse(request.payload);
       if (!p.success) return issues(request, p.error.issues);
       return {
-        call: withAudit({
-          method: 'PATCH',
-          path: `/guilds/${guild}/roles/${p.data.roleId}`,
-          body: present({ name: p.data.name, colors: roleColours(p.data.colors) }),
-        }),
+        call: withAudit({ method: 'DELETE', path: `/guilds/${guild}/roles/${p.data.roleId}` }),
       };
     }
 
@@ -609,6 +596,27 @@ export function toRestCall(request: ActionRequest): PayloadResult {
       };
     }
 
+    case 'set_member_nickname': {
+      const p = setMemberNicknamePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      // Not any string: '@me' would rename Proton past set_bot_nickname's Change Nickname check.
+      const target = snowflakeSchema.safeParse(request.targetId);
+      if (!target.success) {
+        return {
+          error: `Invalid request for '${request.kind}': targetId must be the member's user id.`,
+        };
+      }
+
+      return {
+        call: withAudit({
+          method: 'PATCH',
+          path: `/guilds/${guild}/members/${target.data}`,
+          body: { nick: p.data.nickname },
+        }),
+      };
+    }
+
     case 'end_poll': {
       const p = endPollPayloadSchema.safeParse(request.payload);
       if (!p.success) return issues(request, p.error.issues);
@@ -683,18 +691,6 @@ export function toRestCall(request: ActionRequest): PayloadResult {
       };
     }
 
-    case 'add_bot_role':
-    case 'remove_bot_role': {
-      const p = roleChangePayloadSchema.safeParse(request.payload);
-      if (!p.success) return issues(request, p.error.issues);
-      return {
-        call: withAudit({
-          method: request.kind === 'add_bot_role' ? 'PUT' : 'DELETE',
-          path: `/guilds/${guild}/members/${p.data.userId}/roles/${p.data.roleId}`,
-        }),
-      };
-    }
-
     case 'set_bot_nickname': {
       const p = setBotNicknamePayloadSchema.safeParse(request.payload);
       if (!p.success) return issues(request, p.error.issues);
@@ -716,6 +712,25 @@ export function toRestCall(request: ActionRequest): PayloadResult {
           path: `/guilds/${guild}/members/@me`,
           body: present({ avatar: p.data.avatar, banner: p.data.banner, bio: p.data.bio }),
         }),
+      };
+    }
+
+    case 'set_bot_name_style': {
+      const p = setBotNameStylePayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      const style = p.data.style;
+      return {
+        call: {
+          method: 'PATCH',
+          path: `/guilds/${guild}/members/@me`,
+          // All three every time: Discord silently ignored a body that carried the font id alone.
+          body: {
+            display_name_font_id: style?.fontId ?? null,
+            display_name_effect_id: style?.effectId ?? null,
+            display_name_colors: style?.colours ?? null,
+          },
+        },
       };
     }
   }

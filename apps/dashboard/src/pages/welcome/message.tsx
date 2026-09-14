@@ -1,8 +1,27 @@
-import type { ActionRow, ContainerChild, V2Component } from '@proton/core';
+import type { ActionRow, V2Component } from '@proton/core';
 import { ACTION_ROWS_MAX, MESSAGE_CONTENT_MAX } from '@proton/core';
-import { type GreetingMessage, WELCOME_PLACEHOLDERS } from '@proton/module-welcome/config';
+import type { PlaceholderSurface, SurfaceDiagnostic } from '@proton/core/placeholders';
+import type { GreetingMessage } from '@proton/module-welcome/config';
+import {
+  type GreetingPlaceholderFacts,
+  WELCOME_BOOST_SURFACE,
+  WELCOME_JOIN_SURFACE,
+  WELCOME_LEAVE_SURFACE,
+} from '@proton/module-welcome/placeholders';
 import type { ReactElement } from 'react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
+import {
+  blank,
+  type ConfigErrors,
+  EmbedEditor,
+  MessageField,
+} from '../../components/discord/embed-editor.tsx';
+import {
+  LayoutBuilder,
+  takenKeys as layoutKeys,
+  newLinkButton,
+} from '../../components/discord/layout-builder.tsx';
+import { placeholderSlot } from '../../components/discord/message-editor.tsx';
 import { useRecent } from '../../components/ui/collection.tsx';
 import {
   Button,
@@ -10,20 +29,29 @@ import {
   SegmentedControl,
   type SegmentedOption,
   Switch,
-  TextArea,
 } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { ConfirmDialog } from '../../components/ui/overlay.tsx';
-import { LinkButtonRowEditor, newLinkButton, takenKeys } from './buttons.tsx';
-import { EmbedsSection } from './embeds.tsx';
-import type { ConfigErrors } from './errors.ts';
-import { LayoutBuilder } from './layout.tsx';
+import { LinkButtonRowEditor, takenKeys as rowKeys } from './buttons.tsx';
 
-const PLACEHOLDER_MEANING: Record<string, string> = {
-  '{user}': 'Mentions the member',
-  '{username}': 'The member’s display name',
-  '{server}': 'The server’s name',
-  '{memberCount}': 'The server’s member count',
+export type GreetingKind = 'welcome' | 'goodbye' | 'boost';
+
+export type GreetingMessageKey = 'welcomeMessage' | 'goodbyeMessage' | 'boostMessage';
+
+export type DiagnosticsAt = (path: string) => readonly SurfaceDiagnostic[];
+
+export const GREETING_SURFACES: Readonly<
+  Record<GreetingKind, PlaceholderSurface<GreetingPlaceholderFacts>>
+> = {
+  welcome: WELCOME_JOIN_SURFACE,
+  goodbye: WELCOME_LEAVE_SURFACE,
+  boost: WELCOME_BOOST_SURFACE,
+};
+
+const MESSAGE_LABEL: Record<GreetingKind, string> = {
+  welcome: 'Welcome message',
+  goodbye: 'Goodbye message',
+  boost: 'Boost message',
 };
 
 const MODES: readonly SegmentedOption<'text' | 'layout'>[] = [
@@ -31,46 +59,13 @@ const MODES: readonly SegmentedOption<'text' | 'layout'>[] = [
   { value: 'layout', label: 'Layout' },
 ];
 
-const TOKEN = /\{([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\}/g;
-const KNOWN = new Set(WELCOME_PLACEHOLDERS.map((token) => token.slice(1, -1)));
-
 const TRUNCATION_WARNING_AT = 1900;
 
-function collectUnknown(value: unknown, found: Set<string>): void {
-  if (typeof value === 'string') {
-    for (const match of value.matchAll(TOKEN)) {
-      const name = match[1];
-      if (name !== undefined && !KNOWN.has(name)) found.add(name);
-    }
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) collectUnknown(item, found);
-    return;
-  }
-
-  if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) collectUnknown(item, found);
-  }
-}
+const TRUNCATION_NOTE =
+  'Once placeholders are filled in, anything past 2000 characters is cut off.';
 
 function allKeys(message: GreetingMessage): Set<string> {
-  const keys = takenKeys(message.components);
-
-  const fromChild = (child: ContainerChild): void => {
-    if (child.kind === 'row') for (const key of takenKeys([child.row])) keys.add(key);
-    else if (child.kind === 'section' && child.accessory.kind === 'button') {
-      keys.add(child.accessory.button.key);
-    }
-  };
-
-  for (const component of message.v2) {
-    if (component.kind === 'container') for (const child of component.children) fromChild(child);
-    else fromChild(component);
-  }
-
-  return keys;
+  return new Set([...rowKeys(message.components), ...layoutKeys(message.v2)]);
 }
 
 function textIn(components: readonly V2Component[]): string[] {
@@ -95,21 +90,24 @@ export function GreetingMessageEditor({
   value,
   onChange,
   errors,
+  diagnosticsAt,
   prefix,
   cardAttached,
 }: {
   guildId: string;
-  kind: 'welcome' | 'goodbye';
+  kind: GreetingKind;
   value: GreetingMessage;
   onChange: (next: GreetingMessage) => void;
   errors: ConfigErrors;
-  prefix: 'welcomeMessage' | 'goodbyeMessage';
+  diagnosticsAt: DiagnosticsAt;
+  prefix: GreetingMessageKey;
   cardAttached: boolean;
 }): ReactElement {
-  const field = useRef<HTMLTextAreaElement>(null);
   const [building, setBuilding] = useState(false);
   const [confirmDrop, setConfirmDrop] = useState(false);
   const recent = useRecent();
+
+  const placeholders = placeholderSlot(GREETING_SURFACES[kind], diagnosticsAt);
 
   const content = value.content ?? '';
   const hasLayout = value.v2.length > 0;
@@ -120,24 +118,9 @@ export function GreetingMessageEditor({
     value.components.length === 0 &&
     value.v2.length === 0;
 
-  const unknown = new Set<string>();
-  collectUnknown(value, unknown);
-
   const taken = allKeys(value);
-  const contentError = errors.at(`${prefix}.content`);
   const layoutError = errors.at(`${prefix}.v2`);
   const rowsError = errors.at(`${prefix}.components`);
-
-  const insert = (token: string): void => {
-    const target = field.current;
-    const at = target?.selectionStart ?? content.length;
-
-    onChange({ ...value, content: `${content.slice(0, at)}${token}${content.slice(at)}` });
-    queueMicrotask(() => {
-      target?.focus();
-      target?.setSelectionRange(at + token.length, at + token.length);
-    });
-  };
 
   const dropLayout = (): void => {
     const carried = textIn(value.v2).join('\n\n');
@@ -166,14 +149,6 @@ export function GreetingMessageEditor({
     if (value.v2.every((component) => component.kind === 'text')) dropLayout();
     else setConfirmDrop(true);
   };
-
-  const notes: string[] = [];
-  if (content.length > TRUNCATION_WARNING_AT) {
-    notes.push('Once placeholders are filled in, anything past 2000 characters is cut off.');
-  }
-  for (const name of unknown) {
-    notes.push(`Proton does not recognise {${name}}. It is posted as written.`);
-  }
 
   const setRows = (rows: ActionRow[]): void => onChange({ ...value, components: rows });
 
@@ -207,6 +182,7 @@ export function GreetingMessageEditor({
               taken={taken}
               prefix={`${prefix}.v2`}
               errors={errors}
+              placeholders={placeholders}
               onChange={(next) => onChange({ ...value, v2: next })}
             />
           </>
@@ -214,55 +190,32 @@ export function GreetingMessageEditor({
           <Rows>
             <SettingRow
               title="Text"
-              description="Supports Discord markdown. Placeholders also work in embeds and buttons."
+              description="Supports Discord markdown. Type { to add a placeholder."
               stacked
-              error={contentError}
-              note={
-                notes.length === 0
-                  ? undefined
-                  : notes.map((line) => (
-                      <span key={line} style={{ display: 'block' }}>
-                        {line}
-                      </span>
-                    ))
-              }
             >
-              <div className="welcome-stacked stack stack-8">
-                <div className="chip-list">
-                  {WELCOME_PLACEHOLDERS.map((token) => (
-                    <button
-                      key={token}
-                      type="button"
-                      className="chip welcome-token"
-                      title={PLACEHOLDER_MEANING[token]}
-                      onClick={() => insert(token)}
-                    >
-                      {token}
-                    </button>
-                  ))}
-                </div>
-                <TextArea
-                  ref={field}
-                  aria-label={kind === 'welcome' ? 'Welcome message' : 'Goodbye message'}
-                  rows={5}
-                  maxLength={MESSAGE_CONTENT_MAX}
-                  invalid={contentError !== undefined}
-                  value={content}
-                  onChange={(event) =>
-                    onChange({ ...value, content: event.currentTarget.value || undefined })
-                  }
-                />
-              </div>
+              <MessageField
+                placeholders={placeholders}
+                path={`${prefix}.content`}
+                label={MESSAGE_LABEL[kind]}
+                rows={5}
+                layout="wide"
+                maxLength={MESSAGE_CONTENT_MAX}
+                value={content}
+                error={errors.at(`${prefix}.content`)}
+                note={content.length > TRUNCATION_WARNING_AT ? TRUNCATION_NOTE : undefined}
+                onChange={(next) => onChange({ ...value, content: blank(next) })}
+              />
             </SettingRow>
           </Rows>
         )}
       </Section>
 
       {layout && value.embeds.length === 0 ? null : (
-        <EmbedsSection
+        <EmbedEditor
           value={value.embeds}
           prefix={`${prefix}.embeds`}
           errors={errors}
+          placeholders={placeholders}
           onChange={(embeds) => onChange({ ...value, embeds })}
         />
       )}
@@ -307,7 +260,8 @@ export function GreetingMessageEditor({
                     row={row}
                     taken={taken}
                     prefix={`${prefix}.components.${index}.buttons`}
-                    errorAt={errors.at}
+                    errors={errors}
+                    placeholders={placeholders}
                     onChange={(next) =>
                       setRows(
                         value.components.map((current, at) => (at === index ? next : current)),

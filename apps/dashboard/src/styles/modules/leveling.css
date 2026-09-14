@@ -28,3 +28,21 @@
   color: var(--text-muted);
   font-size: var(--text-secondary-size);
 }
+
+.leveling-stepper {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+
+.leveling-event-failure {
+  margin: -4px 0 0;
+  padding: 0 14px 10px 46px;
+  color: var(--danger);
+  font-size: var(--text-secondary-size);
+}
+
+.leveling-composer-status > :first-child {
+  margin-top: 0;
+}

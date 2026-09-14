@@ -1,4 +1,10 @@
 import type { ModuleConfigView } from '@proton/core';
+import {
+  type ModuleTemplates,
+  type SurfaceDiagnostic,
+  type TemplateReport,
+  validateConfigTemplates,
+} from '@proton/core/placeholders';
 import { useMutation, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { z } from 'zod';
@@ -12,26 +18,28 @@ export type FieldErrors = ReadonlyMap<string, string>;
 
 export interface ModuleForm<T> {
   view: ModuleConfigView;
-  /** The draft. Never the server's copy while there are unsaved edits. */
   value: T;
   setValue: (next: T | ((current: T) => T)) => void;
+  rebase: (patch: (current: T) => T) => void;
 
-  /** Path-addressed access, for controls generated from a field descriptor. */
   get: (path: string) => unknown;
   set: (path: string, value: unknown) => void;
 
   dirty: boolean;
   errors: FieldErrors;
   errorAt: (path: string) => string | undefined;
+  templateDiagnosticsAt: (path: string) => readonly SurfaceDiagnostic[];
 
   save: () => void;
   reset: () => void;
   saving: boolean;
   saveError: string | null;
+  failures: number;
 
-  /** Another admin (or another tab) saved this module while this draft was open. */
   changedElsewhere: boolean;
 }
+
+const NO_DIAGNOSTICS: readonly SurfaceDiagnostic[] = [];
 
 function sameJson(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -59,8 +67,7 @@ function issuesToErrors(error: z.ZodError): Map<string, string> {
 
   for (const issue of error.issues) {
     const path = issue.path.map(String).join('.');
-    // First issue per path wins: Zod reports a union's every branch, and the later ones describe
-    // a shape the admin did not choose.
+    // First issue per path wins: Zod reports every union branch, not only the one chosen.
     if (!errors.has(path)) errors.set(path, issue.message);
   }
 
@@ -90,34 +97,16 @@ function serverErrors(message: string): Map<string, string> {
 interface Options<S extends z.ZodType> {
   guildId: string;
   moduleId: string;
-  /**
-   * The module's own config schema, imported from its browser-safe `./config` subpath. Optional:
-   * the descriptor-driven page renders modules that expose no such subpath, and those fall back to
-   * the api's own validation, which returns the same Zod issues a beat later.
-   */
-  schema?: S | undefined;
+  schema: S;
+  templates?: ModuleTemplates | undefined;
 }
 
-/**
- * One module's settings, from load to save.
- *
- * The draft is forked from the server copy and only re-forked while it is clean: `LIVE` refetches
- * every query on window focus, and adopting a refetch under an open draft would throw away
- * whatever the admin had typed while they were reading Discord in the other tab.
- */
-export function useModuleForm(options: {
-  guildId: string;
-  moduleId: string;
-}): ModuleForm<Record<string, unknown>>;
-export function useModuleForm<S extends z.ZodType>(options: {
-  guildId: string;
-  moduleId: string;
-  schema: S;
-}): ModuleForm<z.infer<S>>;
+export function useModuleForm<S extends z.ZodType>(options: Options<S>): ModuleForm<z.infer<S>>;
 export function useModuleForm<S extends z.ZodType>({
   guildId,
   moduleId,
   schema,
+  templates,
 }: Options<S>): ModuleForm<Record<string, unknown>> {
   type T = Record<string, unknown>;
 
@@ -126,12 +115,13 @@ export function useModuleForm<S extends z.ZodType>({
 
   const server = view.config as T;
 
+  // A draft never adopts a refetch: LIVE refetches on focus, and that would discard what was typed.
   const [draft, setDraft] = useState<T | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [failures, setFailures] = useState(0);
   const [serverIssues, setServerIssues] = useState<Map<string, string>>(new Map());
 
-  // What the draft was forked from, to tell "the admin changed this" from "somebody else did".
   const baseline = useRef<T>(server);
   if (draft === null && !sameJson(baseline.current, server)) baseline.current = server;
   const submittedDraft = useRef<T | null>(null);
@@ -143,10 +133,32 @@ export function useModuleForm<S extends z.ZodType>({
   const setValue = useCallback((next: T | ((current: T) => T)) => {
     setDraft((current) => {
       const from = current ?? baseline.current;
-      return typeof next === 'function' ? (next as (c: T) => T)(from) : next;
+      const resolved = typeof next === 'function' ? (next as (c: T) => T)(from) : next;
+      // Edited back to the baseline, the draft goes: a clean form has to adopt the server's copy.
+      return sameJson(resolved, baseline.current) ? null : resolved;
     });
     setSaveError(null);
   }, []);
+
+  const rebase = useCallback(
+    (patch: (current: T) => T) => {
+      baseline.current = patch(baseline.current);
+      queryClient.setQueryData<ModuleConfigView>(
+        queryKeys.moduleConfig(guildId, moduleId),
+        (current) =>
+          current && {
+            ...current,
+            config: patch(current.config as T) as ModuleConfigView['config'],
+          },
+      );
+      setDraft((current) => {
+        if (current === null) return null;
+        const next = patch(current);
+        return sameJson(next, baseline.current) ? null : next;
+      });
+    },
+    [queryClient, guildId, moduleId],
+  );
 
   const set = useCallback(
     (path: string, fieldValue: unknown) => {
@@ -171,17 +183,25 @@ export function useModuleForm<S extends z.ZodType>({
     [value],
   );
 
-  // Validated against the module's own schema, so a bad value is named beside the field it is in
-  // rather than after a round trip that returns one sentence about the whole form.
-  const validation = useMemo(() => schema?.safeParse(value), [schema, value]);
+  // Validated here too, so a bad value is named beside its field rather than after a round trip.
+  const validation = useMemo(() => schema.safeParse(value), [schema, value]);
+
+  const templateReport = useMemo<TemplateReport | null>(
+    () =>
+      templates === undefined ? null : validateConfigTemplates(templates, value, baseline.current),
+    [templates, value],
+  );
 
   const errors = useMemo<FieldErrors>(() => {
     const merged = new Map(serverIssues);
-    if (validation && !validation.success && submitted) {
+    if (!validation.success && submitted) {
       for (const [path, message] of issuesToErrors(validation.error)) merged.set(path, message);
     }
+    for (const { path, diagnostic } of templateReport?.blocking ?? []) {
+      if (!merged.has(path)) merged.set(path, diagnostic.message);
+    }
     return merged;
-  }, [serverIssues, validation, submitted]);
+  }, [serverIssues, validation, submitted, templateReport]);
 
   const mutation = useMutation({
     mutationFn: (config: T) =>
@@ -203,37 +223,37 @@ export function useModuleForm<S extends z.ZodType>({
       setServerIssues(new Map());
       setSaveError(null);
 
-      // The overview and the module banners read the index, and a save can change
-      // whether a module is able to run.
+      // A save can change whether a module can run, and the overview and banners read the index.
       void queryClient.invalidateQueries({ queryKey: queryKeys.modules(guildId) });
     },
 
     onError: (error: Error) => {
       setServerIssues(serverErrors(error.message));
       setSaveError(saveFailure(error, 'Your changes were not saved'));
+      setFailures((count) => count + 1);
     },
   });
 
   const save = useCallback(() => {
     setSubmitted(true);
 
-    if (schema === undefined) {
-      setSaveError(null);
-      submittedDraft.current = draft;
-      mutation.mutate(value);
-      return;
-    }
-
     const parsed = schema.safeParse(value);
     if (!parsed.success) {
       setSaveError('Fix the marked settings before saving.');
+      setFailures((count) => count + 1);
+      return;
+    }
+
+    if (templateReport !== null && templateReport.blocking.length > 0) {
+      setSaveError('Fix the marked placeholders before saving.');
+      setFailures((count) => count + 1);
       return;
     }
 
     setSaveError(null);
     submittedDraft.current = draft;
     mutation.mutate(parsed.data as T);
-  }, [schema, value, draft, mutation.mutate]);
+  }, [schema, value, templateReport, draft, mutation.mutate]);
 
   const reset = useCallback(() => {
     setDraft(null);
@@ -244,19 +264,27 @@ export function useModuleForm<S extends z.ZodType>({
 
   const errorAt = useCallback((path: string) => errors.get(path), [errors]);
 
+  const templateDiagnosticsAt = useCallback(
+    (path: string) => templateReport?.byPath.get(path) ?? NO_DIAGNOSTICS,
+    [templateReport],
+  );
+
   return {
     view,
     value,
     setValue,
+    rebase,
     get,
     set,
     dirty,
     errors,
     errorAt,
+    templateDiagnosticsAt,
     save,
     reset,
     saving: mutation.isPending,
     saveError,
+    failures,
     changedElsewhere,
   };
 }

@@ -73,7 +73,6 @@ export default function TagsPage({ guildId, meta, summary, area }: ModulePagePro
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={area} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -97,7 +96,13 @@ export default function TagsPage({ guildId, meta, summary, area }: ModulePagePro
         {area === 'settings' ? <TagSettings form={form} /> : null}
       </LoadingBoundary>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

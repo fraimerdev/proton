@@ -40,6 +40,178 @@ export const roleRewardsSchema = z
       'never do anything.',
   });
 
+export const XP_MULTIPLIER_MIN = 0;
+export const XP_MULTIPLIER_MAX = 5;
+export const XP_MULTIPLIER_STEP = 0.1;
+export const XP_MULTIPLIER_LIST_MAX = 50;
+
+export const MULTIPLIER_CHANNEL_TYPES = [0, 2, 4, 5, 13, 15, 16];
+
+// A tolerance, not a remainder: 0.3 / 0.1 is 2.9999999999999996 in floating point.
+function onStep(value: number): boolean {
+  const steps = value / XP_MULTIPLIER_STEP;
+  return Math.abs(steps - Math.round(steps)) < 1e-6;
+}
+
+const STEP_MESSAGE = 'must be a multiple of 0.1 — for example 0.5, 1.5 or 2';
+
+export const xpMultiplierSchema = z
+  .number()
+  .min(XP_MULTIPLIER_MIN)
+  .max(XP_MULTIPLIER_MAX)
+  .refine(onStep, { message: STEP_MESSAGE });
+
+export const roleMultiplierSchema = z.object({
+  roleId: snowflakeSchema.clone().register(protonFields, { field: 'role-id', label: 'Role' }),
+  multiplier: xpMultiplierSchema.clone().register(protonFields, { label: 'Multiplier' }),
+});
+
+export type RoleMultiplier = z.infer<typeof roleMultiplierSchema>;
+
+export const channelMultiplierSchema = z.object({
+  channelId: snowflakeSchema.clone().register(protonFields, {
+    field: 'channel-id',
+    label: 'Channel',
+    channelTypes: MULTIPLIER_CHANNEL_TYPES,
+  }),
+  multiplier: xpMultiplierSchema.clone().register(protonFields, { label: 'Multiplier' }),
+});
+
+export type ChannelMultiplier = z.infer<typeof channelMultiplierSchema>;
+
+function repeatedIndexes(ids: readonly string[]): number[] {
+  const seen = new Set<string>();
+  const repeated: number[] = [];
+
+  ids.forEach((id, index) => {
+    if (seen.has(id)) repeated.push(index);
+    seen.add(id);
+  });
+
+  return repeated;
+}
+
+export const roleMultipliersSchema = z
+  .array(roleMultiplierSchema)
+  .max(XP_MULTIPLIER_LIST_MAX)
+  .superRefine((entries, ctx) => {
+    for (const index of repeatedIndexes(entries.map((entry) => entry.roleId))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [index, 'roleId'],
+        message:
+          'this role already has a multiplier — a role has one, so remove one of the two entries.',
+      });
+    }
+  });
+
+export const channelMultipliersSchema = z
+  .array(channelMultiplierSchema)
+  .max(XP_MULTIPLIER_LIST_MAX)
+  .superRefine((entries, ctx) => {
+    for (const index of repeatedIndexes(entries.map((entry) => entry.channelId))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [index, 'channelId'],
+        message:
+          'this channel already has a multiplier — a channel has one, so remove one of the two ' +
+          'entries.',
+      });
+    }
+  });
+
+const MINUTE_MS = 60_000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+
+export const XP_EVENT_MAX_PENDING = 5;
+export const XP_EVENT_MIN_DURATION_MS = 10 * MINUTE_MS;
+export const XP_EVENT_MAX_DURATION_MS = 14 * DAY_MS;
+export const XP_EVENT_MAX_LEAD_MS = 30 * DAY_MS;
+export const XP_EVENT_MULTIPLIER_MIN = 0.1;
+export const XP_EVENT_MULTIPLIER_MAX = 5;
+
+// A start a few minutes behind the server clock is a browser clock, not an attempt to backdate.
+export const XP_EVENT_START_GRACE_MS = 5 * MINUTE_MS;
+
+export const XP_EVENT_RETENTION_MS = 7 * DAY_MS;
+
+export const XP_EVENT_STATUSES = ['active', 'scheduled'] as const;
+
+export type XpEventStatus = (typeof XP_EVENT_STATUSES)[number];
+
+export const xpEventMultiplierSchema = z
+  .number()
+  .min(XP_EVENT_MULTIPLIER_MIN)
+  .max(XP_EVENT_MULTIPLIER_MAX)
+  .refine(onStep, { message: STEP_MESSAGE });
+
+export const xpEventCreateSchema = z.object({
+  multiplier: xpEventMultiplierSchema,
+  startsAt: z.iso.datetime({ offset: true }),
+  endsAt: z.iso.datetime({ offset: true }),
+});
+
+export type XpEventCreate = z.infer<typeof xpEventCreateSchema>;
+
+export type XpEventBoundsIssue = { path: 'startsAt' | 'endsAt'; message: string };
+
+export function xpEventBoundsIssue(
+  window: { startsAt: number; endsAt: number },
+  now: number,
+): XpEventBoundsIssue | null {
+  if (!Number.isFinite(window.startsAt)) return { path: 'startsAt', message: 'is not a date' };
+  if (!Number.isFinite(window.endsAt)) return { path: 'endsAt', message: 'is not a date' };
+
+  if (window.startsAt < now - XP_EVENT_START_GRACE_MS) {
+    return {
+      path: 'startsAt',
+      message: 'is in the past — an XP event can start now or later, never earlier',
+    };
+  }
+
+  if (window.startsAt - now > XP_EVENT_MAX_LEAD_MS) {
+    return {
+      path: 'startsAt',
+      message: 'is more than 30 days away — an XP event can be scheduled at most 30 days ahead',
+    };
+  }
+
+  const duration = window.endsAt - window.startsAt;
+
+  if (duration < XP_EVENT_MIN_DURATION_MS) {
+    return { path: 'endsAt', message: 'must be at least 10 minutes after the start' };
+  }
+
+  if (duration > XP_EVENT_MAX_DURATION_MS) {
+    return { path: 'endsAt', message: 'must be at most 14 days after the start' };
+  }
+
+  return null;
+}
+
+export function xpEventCreateSchemaAt(now: number) {
+  return xpEventCreateSchema.superRefine((input, ctx) => {
+    const issue = xpEventBoundsIssue(
+      { startsAt: Date.parse(input.startsAt), endsAt: Date.parse(input.endsAt) },
+      now,
+    );
+
+    if (issue) ctx.addIssue({ code: 'custom', path: [issue.path], message: issue.message });
+  });
+}
+
+export const xpEventViewSchema = z.object({
+  id: z.string().min(1),
+  multiplier: xpEventMultiplierSchema,
+  startsAt: z.iso.datetime({ offset: true }),
+  endsAt: z.iso.datetime({ offset: true }),
+  createdBy: z.string(),
+  createdAt: z.iso.datetime({ offset: true }),
+  status: z.enum(XP_EVENT_STATUSES),
+});
+
+export type XpEventView = z.infer<typeof xpEventViewSchema>;
+
 export const LEVEL_UP_PLACEHOLDERS = ['{user}', '{level}', '{xp}'] as const;
 
 export const DEFAULT_LEVEL_UP_MESSAGE = '{user} reached level {level}.';
@@ -186,6 +358,20 @@ const levelingShape = {
   }),
 
   roleRewards: roleRewardsSchema.default([]),
+
+  roleMultipliers: roleMultipliersSchema.default([]).register(protonFields, {
+    label: 'Role multipliers',
+    description:
+      'Scale the XP members with these roles earn, from 0× (no XP at all) to 5×. When several ' +
+      'multipliers apply, the highest wins — unless one of them is 0×.',
+  }),
+
+  channelMultipliers: channelMultipliersSchema.default([]).register(protonFields, {
+    label: 'Channel multipliers',
+    description:
+      'Scale the XP earned in these channels and their threads. A category covers every channel ' +
+      'in it.',
+  }),
 };
 
 export const levelingConfigSchema = z.object(levelingShape).superRefine((config, ctx) => {
@@ -202,9 +388,12 @@ export const levelingConfigSchema = z.object(levelingShape).superRefine((config,
 
 export type LevelingConfig = z.infer<typeof levelingConfigSchema>;
 
-export const levelingFormSchema = z
-  .object(levelingShape)
-  .omit({ levelUpMessage: true, roleRewards: true });
+export const levelingFormSchema = z.object(levelingShape).omit({
+  levelUpMessage: true,
+  roleRewards: true,
+  roleMultipliers: true,
+  channelMultipliers: true,
+});
 
 export const levelingDefaultConfig: LevelingConfig = {
   enabled: false,
@@ -224,6 +413,8 @@ export const levelingDefaultConfig: LevelingConfig = {
 
   rewardMode: 'stack',
   roleRewards: [],
+  roleMultipliers: [],
+  channelMultipliers: [],
 };
 
 export const LEVELING_SCHEMA_VERSION = 4;

@@ -5,7 +5,9 @@ import { guildIconUrl, type SessionGuild } from '../../lib/guild-access.ts';
 import { SUPPORT_INVITE } from '../../lib/site-meta.ts';
 import { cx, SearchField } from '../ui/controls.tsx';
 import { Icon } from '../ui/icon.tsx';
-import { Popover } from '../ui/overlay.tsx';
+import { menuItemFor, Popover } from '../ui/overlay.tsx';
+
+export { menuItemFor } from '../ui/overlay.tsx';
 
 export interface Viewer {
   id: string;
@@ -14,7 +16,7 @@ export interface Viewer {
 }
 
 function initials(name: string): string {
-  return name.slice(0, 2);
+  return [...name].slice(0, 2).join('');
 }
 
 export function ProtonMark({ size = 28 }: { size?: number }): ReactElement {
@@ -86,6 +88,10 @@ export function GuildAvatar({
   return <Avatar src={guildIconUrl(guild, size > 32 ? 256 : 64)} name={guild.name} size={size} />;
 }
 
+function enabledOptions(list: HTMLElement | null): HTMLElement[] {
+  return [...(list?.querySelectorAll<HTMLElement>('[role="option"]:not(:disabled)') ?? [])];
+}
+
 function ServerPicker({
   guilds,
   current,
@@ -96,14 +102,25 @@ function ServerPicker({
   presenceKnown: boolean;
 }): ReactElement {
   const anchor = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const intent = useRef<number | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const router = useRouter();
 
+  const searchable = guilds.length > 6;
   const needle = query.trim().toLowerCase();
   const shown = guilds.filter((guild) => guild.name.toLowerCase().includes(needle));
+
+  useEffect(() => {
+    if (!open || searchable) return;
+
+    const options = enabledOptions(list.current);
+    const target =
+      options.find((option) => option.getAttribute('aria-selected') === 'true') ?? options[0];
+    target?.focus({ preventScroll: true });
+  }, [open, searchable]);
 
   const forget = (): void => window.clearTimeout(intent.current);
 
@@ -139,7 +156,7 @@ function ServerPicker({
         minWidth={268}
         maxWidth={320}
       >
-        {guilds.length > 6 ? (
+        {searchable ? (
           <div className="picker-search">
             <SearchField
               value={query}
@@ -151,7 +168,18 @@ function ServerPicker({
           </div>
         ) : null}
 
-        <div className="popover-scroll" role="listbox">
+        <div
+          ref={list}
+          className="popover-scroll"
+          role="listbox"
+          aria-label="Servers"
+          onKeyDown={(event) => {
+            const target = menuItemFor(enabledOptions(list.current), event.key);
+            if (!target) return;
+            event.preventDefault();
+            target.focus();
+          }}
+        >
           {shown.map((guild) => (
             <button
               key={guild.id}
@@ -194,16 +222,6 @@ function ServerPicker({
       </Popover>
     </>
   );
-}
-
-function menuItemFor(items: HTMLElement[], key: string): HTMLElement | undefined {
-  const current = items.indexOf(document.activeElement as HTMLElement);
-
-  if (key === 'ArrowDown') return items[(current + 1) % items.length];
-  if (key === 'ArrowUp') return items[current <= 0 ? items.length - 1 : current - 1];
-  if (key === 'Home') return items[0];
-  if (key === 'End') return items[items.length - 1];
-  return undefined;
 }
 
 export function UserMenu({

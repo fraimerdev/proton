@@ -11,8 +11,8 @@
     "./store": "./src/store.ts",
     "./image": "./src/image.ts",
     "./kinds": "./src/kinds.ts",
-    "./typeface": "./src/typeface.ts",
-    "./colour": "./src/colour.ts"
+    "./name-style": "./src/name-style.ts",
+    "./name-style-status": "./src/name-style-status.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

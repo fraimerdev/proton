@@ -73,7 +73,6 @@ export default function ServerlogPage({
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -90,7 +89,7 @@ export default function ServerlogPage({
         {unknown.length > 0 ? (
           <StatusBanner
             tone="danger"
-            live="assertive"
+            live="polite"
             title="Some overrides are for events that no longer exist"
             actions={
               unknown.length > 1 ? (
@@ -122,7 +121,13 @@ export default function ServerlogPage({
       {area === 'events' ? <Events guildId={guildId} moduleId={meta.id} form={form} /> : null}
       {area === 'filters' ? <Filters guildId={guildId} form={form} /> : null}
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

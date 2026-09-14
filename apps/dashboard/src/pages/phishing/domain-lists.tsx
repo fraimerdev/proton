@@ -4,9 +4,8 @@ import {
   firstMatch,
   normaliseDomain,
   toDomainSet,
-  zodToDescriptors,
 } from '@proton/core';
-import { type PhishingConfig, phishingConfigSchema } from '@proton/module-phishing/config';
+import { GUILD_LIST_MAX, type PhishingConfig } from '@proton/module-phishing/config';
 import type { ReactElement } from 'react';
 import { useMemo, useState } from 'react';
 import { LimitCounter } from '../../components/ui/collection.tsx';
@@ -17,10 +16,7 @@ import { SegmentedTabs } from '../../components/ui/tabs.tsx';
 
 type ListKey = 'blockDomains' | 'allowDomains';
 
-// GUILD_LIST_MAX is module-private, so the ceiling is read off the schema rather than transcribed.
-const LIST_MAX =
-  zodToDescriptors(phishingConfigSchema).find((field) => field.path === 'blockDomains')?.maxItems ??
-  100;
+const LIST_MAX = GUILD_LIST_MAX;
 
 const FILTER_FROM = 10;
 

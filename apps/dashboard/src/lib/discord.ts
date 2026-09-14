@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { DiscordUserGuild } from './guild-access.ts';
 
 const inFlight = new Map<string, Promise<DiscordUserGuild[]>>();
@@ -256,6 +257,96 @@ export async function fetchGuildMembers(
   if (found.length === 0 && refusal !== 0) throw unreadable('members', refusal);
 
   return found;
+}
+
+const protonMemberSchema = z.object({
+  nick: z.string().nullish(),
+  user: z.object({
+    id: z.string(),
+    username: z.string(),
+    discriminator: z.string().optional(),
+    global_name: z.string().nullish(),
+    avatar: z.string().nullish(),
+  }),
+  display_name_styles: z.unknown().optional(),
+});
+
+const wireNameStyleSchema = z
+  .object({
+    font_id: z.number().int(),
+    effect_id: z.number().int(),
+    colors: z.array(z.number().int()),
+  })
+  .nullable();
+
+const accountNameStyleSchema = z.object({
+  fontId: z.number().int(),
+  effectId: z.number().int(),
+  colours: z.array(z.number().int()),
+});
+
+export const protonAccountSchema = z.object({
+  username: z.string(),
+  discriminator: z.string().nullable(),
+  globalName: z.string().nullable(),
+  nickname: z.string().nullable(),
+  avatarUrl: z.string(),
+  displayNameStyle: accountNameStyleSchema.nullable().optional(),
+});
+
+export type ProtonAccount = z.infer<typeof protonAccountSchema>;
+
+// Parsed apart from the member, so a style in a shape Proton does not know cannot fail the account read.
+function accountNameStyle(raw: unknown): Pick<ProtonAccount, 'displayNameStyle'> {
+  if (raw === undefined) return {};
+
+  const parsed = wireNameStyleSchema.safeParse(raw);
+  if (!parsed.success) return {};
+
+  const style = parsed.data;
+
+  return {
+    displayNameStyle:
+      style === null
+        ? null
+        : { fontId: style.font_id, effectId: style.effect_id, colours: style.colors },
+  };
+}
+
+export async function fetchProtonAccount(
+  restProxyUrl: string,
+  guildId: string,
+  botUserId: string,
+): Promise<ProtonAccount> {
+  const response = await fetch(
+    `${restProxyUrl.replace(/\/$/, '')}/api/guilds/${guildId}/members/${botUserId}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Proton could not read its own account in this server — Discord answered ${response.status}.`,
+    );
+  }
+
+  const parsed = protonMemberSchema.safeParse(await response.json().catch(() => null));
+  if (!parsed.success) {
+    throw new Error(
+      'Proton could not read its own account in this server — Discord answered with no user.',
+    );
+  }
+
+  const { nick, user, display_name_styles } = parsed.data;
+  const discriminator = user.discriminator ?? '0';
+
+  // The member's own avatar is ignored: it is what Branding uploads, and this is what shows without one.
+  return protonAccountSchema.parse({
+    username: user.username,
+    discriminator: discriminator === '0' ? null : discriminator,
+    globalName: user.global_name ?? null,
+    nickname: nick ?? null,
+    avatarUrl: userAvatarUrl({ id: user.id, avatar: user.avatar ?? null, discriminator }),
+    ...accountNameStyle(display_name_styles),
+  });
 }
 
 const CATEGORY_TYPE = 4;

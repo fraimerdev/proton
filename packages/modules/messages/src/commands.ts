@@ -6,6 +6,7 @@ import {
   type RespondTo,
   toDiscordMessage,
 } from '@proton/core';
+import { type MessageRender, usedKeys } from '@proton/core/placeholders';
 import { SlashCommandBuilder } from 'discord.js';
 import { ChannelType, InteractionContextType, InteractionType } from 'discord-api-types/v10';
 import { customIdFor } from './component-id.ts';
@@ -19,7 +20,13 @@ import {
   TEMPLATE_LIST_SHOWN,
   TEMPLATE_NAME_MAX,
 } from './config.ts';
-import { bindFollowUp, describeUnbound, type MessagesDeps } from './deps.ts';
+import {
+  bindFollowUp,
+  describeUnbound,
+  logReadFailure,
+  type MessagesDeps,
+  readPlaceholderSources,
+} from './deps.ts';
 import {
   deferEphemeral,
   followUp,
@@ -29,6 +36,7 @@ import {
   respondTo,
   succeeded,
 } from './perform.ts';
+import { MESSAGES_POST_SURFACE, messageTexts, renderSavedMessage } from './placeholders.ts';
 
 type Command = CommandDefinition<MessagesConfig>;
 
@@ -135,6 +143,44 @@ function messageBuilder(): SlashCommandBuilder {
   return builder;
 }
 
+async function renderForPost(
+  ctx: CommandContext<MessagesConfig>,
+  deps: MessagesDeps,
+  saved: SavedMessage,
+  channelId: string,
+): Promise<MessageRender<SavedMessage>> {
+  const now = deps.placeholders?.now() ?? Date.now();
+  const sources = await readPlaceholderSources(
+    deps,
+    ctx.guildId,
+    channelId,
+    usedKeys(MESSAGES_POST_SURFACE, messageTexts(saved), { allowedOnly: true }),
+    logReadFailure(ctx.logger, `the saved message '${saved.name}'`, {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      template: saved.name,
+    }),
+  );
+
+  return renderSavedMessage(
+    saved,
+    MESSAGES_POST_SURFACE,
+    {
+      ...sources,
+      actor: {
+        user: {
+          id: ctx.userId,
+          username: null,
+          globalName: ctx.actorDisplayName ?? null,
+          avatarHash: null,
+        },
+        member: { nick: ctx.actorNick },
+      },
+    },
+    now,
+  );
+}
+
 async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Promise<void> {
   const to = replyTo(ctx);
 
@@ -164,9 +210,30 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
 
   await deferEphemeral(ctx, to);
 
+  const rendered =
+    saved.placeholders === true
+      ? await renderForPost(ctx, deps, saved, channelId)
+      : { ok: true as const, message: saved };
+
+  if (!rendered.ok) {
+    ctx.logger.warn(`the saved message '${saved.name}' was not posted: ${rendered.humanReason}`, {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      template: saved.name,
+    });
+    await followUp(
+      ctx,
+      to,
+      bound.deps.applicationId,
+      `I could not post **${saved.name}** in <#${channelId}>, because ${rendered.humanReason} ` +
+        'Nothing was posted. An admin can fix it in the Proton dashboard under Messages → Templates.',
+    );
+    return;
+  }
+
   const result = await postMessage(ctx, {
     channelId,
-    body: toDiscordMessage(saved, { customIdFor: customIdFor(saved.name) }),
+    body: toDiscordMessage(rendered.message, { customIdFor: customIdFor(saved.name) }),
     actorId: ctx.userId,
     idempotencyRoot: ctx.idempotencyKey,
   });

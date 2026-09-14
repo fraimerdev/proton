@@ -76,7 +76,7 @@ export function MenuList({
   const [deleting, setDeleting] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
-  const searchable = menus.length > SEARCH_FROM;
+  const searchable = menus.length > SEARCH_FROM || query !== '';
 
   const { data: channels } = useQuery(channelsQuery(guildId));
   const { data: roles, isPending: rolesPending } = useQuery({

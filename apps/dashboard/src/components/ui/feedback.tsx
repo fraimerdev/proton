@@ -19,7 +19,6 @@ interface StatusBannerProps {
   actions?: ReactNode;
   icon?: IconName | undefined;
   onDismiss?: (() => void) | undefined;
-  /** Assertive for a failure the admin caused; polite for a condition they arrived to. */
   live?: 'assertive' | 'polite' | undefined;
 }
 
@@ -58,7 +57,6 @@ interface EmptyStateProps {
   title: string;
   children?: ReactNode;
   actions?: ReactNode;
-  /** Draws the state on its own surface, for an empty collection that still needs a frame. */
   inset?: boolean | undefined;
 }
 
@@ -79,10 +77,7 @@ export function EmptyState({
   );
 }
 
-/**
- * Proton accepts a request before Discord has taken it, so a Post button must not claim "Posted".
- * These are the four honest states and the words that go with them.
- */
+// Proton accepts a request before Discord takes it, so a Post button must not claim "Posted".
 export type AsyncPhase = 'idle' | 'requested' | 'working' | 'completed' | 'failed';
 
 export function AsyncOperationStatus({
@@ -129,7 +124,7 @@ export function AsyncOperationStatus({
 
 export type SpinnerSize = 'sm' | 'md' | 'lg';
 
-const SPINNER_PX: Record<SpinnerSize, number> = { sm: 14, md: 18, lg: 22 };
+const SPINNER_PX: Record<SpinnerSize, number> = { sm: 14, md: 18, lg: 28 };
 
 // Kept equal to --loading-delay and --loading-delay-fallback, or AT hears a load nobody saw.
 const REVEAL_MS = 180;
@@ -198,6 +193,7 @@ interface LoadingAreaProps {
   minHeight?: number | string | undefined;
   size?: SpinnerSize | undefined;
   fallback?: boolean | undefined;
+  fill?: boolean | undefined;
 }
 
 export function LoadingArea({
@@ -205,9 +201,13 @@ export function LoadingArea({
   minHeight,
   size = 'md',
   fallback = false,
+  fill = false,
 }: LoadingAreaProps): ReactElement {
   return (
-    <div className="loading-area" style={minHeight === undefined ? undefined : { minHeight }}>
+    <div
+      className={cx('loading-area', fill && 'loading-area-fill')}
+      style={minHeight === undefined ? undefined : { minHeight }}
+    >
       <Spinner label={label} size={size} fallback={fallback} status />
     </div>
   );
@@ -223,7 +223,9 @@ export function LoadingBoundary({
   children: ReactNode;
 }): ReactElement {
   return (
-    <Suspense fallback={<LoadingArea label={label} minHeight={minHeight} fallback />}>
+    <Suspense
+      fallback={<LoadingArea label={label} minHeight={minHeight} size="lg" fill fallback />}
+    >
       {children}
     </Suspense>
   );

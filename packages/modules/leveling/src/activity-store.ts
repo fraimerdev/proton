@@ -123,10 +123,12 @@ export class DrizzleActivityStore implements ActivityStore {
     return rows.map((row) => row.userId);
   }
 
-  async prune(before: Date): Promise<number> {
+  async prune(guildId: string, before: Date): Promise<number> {
     const rows = await this.#handle.db
       .delete(memberActivityDaily)
-      .where(lt(memberActivityDaily.day, utcDay(before)))
+      .where(
+        and(eq(memberActivityDaily.guildId, guildId), lt(memberActivityDaily.day, utcDay(before))),
+      )
       .returning({ userId: memberActivityDaily.userId });
 
     return rows.length;

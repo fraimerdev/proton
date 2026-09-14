@@ -9,8 +9,15 @@ import {
   countersFormSchema,
   TEMPLATE_MAX,
 } from '../src/config.ts';
-import { countFor, plan, type RefreshOutcome, renderName, renderReport } from '../src/render.ts';
+import { countFor } from '../src/placeholders.ts';
+import { plan, type RefreshOutcome, renderName, renderReport } from '../src/render.ts';
 import { COUNTER_A, COUNTER_B, EVERYONE_ROLE, guildState, MEMBER_COUNT } from './harness.ts';
+
+const NOW = Date.UTC(2026, 8, 14, 9);
+
+function named(template: string, count: number): string {
+  return renderName(template, 'members', { ...guildState(), memberCount: count }, NOW);
+}
 
 function config(counters: CountersConfig['counters']): CountersConfig {
   return { ...countersDefaultConfig, enabled: true, counters };
@@ -44,33 +51,33 @@ function outcome(over: Partial<RefreshOutcome> = {}): RefreshOutcome {
 
 describe('renderName', () => {
   test('puts the number where {count} is', () => {
-    expect(renderName('Members: {count}', 1234)).toBe('Members: 1234');
+    expect(named('Members: {count}', 1234)).toBe('Members: 1234');
   });
 
   test('substitutes every occurrence, not just the first', () => {
-    expect(renderName('{count} of {count}', 7)).toBe('7 of 7');
+    expect(named('{count} of {count}', 7)).toBe('7 of 7');
   });
 
   test('leaves a placeholder it does not know alone rather than rendering undefined', () => {
-    expect(renderName('{members} online — {count}', 3)).toBe('{members} online — 3');
+    expect(named('{members} online — {count}', 3)).toBe('{members} online — 3');
   });
 
   test('renders zero as zero rather than as nothing', () => {
-    expect(renderName('Members: {count}', 0)).toBe('Members: 0');
+    expect(named('Members: {count}', 0)).toBe('Members: 0');
   });
 
   test('a template with no {count} comes back unchanged', () => {
-    expect(renderName('Nothing here', 9)).toBe('Nothing here');
+    expect(named('Nothing here', 9)).toBe('Nothing here');
   });
 
   test('never exceeds the channel-name cap Discord enforces', () => {
-    expect(renderName(`${'x'.repeat(CHANNEL_NAME_MAX)}{count}`, 5)).toHaveLength(CHANNEL_NAME_MAX);
+    expect(named(`${'x'.repeat(CHANNEL_NAME_MAX)}{count}`, 5)).toHaveLength(CHANNEL_NAME_MAX);
   });
 
   test('a template at its own maximum still fits once the number is in it', () => {
     const template = `${'x'.repeat(TEMPLATE_MAX - '{count}'.length)}{count}`;
 
-    expect(renderName(template, 999_999_999).length).toBeLessThanOrEqual(CHANNEL_NAME_MAX);
+    expect(named(template, 999_999_999).length).toBeLessThanOrEqual(CHANNEL_NAME_MAX);
   });
 });
 
@@ -169,7 +176,13 @@ describe('plan', () => {
 
     const result = plan(config([counter(COUNTER_A, 'Members: {count}', 'members')]), state);
 
-    expect(result).toEqual({ creations: [], edits: [], unchanged: [], unavailable: [COUNTER_A] });
+    expect(result).toEqual({
+      creations: [],
+      edits: [],
+      unchanged: [],
+      unavailable: [COUNTER_A],
+      blank: [],
+    });
   });
 
   test('plans each counter independently', () => {
@@ -227,6 +240,7 @@ describe('plan', () => {
       edits: [],
       unchanged: [],
       unavailable: [],
+      blank: [],
     });
   });
 });

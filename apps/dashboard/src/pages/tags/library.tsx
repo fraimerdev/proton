@@ -80,8 +80,7 @@ export function TagLibraryArea({
     return () => window.clearTimeout(timer);
   }, [trimmed, term, tooLong, go]);
 
-  // The store holds a dashed, lower-cased name and the service only lower-cases the needle, so a
-  // typed space matches nothing. Worth saying only when normalising changed more than the case.
+  // A typed space never matches: stored names are dashed, the needle is only lower-cased.
   const normalised = trimmed === '' ? undefined : normaliseTagName(trimmed);
   const dashed =
     normalised?.ok === true && normalised.name !== trimmed.toLowerCase()
@@ -276,8 +275,7 @@ function TagDialog({
   now: number;
   onClose: () => void;
 }): ReactElement | null {
-  // Held against the tag it belongs to rather than cleared in an effect: opening a different tag
-  // would otherwise show "copied" for something the admin never copied.
+  // Keyed to the tag, not cleared in an effect, so a newly opened tag never shows another's copy.
   const [copied, setCopied] = useState<{ name: string; what: string } | null>(null);
 
   if (!tag) return null;

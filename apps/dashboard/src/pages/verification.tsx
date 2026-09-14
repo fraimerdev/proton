@@ -55,7 +55,6 @@ export default function VerificationPage({
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={current} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -87,6 +86,7 @@ export default function VerificationPage({
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         onSave={form.save}
         onReset={form.reset}
         note={

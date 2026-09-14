@@ -1,11 +1,19 @@
 import type { ActionRow, MessageButton } from '@proton/core';
 import { BUTTON_LABEL_MAX, BUTTON_URL_MAX, BUTTONS_PER_ROW_MAX } from '@proton/core';
 import type { ReactElement } from 'react';
+import {
+  blank,
+  type ConfigErrors,
+  MessageField,
+  type PlaceholderSlot,
+  sentence,
+} from '../../components/discord/embed-editor.tsx';
 import { EmojiPicker } from '../../components/discord/emoji-picker.tsx';
+import { newLinkButton } from '../../components/discord/layout-builder.tsx';
 import { PresenceList, useRecent } from '../../components/ui/collection.tsx';
-import { Button, cx, IconButton, TextInput } from '../../components/ui/controls.tsx';
+import { Button, cx, IconButton } from '../../components/ui/controls.tsx';
 
-export type ButtonRow = Extract<ActionRow, { kind: 'buttons' }>;
+type ButtonRow = Extract<ActionRow, { kind: 'buttons' }>;
 
 export function takenKeys(rows: readonly ActionRow[]): Set<string> {
   const keys = new Set<string>();
@@ -18,20 +26,14 @@ export function takenKeys(rows: readonly ActionRow[]): Set<string> {
   return keys;
 }
 
-export function newLinkButton(taken: ReadonlySet<string>): MessageButton {
-  let index = 1;
-  while (taken.has(`link${index}`)) index += 1;
-
-  return { key: `link${index}`, style: 'link', label: 'Open', url: '' };
-}
-
 export function LinkButtonRowEditor({
   guildId,
   row,
   taken,
   onChange,
   onRemove,
-  errorAt,
+  errors,
+  placeholders,
   prefix,
   className,
 }: {
@@ -40,7 +42,8 @@ export function LinkButtonRowEditor({
   taken: ReadonlySet<string>;
   onChange: (next: ButtonRow) => void;
   onRemove: () => void;
-  errorAt: (path: string) => string | undefined;
+  errors: ConfigErrors;
+  placeholders: PlaceholderSlot | undefined;
   prefix: string;
   className?: string | undefined;
 }): ReactElement {
@@ -59,29 +62,28 @@ export function LinkButtonRowEditor({
     <div className={cx('panel-sunken stack stack-12', className)}>
       <PresenceList>
         {row.buttons.map((button, index) => {
-          const urlError = errorAt(`${prefix}.${index}.url`);
-          const labelError = errorAt(`${prefix}.${index}.label`);
-          const styleError = errorAt(`${prefix}.${index}.style`);
+          const at = `${prefix}.${index}`;
+          const styleError = errors.at(`${at}.style`) ?? errors.at(`${at}.action`);
 
           return (
             <div className={cx('stack stack-8', recent.enter(button.key, 'part'))} key={button.key}>
-              <div className="inline inline-8 inline-wrap">
+              <div className="inline inline-8 inline-wrap message-field-row">
                 <EmojiPicker
                   guildId={guildId}
                   label={`Button ${index + 1} emoji`}
                   value={button.emoji ?? null}
                   onChange={(emoji) => set(index, { ...button, emoji: emoji ?? undefined })}
                 />
-                <TextInput
-                  aria-label={`Button ${index + 1} label`}
-                  className="control-w-md"
+                <MessageField
+                  placeholders={placeholders}
+                  path={`${at}.label`}
+                  label={`Button ${index + 1} label`}
                   placeholder="Label"
+                  width="md"
                   maxLength={BUTTON_LABEL_MAX}
-                  invalid={labelError !== undefined}
                   value={button.label ?? ''}
-                  onChange={(event) =>
-                    set(index, { ...button, label: event.currentTarget.value || undefined })
-                  }
+                  error={errors.at(`${at}.label`)}
+                  onChange={(next) => set(index, { ...button, label: blank(next) })}
                 />
                 <span className="push-right">
                   <IconButton
@@ -94,23 +96,23 @@ export function LinkButtonRowEditor({
                 </span>
               </div>
 
-              <TextInput
-                aria-label={`Button ${index + 1} link`}
+              <MessageField
+                placeholders={placeholders}
+                path={`${at}.url`}
+                label={`Button ${index + 1} link`}
+                link
                 placeholder="https://…"
                 maxLength={BUTTON_URL_MAX}
-                invalid={urlError !== undefined}
                 value={button.url ?? ''}
-                onChange={(event) =>
-                  set(index, { ...button, url: event.currentTarget.value || undefined })
-                }
+                error={errors.at(`${at}.url`)}
+                onChange={(next) => set(index, { ...button, url: blank(next) })}
               />
-
-              {labelError !== undefined ? <p className="row-error">{labelError}</p> : null}
-              {urlError !== undefined ? <p className="row-error">{urlError}</p> : null}
 
               {button.style === 'link' ? null : (
                 <>
-                  {styleError !== undefined ? <p className="row-error">{styleError}</p> : null}
+                  {styleError !== undefined ? (
+                    <p className="row-error">{sentence(styleError)}</p>
+                  ) : null}
                   <Button
                     size="sm"
                     className="ladder-add"

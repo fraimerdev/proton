@@ -1,5 +1,6 @@
 import type { AppealPanel } from '@proton/module-appeals/config';
 import { appealsConfigSchema } from '@proton/module-appeals/config';
+import { appealsTemplates } from '@proton/module-appeals/placeholders';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { useModuleForm } from '../components/module/form.ts';
@@ -10,21 +11,18 @@ import {
   moduleState,
 } from '../components/module/page.tsx';
 import type { ModulePageProps } from '../components/module/registry.ts';
-import { ModuleLink } from '../components/module/route.tsx';
+import { ModuleLink, useModuleNavigate, useModuleSearch } from '../components/module/route.tsx';
 import { useModuleToggle } from '../components/module/toggle.ts';
-import { LoadingBoundary, StatusBanner } from '../components/ui/feedback.tsx';
+import { Button } from '../components/ui/controls.tsx';
+import { EmptyState, LoadingBoundary, StatusBanner } from '../components/ui/feedback.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
 import { AreaTabs } from '../components/ui/tabs.tsx';
 import { moduleConfigQuery, modulesQuery } from '../lib/queries.ts';
 import { PanelEditor } from './appeals/editor.tsx';
 import { FormsArea } from './appeals/forms.tsx';
 import { ReviewArea } from './appeals/review.tsx';
-import { panelTitle, useAppealsNav, useAppealsSearch } from './appeals/shape.ts';
+import { panelTitle } from './appeals/shape.ts';
 
-/**
- * A form only ever opens if something mints a signed link for it, and the honeypot's block DM is
- * the only thing in Proton that does. This says so rather than writing the honeypot's config.
- */
 function useUnreachableForms(
   guildId: string,
   panels: readonly AppealPanel[],
@@ -42,6 +40,7 @@ function useUnreachableForms(
   if (summary === undefined || honeypot.data === undefined) return false;
 
   if (!summary.enabled) return true;
+  if (honeypot.data.config.action !== 'ban') return true;
 
   const pointed = honeypot.data.config.appealPanelId;
   return typeof pointed !== 'string' || !live.some((panel) => panel.id === pointed);
@@ -53,10 +52,15 @@ export default function AppealsPage({
   summary,
   area,
 }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: appealsConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: appealsConfigSchema,
+    templates: appealsTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
-  const search = useAppealsSearch();
-  const go = useAppealsNav(guildId, meta.id);
+  const search = useModuleSearch();
+  const go = useModuleNavigate(guildId, meta.id);
 
   const enabled = summary?.enabled ?? form.view.enabled;
   const unreachable = useUnreachableForms(guildId, form.value.panels, enabled);
@@ -98,7 +102,6 @@ export default function AppealsPage({
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={area} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -151,12 +154,33 @@ export default function AppealsPage({
           />
         ) : null}
 
-        {area === 'forms' && editing === undefined ? (
+        {area === 'forms' && search.id !== undefined && editing === undefined ? (
+          <EmptyState
+            icon="warning"
+            title="Appeal form not found"
+            inset
+            actions={
+              <Button tone="primary" onClick={() => go({ id: undefined })}>
+                Back to appeal forms
+              </Button>
+            }
+          >
+            It may have been renamed or deleted.
+          </EmptyState>
+        ) : null}
+
+        {area === 'forms' && search.id === undefined ? (
           <FormsArea form={form} guildId={guildId} onOpen={(id) => go({ id })} />
         ) : null}
       </LoadingBoundary>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

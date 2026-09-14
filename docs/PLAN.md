@@ -209,6 +209,12 @@ Framework-enforced behaviour: a module missing a required intent **disables itse
     ticket channel is private in the call that creates it, not one round trip later), and a guild's
     entitlement tier reaches every module surface on the cached config path, which is what finally
     makes `entitlements/limits.ts` load-bearing rather than decorative.
+  - **Landed after Phase 4:** the `afk` module — `/afk set` and `/afk clear`. Anyone who pings an
+    away member is told the reason and since when; their next message clears it with a welcome-back
+    note and a DM recap of the pings they missed. An `[AFK]` nickname tag comes and goes with it,
+    and Proton deletes its replies after a delay. It brought core's first kind that renames another
+    member, `set_member_nickname` (Manage Nicknames, owner and role-hierarchy prechecks), and a
+    reply now needs Read Message History. Stored reasons expire with the status after 30 days.
 - **Phase 5 (commercial):** entitlements/billing, premium gating, sharding hardening, App Verification, privileged intent application, SLOs, status page.
 - **After engine is stable, high priority:** visual rule builder — worth more than any three modules.
 

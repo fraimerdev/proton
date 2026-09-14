@@ -14,7 +14,14 @@ import {
 } from '@proton/core';
 import type { ReactElement, ReactNode } from 'react';
 import { useState } from 'react';
+import {
+  blank,
+  MessageField,
+  type PlaceholderSlot,
+  sentence,
+} from '../../components/discord/embed-editor.tsx';
 import { EmojiPicker } from '../../components/discord/emoji-picker.tsx';
+import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RolePicker } from '../../components/discord/role-picker.tsx';
 import { useRecent } from '../../components/ui/collection.tsx';
 import {
@@ -26,7 +33,6 @@ import {
   SegmentedControl,
   Select,
   Switch,
-  TextArea,
   TextInput,
 } from '../../components/ui/controls.tsx';
 import { Rows } from '../../components/ui/layout.tsx';
@@ -36,6 +42,7 @@ import {
   freshKey,
   NEEDS_MANAGE_ROLES,
   newButton,
+  type ReplyPreview,
   ROLE_MODE_HELP,
   ROLE_MODE_LABELS,
 } from './shared.ts';
@@ -59,8 +66,9 @@ const ACTION_KINDS = [
   { value: 'reply' as const, label: 'Reply' },
 ];
 
-// Not `Field`: a picker, a switch and a segmented control take no id, so its `<label for>` would
-// point at an element that never exists. They carry their own accessible name instead.
+const REPLY_EMPTY = 'Filled in for this sample, the reply is empty, so Proton would send nothing.';
+
+// Not Field: these controls take no id, so its <label for> would point at nothing.
 export function Labelled({
   label,
   hint,
@@ -131,18 +139,41 @@ function KeyField({
   );
 }
 
+function ReplySample({ preview }: { preview: ReplyPreview }): ReactElement {
+  return (
+    <div>
+      <DiscordPreview
+        message={{ content: preview.text }}
+        mentionNames={preview.mentionNames}
+        now={preview.now}
+        empty={REPLY_EMPTY}
+      />
+      <p className="messages-preview-note text-xs text-muted">{preview.caption}</p>
+      {preview.notes.map((note) => (
+        <p key={note} className="messages-preview-note text-xs text-muted">
+          {sentence(note)}
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function ActionEditor({
   guildId,
   action,
   onChange,
   errorAt,
   prefix,
+  placeholders,
+  previewReply,
 }: {
   guildId: string;
   action: ComponentAction;
   onChange: (next: ComponentAction) => void;
   errorAt: (path: string) => string | undefined;
   prefix: string;
+  placeholders: PlaceholderSlot | undefined;
+  previewReply: ((text: string) => ReplyPreview) | undefined;
 }): ReactElement {
   const [switched, setSwitched] = useState(false);
   const fade = switched ? 'motion-fade' : undefined;
@@ -209,22 +240,24 @@ function ActionEditor({
 
       {action.kind === 'reply' ? (
         <div className={cx('stack stack-8', fade)}>
-          <Field
-            label="Reply"
-            error={errorAt(`${prefix}.content`)}
-            hint={`${action.content.length} / ${REPLY_ACTION_CONTENT_MAX}`}
-          >
-            {(props) => (
-              <TextArea
-                {...props}
-                rows={2}
-                maxLength={REPLY_ACTION_CONTENT_MAX}
-                invalid={errorAt(`${prefix}.content`) !== undefined}
-                value={action.content}
-                onChange={(event) => onChange({ ...action, content: event.currentTarget.value })}
-              />
-            )}
-          </Field>
+          <Labelled label="Reply">
+            <MessageField
+              placeholders={placeholders}
+              path={`${prefix}.content`}
+              label="Reply"
+              rows={2}
+              layout="wide"
+              maxLength={REPLY_ACTION_CONTENT_MAX}
+              value={action.content}
+              error={errorAt(`${prefix}.content`)}
+              note={`${action.content.length} / ${REPLY_ACTION_CONTENT_MAX}`}
+              onChange={(content) => onChange({ ...action, content })}
+            />
+          </Labelled>
+
+          {previewReply !== undefined && action.content.trim() !== '' ? (
+            <ReplySample preview={previewReply(action.content)} />
+          ) : null}
 
           <div className="inline inline-8">
             <Switch
@@ -250,6 +283,8 @@ function ButtonEditor({
   onChange,
   onRemove,
   className,
+  placeholders,
+  previewReply,
 }: {
   guildId: string;
   button: MessageButton;
@@ -260,6 +295,8 @@ function ButtonEditor({
   onChange: (next: MessageButton) => void;
   onRemove: () => void;
   className?: string | undefined;
+  placeholders: PlaceholderSlot | undefined;
+  previewReply: ((text: string) => ReplyPreview) | undefined;
 }): ReactElement {
   const link = button.style === 'link';
 
@@ -276,20 +313,18 @@ function ButtonEditor({
         </Labelled>
 
         <div className="messages-field-grow">
-          <Field label="Label" error={errorAt(`${prefix}.label`)}>
-            {(props) => (
-              <TextInput
-                {...props}
-                width="md"
-                maxLength={BUTTON_LABEL_MAX}
-                invalid={errorAt(`${prefix}.label`) !== undefined}
-                value={button.label ?? ''}
-                onChange={(event) =>
-                  onChange({ ...button, label: event.currentTarget.value || undefined })
-                }
-              />
-            )}
-          </Field>
+          <Labelled label="Label">
+            <MessageField
+              placeholders={placeholders}
+              path={`${prefix}.label`}
+              label={`Button ${index + 1} label`}
+              width="md"
+              maxLength={BUTTON_LABEL_MAX}
+              value={button.label ?? ''}
+              error={errorAt(`${prefix}.label`)}
+              onChange={(label) => onChange({ ...button, label: blank(label) })}
+            />
+          </Labelled>
         </div>
 
         <Field label="Style">
@@ -344,18 +379,19 @@ function ButtonEditor({
       </div>
 
       {link ? (
-        <Field label="Link" error={errorAt(`${prefix}.url`)}>
-          {(props) => (
-            <TextInput
-              {...props}
-              placeholder="https://…"
-              maxLength={BUTTON_URL_MAX}
-              invalid={errorAt(`${prefix}.url`) !== undefined}
-              value={button.url ?? ''}
-              onChange={(event) => onChange({ ...button, url: event.currentTarget.value })}
-            />
-          )}
-        </Field>
+        <Labelled label="Link">
+          <MessageField
+            placeholders={placeholders}
+            path={`${prefix}.url`}
+            label={`Button ${index + 1} link`}
+            link
+            placeholder="https://…"
+            maxLength={BUTTON_URL_MAX}
+            value={button.url ?? ''}
+            error={errorAt(`${prefix}.url`)}
+            onChange={(url) => onChange({ ...button, url })}
+          />
+        </Labelled>
       ) : (
         <>
           <ActionEditor
@@ -363,6 +399,8 @@ function ButtonEditor({
             action={button.action ?? DEFAULT_ACTION}
             prefix={`${prefix}.action`}
             errorAt={errorAt}
+            placeholders={placeholders}
+            previewReply={previewReply}
             onChange={(action) => onChange({ ...button, action })}
           />
           {errorAt(`${prefix}.action`) !== undefined ? (
@@ -385,6 +423,8 @@ function OptionEditor({
   onRemove,
   removable,
   className,
+  placeholders,
+  previewReply,
 }: {
   guildId: string;
   option: SelectOption;
@@ -396,6 +436,8 @@ function OptionEditor({
   onRemove: () => void;
   removable: boolean;
   className?: string | undefined;
+  placeholders: PlaceholderSlot | undefined;
+  previewReply: ((text: string) => ReplyPreview) | undefined;
 }): ReactElement {
   return (
     <div className={cx('row stacked', className)}>
@@ -410,34 +452,33 @@ function OptionEditor({
         </Labelled>
 
         <div className="messages-field-grow">
-          <Field label="Label" error={errorAt(`${prefix}.label`)}>
-            {(props) => (
-              <TextInput
-                {...props}
-                width="md"
-                maxLength={SELECT_OPTION_LABEL_MAX}
-                invalid={errorAt(`${prefix}.label`) !== undefined}
-                value={option.label}
-                onChange={(event) => onChange({ ...option, label: event.currentTarget.value })}
-              />
-            )}
-          </Field>
+          <Labelled label="Label">
+            <MessageField
+              placeholders={placeholders}
+              path={`${prefix}.label`}
+              label={`Option ${index + 1} label`}
+              width="md"
+              maxLength={SELECT_OPTION_LABEL_MAX}
+              value={option.label}
+              error={errorAt(`${prefix}.label`)}
+              onChange={(label) => onChange({ ...option, label })}
+            />
+          </Labelled>
         </div>
 
         <div className="messages-field-grow">
-          <Field label="Description" error={errorAt(`${prefix}.description`)}>
-            {(props) => (
-              <TextInput
-                {...props}
-                width="md"
-                maxLength={SELECT_OPTION_DESCRIPTION_MAX}
-                value={option.description ?? ''}
-                onChange={(event) =>
-                  onChange({ ...option, description: event.currentTarget.value || undefined })
-                }
-              />
-            )}
-          </Field>
+          <Labelled label="Description">
+            <MessageField
+              placeholders={placeholders}
+              path={`${prefix}.description`}
+              label={`Option ${index + 1} description`}
+              width="md"
+              maxLength={SELECT_OPTION_DESCRIPTION_MAX}
+              value={option.description ?? ''}
+              error={errorAt(`${prefix}.description`)}
+              onChange={(description) => onChange({ ...option, description: blank(description) })}
+            />
+          </Labelled>
         </div>
 
         <KeyField
@@ -475,14 +516,14 @@ function OptionEditor({
         action={option.action}
         prefix={`${prefix}.action`}
         errorAt={errorAt}
+        placeholders={placeholders}
+        previewReply={previewReply}
         onChange={(action) => onChange({ ...option, action })}
       />
     </div>
   );
 }
 
-// What a press does is edited here rather than in MessageEditor, which says itself that a
-// component's behaviour belongs to the module that owns it.
 export function RowEditor({
   guildId,
   row,
@@ -491,6 +532,8 @@ export function RowEditor({
   prefix,
   onChange,
   onRemove,
+  placeholders,
+  previewReply,
 }: {
   guildId: string;
   row: ActionRow;
@@ -499,6 +542,8 @@ export function RowEditor({
   prefix: string;
   onChange: (next: ActionRow) => void;
   onRemove: () => void;
+  placeholders?: PlaceholderSlot | undefined;
+  previewReply?: ((text: string) => ReplyPreview) | undefined;
 }): ReactElement {
   const recent = useRecent();
 
@@ -511,23 +556,18 @@ export function RowEditor({
         <div className="row stacked">
           <div className="messages-fields">
             <div className="messages-field-grow">
-              <Field
-                label="Placeholder"
-                hint="Shown before a member picks an option."
-                error={errorAt(`${prefix}.select.placeholder`)}
-              >
-                {(props) => (
-                  <TextInput
-                    {...props}
-                    width="lg"
-                    maxLength={SELECT_PLACEHOLDER_MAX}
-                    value={select.placeholder ?? ''}
-                    onChange={(event) =>
-                      change({ ...select, placeholder: event.currentTarget.value || undefined })
-                    }
-                  />
-                )}
-              </Field>
+              <Labelled label="Prompt" hint="Shown before a member picks an option.">
+                <MessageField
+                  placeholders={placeholders}
+                  path={`${prefix}.select.placeholder`}
+                  label="Dropdown prompt"
+                  width="lg"
+                  maxLength={SELECT_PLACEHOLDER_MAX}
+                  value={select.placeholder ?? ''}
+                  error={errorAt(`${prefix}.select.placeholder`)}
+                  onChange={(placeholder) => change({ ...select, placeholder: blank(placeholder) })}
+                />
+              </Labelled>
             </div>
 
             <KeyField
@@ -588,6 +628,8 @@ export function RowEditor({
             errorAt={errorAt}
             prefix={`${prefix}.select.options.${index}`}
             removable={select.options.length > 1}
+            placeholders={placeholders}
+            previewReply={previewReply}
             onChange={(next) =>
               change({
                 ...select,
@@ -647,6 +689,8 @@ export function RowEditor({
           keys={keys}
           errorAt={errorAt}
           prefix={`${prefix}.buttons.${index}`}
+          placeholders={placeholders}
+          previewReply={previewReply}
           onChange={(next) =>
             onChange({
               kind: 'buttons',
@@ -654,8 +698,7 @@ export function RowEditor({
             })
           }
           onRemove={() => {
-            // A row with no buttons is not a shape Discord or the schema accepts, so the last one
-            // out takes the row with it.
+            // A row with no buttons is invalid, so removing the last button removes the row.
             if (buttons.length === 1) onRemove();
             else onChange({ kind: 'buttons', buttons: buttons.filter((_, at) => at !== index) });
           }}

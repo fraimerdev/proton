@@ -1,5 +1,15 @@
 import { TICKET_PRIORITIES, type TicketPriority } from '@proton/core';
 import {
+  type PlaceholderSurface,
+  SAMPLE_MEMBER,
+  SAMPLE_SERVER,
+  SAMPLE_TICKET_OPEN,
+  type SurfaceDiagnostic,
+  type SurfaceSample,
+  type TemplateReport,
+  validateConfigTemplates,
+} from '@proton/core/placeholders';
+import {
   type ClaimMode,
   FORM_FIELDS_MAX,
   type FormFieldStyle,
@@ -13,18 +23,180 @@ import {
   type TicketsConfig,
   type TicketType,
   type TranscriptDestination,
+  ticketsConfigSchema,
 } from '@proton/module-tickets/config';
+import {
+  TICKET_CLOSE_SURFACE,
+  TICKET_NAME_SURFACE,
+  TICKET_RESPONSE_SURFACE,
+  TICKET_WELCOME_SURFACE,
+  type TicketAnswerFacts,
+  ticketsTemplates,
+} from '@proton/module-tickets/placeholders';
+import { useId, useMemo } from 'react';
 import type { ModuleForm } from '../../components/module/form.ts';
+import type { DynamicPlaceholder } from '../../components/placeholders/autocomplete.ts';
+import { visibleDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
+import {
+  type PlaceholderAutocomplete,
+  usePlaceholderAutocomplete,
+} from '../../components/placeholders/use-placeholder-autocomplete.ts';
+import { previewText, type TextPreview } from '../../lib/placeholder-preview.ts';
 
 export type TicketsForm = ModuleForm<TicketsConfig>;
 
-// TICKET_ACCENT from the module's src/interface.ts, which has no package export yet. The panel and
-// welcome previews are built against it, so a change there has to be mirrored here.
+// Mirrors TICKET_ACCENT in the module's src/interface.ts; the previews drift if the two differ.
 export const TICKET_ACCENT = 0x3874f3;
 
-export const SAMPLE_TICKET_NUMBER = 42;
-export const SAMPLE_OPENER = 'ada';
-export const SAMPLE_USER_ID = '100000000000000000';
+const NO_DIAGNOSTICS: readonly SurfaceDiagnostic[] = [];
+
+const SAMPLE_ANSWER = 'Sample answer';
+
+function firstSample<F>(surface: PlaceholderSurface<F>): SurfaceSample<F> {
+  const sample = surface.samples[0];
+  if (sample === undefined) {
+    throw new Error(
+      `The ${surface.label} placeholders have no sample, so nothing can be previewed.`,
+    );
+  }
+  return sample;
+}
+
+const NAME_SAMPLE = firstSample(TICKET_NAME_SURFACE);
+const WELCOME_SAMPLE = firstSample(TICKET_WELCOME_SURFACE);
+const CLOSE_SAMPLE = firstSample(TICKET_CLOSE_SURFACE);
+const RESPONSE_SAMPLE = firstSample(TICKET_RESPONSE_SURFACE);
+
+export const SAMPLE_TICKET_NUMBER = SAMPLE_TICKET_OPEN.number;
+
+function openingCaption(typeName: string): string {
+  const member = SAMPLE_MEMBER.user.globalName ?? SAMPLE_MEMBER.user.username ?? 'a member';
+  const server = SAMPLE_SERVER.name ?? 'your server';
+  return `Sample: ${member} opening ${typeName} ticket #${SAMPLE_TICKET_NUMBER} in ${server}`;
+}
+
+export function useTicketTemplates(form: TicketsForm): TemplateReport {
+  const { value, view } = form;
+  return useMemo(
+    () => validateConfigTemplates(ticketsTemplates, value, view.config),
+    [value, view.config],
+  );
+}
+
+export interface TemplateField {
+  autocomplete: PlaceholderAutocomplete;
+  diagnostics: readonly SurfaceDiagnostic[];
+  diagnosticsId: string;
+  describedBy: string | undefined;
+  invalid: boolean;
+  error: string | undefined;
+}
+
+export function useTemplateField({
+  surface,
+  report,
+  path,
+  onChange,
+  error,
+  dynamic,
+}: {
+  surface: PlaceholderSurface<unknown>;
+  report: TemplateReport;
+  path: string;
+  onChange: (next: string) => void;
+  error: string | undefined;
+  dynamic?: readonly DynamicPlaceholder[] | undefined;
+}): TemplateField {
+  const diagnosticsId = useId();
+  const diagnostics = report.byPath.get(path) ?? NO_DIAGNOSTICS;
+  const autocomplete = usePlaceholderAutocomplete({ surface, path, onChange, dynamic });
+  const listed = error !== undefined && diagnostics.some(({ message }) => message === error);
+
+  return {
+    autocomplete,
+    diagnostics,
+    diagnosticsId,
+    describedBy: visibleDiagnostics(diagnostics).shown.length > 0 ? diagnosticsId : undefined,
+    invalid: error !== undefined || report.blocking.some((issue) => issue.path === path),
+    error: listed ? undefined : error,
+  };
+}
+
+export function namesEachTicket(pattern: string): boolean {
+  return ticketsConfigSchema.shape.namePattern.safeParse(pattern).success;
+}
+
+export function sampleAnswer(field: TicketFormField): string {
+  if (field.style === 'select') return field.options[0]?.value ?? SAMPLE_ANSWER;
+
+  const hint = field.placeholder?.trim() ?? '';
+  return hint === '' ? SAMPLE_ANSWER : hint;
+}
+
+function askedFields(types: readonly TicketType[]): TicketFormField[] {
+  const seen = new Set<string>();
+
+  return types
+    .flatMap((type) => modalFields(type))
+    .filter((field) => {
+      if (seen.has(field.id)) return false;
+      seen.add(field.id);
+      return true;
+    });
+}
+
+export function answerPlaceholders(types: readonly TicketType[]): DynamicPlaceholder[] {
+  return askedFields(types).map((field) => ({
+    key: `ticket.answer.${field.id}`,
+    label: field.label === '' ? field.id : field.label,
+  }));
+}
+
+function sampleAnswers(types: readonly TicketType[]): TicketAnswerFacts[] {
+  return askedFields(types).map((field) => ({ fieldId: field.id, value: sampleAnswer(field) }));
+}
+
+export function namePreview(path: string, pattern: string, typeName?: string): TextPreview {
+  if (typeName === undefined) return previewText(TICKET_NAME_SURFACE, path, pattern, NAME_SAMPLE);
+
+  const preview = previewText(TICKET_NAME_SURFACE, path, pattern, NAME_SAMPLE, { typeName });
+  return { ...preview, caption: openingCaption(typeName) };
+}
+
+export function openingPreview(type: TicketType, index: number): TextPreview {
+  const { ticket } = WELCOME_SAMPLE.facts;
+  const preview = previewText(
+    TICKET_WELCOME_SURFACE,
+    `types.${index}.welcomeMessage`,
+    type.welcomeMessage,
+    WELCOME_SAMPLE,
+    {
+      typeName: type.name,
+      ticket: ticket === null ? null : { ...ticket, priority: type.defaultPriority },
+      answers: sampleAnswers([type]),
+    },
+  );
+
+  return { ...preview, caption: `${openingCaption(type.name)}. The answers are examples.` };
+}
+
+export function closingPreview(text: string): TextPreview {
+  return previewText(TICKET_CLOSE_SURFACE, 'closeConfirmation', text, CLOSE_SAMPLE);
+}
+
+export function responsePreview(
+  types: readonly TicketType[],
+  index: number,
+  content: string,
+): TextPreview {
+  return previewText(
+    TICKET_RESPONSE_SURFACE,
+    `responses.${index}.content`,
+    content,
+    RESPONSE_SAMPLE,
+    { answers: sampleAnswers(types) },
+  );
+}
 
 export function hexOf(colour: number): string {
   return `#${colour.toString(16).padStart(6, '0')}`;
@@ -75,6 +247,14 @@ export function slugify(raw: string, max: number): string {
     .replace(/-{2,}/g, '-')
     .replace(/^[^a-z0-9]+/, '')
     .replace(/[-._]+$/, '')
+    .slice(0, max);
+}
+
+export function slugTyping(raw: string, max: number): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/-{2,}/g, '-')
     .slice(0, max);
 }
 
@@ -171,10 +351,6 @@ export function duplicateOptionValues(field: TicketFormField): boolean {
   return false;
 }
 
-/**
- * modalFieldsFor and needsModal, which live in the module's `src/modal.ts`. That file has no
- * package export yet, so the rule is restated here rather than the page guessing at the answer.
- */
 export function modalFields(type: TicketType): TicketFormField[] {
   return type.form
     .filter((field) => !droppedSelect(field))

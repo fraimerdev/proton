@@ -17,9 +17,9 @@ import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { humaniseOption } from '../../lib/enum-labels.ts';
 import type { ConfigErrors } from './errors.ts';
 
-export type GreetingKind = 'welcome' | 'goodbye';
+export type CardGreeting = 'welcome' | 'goodbye';
 
-const KINDS: readonly SegmentedOption<GreetingKind>[] = [
+const KINDS: readonly SegmentedOption<CardGreeting>[] = [
   { value: 'welcome', label: 'Welcome' },
   { value: 'goodbye', label: 'Goodbye' },
 ];
@@ -34,7 +34,7 @@ function renderableBackground(url: string | undefined): string | undefined {
   return url !== undefined && cardImageHostAllowed(url) ? url : undefined;
 }
 
-export function cardOptionsFor(config: WelcomeConfig, kind: GreetingKind): CardPreviewOptions {
+export function cardOptionsFor(config: WelcomeConfig, kind: CardGreeting): CardPreviewOptions {
   return {
     kind,
     preset: config.preset,
@@ -95,7 +95,7 @@ export function CardArea({
   errors: ConfigErrors;
 }): ReactElement {
   const config = form.value;
-  const [kind, setKind] = useState<GreetingKind>('welcome');
+  const [kind, setKind] = useState<CardGreeting>('welcome');
 
   const options = useMemo(() => cardOptionsFor(config, kind), [config, kind]);
   const background = config.cardBackgroundUrl;
@@ -123,7 +123,7 @@ export function CardArea({
         <Rows>
           <SettingRow
             title="Attach a card"
-            description="Costs an extra image render per join."
+            description="Goes with welcome and goodbye messages, never boosts. Costs an extra image render each time a member joins or leaves."
             error={errors.at('card')}
           >
             <Switch

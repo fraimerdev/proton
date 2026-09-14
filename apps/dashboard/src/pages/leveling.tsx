@@ -1,4 +1,5 @@
 import { levelingConfigSchema } from '@proton/module-leveling/config';
+import { levelingTemplates } from '@proton/module-leveling/placeholders';
 import type { ReactElement } from 'react';
 import { useModuleForm } from '../components/module/form.ts';
 import {
@@ -13,6 +14,7 @@ import { LoadingBoundary, StatusBanner } from '../components/ui/feedback.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
 import { AreaTabs } from '../components/ui/tabs.tsx';
 import { RankCardArea } from './leveling/card.tsx';
+import { EventsArea } from './leveling/events.tsx';
 import { LeaderboardArea } from './leveling/leaderboard.tsx';
 import { LevelUpArea } from './leveling/levelup.tsx';
 import { RewardsArea } from './leveling/rewards.tsx';
@@ -28,7 +30,12 @@ export default function LevelingPage({
   summary,
   area,
 }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: levelingConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: levelingConfigSchema,
+    templates: levelingTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
 
   const enabled = summary?.enabled ?? form.view.enabled;
@@ -51,7 +58,6 @@ export default function LevelingPage({
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={area} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -70,13 +76,20 @@ export default function LevelingPage({
 
       <LoadingBoundary key={area} label={`Loading ${meta.label}`} minHeight={320}>
         {area === 'xp' ? <EarningArea guildId={guildId} form={form} /> : null}
+        {area === 'events' ? <EventsArea guildId={guildId} enabled={enabled} /> : null}
         {area === 'levelup' ? <LevelUpArea guildId={guildId} form={form} /> : null}
         {area === 'rewards' ? <RewardsArea guildId={guildId} form={form} /> : null}
         {area === 'card' ? <RankCardArea guildId={guildId} form={form} /> : null}
         {area === 'leaderboard' ? <LeaderboardArea guildId={guildId} /> : null}
       </LoadingBoundary>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

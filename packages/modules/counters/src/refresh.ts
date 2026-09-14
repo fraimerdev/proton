@@ -40,11 +40,19 @@ export async function refreshCounters(
   const owned = await readOwned(ctx, deps.channels);
   if ('failed' in owned) return { ok: false, humanReason: owned.failed, permanent: false };
 
-  const steps = plan(ctx.config, state, owned.channels);
+  const steps = plan(ctx.config, state, owned.channels, deps.placeholders?.now() ?? Date.now());
   const failures: CounterFailure[] = [];
   const creationFailures: CreationFailure[] = [];
   const unlocked: string[] = [];
   let created = 0;
+
+  for (const blank of steps.blank) {
+    if (blank.channelId === null) {
+      creationFailures.push({ name: blank.template, humanReason: blank.humanReason });
+    } else {
+      failures.push({ channelId: blank.channelId, humanReason: blank.humanReason });
+    }
+  }
 
   for (const creation of steps.creations) {
     if (!deps.channels) {

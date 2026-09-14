@@ -9,6 +9,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { CHANNEL_TYPE, ChannelPicker } from '../../components/discord/channel-picker.tsx';
+import { configErrors, EmbedEditor } from '../../components/discord/embed-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
 import { LimitCounter } from '../../components/ui/collection.tsx';
@@ -22,7 +23,6 @@ import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { saveFailure } from '../../lib/errors.ts';
 import { channelsQuery } from '../../lib/queries.ts';
 import { postModulePanel } from '../../server/modules.ts';
-import { EmbedsSection } from './embeds.tsx';
 import { EmojiField } from './emoji.tsx';
 
 // refineVerificationPanel, verbatim: a stored panel can still carry these, and a save refuses them.
@@ -31,7 +31,7 @@ const CARRIES_ROWS =
   '— a second row would be posted under a button nobody configured.';
 
 const CARRIES_V2 =
-  'the verification panel is posted with Proton’s own verify button attached, and Discord will ' +
+  'The verification panel is posted with Proton’s own verify button attached, and Discord will ' +
   'not put a button row on a components layout. Build this panel from text and embeds.';
 
 const POST_NOTE = 'Post the panel again if it was deleted in Discord.';
@@ -220,7 +220,12 @@ export function PanelArea({ guildId, moduleId, form }: AreaProps): ReactElement 
           ) : null}
         </Section>
 
-        <EmbedsSection form={form} />
+        <EmbedEditor
+          value={panel.embeds}
+          prefix="panel.embeds"
+          errors={configErrors(form)}
+          onChange={(embeds) => form.set('panel.embeds', embeds)}
+        />
 
         <Section label="Mentions" intro={MENTIONS_NOTE}>
           <Rows>

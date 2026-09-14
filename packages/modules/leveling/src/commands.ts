@@ -4,6 +4,7 @@ import { InteractionContextType } from 'discord-api-types/v10';
 import type { LevelingConfig } from './config.ts';
 import { levelProgress, MAX_XP } from './curve.ts';
 import { bindXp, clockOf, describeUnbound, type LevelingDeps } from './deps.ts';
+import { addXpEventGroup, runXpEventCommand, XP_EVENT_GROUP } from './event-commands.ts';
 import { applyLevelUp } from './level-up.ts';
 import { MODULE_ID, reply } from './perform.ts';
 import { renderRankCard } from './rank-card.ts';
@@ -162,11 +163,11 @@ export function leaderboardCommand(deps: LevelingDeps): Command {
 export function xpCommand(deps: LevelingDeps): Command {
   return {
     name: 'xp',
-    description: 'Adjust a member’s XP.',
+    description: 'Adjust a member’s XP or run an XP event.',
 
     data: new SlashCommandBuilder()
       .setName('xp')
-      .setDescription('Adjust a member’s XP.')
+      .setDescription('Adjust a member’s XP or run an XP event.')
       .setContexts(InteractionContextType.Guild)
       .setDefaultMemberPermissions(Permissions.ManageGuild)
       .addSubcommand((sub) =>
@@ -217,9 +218,25 @@ export function xpCommand(deps: LevelingDeps): Command {
               .setMaxValue(MAX_XP),
           ),
       )
+      .addSubcommandGroup(addXpEventGroup)
       .toJSON(),
 
     async handler(ctx) {
+      if (ctx.options.getSubcommandGroup() === XP_EVENT_GROUP) {
+        if (!ctx.config.enabled) {
+          await reply(
+            ctx,
+            'Leveling is switched off in this server, so an XP event would do nothing. An admin ' +
+              'can turn it on from the Proton dashboard.',
+            { ephemeral: true },
+          );
+          return;
+        }
+
+        await runXpEventCommand(ctx, deps);
+        return;
+      }
+
       const store = await ready(ctx, deps);
       if (!store) return;
 
@@ -260,15 +277,20 @@ export function xpCommand(deps: LevelingDeps): Command {
           `${result.level === result.previousLevel ? '' : `, up from ${result.previousLevel}`}.`,
       );
 
-      await applyLevelUp(ctx, {
-        userId,
-        previousLevel: result.previousLevel,
-        level: result.level,
-        xp: result.xp,
-        source: 'admin',
-        idempotencyRoot: `leveling:${ctx.idempotencyKey}`,
-        originChannelId: ctx.channelId,
-      });
+      await applyLevelUp(
+        ctx,
+        {
+          userId,
+          previousLevel: result.previousLevel,
+          level: result.level,
+          xp: result.xp,
+          source: 'admin',
+          idempotencyRoot: `leveling:${ctx.idempotencyKey}`,
+          originChannelId: ctx.channelId,
+          ...(adjustment === 'give' ? { gained: amount } : {}),
+        },
+        deps,
+      );
     },
   };
 }

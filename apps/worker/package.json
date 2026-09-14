@@ -16,6 +16,7 @@
     "@proton/cards": "workspace:*",
     "@proton/core": "workspace:*",
     "@proton/db": "workspace:*",
+    "@proton/module-afk": "workspace:*",
     "@proton/module-antinuke": "workspace:*",
     "@proton/module-appeals": "workspace:*",
     "@proton/module-backup": "workspace:*",

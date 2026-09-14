@@ -1,5 +1,3 @@
-/* ---------------------------------------------------------------- sections */
-
 .section + .section {
   margin-top: 38px;
 }
@@ -46,8 +44,6 @@
 .rows + .rows {
   margin-top: 10px;
 }
-
-/* -------------------------------------------------------------- setting row */
 
 .row {
   display: flex;
@@ -115,8 +111,6 @@
   color: var(--text-disabled);
 }
 
-/* ----------------------------------------------------------- navigation row */
-
 .nav-row {
   display: flex;
   align-items: center;
@@ -167,8 +161,6 @@ button.nav-row:hover .nav-row-chevron {
     transform: translateX(4px);
   }
 }
-
-/* ----------------------------------------------------------- expandable row */
 
 .row-expandable {
   display: flex;
@@ -267,8 +259,6 @@ button.nav-row:hover .nav-row-chevron {
   font-size: var(--text-secondary-size);
   line-height: 1.5;
 }
-
-/* ------------------------------------------------------------ collections */
 
 .collection-head {
   display: flex;
@@ -424,42 +414,6 @@ button.collection-row:hover {
   gap: 8px;
 }
 
-/* A collection whose detail opens beside the list rather than on its own route. */
-.split {
-  display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.split-detail {
-  background: var(--surface-1);
-  border-radius: var(--radius-md);
-}
-
-.split-detail-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 16px;
-}
-
-.split-detail-body {
-  padding: 16px;
-}
-
-.split-detail-body .section:first-child {
-  margin-top: 0;
-}
-
-@container workspace (max-width: 760px) {
-  .split {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-/* ---------------------------------------------------------------- matrix */
-
 .matrix {
   width: 100%;
   background: var(--surface-1);
@@ -481,7 +435,7 @@ button.collection-row:hover {
   transition: background var(--motion-fast) var(--ease-standard);
 }
 
-.matrix-group-head:hover {
+button.matrix-group-head:hover {
   background: var(--surface-hover);
 }
 
@@ -564,8 +518,6 @@ button.collection-row:hover {
     justify-content: flex-start;
   }
 }
-
-/* ------------------------------------------------------------- key/value */
 
 .pairs {
   display: grid;

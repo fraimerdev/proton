@@ -182,6 +182,7 @@ describe('lifecycle events the consumer cannot act on', () => {
     const { store, states } = memoryStore();
 
     await consumer(store).handle({
+      id: `entity.channel_created:${CHANNEL}`,
       type: 'entity.channel_created',
       guildId: null,
       payload: { id: CHANNEL, type: 1 },
@@ -195,7 +196,12 @@ describe('lifecycle events the consumer cannot act on', () => {
     const c = consumer(store);
 
     await c.handle(events('threadCreate'));
-    await c.handle({ type: 'entity.thread_deleted', guildId: GUILD, payload: {} });
+    await c.handle({
+      id: 'entity.thread_deleted:without-id',
+      type: 'entity.thread_deleted',
+      guildId: GUILD,
+      payload: {},
+    });
 
     expect(states.get(GUILD)?.channels.has(THREAD)).toBe(true);
   });

@@ -240,11 +240,6 @@ export function ChecksArea({ form }: { form: Form }): ReactElement {
 
   return (
     <>
-      <p className="automod-tally">
-        <strong>{activeChecks(config)}</strong> of {AUTOMOD_CHECKS.length} checks on. When several
-        checks match one message, the highest severity decides the action.
-      </p>
-
       <Section label="Spam">
         <Rows>
           <CheckRow
@@ -556,11 +551,6 @@ export function ChecksArea({ form }: { form: Form }): ReactElement {
           <CheckRow meta={ZALGO} form={form} />
         </Rows>
       </Section>
-
-      <p className="automod-note">
-        Exemptions apply before any check runs, so exempt messages never count toward the flood or
-        duplicate limits.
-      </p>
     </>
   );
 }

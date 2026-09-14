@@ -1,8 +1,11 @@
 import { type DiscordMessageBody, toDiscordMessage } from '@proton/core';
+import { usedKeys } from '@proton/core/placeholders';
 import { z } from 'zod';
 import { customIdFor } from './component-id.ts';
 import { findTemplate, MODULE_ID, normaliseTemplateName, type SavedMessage } from './config.ts';
+import { logReadFailure, type MessagesDeps, readPlaceholderSources } from './deps.ts';
 import { type MessagesContext, postMessage, succeeded } from './perform.ts';
+import { MESSAGES_SCHEDULED_SURFACE, messageTexts, renderSavedMessage } from './placeholders.ts';
 import { followingRun } from './schedule.ts';
 
 export const POST_JOB = 'post';
@@ -38,21 +41,24 @@ export function postKey(guildId: string, templateName: string, runAt: string): s
 
 export type PostOutcome =
   | { action: 'skipped'; reason: string }
+  | { action: 'refused'; reason: string; rescheduled: Date | null }
   | { action: 'posted'; rescheduled: Date | null };
 
 async function bookNext(
   ctx: MessagesContext,
   template: SavedMessage,
   firedAt: Date,
+  posted: boolean,
 ): Promise<Date | null> {
   const booked = template.schedule;
   if (!booked) return null;
 
   const next = followingRun(booked, firedAt);
+  const said = posted ? `“${template.name}” posted but` : `“${template.name}” was not posted, and`;
 
   if (next.status === 'unreadable') {
     ctx.logger.error(
-      `“${template.name}” posted but will not repeat: ${next.humanReason} Fix it in the Proton ` +
+      `${said} will not repeat: ${next.humanReason} Fix it in the Proton ` +
         'dashboard under Messages → Templates and save, which books it again.',
       { guildId: ctx.guildId, moduleId: MODULE_ID, template: template.name },
     );
@@ -63,7 +69,7 @@ async function bookNext(
 
   if (typeof ctx.schedule !== 'function') {
     ctx.logger.error(
-      `“${template.name}” posted but cannot repeat: this process has no scheduler, so the module ` +
+      `${said} cannot repeat: this process has no scheduler, so the module ` +
         'context was built without `schedule`. The worker must be started with a scheduled-action ' +
         'store.',
       { guildId: ctx.guildId, moduleId: MODULE_ID, template: template.name },
@@ -119,6 +125,7 @@ export async function runScheduledPost(
   data: unknown,
   ctx: MessagesContext,
   now: Date = new Date(),
+  deps: MessagesDeps = {},
 ): Promise<PostOutcome> {
   const parsed = postDataSchema.safeParse(data);
   if (!parsed.success) {
@@ -162,10 +169,46 @@ export async function runScheduledPost(
     return { action: 'skipped', reason: 'that template is switched off' };
   }
 
+  let message: SavedMessage = template;
+
+  if (template.placeholders === true) {
+    const at = Date.parse(parsed.data.runAt);
+    const meta = { guildId: ctx.guildId, moduleId: MODULE_ID, template: template.name };
+    const sources = await readPlaceholderSources(
+      deps,
+      ctx.guildId,
+      booked.channelId,
+      usedKeys(MESSAGES_SCHEDULED_SURFACE, messageTexts(template), { allowedOnly: true }),
+      logReadFailure(ctx.logger, `the scheduled template “${template.name}”`, meta),
+    );
+    const rendered = renderSavedMessage(
+      template,
+      MESSAGES_SCHEDULED_SURFACE,
+      { ...sources, actor: null },
+      at,
+    );
+
+    if (!rendered.ok) {
+      const rescheduled =
+        booked.mode === 'repeat' ? await bookNext(ctx, template, now, false) : null;
+      const next =
+        rescheduled === null ? '' : ` Its next run, ${rescheduled.toISOString()}, is still booked.`;
+
+      ctx.logger.error(
+        `the scheduled template “${template.name}” was not posted in <#${booked.channelId}>, because ` +
+          `${rendered.humanReason} It is not retried, because it would be refused the same way.` +
+          `${next} Fix it in the Proton dashboard under Messages → Templates.`,
+        meta,
+      );
+      return { action: 'refused', reason: rendered.humanReason, rescheduled };
+    }
+    message = rendered.message;
+  }
+
   const result = await postMessage(ctx, {
     channelId: booked.channelId,
     body: withPing(
-      toDiscordMessage(template, { customIdFor: customIdFor(template.name), now }),
+      toDiscordMessage(message, { customIdFor: customIdFor(template.name), now }),
       booked.pingRoleId,
     ),
     actorId: SCHEDULED_ACTOR,
@@ -180,7 +223,7 @@ export async function runScheduledPost(
     );
   }
 
-  const rescheduled = booked.mode === 'repeat' ? await bookNext(ctx, template, now) : null;
+  const rescheduled = booked.mode === 'repeat' ? await bookNext(ctx, template, now, true) : null;
 
   return { action: 'posted', rescheduled };
 }

@@ -111,8 +111,7 @@ export function CommandMatrix({
     [setValue],
   );
 
-  // An empty list and an absent key mean the same thing to the gate, so the key goes rather than
-  // leaving a trail of `[]` behind every command somebody opened and closed.
+  // Deletes the key instead of storing []: the gate reads both alike, and [] would pile up.
   const setRoles = useCallback(
     (name: string, next: readonly string[]) =>
       edit((overrides) => {

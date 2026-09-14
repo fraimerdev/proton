@@ -122,6 +122,7 @@ describe('GUILD_DELETE means two different things', () => {
     });
 
     await consumer(registrar, store).handle({
+      id: 'guild.unavailable:900000000000000001:outage',
       type: 'guild.unavailable',
       guildId: '900000000000000001',
 
@@ -137,6 +138,7 @@ describe('GUILD_DELETE means two different things', () => {
     const { store } = memoryStore();
 
     await consumer(registrar, store).handle({
+      id: 'guild.unavailable:900000000000000001:removed',
       type: 'guild.unavailable',
       guildId: '900000000000000001',
       payload: { id: '900000000000000001' },

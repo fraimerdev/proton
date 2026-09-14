@@ -145,6 +145,17 @@ describe('RedisRateWindow', () => {
     });
   });
 
+  test('a crossing does not lapse on the Redis clock while its window is still live', async () => {
+    for (let i = 0; i < 5; i++) await hit({ member: `m${i}`, now: NOW + i });
+    const crossed = crossedKeyFor(rateWindowKey(GUILD, RULE, MEMBER));
+    await redis.pexpire(crossed, 1_000);
+
+    await hit({ member: 'm5', now: NOW + 5 });
+
+    expect(await redis.pttl(crossed)).toBeGreaterThan(1_000);
+    expect(await hit({ member: 'm4', now: NOW + 6 })).toEqual({ count: 6, tripped: true });
+  });
+
   test('windows are separate per guild, per rule and per actor', async () => {
     await hit({ member: 'a' });
     await hit({ member: 'b' });

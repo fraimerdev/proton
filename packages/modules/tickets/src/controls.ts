@@ -2,13 +2,12 @@ import type { ActionResult, ModuleContext, TicketPriority } from '@proton/core';
 import {
   MODULE_ID,
   PRIORITY_LABELS,
-  renderChannelName,
   sanitiseChannelName,
   staffRolesFor,
   type TicketsConfig,
   typeFor,
 } from './config.ts';
-import type { TicketsDeps } from './deps.ts';
+import { clockOf, placeholderReads, readProfile, readServer, type TicketsDeps } from './deps.ts';
 import { describePriority } from './interface.ts';
 import {
   OVERWRITE_MEMBER,
@@ -17,6 +16,7 @@ import {
   TICKET_MEMBER_ALLOW,
   ticketOverwrites,
 } from './overwrites.ts';
+import { renderTicketChannelName, TICKET_NAME_SURFACE, ticketSourcesFor } from './placeholders.ts';
 import { armTicketTimers } from './schedule.ts';
 import type { Ticket, TicketStore } from './store.ts';
 
@@ -475,13 +475,26 @@ export async function requestClose(
   };
 }
 
-export function defaultName(ctx: ModuleContext<TicketsConfig>, ticket: Ticket): string {
+export async function defaultName(
+  ctx: ModuleContext<TicketsConfig>,
+  ticket: Ticket,
+  deps: TicketsDeps = {},
+): Promise<string> {
   const type = typeFor(ctx.config, ticket.typeId);
+  const pattern = type?.namePattern ?? ctx.config.namePattern;
+  const reads = placeholderReads(ctx, deps, ticketSourcesFor(TICKET_NAME_SURFACE, [pattern]));
 
-  return renderChannelName(
-    type?.namePattern ?? ctx.config.namePattern,
-    ticket.number,
-    ticket.ownerId,
-    type?.name ?? '',
+  return renderTicketChannelName(
+    pattern,
+    {
+      number: ticket.number,
+      typeName: type?.name ?? '',
+      ownerId: ticket.ownerId,
+      // The rename prefill always wrote the owner's id for {user}, never a name.
+      legacyUserName: ticket.ownerId,
+      owner: await readProfile(reads, ticket.ownerId, reads.sources.owner),
+      server: await readServer(reads),
+    },
+    clockOf(deps).getTime(),
   );
 }

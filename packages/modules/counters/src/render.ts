@@ -1,14 +1,8 @@
-import type { ChannelState, GuildState } from '@proton/core';
-import {
-  CHANNEL_NAME_MAX,
-  COUNT_PLACEHOLDER,
-  type CounterSource,
-  type CountersConfig,
-} from './config.ts';
-
-const CATEGORY_TYPE = 4;
-
-const THREAD_TYPES: ReadonlySet<number> = new Set([10, 11, 12]);
+import type { GuildState } from '@proton/core';
+import type { TemplateDiagnostic } from '@proton/core/placeholders';
+import type { CountersConfig } from './config.ts';
+import type { CounterSource } from './constants.ts';
+import { countFor, renderCounterName } from './placeholders.ts';
 
 export interface CounterEdit {
   channelId: string;
@@ -22,32 +16,39 @@ export interface CounterCreation {
   name: string;
 }
 
+export interface BlankCounter {
+  counterId: string;
+  channelId: string | null;
+  template: string;
+  humanReason: string;
+}
+
 export interface CounterPlan {
   creations: CounterCreation[];
   edits: CounterEdit[];
 
   unchanged: string[];
   unavailable: string[];
+  blank: BlankCounter[];
 }
 
-export function renderName(template: string, count: number): string {
-  return template.split(COUNT_PLACEHOLDER).join(String(count)).slice(0, CHANNEL_NAME_MAX);
+export function renderName(
+  template: string,
+  source: CounterSource,
+  state: GuildState,
+  now: number,
+): string {
+  return renderCounterName(template, { source, state }, now).output;
 }
 
-function countable(channel: ChannelState): boolean {
-  if (channel.type === undefined) return true;
-  return channel.type !== CATEGORY_TYPE && !THREAD_TYPES.has(channel.type);
-}
-
-export function countFor(source: CounterSource, state: GuildState): number | null {
-  switch (source) {
-    case 'members':
-      return state.memberCount ?? null;
-    case 'roles':
-      return [...state.roles.keys()].filter((roleId) => roleId !== state.everyoneRoleId).length;
-    case 'channels':
-      return [...state.channels.values()].filter(countable).length;
-  }
+function blankReason(diagnostics: readonly TemplateDiagnostic[]): string {
+  return [
+    'its name comes out empty once its placeholders are filled in, and Discord needs a channel ' +
+      'name of 1 to 100 characters.',
+    ...diagnostics
+      .filter((diagnostic) => diagnostic.code !== 'empty_channel_name')
+      .map((diagnostic) => diagnostic.message),
+  ].join(' ');
 }
 
 export interface CounterFailure {
@@ -126,23 +127,35 @@ export function plan(
   config: CountersConfig,
   state: GuildState,
   owned: ReadonlyMap<string, string> = new Map(),
+  now: number = Date.now(),
 ): CounterPlan {
   const creations: CounterCreation[] = [];
   const edits: CounterEdit[] = [];
   const unchanged: string[] = [];
   const unavailable: string[] = [];
+  const blank: BlankCounter[] = [];
 
   for (const counter of config.counters) {
     const channelId = counter.channelId ?? owned.get(counter.id);
 
-    const count = countFor(counter.source, state);
-    if (count === null) {
+    if (countFor(counter.source, state) === null) {
       // Counted before created, so a counter Proton owns is never born showing the wrong number.
       unavailable.push(channelId ?? counter.id);
       continue;
     }
 
-    const to = renderName(counter.template, count);
+    const rendered = renderCounterName(counter.template, { source: counter.source, state }, now);
+    const to = rendered.output;
+
+    if (to === '') {
+      blank.push({
+        counterId: counter.id,
+        channelId: channelId ?? null,
+        template: counter.template,
+        humanReason: blankReason(rendered.diagnostics),
+      });
+      continue;
+    }
 
     if (channelId === undefined) {
       creations.push({ counterId: counter.id, name: to });
@@ -161,5 +174,5 @@ export function plan(
     edits.push({ channelId, from, to });
   }
 
-  return { creations, edits, unchanged, unavailable };
+  return { creations, edits, unchanged, unavailable, blank };
 }

@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
+    "./placeholders": "./src/placeholders.ts",
     "./table": "./src/table.ts"
   },
   "scripts": {

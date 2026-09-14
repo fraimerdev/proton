@@ -6,7 +6,6 @@ import { Icon, type IconName } from './icon.tsx';
 export interface Column<Row> {
   id: string;
   header: string;
-  /** Sortable columns pass the field name the query understands. */
   sortField?: string | undefined;
   align?: 'left' | 'right' | undefined;
   width?: number | string | undefined;
@@ -31,6 +30,8 @@ interface DataTableProps<Row> {
   empty?: { icon?: IconName | undefined; title: string; body?: ReactNode } | undefined;
   footer?: ReactNode;
 }
+
+const ROW_CONTROLS = 'button, a, input, select, textarea, [role="menuitem"]';
 
 export function DataTable<Row>({
   columns,
@@ -101,7 +102,29 @@ export function DataTable<Row>({
                 <tr
                   key={rowKey(row)}
                   className={cx(onRowClick && 'clickable')}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onClick={
+                    onRowClick
+                      ? (event) => {
+                          const target = event.target as Element;
+                          // React bubbles portal clicks, so a row menu's items land here too.
+                          if (!event.currentTarget.contains(target)) return;
+                          const control = target.closest(ROW_CONTROLS);
+                          if (control !== null && event.currentTarget.contains(control)) return;
+                          onRowClick(row);
+                        }
+                      : undefined
+                  }
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (event.target !== event.currentTarget) return;
+                          if (event.key !== 'Enter' && event.key !== ' ') return;
+                          event.preventDefault();
+                          onRowClick(row);
+                        }
+                      : undefined
+                  }
                 >
                   {columns.map((column) => (
                     <td

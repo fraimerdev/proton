@@ -72,6 +72,21 @@ describe('scheduledActionPayloadSchema', () => {
     expect(parsed.data).toMatchObject({ kind: 'module', jobId: 'remind' });
   });
 
+  test('a module job scheduled with no data still parses once jsonb has dropped the key', () => {
+    const stored = JSON.parse(
+      JSON.stringify({
+        kind: 'module',
+        moduleId: 'counters',
+        jobId: 'refresh',
+        guildId: GUILD,
+        data: undefined,
+      }),
+    );
+
+    expect('data' in stored).toBe(false);
+    expect(scheduledActionPayloadSchema.safeParse(stored).success).toBe(true);
+  });
+
   test('a payload with no kind and no reversal fields is refused, and names the field', () => {
     const parsed = scheduledActionPayloadSchema.safeParse({ nothing: true });
 

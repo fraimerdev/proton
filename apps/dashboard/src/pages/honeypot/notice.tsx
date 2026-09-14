@@ -1,15 +1,13 @@
 import { countV2Components, V2_COMPONENTS_MAX } from '@proton/core';
-import { useQuery } from '@tanstack/react-query';
+import { HONEYPOT_NOTICE_SURFACE } from '@proton/module-honeypot/placeholders';
 import type { ReactElement } from 'react';
 import { EditorPreviewLayout } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { Switch } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
-import { channelsQuery } from '../../lib/queries.ts';
 import { LayoutBuilder } from './layout-builder.tsx';
 import {
-  armedChannelIds,
   configErrors,
   type HoneypotForm,
   noticePreview,
@@ -23,8 +21,17 @@ const OVERRIDDEN =
   '“Hide channel purpose” is switched on, so this text replaces your paragraph when the warning ' +
   'message is posted.';
 
-const COUNTER_IS_ZERO =
-  'The preview counter shows 0. In Discord, each bait channel shows its own count.';
+const PLACEHOLDERS =
+  'Placeholders are filled in when the warning message is posted. Type { in a text or link to ' +
+  'add one.';
+
+const OWN_COUNT = 'In Discord, each bait channel’s counter shows its own count.';
+
+const EMPTY = 'This layout posts nothing. Discord refuses an empty message.';
+
+const REFUSED =
+  'Once its placeholders are filled in, this layout cannot be posted. Check the links, and any ' +
+  'text that could come out empty.';
 
 const NOT_POSTED =
   'The warning message is switched off. This layout is kept, and saving deletes any warning ' +
@@ -44,10 +51,7 @@ export function NoticeArea({
   const config = form.value;
   const errors = configErrors(form);
   const layoutError = form.errorAt('noticeLayout.v2');
-
-  const { data: channels } = useQuery(channelsQuery(guildId));
-  const armed = armedChannelIds(config)[0] ?? config.channels[0]?.channelId;
-  const baitChannel = (channels ?? []).find((channel) => channel.id === armed);
+  const preview = noticePreview(config, form.view.tier);
 
   const overriddenAt = config.hideWhatIsAHoneypot
     ? overriddenBodyPath(config.noticeLayout.v2)
@@ -110,14 +114,12 @@ export function NoticeArea({
               <p className="row-error honeypot-layout-error">{layoutError}</p>
             ) : null}
 
-            <p className="section-intro">
-              <span className="mono">{'{consequence}'}</span> is replaced with what the action does
-              to the member, and <span className="mono">{'{purge}'}</span> with a sentence about
-              deleted messages.
-            </p>
+            <p className="section-intro">{PLACEHOLDERS}</p>
 
             <LayoutBuilder
               guildId={guildId}
+              surface={HONEYPOT_NOTICE_SURFACE}
+              diagnosticsAt={form.templateDiagnosticsAt}
               value={config.noticeLayout.v2}
               errors={errors}
               prefix="noticeLayout.v2"
@@ -126,7 +128,7 @@ export function NoticeArea({
                   ? undefined
                   : (path) =>
                       path === overriddenPath
-                        ? { content: quietNoticeBody(config), note: OVERRIDDEN }
+                        ? { content: quietNoticeBody(config, `${path}.content`), note: OVERRIDDEN }
                         : undefined
               }
               onChange={(next) =>
@@ -141,11 +143,14 @@ export function NoticeArea({
       preview={
         <div className="stack stack-10">
           <DiscordPreview
-            message={{ v2: noticePreview(config, form.view.tier, 0) }}
-            channelName={baitChannel?.name ?? 'bait'}
-            empty="This layout posts nothing. Discord refuses an empty message."
+            message={{ v2: preview.v2 ?? [] }}
+            mentionNames={preview.mentionNames}
+            now={preview.now}
+            channelName={preview.channelName}
+            empty={preview.v2 === null ? REFUSED : EMPTY}
           />
-          <p className="text-xs text-muted">{COUNTER_IS_ZERO}</p>
+          <p className="text-xs text-muted">{preview.caption}</p>
+          {config.noticeCounterButton ? <p className="text-xs text-muted">{OWN_COUNT}</p> : null}
           {form.view.tier === 'free' ? <p className="text-xs text-muted">{FREE_TIER}</p> : null}
         </div>
       }

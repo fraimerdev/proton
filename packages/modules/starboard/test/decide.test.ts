@@ -166,7 +166,7 @@ describe('decide', () => {
   test('above the threshold with a stale count, edits', () => {
     expect(
       decide({ count: 5, threshold: 3, post: { boardMessageId: 'm1', starCount: 4 } }),
-    ).toEqual({ action: 'edit', boardMessageId: 'm1', count: 5 });
+    ).toEqual({ action: 'edit', boardMessageId: 'm1', fromCount: 4, count: 5 });
   });
 
   test('an unchanged count does nothing', () => {
@@ -196,7 +196,7 @@ describe('decide', () => {
   test('an edit down is still an edit, not a delete, while above the threshold', () => {
     expect(
       decide({ count: 3, threshold: 3, post: { boardMessageId: 'm1', starCount: 9 } }),
-    ).toEqual({ action: 'edit', boardMessageId: 'm1', count: 3 });
+    ).toEqual({ action: 'edit', boardMessageId: 'm1', fromCount: 9, count: 3 });
   });
 
   test('the same state always yields the same decision', () => {

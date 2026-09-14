@@ -28,6 +28,48 @@ const NOT_A_SNOWFLAKE = 'must be a Discord snowflake';
 // caseQuerySchema's refine, which reports against `from`.
 const RANGE_BACKWARDS = 'the start of the date range must not be after its end';
 
+const KIND_LABELS: Record<ActionKind, string> = {
+  send: 'Message sent',
+  edit_message: 'Message edited',
+  delete_message: 'Message deleted',
+  add_reaction: 'Reaction added',
+  interaction_reply: 'Command reply',
+  interaction_followup: 'Command follow-up',
+  warn: 'Warn',
+  unwarn: 'Warning removed',
+  ban: 'Ban',
+  unban: 'Unban',
+  kick: 'Kick',
+  timeout: 'Timeout',
+  untimeout: 'Timeout removed',
+  add_role: 'Role added',
+  remove_role: 'Role removed',
+  purge: 'Messages purged',
+  slowmode: 'Slowmode',
+  lockdown: 'Lockdown',
+  unlock: 'Unlock',
+  create_channel: 'Channel created',
+  create_role: 'Role created',
+  delete_role: 'Role deleted',
+  delete_channel: 'Channel deleted',
+  edit_channel: 'Channel edited',
+  set_channel_overwrite: 'Channel permission set',
+  delete_channel_overwrite: 'Channel permission removed',
+  create_thread: 'Thread created',
+  move_member: 'Member moved',
+  set_member_nickname: 'Nickname changed',
+  end_poll: 'Poll ended',
+  pin_message: 'Message pinned',
+  automod_rule_create: 'AutoMod rule created',
+  automod_rule_update: 'AutoMod rule updated',
+  automod_rule_delete: 'AutoMod rule deleted',
+  giveaway_draw: 'Giveaway drawn',
+  create_dm: 'Direct message opened',
+  set_bot_nickname: 'Proton nickname changed',
+  set_bot_profile: 'Proton profile changed',
+  set_bot_name_style: 'Proton name style changed',
+};
+
 const MODERATION_KINDS: readonly ActionKind[] = [
   'warn',
   'unwarn',
@@ -51,7 +93,7 @@ const CHANNEL_KINDS: readonly ActionKind[] = [
   'create_thread',
 ];
 
-const ROLE_KINDS: readonly ActionKind[] = ['add_role', 'remove_role', 'create_role', 'edit_role'];
+const ROLE_KINDS: readonly ActionKind[] = ['add_role', 'remove_role', 'create_role', 'delete_role'];
 
 const MESSAGE_KINDS: readonly ActionKind[] = [
   'send',
@@ -305,9 +347,11 @@ export function CaseLogArea({
       width: 148,
       cell: (row) =>
         MARKED.has(row.type) ? (
-          <Badge tone={SEVERE.has(row.type) ? 'danger' : 'warning'}>{row.type}</Badge>
+          <Badge tone={SEVERE.has(row.type) ? 'danger' : 'warning'}>
+            {KIND_LABELS[row.type as ActionKind] ?? row.type}
+          </Badge>
         ) : (
-          row.type
+          (KIND_LABELS[row.type as ActionKind] ?? row.type)
         ),
     },
     {
@@ -387,7 +431,11 @@ export function CaseLogArea({
                 options={[
                   { value: '', label: 'Any type' },
                   ...TYPE_GROUPS.flatMap((group) =>
-                    group.kinds.map((kind) => ({ value: kind, label: kind, group: group.label })),
+                    group.kinds.map((kind) => ({
+                      value: kind,
+                      label: KIND_LABELS[kind],
+                      group: group.label,
+                    })),
                   ),
                 ]}
                 onChange={(value) =>
@@ -564,7 +612,7 @@ function CaseDialog({
             </Button>
           </span>
         </Pair>
-        <Pair label="Type">{row.type}</Pair>
+        <Pair label="Type">{KIND_LABELS[row.type as ActionKind] ?? row.type}</Pair>
         <Pair label="Module">{row.moduleId}</Pair>
         <Pair label="Member">
           <Who id={row.targetId} pending={pending} absent="None" />

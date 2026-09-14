@@ -1,38 +1,48 @@
-import type { ActionRow, Embed, MessageButton, ProtonMessage } from '@proton/core';
+import type { ActionRow, Embed, EmbedField, MessageButton, ProtonMessage } from '@proton/core';
 import {
   BUTTON_LABEL_MAX,
   BUTTON_STYLES,
+  BUTTON_URL_MAX,
   EMBED_DESCRIPTION_MAX,
   EMBED_FIELD_NAME_MAX,
   EMBED_FIELD_VALUE_MAX,
   EMBED_FIELDS_MAX,
   EMBED_FOOTER_TEXT_MAX,
   EMBED_TITLE_MAX,
+  EMBED_URL_MAX,
   MESSAGE_CONTENT_MAX,
   SELECT_OPTION_LABEL_MAX,
 } from '@proton/core';
+import type { PlaceholderSurface, SurfaceDiagnostic } from '@proton/core/placeholders';
 import type { ReactElement, ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useId } from 'react';
+import { PlaceholderSuggestions } from '../placeholders/placeholder-suggestions.tsx';
+import { TemplateDiagnostics, visibleDiagnostics } from '../placeholders/template-diagnostics.tsx';
+import { usePlaceholderAutocomplete } from '../placeholders/use-placeholder-autocomplete.ts';
 import { useRecent } from '../ui/collection.tsx';
-import { Button, cx, IconButton, Select, Switch, TextArea, TextInput } from '../ui/controls.tsx';
+import { Button, cx, IconButton, Select, Switch } from '../ui/controls.tsx';
 import { Icon } from '../ui/icon.tsx';
 import { Rows, Section, SettingRow } from '../ui/layout.tsx';
-import { Popover } from '../ui/overlay.tsx';
+import {
+  blank,
+  MessageField,
+  type PlaceholderField,
+  type PlaceholderKit,
+  type PlaceholderSlot,
+} from './embed-editor.tsx';
 import { EmojiPicker } from './emoji-picker.tsx';
 import { ColourPicker, DEFAULT_EMBED_COLOUR } from './inputs.tsx';
 
 export type EditableMessage = Pick<ProtonMessage, 'content' | 'embeds' | 'components' | 'mentions'>;
 
-export interface MessageVariable {
-  token: string;
-  describes: string;
-}
+export type TemplateDiagnosticsAt = (path: string) => readonly SurfaceDiagnostic[];
+
+type ErrorAt = (path: string) => string | undefined;
 
 interface MessageEditorProps {
   guildId: string;
   value: EditableMessage;
   onChange: (next: EditableMessage) => void;
-  /** Which parts of a message this surface is allowed to author. */
   allow?:
     | {
         embed?: boolean | undefined;
@@ -40,11 +50,10 @@ interface MessageEditorProps {
         mentions?: boolean | undefined;
       }
     | undefined;
-  variables?: readonly MessageVariable[] | undefined;
+  placeholders?: PlaceholderSlot | undefined;
   contentLabel?: string | undefined;
   contentDescription?: ReactNode;
-  errorAt?: ((path: string) => string | undefined) | undefined;
-  /** Prefix for the paths errorAt is asked about, e.g. "panel" -> "panel.content". */
+  errorAt?: ErrorAt | undefined;
   pathPrefix?: string | undefined;
 }
 
@@ -56,74 +65,74 @@ const BUTTON_STYLE_LABELS: Record<string, string> = {
   link: 'Link',
 };
 
+const FIELD_NAMELESS = 'A field needs a name, or remove it.';
+const FIELD_TEXTLESS = 'A field needs text, or remove it.';
+
 function countLabel(used: number, max: number): string {
   return `${used} / ${max}`;
 }
 
-function VariableMenu({
-  variables,
-  onInsert,
-}: {
-  variables: readonly MessageVariable[];
-  onInsert: (token: string) => void;
-}): ReactElement {
-  const anchor = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
+const NO_DIAGNOSTICS: readonly SurfaceDiagnostic[] = [];
 
-  return (
-    <>
-      <Button
-        ref={anchor}
-        tone="secondary"
-        size="sm"
-        trailingIcon="caret-down"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        Insert placeholder
-      </Button>
-      <Popover
-        anchor={anchor}
-        open={open}
-        onClose={() => setOpen(false)}
-        align="end"
-        minWidth={260}
-      >
-        <div role="menu">
-          {variables.map((variable) => (
-            <button
-              key={variable.token}
-              type="button"
-              role="menuitem"
-              className="menu-item"
-              onClick={() => {
-                onInsert(variable.token);
-                setOpen(false);
-              }}
-            >
-              <span className="mono">{variable.token}</span>
-              <span className="push-right text-xs text-muted">{variable.describes}</span>
-            </button>
-          ))}
-        </div>
-      </Popover>
-    </>
-  );
+function PlaceholderAutocompleteField({
+  surface,
+  field,
+  diagnostics = NO_DIAGNOSTICS,
+  render,
+}: {
+  surface: PlaceholderSurface<unknown>;
+  field: PlaceholderField;
+  diagnostics: readonly SurfaceDiagnostic[] | undefined;
+  render: (kit: PlaceholderKit) => ReactElement;
+}): ReactElement {
+  const id = useId();
+  const autocomplete = usePlaceholderAutocomplete({
+    surface,
+    path: field.path,
+    onChange: field.onChange,
+  });
+  const listed = visibleDiagnostics(diagnostics).shown.length > 0;
+
+  return render({
+    field: autocomplete.field,
+    suggestions: <PlaceholderSuggestions autocomplete={autocomplete} />,
+    describedBy: listed ? id : undefined,
+    diagnostics: listed ? <TemplateDiagnostics id={id} diagnostics={diagnostics} /> : undefined,
+    diagnosticMessages: diagnostics.map(({ message }) => message),
+  });
 }
 
-function EmbedEditor({
+export function placeholderSlot(
+  surface: PlaceholderSurface<unknown>,
+  diagnosticsAt?: TemplateDiagnosticsAt | undefined,
+): PlaceholderSlot {
+  return (field, render) =>
+    surface.fieldAt(field.path) === undefined ? null : (
+      <PlaceholderAutocompleteField
+        key={field.path}
+        surface={surface}
+        field={field}
+        diagnostics={diagnosticsAt?.(field.path)}
+        render={render}
+      />
+    );
+}
+
+function SingleEmbedEditor({
   embed,
+  path,
   onChange,
   onRemove,
   errorAt,
-  prefix,
+  placeholders,
   className,
 }: {
   embed: Embed;
+  path: string;
   onChange: (next: Embed) => void;
   onRemove: () => void;
-  errorAt: (path: string) => string | undefined;
-  prefix: string;
+  errorAt: ErrorAt;
+  placeholders: PlaceholderSlot | undefined;
   className?: string | undefined;
 }): ReactElement {
   const recent = useRecent();
@@ -133,32 +142,40 @@ function EmbedEditor({
 
   const fields = embed.fields ?? [];
 
+  const setField = (index: number, next: EmbedField): void =>
+    set(
+      'fields',
+      fields.map((current, at) => (at === index ? next : current)),
+    );
+
   return (
     <>
       <Rows className={className}>
-        <SettingRow title="Title" error={errorAt(`${prefix}.title`)}>
-          <TextInput
+        <SettingRow title="Title">
+          <MessageField
+            placeholders={placeholders}
+            path={`${path}.title`}
+            label="Embed title"
             width="lg"
-            aria-label="Embed title"
             maxLength={EMBED_TITLE_MAX}
             value={embed.title ?? ''}
-            onChange={(event) => set('title', event.currentTarget.value || undefined)}
+            error={errorAt(`${path}.title`)}
+            onChange={(next) => set('title', blank(next))}
           />
         </SettingRow>
 
-        <SettingRow
-          title="Description"
-          description="Supports Discord markdown."
-          stacked
-          error={errorAt(`${prefix}.description`)}
-          note={countLabel((embed.description ?? '').length, EMBED_DESCRIPTION_MAX)}
-        >
-          <TextArea
-            aria-label="Embed description"
+        <SettingRow title="Description" description="Supports Discord markdown." stacked>
+          <MessageField
+            placeholders={placeholders}
+            path={`${path}.description`}
+            label="Embed description"
             rows={5}
+            layout="wide"
             maxLength={EMBED_DESCRIPTION_MAX}
             value={embed.description ?? ''}
-            onChange={(event) => set('description', event.currentTarget.value || undefined)}
+            error={errorAt(`${path}.description`)}
+            note={countLabel((embed.description ?? '').length, EMBED_DESCRIPTION_MAX)}
+            onChange={(next) => set('description', blank(next))}
           />
         </SettingRow>
 
@@ -170,38 +187,48 @@ function EmbedEditor({
           />
         </SettingRow>
 
-        <SettingRow title="Footer" error={errorAt(`${prefix}.footer.text`)}>
-          <TextInput
+        <SettingRow title="Footer">
+          <MessageField
+            placeholders={placeholders}
+            path={`${path}.footer.text`}
+            label="Embed footer"
             width="lg"
-            aria-label="Embed footer"
             maxLength={EMBED_FOOTER_TEXT_MAX}
             value={embed.footer?.text ?? ''}
-            onChange={(event) =>
-              set(
-                'footer',
-                event.currentTarget.value ? { text: event.currentTarget.value } : undefined,
-              )
+            error={errorAt(`${path}.footer.text`)}
+            onChange={(next) =>
+              set('footer', next === '' ? undefined : { ...embed.footer, text: next })
             }
           />
         </SettingRow>
 
         <SettingRow title="Image" description="Shown full width under the text.">
-          <TextInput
+          <MessageField
+            placeholders={placeholders}
+            path={`${path}.imageUrl`}
+            label="Embed image URL"
+            link
             width="lg"
-            aria-label="Embed image URL"
             placeholder="https://…"
+            maxLength={EMBED_URL_MAX}
             value={embed.imageUrl ?? ''}
-            onChange={(event) => set('imageUrl', event.currentTarget.value || undefined)}
+            error={errorAt(`${path}.imageUrl`)}
+            onChange={(next) => set('imageUrl', blank(next))}
           />
         </SettingRow>
 
         <SettingRow title="Thumbnail" description="Shown small, top right.">
-          <TextInput
+          <MessageField
+            placeholders={placeholders}
+            path={`${path}.thumbnailUrl`}
+            label="Embed thumbnail URL"
+            link
             width="lg"
-            aria-label="Embed thumbnail URL"
             placeholder="https://…"
+            maxLength={EMBED_URL_MAX}
             value={embed.thumbnailUrl ?? ''}
-            onChange={(event) => set('thumbnailUrl', event.currentTarget.value || undefined)}
+            error={errorAt(`${path}.thumbnailUrl`)}
+            onChange={(next) => set('thumbnailUrl', blank(next))}
           />
         </SettingRow>
       </Rows>
@@ -230,33 +257,23 @@ function EmbedEditor({
               // biome-ignore lint/suspicious/noArrayIndexKey: embed fields have no id of their own
               <div className={cx('row stacked', recent.enter(index, 'part'))} key={index}>
                 <div className="inline inline-8">
-                  <TextInput
-                    aria-label={`Field ${index + 1} name`}
-                    className="control-w-md"
+                  <MessageField
+                    placeholders={placeholders}
+                    path={`${path}.fields.${index}.name`}
+                    label={`Field ${index + 1} name`}
+                    width="md"
                     maxLength={EMBED_FIELD_NAME_MAX}
                     value={field.name}
-                    onChange={(event) =>
-                      set(
-                        'fields',
-                        fields.map((current, at) =>
-                          at === index ? { ...current, name: event.currentTarget.value } : current,
-                        ),
-                      )
-                    }
+                    error={errorAt(`${path}.fields.${index}.name`)}
+                    empty={FIELD_NAMELESS}
+                    onChange={(next) => setField(index, { ...field, name: next })}
                   />
                   <span className="push-right inline inline-8">
                     <span className="text-xs text-muted">Inline</span>
                     <Switch
                       label={`Field ${index + 1} inline`}
                       checked={field.inline === true}
-                      onChange={(next) =>
-                        set(
-                          'fields',
-                          fields.map((current, at) =>
-                            at === index ? { ...current, inline: next } : current,
-                          ),
-                        )
-                      }
+                      onChange={(next) => setField(index, { ...field, inline: next })}
                     />
                     <IconButton
                       icon="trash"
@@ -272,19 +289,17 @@ function EmbedEditor({
                     />
                   </span>
                 </div>
-                <TextArea
-                  aria-label={`Field ${index + 1} value`}
+                <MessageField
+                  placeholders={placeholders}
+                  path={`${path}.fields.${index}.value`}
+                  label={`Field ${index + 1} value`}
                   rows={2}
+                  layout="wide"
                   maxLength={EMBED_FIELD_VALUE_MAX}
                   value={field.value}
-                  onChange={(event) =>
-                    set(
-                      'fields',
-                      fields.map((current, at) =>
-                        at === index ? { ...current, value: event.currentTarget.value } : current,
-                      ),
-                    )
-                  }
+                  error={errorAt(`${path}.fields.${index}.value`)}
+                  empty={FIELD_TEXTLESS}
+                  onChange={(next) => setField(index, { ...field, value: next })}
                 />
               </div>
             ))}
@@ -304,17 +319,19 @@ function EmbedEditor({
 function ButtonRowEditor({
   guildId,
   row,
+  path,
   onChange,
   onRemove,
   errorAt,
-  prefix,
+  placeholders,
 }: {
   guildId: string;
   row: Extract<ActionRow, { kind: 'buttons' }>;
+  path: string;
   onChange: (next: ActionRow) => void;
   onRemove: () => void;
-  errorAt: (path: string) => string | undefined;
-  prefix: string;
+  errorAt: ErrorAt;
+  placeholders: PlaceholderSlot | undefined;
 }): ReactElement {
   const recent = useRecent();
 
@@ -326,73 +343,77 @@ function ButtonRowEditor({
 
   return (
     <Rows>
-      {row.buttons.map((button, index) => (
-        <div className={cx('row stacked', recent.enter(button.key, 'part'))} key={button.key}>
-          <div className="inline inline-8 inline-wrap">
-            <EmojiPicker
-              guildId={guildId}
-              label={`Button ${index + 1} emoji`}
-              value={button.emoji ?? null}
-              onChange={(emoji) => setButton(index, { ...button, emoji: emoji ?? undefined })}
-            />
-            <TextInput
-              aria-label={`Button ${index + 1} label`}
-              className="control-w-md"
-              placeholder="Label"
-              maxLength={BUTTON_LABEL_MAX}
-              invalid={errorAt(`${prefix}.${index}.label`) !== undefined}
-              value={button.label ?? ''}
-              onChange={(event) =>
-                setButton(index, { ...button, label: event.currentTarget.value || undefined })
-              }
-            />
-            <Select
-              aria-label={`Button ${index + 1} style`}
-              className="control-w-sm"
-              value={button.style}
-              options={BUTTON_STYLES.map((style) => ({
-                value: style,
-                label: BUTTON_STYLE_LABELS[style] ?? style,
-              }))}
-              onChange={(value) =>
-                setButton(index, { ...button, style: value as MessageButton['style'] })
-              }
-            />
-            <IconButton
-              icon="trash"
-              tone="ghost"
-              size="sm"
-              label={`Remove button ${index + 1}`}
-              onClick={() =>
-                onChange({ kind: 'buttons', buttons: row.buttons.filter((_, at) => at !== index) })
-              }
-            />
-          </div>
+      {row.buttons.map((button, index) => {
+        const at = `${path}.buttons.${index}`;
 
-          {button.style === 'link' ? (
-            <>
-              <TextInput
-                aria-label={`Button ${index + 1} link`}
-                placeholder="https://…"
-                invalid={errorAt(`${prefix}.${index}.url`) !== undefined}
-                value={button.url ?? ''}
-                onChange={(event) =>
-                  setButton(index, { ...button, url: event.currentTarget.value || undefined })
+        return (
+          <div className={cx('row stacked', recent.enter(button.key, 'part'))} key={button.key}>
+            <div className="inline inline-8 inline-wrap">
+              <EmojiPicker
+                guildId={guildId}
+                label={`Button ${index + 1} emoji`}
+                value={button.emoji ?? null}
+                onChange={(emoji) => setButton(index, { ...button, emoji: emoji ?? undefined })}
+              />
+              <MessageField
+                placeholders={placeholders}
+                path={`${at}.label`}
+                label={`Button ${index + 1} label`}
+                width="md"
+                placeholder="Label"
+                maxLength={BUTTON_LABEL_MAX}
+                value={button.label ?? ''}
+                error={errorAt(`${at}.label`)}
+                onChange={(next) => setButton(index, { ...button, label: blank(next) })}
+              />
+              <Select
+                aria-label={`Button ${index + 1} style`}
+                className="control-w-sm"
+                value={button.style}
+                options={BUTTON_STYLES.map((style) => ({
+                  value: style,
+                  label: BUTTON_STYLE_LABELS[style] ?? style,
+                }))}
+                onChange={(value) =>
+                  setButton(index, { ...button, style: value as MessageButton['style'] })
                 }
               />
-              {errorAt(`${prefix}.${index}.url`) !== undefined ? (
-                <p className="row-error">{errorAt(`${prefix}.${index}.url`)}</p>
-              ) : null}
-            </>
-          ) : button.action ? (
-            <p className="row-note">
-              Proton handles this button
-              {button.action.kind === 'role' ? ' — it changes a role' : ' — it replies'}. Only its
-              module can change what it does.
-            </p>
-          ) : null}
-        </div>
-      ))}
+              <IconButton
+                icon="trash"
+                tone="ghost"
+                size="sm"
+                label={`Remove button ${index + 1}`}
+                onClick={() =>
+                  onChange({
+                    kind: 'buttons',
+                    buttons: row.buttons.filter((_, position) => position !== index),
+                  })
+                }
+              />
+            </div>
+
+            {button.style === 'link' ? (
+              <MessageField
+                placeholders={placeholders}
+                path={`${at}.url`}
+                label={`Button ${index + 1} link`}
+                link
+                placeholder="https://…"
+                maxLength={BUTTON_URL_MAX}
+                value={button.url ?? ''}
+                error={errorAt(`${at}.url`)}
+                onChange={(next) => setButton(index, { ...button, url: blank(next) })}
+              />
+            ) : button.action ? (
+              <p className="row-note">
+                Proton handles this button
+                {button.action.kind === 'role' ? ' — it changes a role' : ' — it replies'}. Only its
+                module can change what it does.
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
 
       <div className="row">
         <Button
@@ -422,30 +443,33 @@ function ButtonRowEditor({
 
 function SelectRowEditor({
   row,
+  path,
   onChange,
   onRemove,
+  errorAt,
+  placeholders,
 }: {
   row: Extract<ActionRow, { kind: 'select' }>;
+  path: string;
   onChange: (next: ActionRow) => void;
   onRemove: () => void;
+  errorAt: ErrorAt;
+  placeholders: PlaceholderSlot | undefined;
 }): ReactElement {
   const { select } = row;
 
   return (
     <Rows>
-      <SettingRow
-        title="Placeholder"
-        description="Shown in the dropdown before anything is chosen."
-      >
-        <TextInput
+      <SettingRow title="Prompt" description="Shown in the dropdown before anything is chosen.">
+        <MessageField
+          placeholders={placeholders}
+          path={`${path}.select.placeholder`}
+          label="Dropdown prompt"
           width="lg"
-          aria-label="Dropdown placeholder"
           value={select.placeholder ?? ''}
-          onChange={(event) =>
-            onChange({
-              kind: 'select',
-              select: { ...select, placeholder: event.currentTarget.value || undefined },
-            })
+          error={errorAt(`${path}.select.placeholder`)}
+          onChange={(next) =>
+            onChange({ kind: 'select', select: { ...select, placeholder: blank(next) } })
           }
         />
       </SettingRow>
@@ -453,18 +477,21 @@ function SelectRowEditor({
       {select.options.map((option, index) => (
         <div className="row" key={option.key}>
           <div className="row-main inline inline-8">
-            <TextInput
-              aria-label={`Option ${index + 1} label`}
-              className="control-w-md"
+            <MessageField
+              placeholders={placeholders}
+              path={`${path}.select.options.${index}.label`}
+              label={`Option ${index + 1} label`}
+              width="md"
               maxLength={SELECT_OPTION_LABEL_MAX}
               value={option.label}
-              onChange={(event) =>
+              error={errorAt(`${path}.select.options.${index}.label`)}
+              onChange={(next) =>
                 onChange({
                   kind: 'select',
                   select: {
                     ...select,
                     options: select.options.map((current, at) =>
-                      at === index ? { ...current, label: event.currentTarget.value } : current,
+                      at === index ? { ...current, label: next } : current,
                     ),
                   },
                 })
@@ -503,66 +530,49 @@ function SelectRowEditor({
   );
 }
 
-/**
- * The authoring half of an editor+preview page. Put it in `.editor-main` with `DiscordPreview` in
- * `.editor-preview` beside it.
- */
 export function MessageEditor({
   guildId,
   value,
   onChange,
   allow,
-  variables,
+  placeholders,
   contentLabel = 'Message',
   contentDescription,
   errorAt,
   pathPrefix,
 }: MessageEditorProps): ReactElement {
-  const content = useRef<HTMLTextAreaElement>(null);
   const recent = useRecent();
   const prefix = pathPrefix === undefined ? '' : `${pathPrefix}.`;
-  const error = (path: string): string | undefined => errorAt?.(`${prefix}${path}`);
+  const errorFor: ErrorAt = (path) => errorAt?.(path);
 
+  const content = value.content ?? '';
   const embed = value.embeds[0];
 
-  const insert = (token: string): void => {
-    const field = content.current;
-    const at = field?.selectionStart ?? (value.content ?? '').length;
-    const text = value.content ?? '';
-
-    onChange({ ...value, content: `${text.slice(0, at)}${token}${text.slice(at)}` });
-    queueMicrotask(() => {
-      field?.focus();
-      field?.setSelectionRange(at + token.length, at + token.length);
+  const replaceRow = (index: number, next: ActionRow): void =>
+    onChange({
+      ...value,
+      components: value.components.map((current, at) => (at === index ? next : current)),
     });
-  };
+
+  const removeRow = (index: number): void =>
+    onChange({ ...value, components: value.components.filter((_, at) => at !== index) });
 
   return (
     <>
-      <Section
-        label="Content"
-        actions={
-          variables && variables.length > 0 ? (
-            <VariableMenu variables={variables} onInsert={insert} />
-          ) : null
-        }
-      >
+      <Section label="Content">
         <Rows>
-          <SettingRow
-            title={contentLabel}
-            description={contentDescription}
-            stacked
-            error={error('content')}
-            note={countLabel((value.content ?? '').length, MESSAGE_CONTENT_MAX)}
-          >
-            <TextArea
-              ref={content}
-              aria-label={contentLabel}
+          <SettingRow title={contentLabel} description={contentDescription} stacked>
+            <MessageField
+              placeholders={placeholders}
+              path={`${prefix}content`}
+              label={contentLabel}
               rows={5}
+              layout="wide"
               maxLength={MESSAGE_CONTENT_MAX}
-              invalid={error('content') !== undefined}
-              value={value.content ?? ''}
-              onChange={(event) => onChange({ ...value, content: event.currentTarget.value })}
+              value={content}
+              error={errorFor(`${prefix}content`)}
+              note={countLabel(content.length, MESSAGE_CONTENT_MAX)}
+              onChange={(next) => onChange({ ...value, content: next })}
             />
           </SettingRow>
         </Rows>
@@ -571,11 +581,12 @@ export function MessageEditor({
       {allow?.embed !== false ? (
         embed ? (
           <Section label="Embed">
-            <EmbedEditor
+            <SingleEmbedEditor
               embed={embed}
+              path={`${prefix}embeds.0`}
               className={recent.enter('embed', 'part')}
-              prefix={`${prefix}embeds.0`}
-              errorAt={(path) => errorAt?.(path)}
+              errorAt={errorFor}
+              placeholders={placeholders}
               onChange={(next) => onChange({ ...value, embeds: [next, ...value.embeds.slice(1)] })}
               onRemove={() => onChange({ ...value, embeds: value.embeds.slice(1) })}
             />
@@ -653,40 +664,20 @@ export function MessageEditor({
                     <ButtonRowEditor
                       guildId={guildId}
                       row={row}
-                      prefix={`${prefix}components.${index}.buttons`}
-                      errorAt={(path) => errorAt?.(path)}
-                      onChange={(next) =>
-                        onChange({
-                          ...value,
-                          components: value.components.map((current, at) =>
-                            at === index ? next : current,
-                          ),
-                        })
-                      }
-                      onRemove={() =>
-                        onChange({
-                          ...value,
-                          components: value.components.filter((_, at) => at !== index),
-                        })
-                      }
+                      path={`${prefix}components.${index}`}
+                      errorAt={errorFor}
+                      placeholders={placeholders}
+                      onChange={(next) => replaceRow(index, next)}
+                      onRemove={() => removeRow(index)}
                     />
                   ) : (
                     <SelectRowEditor
                       row={row}
-                      onChange={(next) =>
-                        onChange({
-                          ...value,
-                          components: value.components.map((current, at) =>
-                            at === index ? next : current,
-                          ),
-                        })
-                      }
-                      onRemove={() =>
-                        onChange({
-                          ...value,
-                          components: value.components.filter((_, at) => at !== index),
-                        })
-                      }
+                      path={`${prefix}components.${index}`}
+                      errorAt={errorFor}
+                      placeholders={placeholders}
+                      onChange={(next) => replaceRow(index, next)}
+                      onRemove={() => removeRow(index)}
                     />
                   )}
                 </div>

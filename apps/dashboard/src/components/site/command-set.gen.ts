@@ -16,6 +16,24 @@ export interface CommandEntry {
 
 export const COMMAND_SET: readonly CommandEntry[] = [
   {
+    usage: '/afk clear',
+    description: 'Clear your AFK, or with Manage Nicknames, someone else’s.',
+    args: [
+      { name: 'member', required: false },
+    ],
+    module: 'afk',
+    permission: null,
+  },
+  {
+    usage: '/afk set',
+    description: 'Mark yourself AFK in this server.',
+    args: [
+      { name: 'reason', required: false },
+    ],
+    module: 'afk',
+    permission: null,
+  },
+  {
     usage: '/antinuke maintenance',
     description: 'Suspend the breaker for a fixed period of bulk admin work.',
     args: [
@@ -1082,6 +1100,31 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     ],
     module: 'moderation',
     permission: 'Timeout Members',
+  },
+  {
+    usage: '/xp event end',
+    description: 'End every XP event running now.',
+    args: [],
+    module: 'leveling',
+    permission: 'Manage Server',
+  },
+  {
+    usage: '/xp event list',
+    description: 'List the active and scheduled XP events.',
+    args: [],
+    module: 'leveling',
+    permission: 'Manage Server',
+  },
+  {
+    usage: '/xp event start',
+    description: 'Start or schedule an XP event.',
+    args: [
+      { name: 'multiplier', required: true },
+      { name: 'duration', required: true },
+      { name: 'starts_in', required: false },
+    ],
+    module: 'leveling',
+    permission: 'Manage Server',
   },
   {
     usage: '/xp give',

@@ -22,6 +22,7 @@ export {
 export {
   ACTION_KINDS,
   type ActionKind,
+  exposesUpstreamOnFailure,
   isActionKind,
   isLedgerOnly,
   isNeverRecorded,
@@ -33,6 +34,7 @@ export {
   reversalOf,
   TARGETS_MEMBER,
   targetsMember,
+  UPSTREAM_ON_FAILURE_KINDS,
 } from './actions/kinds.ts';
 export * from './actions/payloads.ts';
 export { type PrecheckInput, runPrechecks } from './actions/prechecks.ts';
@@ -132,6 +134,17 @@ export {
   liftBlockInputSchema,
   liftBlockResultSchema,
 } from './blocked/query.ts';
+export {
+  type BrandingNameStyleStore,
+  NAME_STYLE_OUTCOMES,
+  NAME_STYLE_REASONS,
+  type NameStyleAttempt,
+  type NameStyleOutcome,
+  type NameStyleReason,
+  type NameStyleState,
+  nameStyleAttemptSchema,
+  nameStyleStateSchema,
+} from './branding/name-style-state.ts';
 export {
   type BooleanField,
   type ChannelIdField,
@@ -271,7 +284,13 @@ export {
   type VerificationWebPassed,
   verificationWebPassedSchema,
 } from './events/verification.ts';
-export { buildGuildState, parseChannel, parseOverwrites, parseRole } from './guild-state/build.ts';
+export {
+  buildGuildState,
+  parseChannel,
+  parseGuildProfile,
+  parseOverwrites,
+  parseRole,
+} from './guild-state/build.ts';
 export { GUILD_STATE_PREFIX, RedisGuildStateStore } from './guild-state/redis.ts';
 export {
   type ChannelState,
@@ -507,6 +526,7 @@ export type {
   CommandContext,
   CommandDefinition,
   ConfigLimit,
+  ConfigWriteIssue,
   EventListener,
   Logger,
   ModuleCategory,

@@ -1,4 +1,10 @@
 import {
+  SAMPLE_NOW,
+  type SurfaceDiagnostic,
+  type SurfaceSample,
+  validateConfigTemplates,
+} from '@proton/core/placeholders';
+import {
   CHANNEL_NAME_MAX,
   OWNER_CONTROL_LABELS,
   OWNER_CONTROLS,
@@ -16,16 +22,28 @@ import {
   type TempRoleMode,
   type TempVcHub,
 } from '@proton/module-tempvc/config';
+import {
+  renderTempVcName,
+  TEMPVC_NAME_SURFACE,
+  type TempVcNameFacts,
+  tempvcTemplates,
+} from '@proton/module-tempvc/placeholders';
 import type { ReactElement } from 'react';
-import { useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { CHANNEL_TYPE, ChannelPicker } from '../../components/discord/channel-picker.tsx';
 import { DurationInput } from '../../components/discord/inputs.tsx';
 import { RolePicker } from '../../components/discord/role-picker.tsx';
 import { ModuleLink } from '../../components/module/route.tsx';
+import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
+import {
+  TemplateDiagnostics,
+  visibleDiagnostics,
+} from '../../components/placeholders/template-diagnostics.tsx';
+import { usePlaceholderAutocomplete } from '../../components/placeholders/use-placeholder-autocomplete.ts';
 import { Button, NumberStepper, Select, Switch, TextInput } from '../../components/ui/controls.tsx';
 import { ActionRow, Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { ConfirmDialog } from '../../components/ui/overlay.tsx';
-import { PANEL_GROUPS, setHubs, type TempVcForm, updateHub } from './shape.ts';
+import { DUPLICATE_HUB, PANEL_GROUPS, setHubs, type TempVcForm, updateHub } from './shape.ts';
 
 const PRIVACY_OPTIONS = PRIVACY_MODES.map((mode) => ({ value: mode, label: PRIVACY_LABELS[mode] }));
 
@@ -44,6 +62,22 @@ const TEMP_ROLE_OPTIONS = TEMP_ROLE_MODES.map((mode) => ({
   label: TEMP_ROLE_LABELS[mode],
 }));
 
+const NO_DIAGNOSTICS: readonly SurfaceDiagnostic[] = [];
+
+const NAME_DESCRIPTION =
+  'What each new channel is called. Include the member’s name or ID, or every channel gets the ' +
+  'same name.';
+
+function nameSample(): SurfaceSample<TempVcNameFacts> {
+  const sample = TEMPVC_NAME_SURFACE.samples[0];
+  if (sample === undefined) {
+    throw new Error('The channel name placeholders have no sample, so no name can be previewed.');
+  }
+  return sample;
+}
+
+const NAME_SAMPLE = nameSample();
+
 export function HubDetail({
   form,
   guildId,
@@ -51,6 +85,7 @@ export function HubDetail({
   index,
   hub,
   onRemoved,
+  onChannelChange,
 }: {
   form: TempVcForm;
   guildId: string;
@@ -58,11 +93,39 @@ export function HubDetail({
   index: number;
   hub: TempVcHub;
   onRemoved: () => void;
+  onChannelChange: (channelId: string) => void;
 }): ReactElement {
   const [removing, setRemoving] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
 
   const at = (field: string): string | undefined => form.errorAt(`hubs.${index}.${field}`);
   const change = (next: (current: TempVcHub) => TempVcHub): void => updateHub(form, index, next);
+  const channelError = duplicate ? DUPLICATE_HUB : at('channelId');
+
+  const { value: config, view } = form;
+  const report = useMemo(
+    () => validateConfigTemplates(tempvcTemplates, config, view.config),
+    [config, view.config],
+  );
+
+  const namePath = `hubs.${index}.nameTemplate`;
+  const nameDiagnostics = report.byPath.get(namePath) ?? NO_DIAGNOSTICS;
+  const nameDiagnosticsId = useId();
+  const nameError = at('nameTemplate');
+  const nameListed =
+    nameError !== undefined && nameDiagnostics.some(({ message }) => message === nameError);
+  const nameInvalid =
+    nameError !== undefined || report.blocking.some((issue) => issue.path === namePath);
+  const nameDescribedBy =
+    visibleDiagnostics(nameDiagnostics).shown.length > 0 ? nameDiagnosticsId : undefined;
+
+  const name = usePlaceholderAutocomplete({
+    surface: TEMPVC_NAME_SURFACE,
+    path: namePath,
+    onChange: (nameTemplate) => change((current) => ({ ...current, nameTemplate })),
+  });
+
+  const sampleName = renderTempVcName(hub.nameTemplate, NAME_SAMPLE.facts, SAMPLE_NOW).output;
 
   return (
     <>
@@ -71,7 +134,7 @@ export function HubDetail({
           <SettingRow
             title="Creator channel"
             description="Members who join this channel get a voice channel of their own and are moved into it."
-            error={at('channelId')}
+            error={channelError}
           >
             <ChannelPicker
               guildId={guildId}
@@ -79,9 +142,24 @@ export function HubDetail({
               placeholder="Choose a voice channel"
               types={[CHANNEL_TYPE.voice]}
               allowNone={false}
-              invalid={at('channelId') !== undefined}
+              invalid={channelError !== undefined}
               value={hub.channelId}
-              onChange={(next) => change((current) => ({ ...current, channelId: next ?? '' }))}
+              onChange={(next) => {
+                if (next === null) return;
+
+                if (
+                  form.value.hubs.some(
+                    (other, position) => position !== index && other.channelId === next,
+                  )
+                ) {
+                  setDuplicate(true);
+                  return;
+                }
+
+                setDuplicate(false);
+                change((current) => ({ ...current, channelId: next }));
+                onChannelChange(next);
+              }}
             />
           </SettingRow>
 
@@ -121,26 +199,31 @@ export function HubDetail({
         <Rows>
           <SettingRow
             title="Name template"
-            description={
+            description={NAME_DESCRIPTION}
+            error={nameListed ? undefined : nameError}
+            note={
               <>
-                <span className="mono">{'{user}'}</span> and{' '}
-                <span className="mono">{'{displayName}'}</span> become the member’s display name,{' '}
-                <span className="mono">{'{username}'}</span> their username and{' '}
-                <span className="mono">{'{userId}'}</span> their ID.
+                {NAME_SAMPLE.label}. Channel: <span className="mono">{sampleName}</span>
               </>
             }
-            error={at('nameTemplate')}
           >
-            <TextInput
-              width="lg"
-              aria-label="Name template"
-              maxLength={CHANNEL_NAME_MAX}
-              invalid={at('nameTemplate') !== undefined}
-              value={hub.nameTemplate}
-              onChange={(event) =>
-                change((current) => ({ ...current, nameTemplate: event.currentTarget.value }))
-              }
-            />
+            <div className="message-field">
+              <TextInput
+                {...name.field}
+                width="lg"
+                aria-label="Name template"
+                aria-describedby={nameDescribedBy}
+                spellCheck={false}
+                maxLength={CHANNEL_NAME_MAX}
+                invalid={nameInvalid}
+                value={hub.nameTemplate}
+                onChange={(event) =>
+                  change((current) => ({ ...current, nameTemplate: event.currentTarget.value }))
+                }
+              />
+              <PlaceholderSuggestions autocomplete={name} />
+              <TemplateDiagnostics id={nameDiagnosticsId} diagnostics={nameDiagnostics} />
+            </div>
           </SettingRow>
 
           <SettingRow
@@ -459,8 +542,8 @@ export function HubDetail({
           onRemoved();
         }}
       >
-        Its settings are deleted. Channels it already created stay until they empty, and /voice in
-        them replies that their creator channel was removed.
+        Its settings are deleted when you save. Channels it already created stay until they empty,
+        and /voice in them replies that their creator channel was removed.
       </ConfirmDialog>
     </>
   );

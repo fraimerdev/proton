@@ -2,6 +2,7 @@ import type { ModuleIndex, ModuleSummary } from '@proton/core';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { saveFailure } from '../../lib/errors.ts';
+import { MODULE_BY_ID } from '../../lib/modules/catalogue.ts';
 import { queryKeys } from '../../lib/query-keys.ts';
 import { updateModuleConfig } from '../../server/modules.ts';
 
@@ -27,10 +28,6 @@ export interface ModuleToggle {
   dismiss: () => void;
 }
 
-/**
- * The module's own on/off switch. Optimistic, because the switch is the feedback: a spinner on a
- * 200ms round trip reads as the switch not having worked.
- */
 export function useModuleToggle(guildId: string, summary: ModuleSummary | undefined): ModuleToggle {
   const queryClient = useQueryClient();
   const modulesKey = queryKeys.modules(guildId);
@@ -57,7 +54,7 @@ export function useModuleToggle(guildId: string, summary: ModuleSummary | undefi
       setFailure(
         saveFailure(
           error,
-          `${summary?.name ?? 'That module'} was not switched ${enabled ? 'on' : 'off'}`,
+          `${(summary && MODULE_BY_ID.get(summary.id)?.label) ?? summary?.name ?? 'That module'} was not switched ${enabled ? 'on' : 'off'}`,
         ),
       );
     },

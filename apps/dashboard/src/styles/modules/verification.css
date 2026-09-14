@@ -5,23 +5,6 @@
   max-width: 100%;
 }
 
-.verification-detail-wide {
-  flex: 1 1 100%;
-}
-
-/* Narrower than the input above it: a wider message would widen the whole detail column. */
-.verification-detail-error {
-  max-width: 190px;
-}
-
-.verification-detail-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 16px;
-  flex: 1 1 100%;
-}
-
 /* The four Discord button colours, shown in Discord's own colours because that is the setting. */
 .verification-style-group {
   display: flex;

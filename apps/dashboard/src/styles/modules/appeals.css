@@ -1,5 +1,3 @@
-/* appeals page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
-
 .appeals-note {
   margin-top: 10px;
   color: var(--text-muted);
@@ -15,10 +13,6 @@
 .appeals-field-grow {
   flex: 1 1 260px;
   min-width: 220px;
-}
-
-.appeals-row-bad {
-  border: 1px solid var(--danger-border);
 }
 
 .appeals-crumb-link {

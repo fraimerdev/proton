@@ -9,6 +9,7 @@ import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { ChannelName, useChannelIndex } from '../../components/discord/channel-picker.tsx';
 import { EmojiGlyph } from '../../components/discord/emoji-picker.tsx';
+import { useModuleNavigate } from '../../components/module/route.tsx';
 import {
   CollectionHeader,
   CollectionStaticRow,
@@ -26,7 +27,6 @@ import { EmptyState, StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section } from '../../components/ui/layout.tsx';
 import { Dialog, MenuButton } from '../../components/ui/overlay.tsx';
 import { ceilingNote, listCeiling } from '../../lib/limits.ts';
-import { useTicketNav } from './nav.ts';
 import {
   duplicateIds,
   panelsCarrying,
@@ -93,7 +93,7 @@ export function TypesArea({
 }): ReactElement {
   const config = form.value;
   const tier = form.view.tier;
-  const go = useTicketNav(guildId, moduleId);
+  const go = useModuleNavigate(guildId, moduleId);
 
   const [term, setTerm] = useState('');
   const [creating, setCreating] = useState(false);

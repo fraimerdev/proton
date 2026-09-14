@@ -4,7 +4,7 @@ import { LoadingArea } from './feedback.tsx';
 export function RoutePending(): ReactElement {
   return (
     <div className="page">
-      <LoadingArea size="lg" minHeight="60vh" fallback />
+      <LoadingArea size="lg" fill fallback />
     </div>
   );
 }

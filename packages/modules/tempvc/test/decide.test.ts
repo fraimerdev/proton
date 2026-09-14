@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { SAMPLE_NOW } from '@proton/core/placeholders';
 import {
   CHANNEL_NAME_MAX,
   hubFor,
-  renderChannelName,
   type TempVcConfig,
   tempVcConfigSchema,
   tempVcHubSchema,
@@ -14,6 +14,7 @@ import {
   type TempVcStep,
   type TransitionFacts,
 } from '../src/decide.ts';
+import { renderTempVcName, type TempVcOwner } from '../src/placeholders.ts';
 
 const HUB = '500000000000000001';
 const OTHER_HUB = '500000000000000003';
@@ -264,32 +265,46 @@ describe('reconciling after a restart', () => {
   });
 });
 
-function named(displayName: string) {
+function named(displayName: string): TempVcOwner {
   return { displayName, username: 'ada', userId: ADA };
 }
 
-describe('renderChannelName', () => {
+function channelName(template: string, owner: TempVcOwner): string {
+  return renderTempVcName(template, { owner, hub: null, server: null }, SAMPLE_NOW).output;
+}
+
+describe('renderTempVcName', () => {
   test('fills the owner placeholder', () => {
-    expect(renderChannelName('{user}’s room', named('Ada'))).toBe('Ada’s room');
+    expect(channelName('{user}’s room', named('Ada'))).toBe('Ada’s room');
   });
 
   test('fills every placeholder the spec names', () => {
-    expect(renderChannelName('{displayName} {username} {userId}', named('Ada'))).toBe(
+    expect(channelName('{displayName} {username} {userId}', named('Ada'))).toBe(`Ada ada ${ADA}`);
+  });
+
+  test('fills a repeated placeholder every time', () => {
+    expect(channelName('{user} and {user}', named('Ada'))).toBe('Ada and Ada');
+  });
+
+  test('clamps to what Discord accepts', () => {
+    expect(channelName('{user}', named('x'.repeat(500)))).toHaveLength(CHANNEL_NAME_MAX);
+  });
+
+  test('a template that renders to nothing falls back to the name', () => {
+    expect(channelName('{username}', { displayName: 'Ada', username: '', userId: ADA })).toBe(
+      'Ada',
+    );
+  });
+
+  test('fills the canonical placeholders the same way as their older names', () => {
+    expect(channelName('{user.display_name} {user.username} {user.id}', named('Ada'))).toBe(
       `Ada ada ${ADA}`,
     );
   });
 
-  test('fills a repeated placeholder every time', () => {
-    expect(renderChannelName('{user} and {user}', named('Ada'))).toBe('Ada and Ada');
-  });
-
-  test('clamps to what Discord accepts', () => {
-    expect(renderChannelName('{user}', named('x'.repeat(500)))).toHaveLength(CHANNEL_NAME_MAX);
-  });
-
-  test('a template that renders to nothing falls back to the name', () => {
-    expect(renderChannelName('{username}', { displayName: 'Ada', username: '', userId: ADA })).toBe(
-      'Ada',
+  test('a display name holding a placeholder is posted as written, where the old renderer filled it in again', () => {
+    expect(channelName('{user}', { displayName: '{username}', username: 'ada', userId: ADA })).toBe(
+      '{username}',
     );
   });
 });
@@ -299,6 +314,13 @@ describe('the config schema', () => {
     expect(
       tempVcConfigSchema.safeParse({ hubs: [{ channelId: HUB, nameTemplate: 'Voice' }] }).success,
     ).toBe(false);
+  });
+
+  test('accepts a name template that names the member only by a canonical placeholder', () => {
+    expect(
+      tempVcHubSchema.safeParse({ channelId: HUB, nameTemplate: '{user.global_name}’s room' })
+        .success,
+    ).toBe(true);
   });
 
   test('refuses two creator channels on the same channel', () => {

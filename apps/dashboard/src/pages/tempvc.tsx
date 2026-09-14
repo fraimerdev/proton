@@ -1,4 +1,5 @@
 import { tempVcConfigSchema } from '@proton/module-tempvc/config';
+import { tempvcTemplates } from '@proton/module-tempvc/placeholders';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { useCallback } from 'react';
@@ -35,7 +36,12 @@ export default function TempVcPage({
   summary,
   area,
 }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: tempVcConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: tempVcConfigSchema,
+    templates: tempvcTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
   const navigate = useModuleNavigate(guildId, meta.id);
   const search = useModuleSearch();
@@ -105,7 +111,6 @@ export default function TempVcPage({
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -130,6 +135,7 @@ export default function TempVcPage({
           index={index}
           hub={hub}
           onRemoved={() => go({ id: undefined })}
+          onChannelChange={(id) => navigate({ area: 'hubs', id }, { replace: true })}
         />
       ) : null}
 
@@ -158,7 +164,13 @@ export default function TempVcPage({
         />
       ) : null}
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

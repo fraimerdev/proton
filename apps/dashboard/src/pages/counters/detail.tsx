@@ -12,6 +12,8 @@ import {
   ChannelPicker,
   channelIcon,
 } from '../../components/discord/channel-picker.tsx';
+import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
+import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import { Button, SegmentedControl, TextInput } from '../../components/ui/controls.tsx';
 import type { IconName } from '../../components/ui/icon.tsx';
 import { ActionRow, Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
@@ -26,6 +28,8 @@ import {
   NamePreview,
   SOURCE_OPTIONS,
   setCounters,
+  useCounterTemplates,
+  useTemplateField,
   withChannel,
 } from './shape.tsx';
 
@@ -84,6 +88,15 @@ export function CounterDetail({
 
   const channelError = channelTaken(counters, index) ? CHANNEL_TAKEN : at('channelId');
 
+  const report = useCounterTemplates(form);
+
+  const name = useTemplateField({
+    report,
+    path: `counters.${index}.template`,
+    onChange: (template) => change({ ...counter, template }),
+    error: templateError,
+  });
+
   const previewIcon: IconName =
     counter.channelId === undefined ? 'speaker-high' : channel ? channelIcon(channel.type) : 'hash';
 
@@ -107,26 +120,37 @@ export function CounterDetail({
             title="Name template"
             description={
               <>
-                Put <span className="mono">{COUNT_PLACEHOLDER}</span> where the number should go.
+                Put a count where the number should go, such as{' '}
+                <span className="mono">{COUNT_PLACEHOLDER}</span>.
               </>
             }
             stacked
-            error={templateError}
+            error={name.error}
           >
             <div className="stack stack-12">
-              <TextInput
-                width="lg"
-                aria-label="Name template"
-                spellCheck={false}
-                maxLength={TEMPLATE_MAX}
-                invalid={templateError !== undefined}
-                value={counter.template}
-                onChange={(event) => change({ ...counter, template: event.currentTarget.value })}
-              />
+              <div className="message-field">
+                <TextInput
+                  {...name.autocomplete.field}
+                  width="lg"
+                  aria-label="Name template"
+                  aria-describedby={name.describedBy}
+                  spellCheck={false}
+                  maxLength={TEMPLATE_MAX}
+                  invalid={name.invalid}
+                  value={counter.template}
+                  onChange={(event) => change({ ...counter, template: event.currentTarget.value })}
+                />
+                <PlaceholderSuggestions autocomplete={name.autocomplete} />
+                <TemplateDiagnostics id={name.diagnosticsId} diagnostics={name.diagnostics} />
+              </div>
 
               <div className="field">
                 <span className="field-label">Channel name</span>
-                <NamePreview template={counter.template} icon={previewIcon} />
+                <NamePreview
+                  template={counter.template}
+                  source={counter.source}
+                  icon={previewIcon}
+                />
               </div>
             </div>
           </SettingRow>

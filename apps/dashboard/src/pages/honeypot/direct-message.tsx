@@ -1,21 +1,32 @@
 import { countV2Components, V2_COMPONENTS_MAX } from '@proton/core';
-import { useQuery } from '@tanstack/react-query';
+import { HONEYPOT_DM_SURFACE } from '@proton/module-honeypot/placeholders';
 import type { ReactElement } from 'react';
 import { EditorPreviewLayout } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { Switch, TextInput } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
-import { guildQuery } from '../../lib/queries.ts';
 import { LayoutBuilder } from './layout-builder.tsx';
 import { configErrors, dmOffersAppeal, dmPreview, type HoneypotForm } from './shape.ts';
 
 const INVITE_URL_MAX = 512;
 
+const PLACEHOLDERS =
+  'Placeholders are filled in when the message is sent. Type { in a text or link to add one. ' +
+  'Proton adds recovery advice and any buttons below.';
+
 const APPEAL_ADDRESS = 'The Appeal button gets a separate link for each caught member.';
 
 const APPEAL_FROM_ESCALATION =
   'The Appeal button comes from the appeal form chosen under Follow-up, and only a ban offers one.';
+
+const EMPTY = 'This layout sends nothing. Discord refuses an empty message.';
+
+const REFUSED = 'Once its placeholders are filled in, this message cannot be sent.';
+
+const BUILT_IN =
+  'Once its placeholders are filled in, this layout cannot be sent, so Proton sends its own ' +
+  'wording instead, shown here. Check the links, and any text that could come out empty.';
 
 const NOT_SENT = 'The direct message is switched off. This layout is kept, but nothing is sent.';
 
@@ -33,9 +44,7 @@ export function DirectMessageArea({
   const config = form.value;
   const errors = configErrors(form);
   const layoutError = form.errorAt('dmLayout.v2');
-
-  const { data: guild } = useQuery(guildQuery(guildId));
-  const guildName = guild?.name ?? 'this server';
+  const preview = dmPreview(config, form.view.tier);
 
   return (
     <EditorPreviewLayout
@@ -101,14 +110,12 @@ export function DirectMessageArea({
               <p className="row-error honeypot-layout-error">{layoutError}</p>
             ) : null}
 
-            <p className="section-intro">
-              <span className="mono">{'{server}'}</span> is replaced with the server name, and{' '}
-              <span className="mono">{'{action}'}</span> with what happened to the member. Proton
-              adds recovery advice and any buttons below.
-            </p>
+            <p className="section-intro">{PLACEHOLDERS}</p>
 
             <LayoutBuilder
               guildId={guildId}
+              surface={HONEYPOT_DM_SURFACE}
+              diagnosticsAt={form.templateDiagnosticsAt}
               value={config.dmLayout.v2}
               errors={errors}
               prefix="dmLayout.v2"
@@ -122,9 +129,13 @@ export function DirectMessageArea({
       preview={
         <div className="stack stack-10">
           <DiscordPreview
-            message={{ v2: dmPreview(config, form.view.tier, guildName) }}
-            empty="This layout sends nothing. Discord refuses an empty message."
+            message={{ v2: preview.v2 ?? [] }}
+            mentionNames={preview.mentionNames}
+            now={preview.now}
+            empty={preview.v2 === null ? REFUSED : EMPTY}
           />
+          <p className="text-xs text-muted">{preview.caption}</p>
+          {preview.builtIn ? <p className="field-warning">{BUILT_IN}</p> : null}
           <p className="text-xs text-muted">
             {dmOffersAppeal(config) ? APPEAL_ADDRESS : APPEAL_FROM_ESCALATION}
           </p>

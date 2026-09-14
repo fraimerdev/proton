@@ -7,7 +7,12 @@ import {
   requiredPermissionsFor,
   targetsMember,
 } from './kinds.ts';
-import { snowflakeSchema, THREAD_TYPE_PRIVATE, THREAD_TYPE_PUBLIC } from './payloads.ts';
+import {
+  deleteRolePayloadSchema,
+  snowflakeSchema,
+  THREAD_TYPE_PRIVATE,
+  THREAD_TYPE_PUBLIC,
+} from './payloads.ts';
 import type { PrecheckInput } from './prechecks.ts';
 import type { ActionFailure, ActionRequest } from './types.ts';
 
@@ -99,6 +104,11 @@ export async function resolvePrecheckContext(
       state.channels.get(channel?.parentId ?? '')?.overwrites ?? [],
     );
 
+  const deleted =
+    request.kind === 'delete_role' ? deleteRolePayloadSchema.safeParse(request.payload) : null;
+  // A role missing from state goes on to Discord, whose 404 is how a caller learns it is gone.
+  const role = deleted?.success ? state.roles.get(deleted.data.roleId) : undefined;
+
   const context: PrecheckInput = {
     guildId: request.guildId,
     guildOwnerId: state.ownerId,
@@ -106,6 +116,7 @@ export async function resolvePrecheckContext(
     botHighestRolePosition: highestRolePosition(state.roles, state.botRoleIds),
     botChannelPermissions,
     requiredPermissions: required,
+    ...(role ? { role: { id: role.id, position: role.position } } : {}),
     ...(channelId ? { channelId } : {}),
     ...(threadParentId ? { threadParentId } : {}),
     ...(channelId && !channel && appPermissions === undefined

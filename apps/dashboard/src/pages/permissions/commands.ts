@@ -1,5 +1,6 @@
 import type { ModuleSummary } from '@proton/core';
 import { RETIRED_COMMAND_ALIASES } from '@proton/module-permissions/config';
+import { MODULE_BY_ID, MODULES, NAV_GROUPS } from '../../lib/modules/catalogue.ts';
 
 export const ORPHAN_GROUP = 'Commands with no module';
 
@@ -12,7 +13,6 @@ export interface CommandRow {
   moduleId: string;
   moduleName: string;
   roles: readonly string[];
-  /** The retired command name whose role list this row is standing in for. */
   inheritedFrom: string | undefined;
   orphan: boolean;
 }
@@ -29,10 +29,6 @@ export interface Folded {
   inherited: ReadonlyMap<string, string>;
 }
 
-/**
- * The same fold `liftStoredConfig` and `requiredRolesFor` do: a retired name never gets a row of
- * its own, and its list moves to the command that replaced it only where that one is empty.
- */
 export function foldRetired(stored: Readonly<Record<string, readonly string[]>>): Folded {
   const overrides: Overrides = {};
   for (const [name, roles] of Object.entries(stored)) overrides[name] = [...roles];
@@ -76,26 +72,40 @@ function gatedCount(rows: readonly CommandRow[]): number {
   return rows.filter((row) => row.roles.length > 0).length;
 }
 
-/**
- * Rows are the real command set — every name the module index reports — plus any override key left
- * behind by a module that is not running here. Never a hardcoded list: commands arrive by phase.
- */
+const GROUP_RANK = new Map(NAV_GROUPS.map((group, at) => [group.id, at]));
+const MODULE_RANK = new Map(MODULES.map((module, at) => [module.id, at]));
+
+function compareModules(a: ModuleSummary, b: ModuleSummary): number {
+  const metaA = MODULE_BY_ID.get(a.id);
+  const metaB = MODULE_BY_ID.get(b.id);
+
+  if (metaA !== undefined && metaB !== undefined) {
+    return (
+      (GROUP_RANK.get(metaA.group) ?? 0) - (GROUP_RANK.get(metaB.group) ?? 0) ||
+      (MODULE_RANK.get(a.id) ?? 0) - (MODULE_RANK.get(b.id) ?? 0)
+    );
+  }
+  if (metaA !== undefined) return -1;
+  if (metaB !== undefined) return 1;
+
+  return a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
+}
+
 export function buildGroups(
   modules: readonly ModuleSummary[],
   folded: Folded,
 ): readonly CommandGroup[] {
-  const owning = [...modules]
-    .filter((module) => module.commands.length > 0)
-    .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+  const owning = [...modules].filter((module) => module.commands.length > 0).sort(compareModules);
 
   const owned = new Set(owning.flatMap((module) => module.commands));
 
   const groups: CommandGroup[] = owning.map((module) => {
+    const label = MODULE_BY_ID.get(module.id)?.label ?? module.name;
     const rows = [...new Set(module.commands)]
       .sort()
-      .map((name) => makeRow(name, module.id, module.name, folded, false));
+      .map((name) => makeRow(name, module.id, label, folded, false));
 
-    return { id: module.id, label: module.name, rows, gated: gatedCount(rows) };
+    return { id: module.id, label, rows, gated: gatedCount(rows) };
   });
 
   const orphans = Object.keys(folded.overrides)
@@ -139,8 +149,6 @@ export function filterGroups(
     .filter((group) => group.rows.length > 0);
 }
 
-// Copied from describeRefusal in permissions/src/gate.ts, which the package does not export on a
-// browser-safe subpath. It is security copy a member actually reads, so it must not be reworded.
 export function refusalSentence(
   commandName: string,
   required: readonly string[],

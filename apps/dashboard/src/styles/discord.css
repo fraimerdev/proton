@@ -224,7 +224,9 @@
   min-width: 0;
 }
 
+/* Block, not the .inline utility's flex row, which would set a field's name beside its value. */
 .dc-embed-field.inline {
+  display: block;
   grid-column: span 1;
 }
 
@@ -705,4 +707,65 @@
 .card-preview-pending {
   display: grid;
   aspect-ratio: 1200 / 400;
+}
+
+.message-detail-wide {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.message-detail-group {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+}
+
+.message-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.message-field.grow {
+  flex: 1 1 auto;
+}
+
+.message-field.wide {
+  flex: 1 1 100%;
+}
+
+.message-field-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  contain: inline-size;
+}
+
+.inline.message-field-row {
+  align-items: flex-start;
+}
+
+.layout-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-medium);
+}
+
+.layout-nested {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 14px;
+}
+
+.layout-overridden {
+  color: var(--text-muted);
+  background: var(--surface-2);
 }

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { RoleMultiPicker, RolePicker } from '../../components/discord/role-picker.tsx';
+import { LimitCounter } from '../../components/ui/collection.tsx';
 import { Switch } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
@@ -60,11 +61,11 @@ export function ExemptionsArea({
           stacked
           error={form.errorAt('exemptRoleIds')}
           badge={
-            config.exemptRoleIds.length >= 40 ? (
-              <span className="limit-counter">
-                {config.exemptRoleIds.length} / {EXEMPT_ROLES_MAX}
-              </span>
-            ) : undefined
+            <LimitCounter
+              used={config.exemptRoleIds.length}
+              ceiling={EXEMPT_ROLES_MAX}
+              label="roles"
+            />
           }
         >
           <RoleMultiPicker

@@ -78,7 +78,6 @@ export default function SuggestionsPage({ guildId, meta, summary }: ModulePagePr
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -183,7 +182,13 @@ export default function SuggestionsPage({ guildId, meta, summary }: ModulePagePr
         </Rows>
       </Section>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

@@ -342,6 +342,25 @@ describe('aggregate requirements', () => {
     expect(registry.invitePermissions() & Permissions.SendPolls).toBe(Permissions.SendPolls);
   });
 
+  test('a declared send kind carries Read Message History, because a reply needs it', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ actionKinds: ['send'] }));
+
+    expect(registry.invitePermissions() & Permissions.ReadMessageHistory).toBe(
+      Permissions.ReadMessageHistory,
+    );
+  });
+
+  test('a declared set_member_nickname kind invites Manage Nicknames without gating the module on it', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ actionKinds: ['set_member_nickname'] }));
+
+    expect(registry.invitePermissions() & Permissions.ManageNicknames).toBe(
+      Permissions.ManageNicknames,
+    );
+    expect(registry.evaluate('ping', env).enabled).toBe(true);
+  });
+
   test('a rung a guild never configures still does not mark the module broken', () => {
     const registry = new ModuleRegistry();
     registry.register(

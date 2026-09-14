@@ -67,18 +67,6 @@ export function createPollsModule(deps: PollsDeps = {}): ModuleManifest<typeof p
 
     schedules: [ANNOUNCE_JOB],
     scheduledHandlers: { [ANNOUNCE_JOB]: createAnnounceHandler(deps) },
-
-    dashboard: {
-      icon: 'bar-chart-3',
-      sections: [
-        { id: 'general', title: 'General', fields: ['enabled', 'defaultDurationHours'] },
-        {
-          id: 'results',
-          title: 'When a poll closes',
-          fields: ['announceResults', 'announceChannelId'],
-        },
-      ],
-    },
   };
 }
 

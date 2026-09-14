@@ -90,6 +90,8 @@
   --save-hover: #1f7040;
   --save-pressed: #1a6334;
   --on-save: #ffffff;
+  /* The toast's refusal flash, Discord's red; white keeps 4.5:1 on it. */
+  --save-refused: #da373c;
 
   --topbar-height: 42px;
   --sidebar-width: 240px;

@@ -45,6 +45,10 @@
   color: var(--link-hover);
 }
 
+.overview-attention-name {
+  font-weight: var(--weight-semibold);
+}
+
 .overview-section + .overview-section {
   margin-top: 40px;
 }
@@ -104,15 +108,34 @@
   transition: background var(--motion-fast) var(--ease-standard);
 }
 
-.overview-card:hover {
+.overview-card:not(.overview-card-static):hover {
   background: var(--surface-hover);
+}
+
+.overview-card-link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+}
+
+.overview-card-link:focus-visible {
+  box-shadow: none;
+}
+
+.overview-card-link:focus-visible::after {
+  box-shadow: var(--focus-ring);
 }
 
 .overview-card-corner {
   position: absolute;
   top: 16px;
   right: 16px;
+  z-index: 1;
   display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
 }
 
 .overview-tile {
@@ -167,13 +190,13 @@
   transition: transform var(--motion-normal) var(--ease-spring-soft);
 }
 
-.overview-card:hover .overview-tile {
+.overview-card:not(.overview-card-static):hover .overview-tile {
   background: var(--tile-ground-hover);
   color: var(--tile-ink-hover);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .overview-card:hover .overview-tile svg {
+  .overview-card:not(.overview-card-static):hover .overview-tile svg {
     transform: scale(1.14);
   }
 }
@@ -189,6 +212,15 @@
 
 .overview-card-description {
   color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.45;
+}
+
+.overview-card-error {
+  position: relative;
+  z-index: 1;
+  margin-top: 8px;
+  color: var(--danger);
   font-size: var(--text-secondary-size);
   line-height: 1.45;
 }

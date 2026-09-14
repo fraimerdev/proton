@@ -14,8 +14,7 @@ import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 
 const QUARANTINE_ANCHOR = 'verification-quarantine-role';
 
-const DURATION_INVALID =
-  'must be a number followed by s, m, h, d or w — for example 30m, 12h or 7d';
+const DURATION_INVALID = 'Enter a number followed by s, m, h, d or w — for example 30m, 12h or 7d.';
 
 // gate.ts:78-84, without the clause naming the member who joined: no member is in scope here.
 const UNGATED =

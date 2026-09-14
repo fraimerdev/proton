@@ -1,13 +1,10 @@
-import {
-  COUNT_PLACEHOLDER,
-  type Counter,
-  type CounterSource,
-  TEMPLATE_MAX,
-} from '@proton/module-counters/config';
+import { type Counter, type CounterSource, TEMPLATE_MAX } from '@proton/module-counters/config';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ChannelName } from '../../components/discord/channel-picker.tsx';
+import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
+import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import {
   CollectionButtonRow,
   CollectionHeader,
@@ -31,6 +28,8 @@ import {
   counterIssues,
   hasCount,
   NamePreview,
+  NEW_COUNTER_PATH,
+  newCounterReport,
   nextCounterId,
   prefillFor,
   SOURCE_ICON,
@@ -38,6 +37,7 @@ import {
   SOURCE_OPTIONS,
   setCounters,
   TemplateName,
+  useTemplateField,
 } from './shape.tsx';
 
 const SEARCH_FROM = 8;
@@ -188,6 +188,11 @@ export function CounterList({
   );
 }
 
+function describedBy(...ids: readonly (string | undefined)[]): string | undefined {
+  const joined = ids.filter((id) => id !== undefined).join(' ');
+  return joined === '' ? undefined : joined;
+}
+
 function AddCounterDialog({
   counters,
   onClose,
@@ -207,6 +212,21 @@ function AddCounterDialog({
   const problem =
     trimmed === '' ? undefined : counterIssues({ id, template: trimmed, source }).get('template');
 
+  const report = useMemo(
+    () => newCounterReport({ id, template: trimmed, source }),
+    [id, trimmed, source],
+  );
+
+  const name = useTemplateField({
+    report,
+    path: NEW_COUNTER_PATH,
+    onChange: (next) => {
+      setEdited(true);
+      setTemplate(next);
+    },
+    error: problem,
+  });
+
   return (
     <Dialog
       open
@@ -223,7 +243,7 @@ function AddCounterDialog({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             tone="primary"
-            disabled={trimmed === '' || !hasCount(trimmed)}
+            disabled={trimmed === '' || !hasCount(trimmed) || report.blocking.length > 0}
             onClick={() => onAdd({ id, template: trimmed, source })}
           >
             Add
@@ -246,29 +266,32 @@ function AddCounterDialog({
           />
         </div>
 
-        <Field label="Name template" error={problem}>
+        <Field label="Name template" error={name.error}>
           {(props) => (
-            <TextInput
-              {...props}
-              autoFocus
-              spellCheck={false}
-              maxLength={TEMPLATE_MAX}
-              invalid={problem !== undefined}
-              value={template}
-              onChange={(event) => {
-                setEdited(true);
-                setTemplate(event.currentTarget.value);
-              }}
-            />
+            <>
+              <TextInput
+                {...name.autocomplete.field}
+                {...props}
+                aria-describedby={describedBy(props['aria-describedby'], name.describedBy)}
+                autoFocus
+                spellCheck={false}
+                maxLength={TEMPLATE_MAX}
+                invalid={name.invalid}
+                value={template}
+                onChange={(event) => {
+                  setEdited(true);
+                  setTemplate(event.currentTarget.value);
+                }}
+              />
+              <PlaceholderSuggestions autocomplete={name.autocomplete} />
+              <TemplateDiagnostics id={name.diagnosticsId} diagnostics={name.diagnostics} />
+            </>
           )}
         </Field>
 
         <div className="field">
           <span className="field-label">Channel name</span>
-          <NamePreview template={template} icon="speaker-high" />
-          <span className="field-hint">
-            Proton replaces {COUNT_PLACEHOLDER} with the number every 10 minutes.
-          </span>
+          <NamePreview template={template} source={source} icon="speaker-high" />
         </div>
       </div>
     </Dialog>

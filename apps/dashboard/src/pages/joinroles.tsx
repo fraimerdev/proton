@@ -47,10 +47,7 @@ const SCREENING_INTRO =
   'join.';
 
 function configuredButOff(count: number): string {
-  return (
-    `${count} role(s) are set to be given on join, but "Grant roles on join" is switched off, so ` +
-    'none are given.'
-  );
+  return `${count} ${count === 1 ? 'role is' : 'roles are'} set to be given on join, but Join Roles is switched off, so none are given.`;
 }
 
 function useRoleIndex(guildId: string): RoleIndex {
@@ -379,8 +376,6 @@ export default function JoinRolesPage({
   const enabled = summary?.enabled ?? form.view.enabled;
   const granted = form.value.memberRoleIds.length + form.value.botRoleIds.length;
 
-  // undefined rather than a fragment of nulls: ModuleBanners renders its container for any
-  // children at all, and an empty one leaves a 20px gap under the title.
   const notices =
     toggle.failure !== null || !enabled ? (
       <>
@@ -416,7 +411,6 @@ export default function JoinRolesPage({
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -450,7 +444,13 @@ export default function JoinRolesPage({
         {area === 'options' ? <OptionsArea form={form} /> : null}
       </LoadingBoundary>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

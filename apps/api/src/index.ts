@@ -1,6 +1,6 @@
 import { ALL_PERMISSIONS, RedisStreamsEventBus } from '@proton/core';
 import { createRedisClient } from '@proton/core/redis';
-import { createDb, DrizzleGuildRuleStore } from '@proton/db';
+import { createDb, DrizzleBrandingNameStyleStore, DrizzleGuildRuleStore } from '@proton/db';
 import { RedisMaintenanceStore } from '@proton/module-antinuke';
 import { DrizzleAppealStore } from '@proton/module-appeals';
 import { DrizzleBrandingAssetStore } from '@proton/module-branding/store';
@@ -8,6 +8,7 @@ import { DrizzleCaseHistoryStore } from '@proton/module-cases/store';
 import { DrizzleGiveawayStore } from '@proton/module-giveaways';
 import { levelForXp } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
+import { DrizzleXpEventStore } from '@proton/module-leveling/xp-event-store';
 import { createModuleRegistry } from '@proton/modules';
 import { createApiApp } from './app.ts';
 import { AppealsService } from './appeals/service.ts';
@@ -18,6 +19,7 @@ import { loadEnv } from './env.ts';
 import { BotGuildDirectory } from './guilds/directory.ts';
 import { GuildService } from './guilds/service.ts';
 import { LeaderboardService } from './leveling/service.ts';
+import { auditTrailWriter, XpEventService } from './leveling/xp-events.ts';
 import { BlockedMemberService } from './moderation/blocked-members.ts';
 import { ModuleConfigService } from './modules/service.ts';
 import { TagSearchService } from './tags/service.ts';
@@ -67,6 +69,7 @@ const app = createApiApp({
   guilds: new GuildService(handle, new BotGuildDirectory(env.REST_PROXY_URL)),
   modules,
   branding: new BrandingAssetService(new DrizzleBrandingAssetStore(handle), modules),
+  brandingNameStyles: new DrizzleBrandingNameStyleStore(handle),
   verification: new VerificationService({ ...(bus ? { bus } : {}) }),
   blocked: new BlockedMemberService(handle),
   appeals: new AppealsService({
@@ -77,6 +80,11 @@ const app = createApiApp({
   cards: new CardPreviewService(),
   cases: new CaseQueryService(handle),
   leaderboard: new LeaderboardService(handle),
+  xpEvents: new XpEventService({
+    store: new DrizzleXpEventStore(handle),
+    audit: auditTrailWriter(handle),
+    logger: console,
+  }),
   tags: new TagSearchService(handle),
   tickets: new TicketSearchService(handle),
   registry,

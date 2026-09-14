@@ -52,10 +52,6 @@ export function tagsQuery(guildId: string, filter: TagFilter) {
   });
 }
 
-/**
- * The tier counter has to count every tag, and a search-filtered total would read "3 / 25" with a
- * search box open. One row is asked for because only `total` is wanted.
- */
 export function tagCountQuery(guildId: string, enabled: boolean) {
   return queryOptions({
     queryKey: queryKeys.view(guildId, 'tags-count', null),

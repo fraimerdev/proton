@@ -3,8 +3,6 @@ import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { NumberStepper, Select, TextInput } from '../ui/controls.tsx';
 
-/* ------------------------------------------------------------------ duration */
-
 const UNITS = [
   { value: 's', label: 'seconds', ms: 1000 },
   { value: 'm', label: 'minutes', ms: 60_000 },
@@ -24,11 +22,6 @@ function split(value: string): { amount: number | null; unit: Unit } {
   return { amount: Number(amount), unit };
 }
 
-/**
- * Two human controls over Proton's duration string. An existing `30s` parses into 30 + seconds
- * rather than being shown as raw text, and every edit serialises back to the same format the
- * schema validates.
- */
 export function DurationInput({
   value,
   onChange,
@@ -41,7 +34,7 @@ export function DurationInput({
 }: {
   value: string;
   onChange: (value: string) => void;
-  /** Bounds in milliseconds, enforced across whichever unit is chosen. */
+  // Milliseconds, enforced across whichever unit is chosen.
   min?: number | undefined;
   max?: number | undefined;
   disabled?: boolean | undefined;
@@ -115,8 +108,6 @@ export function humaniseDuration(value: string): string {
   return `${amount} ${amount === 1 ? unit.label.replace(/s$/, '') : unit.label}`;
 }
 
-/* -------------------------------------------------------------------- colour */
-
 function toHex(value: number): string {
   return `#${Math.max(0, Math.min(0xffffff, value)).toString(16).padStart(6, '0').toUpperCase()}`;
 }
@@ -125,10 +116,6 @@ const HEX = /^#?[0-9a-f]{6}$/i;
 
 export const DEFAULT_EMBED_COLOUR = 0x2a8af7;
 
-/**
- * Discord stores an embed colour as an integer; an admin thinks in hex. This shows the hex,
- * validates it as they type, and serialises the integer the schema expects.
- */
 export function ColourPicker({
   value,
   onChange,

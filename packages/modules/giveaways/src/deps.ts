@@ -1,4 +1,5 @@
 import type { MemberContextLoader, ModuleAvailability, ProviderRegistry } from '@proton/core';
+import type { PlaceholderEnvironment } from '@proton/core/placeholders';
 import type { DraftStore } from './builder/state.ts';
 import type { DirtyCounts } from './counter.ts';
 import type { EntryBucket } from './entry.ts';
@@ -23,6 +24,8 @@ export interface GiveawaysDeps {
 
   /** Whether a provider's owning module is on for a guild, so the picker only offers usable ones. */
   availability?: ModuleAvailability;
+
+  placeholders?: PlaceholderEnvironment;
 
   applicationId?: string;
   now?: () => number;
@@ -84,6 +87,7 @@ export function bindEntry(deps: GiveawaysDeps): BindResult<BoundEntry> {
 export interface BoundDraw {
   store: GiveawayStore;
   providers: ProviderRegistry;
+  placeholders?: PlaceholderEnvironment;
 }
 
 export function bindDraw(deps: GiveawaysDeps): BindResult<BoundDraw> {
@@ -93,7 +97,13 @@ export function bindDraw(deps: GiveawaysDeps): BindResult<BoundDraw> {
 
   if (!deps.store || !deps.providers) return { unbound };
 
-  return { bound: { store: deps.store, providers: deps.providers } };
+  return {
+    bound: {
+      store: deps.store,
+      providers: deps.providers,
+      ...(deps.placeholders ? { placeholders: deps.placeholders } : {}),
+    },
+  };
 }
 
 export interface BoundBuilder {

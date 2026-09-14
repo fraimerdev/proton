@@ -32,31 +32,3 @@
   margin-top: 12px;
   max-width: 62ch;
 }
-
-.honeypot-detail-wide {
-  flex: 1 1 100%;
-  min-width: 0;
-}
-
-.honeypot-item-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-  color: var(--text-secondary);
-  font-size: var(--text-secondary-size);
-  font-weight: var(--weight-medium);
-}
-
-.honeypot-nested {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-left: 14px;
-}
-
-/* The paragraph "Hide channel purpose" overwrites at post time: shown, not editable. */
-.honeypot-overridden {
-  color: var(--text-muted);
-  background: var(--surface-2);
-}

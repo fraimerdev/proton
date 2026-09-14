@@ -1,4 +1,4 @@
-import type { ServerlogConfig } from '@proton/module-serverlog/config';
+import { IGNORABLE_CHANNEL_TYPES, type ServerlogConfig } from '@proton/module-serverlog/config';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { ChannelMultiPicker } from '../../components/discord/channel-picker.tsx';
@@ -131,6 +131,7 @@ function ChannelChips({
         guildId={guildId}
         value={value}
         onChange={onChange}
+        types={IGNORABLE_CHANNEL_TYPES}
         max={max}
         label="Add ignored channel"
       />
@@ -212,7 +213,7 @@ function UserIds({
 
       {refused && !valid ? (
         <span className="field-error" role="alert">
-          must be a Discord user id
+          Enter a Discord user ID: a number of 17 to 20 digits.
         </span>
       ) : atMax ? (
         <span className="row-note">

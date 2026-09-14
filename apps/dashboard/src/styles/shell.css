@@ -21,8 +21,6 @@
   column-gap: var(--shell-gap);
 }
 
-/* ---------------------------------------------------------------- topbar */
-
 .topbar {
   position: sticky;
   top: 0;
@@ -96,7 +94,6 @@
   color: var(--text-primary);
 }
 
-/* Server picker and user menu share one compact trigger shape. */
 .topbar-trigger {
   display: inline-flex;
   align-items: center;
@@ -244,8 +241,6 @@
   color: var(--danger);
 }
 
-/* --------------------------------------------------------------- sidebar */
-
 .sidebar {
   position: relative;
   min-width: 0;
@@ -388,7 +383,9 @@
   font-size: var(--text-secondary-size);
 }
 
-/* ------------------------------------------------------------- workspace */
+.sidebar-scrim {
+  display: none;
+}
 
 .workspace {
   min-width: 0;
@@ -398,8 +395,6 @@
 .page {
   padding: var(--content-padding-top) 0 var(--content-padding-bottom);
 }
-
-/* ----------------------------------------------------------- page header */
 
 .page-head {
   display: flex;
@@ -455,8 +450,6 @@
   padding-top: 2px;
 }
 
-/* ------------------------------------------------------------- responsive */
-
 @media (max-width: 900px) {
   .shell-body {
     grid-template-columns: minmax(0, 1fr);
@@ -489,6 +482,7 @@
   }
 
   .sidebar-scrim {
+    display: block;
     position: fixed;
     inset: var(--topbar-height) 0 0;
     z-index: calc(var(--z-drawer) - 1);

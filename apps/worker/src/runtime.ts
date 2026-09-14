@@ -6,6 +6,7 @@ import {
   type EventType,
   isScopedActionExecutor,
   type Logger,
+  type ModuleManifest,
   type ModuleRegistry,
   type ProtonEvent,
   type RawOption,
@@ -112,6 +113,25 @@ function memberPermissionsOf(d: Record<string, unknown>): bigint | undefined {
   }
 }
 
+function memberNickOf(d: Record<string, unknown>): string | null | undefined {
+  if (typeof d.member !== 'object' || d.member === null) return undefined;
+  const nick = nested(d.member, 'nick');
+  if (nick === null) return null;
+  return typeof nick === 'string' ? nick : undefined;
+}
+
+function displayNameOf(d: Record<string, unknown>): string | undefined {
+  const user = nested(d.member, 'user') ?? d.user;
+  return str(nested(user, 'global_name')) ?? str(nested(user, 'username')) ?? undefined;
+}
+
+function noSettingsPage(moduleName: string): string {
+  return (
+    `**${moduleName}** has no settings page to repair them from, so this is a Proton problem, ` +
+    'and nothing an admin did caused it.'
+  );
+}
+
 export class ModuleRuntime {
   readonly #deps: ModuleRuntimeDeps;
 
@@ -197,10 +217,13 @@ export class ModuleRuntime {
             `read, and retrying will not help: ${error.message}.`,
           { guildId, moduleId: manifest.id, status: error.status },
         );
+        const repair = manifest.dashboard
+          ? `An admin can repair it by opening ${this.#dashboardLink(guildId, manifest)} and ` +
+            'pressing Save once, which rewrites the stored settings.'
+          : noSettingsPage(manifest.name);
         await reply(
           `I couldn't read this server's **${manifest.name}** settings, so \`/${commandName}\` ` +
-            `did nothing. An admin can repair it by opening ${this.#settingsUrl(guildId, manifest.id)} ` +
-            'and pressing Save once, which rewrites the stored settings.',
+            `did nothing. ${repair}`,
           'config-unreadable',
           manifest.id,
         );
@@ -212,10 +235,12 @@ export class ModuleRuntime {
     const disabled = disabledReason(snapshot, manifest.configSchema);
     if (disabled) {
       this.#deps.logger.info(`${manifest.id} is disabled in this guild`, { guildId, disabled });
+      const where = manifest.dashboard
+        ? 'the switch at the top of that page'
+        : `the switch on the **${manifest.name}** card`;
       await reply(
         `**${manifest.name}** is switched off in this server, so \`/${commandName}\` did nothing.\n\n` +
-          `A server admin can turn it on at ${this.#settingsUrl(guildId, manifest.id)} — ` +
-          `the switch beside **${manifest.name}** in the sidebar.`,
+          `A server admin can turn it on at ${this.#dashboardLink(guildId, manifest)} — ${where}.`,
         'module-disabled',
         manifest.id,
       );
@@ -226,10 +251,12 @@ export class ModuleRuntime {
     if (!parsed.success) {
       const issues = parsed.error.issues.map((i) => `${i.path.map(String).join('.')} ${i.message}`);
       this.#deps.logger.error(`invalid stored config for ${manifest.id}`, { guildId, issues });
+      const fix = manifest.dashboard
+        ? `An admin can fix it at ${this.#dashboardLink(guildId, manifest)}.`
+        : noSettingsPage(manifest.name);
       await reply(
         `This server's **${manifest.name}** settings are not valid, so \`/${commandName}\` did ` +
-          `nothing: ${issues.join('; ')}.\n\nAn admin can fix it at ` +
-          `${this.#settingsUrl(guildId, manifest.id)}.`,
+          `nothing: ${issues.join('; ')}.\n\n${fix}`,
         'config-invalid',
         manifest.id,
       );
@@ -237,6 +264,8 @@ export class ModuleRuntime {
     }
 
     const actorPermissions = memberPermissionsOf(d);
+    const actorNick = memberNickOf(d);
+    const actorDisplayName = displayNameOf(d);
 
     await command.handler({
       guildId,
@@ -244,6 +273,8 @@ export class ModuleRuntime {
       userId,
       actorRoleIds: memberRoleIds(d),
       ...(actorPermissions === undefined ? {} : { actorPermissions }),
+      ...(actorNick === undefined ? {} : { actorNick }),
+      ...(actorDisplayName === undefined ? {} : { actorDisplayName }),
       options: createCommandOptions((nested(d.data, 'options') as RawOption[] | undefined) ?? []),
       config: parsed.data,
       tier: snapshot.tier ?? 'free',
@@ -261,9 +292,12 @@ export class ModuleRuntime {
     });
   }
 
-  #settingsUrl(guildId: string, moduleId: string): string {
+  // No dashboard sections means no settings page: the module is only a switch on the overview.
+  #dashboardLink(guildId: string, manifest: ModuleManifest): string {
     const base = (this.#deps.dashboardUrl ?? DEFAULT_DASHBOARD_URL).replace(/\/$/, '');
-    return `<${base}/dashboard/${guildId}/${moduleId}>`;
+    return manifest.dashboard
+      ? `<${base}/dashboard/${guildId}/${manifest.id}>`
+      : `<${base}/dashboard/${guildId}>`;
   }
 
   async #tell(ctx: {

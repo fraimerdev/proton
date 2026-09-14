@@ -44,9 +44,9 @@ const RUNGS: readonly {
 ];
 
 // Verbatim from durationStringSchema, which states it as a predicate on the field's own name.
-const DURATION_RULE = 'must be a number followed by s, m, h, d or w — for example 30m, 12h or 7d';
+const DURATION_RULE = 'must be a number followed by s, m, h, d or w. For example: 30m, 12h or 7d';
 
-const TIMEOUT_CEILING = 'Discord caps timeouts at 28 days and applies anything longer as 28 days.';
+const TIMEOUT_CEILING = 'Timeouts cannot be longer than 28 days. Any duration longer than 28 days will be treated as 28 days.';
 
 const LOW_TIMEOUT = 'A low severity timeout uses the medium timeout duration.';
 
@@ -117,19 +117,11 @@ function Rung({
             </>
           ) : null}
 
-          <span className="rung-connector">·</span>
+          <span className="rung-connector">&</span>
           <span className="text-sm text-muted">
-            {deletesAt(config, severity) ? 'Message deleted' : 'Message left up'}
+            {deletesAt(config, severity) ? 'Message deleted' : null}
           </span>
         </div>
-
-        {permission !== undefined ? (
-          <div className="rung-aside">
-            <Badge tone="neutral" icon="lock">
-              {permission}
-            </Badge>
-          </div>
-        ) : null}
       </div>
 
       {usesTimeout && severity === 'low' ? (
@@ -156,14 +148,7 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
         <Rows>
           <SettingRow
             title="Delete messages"
-            description="Delete the matching message, whatever action is taken against the member."
-            badge={
-              config.deleteFrom !== 'never' ? (
-                <Badge tone="neutral" icon="lock">
-                  Needs Manage Messages
-                </Badge>
-              ) : undefined
-            }
+            description="Delete messages that trigger checks of this severity or higher."
             error={form.errorAt('deleteFrom')}
           >
             <Select
@@ -183,7 +168,6 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
 
       <Section
         label="Actions"
-        intro="Every check uses these actions. Set each check’s severity under Checks."
       >
         <div className="ladder">
           {RUNGS.map((rung) => (
@@ -196,29 +180,13 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
             />
           ))}
         </div>
-
-        <p className="automod-note">
-          Warnings and timeouts count toward warn escalation in Moderation when it is switched on.
-        </p>
       </Section>
 
       <Section label="Alerts">
         <Rows>
           <SettingRow
             title="Alert channel"
-            description="Where Proton reports Automod actions."
-            badge={
-              config.alertChannelId !== undefined ? (
-                <Badge tone="neutral" icon="lock">
-                  Needs View Channel and Send Messages there
-                </Badge>
-              ) : undefined
-            }
-            note={
-              config.alertChannelId !== undefined
-                ? 'The Discord AutoMod rules Proton creates also send their alerts here.'
-                : undefined
-            }
+            description="Where Automod actions are reported."
             error={form.errorAt('alertChannelId')}
           >
             <ChannelPicker

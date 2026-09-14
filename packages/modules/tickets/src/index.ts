@@ -20,6 +20,7 @@ import {
 import { bindStore, clockOf, PROTON_ACTOR, type TicketsDeps } from './deps.ts';
 import { createTicketInteractionListener } from './interactions.ts';
 import { archiveTicket, closeTicket, deleteTicket } from './lifecycle.ts';
+import { ticketsTemplates } from './placeholders.ts';
 import { createTicketPanelListener } from './post.ts';
 import { createTicketChannelListener, createTicketPatrolListener, patrol } from './reconcile.ts';
 import {
@@ -146,8 +147,15 @@ export {
   describeUnbound,
   nameOf,
   namesOf,
+  type PlaceholderReads,
+  placeholderReads,
+  readBot,
+  readProfile,
+  readServer,
   type StoreBinding,
+  type TicketFactsInput,
   type TicketsDeps,
+  ticketFacts,
 } from './deps.ts';
 export {
   ADD_SELECT_ACTION,
@@ -217,6 +225,28 @@ export {
   withParticipant,
 } from './overwrites.ts';
 export { buildPanelMessage, type PanelMessage } from './panel.ts';
+export {
+  renderTicketChannelName,
+  renderTicketText,
+  renderTicketWelcome,
+  TICKET_BLACKLIST_SURFACE,
+  TICKET_CLOSE_SURFACE,
+  TICKET_NAME_SURFACE,
+  TICKET_RESPONSE_SURFACE,
+  TICKET_SURFACE_EVENTS,
+  TICKET_TEXT_MAX,
+  TICKET_WELCOME_SURFACE,
+  type TicketAnswerFacts,
+  type TicketBlacklistFacts,
+  type TicketCloseFacts,
+  type TicketMessageSurface,
+  type TicketNameFacts,
+  type TicketPlaceholderFacts,
+  type TicketRecordFacts,
+  type TicketSources,
+  ticketSourcesFor,
+  ticketsTemplates,
+} from './placeholders.ts';
 export {
   createTicketPanelListener,
   PANEL_EVENT_TYPES,
@@ -494,6 +524,8 @@ export function createTicketsModule(
       { key: 'ticketPanels', path: 'panels' },
       { key: 'ticketTypes', path: 'types' },
     ],
+
+    templates: ticketsTemplates,
 
     commands: ticketsCommands(deps),
     listeners: [

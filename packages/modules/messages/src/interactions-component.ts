@@ -1,5 +1,6 @@
 import {
   type ComponentAction,
+  type ComponentInteraction,
   type EventListener,
   type EventType,
   findComponentAction,
@@ -9,10 +10,17 @@ import {
   readComponentInteraction,
   rowKeys,
 } from '@proton/core';
+import { usedKeys } from '@proton/core/placeholders';
 import { ComponentType } from 'discord-api-types/v10';
 import { readComponentRef } from './component-id.ts';
 import { findTemplate, type MessagesConfig, MODULE_ID } from './config.ts';
-import { bindFollowUp, describeUnbound, type MessagesDeps } from './deps.ts';
+import {
+  bindFollowUp,
+  describeUnbound,
+  logReadFailure,
+  type MessagesDeps,
+  readPlaceholderSources,
+} from './deps.ts';
 import {
   acknowledge,
   changeRoles,
@@ -21,6 +29,7 @@ import {
   replyEphemeral,
   respondTo,
 } from './perform.ts';
+import { MESSAGES_REPLY_SURFACE, type MessagesPerson, renderReply } from './placeholders.ts';
 
 export const MESSAGES_COMPONENT_EVENT_TYPES: EventType[] = ['interaction.component'];
 
@@ -43,6 +52,87 @@ export type ComponentOutcome =
 
 function listKeys(keys: readonly string[]): string {
   return keys.map((key) => `'${key}'`).join(', ');
+}
+
+function payloadRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function textOrNull(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function readField(record: Record<string, unknown>, key: string): string | null | undefined {
+  if (!Object.hasOwn(record, key)) return undefined;
+
+  const value = record[key];
+  if (value === null) return null;
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readPresser(payload: unknown, facts: ComponentInteraction): MessagesPerson {
+  const interaction = payloadRecord(payload);
+  const member = payloadRecord(interaction?.member);
+  const user = payloadRecord(member?.user) ?? payloadRecord(interaction?.user);
+
+  return {
+    user: {
+      id: facts.userId,
+      username: textOrNull(user?.username),
+      globalName: textOrNull(user?.global_name),
+      avatarHash: textOrNull(user?.avatar),
+      bot: user?.bot === true,
+    },
+    member:
+      member === null
+        ? null
+        : {
+            nick: readField(member, 'nick'),
+            joinedAt: readField(member, 'joined_at'),
+            premiumSince: readField(member, 'premium_since'),
+            roleIds: facts.roleIds,
+          },
+  };
+}
+
+async function renderReplies(
+  event: ProtonEvent,
+  ctx: ModuleContext<MessagesConfig>,
+  deps: MessagesDeps,
+  facts: ComponentInteraction,
+  where: { messageName: string; key: string },
+  texts: readonly string[],
+): Promise<string[]> {
+  const meta = {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    template: where.messageName,
+    key: where.key,
+  };
+  const subject = `the reply on '${where.messageName}' (${where.key})`;
+  const keys = usedKeys(MESSAGES_REPLY_SURFACE, texts, { allowedOnly: true });
+
+  const sources = await readPlaceholderSources(
+    deps,
+    ctx.guildId,
+    facts.channelId,
+    keys,
+    logReadFailure(ctx.logger, subject, meta),
+  );
+  const presser = readPresser(event.payload, facts);
+  const now = deps.placeholders?.now() ?? Date.now();
+  const lookup = MESSAGES_REPLY_SURFACE.build(
+    { ...sources, actor: presser, user: presser },
+    { now, keys },
+  );
+
+  return texts.map((text) =>
+    renderReply(text, lookup, now, (code, message) => {
+      ctx.logger.warn(`${subject}: ${message}`, { ...meta, code });
+    }),
+  );
 }
 
 export async function handleComponentPress(
@@ -193,13 +283,39 @@ export async function handleComponentPress(
     );
   }
 
+  const contents =
+    saved.placeholders === true && replies.length > 0
+      ? await renderReplies(
+          event,
+          ctx,
+          deps,
+          facts,
+          { messageName: saved.name, key: ref.key },
+          replies.map(({ content }) => content),
+        )
+      : replies.map(({ content }) => content);
+
+  let sent = 0;
+
   for (const [index, reply] of replies.entries()) {
+    const content = contents[index] ?? '';
+
+    if (content.trim() === '') {
+      ctx.logger.warn(
+        `the reply on '${saved.name}' (${ref.key}) came out empty once its placeholders were ` +
+          'filled in, so it was not sent.',
+        { guildId: ctx.guildId, moduleId: MODULE_ID, template: saved.name, key: ref.key },
+      );
+      continue;
+    }
+
     await followUp(
       ctx,
       respondTo(ctx, to.interaction, facts.userId, `${event.id}:reply:${index}`),
       bound.deps.applicationId,
-      { content: reply.content, ephemeral: reply.ephemeral, allowedMentions: { parse: [] } },
+      { content, ephemeral: reply.ephemeral, allowedMentions: { parse: [] } },
     );
+    sent += 1;
   }
 
   if (report.failures.length > 0) {
@@ -217,7 +333,7 @@ export async function handleComponentPress(
     messageName: saved.name,
     added: report.added,
     removed: report.removed,
-    replies: replies.length,
+    replies: sent,
   };
 }
 

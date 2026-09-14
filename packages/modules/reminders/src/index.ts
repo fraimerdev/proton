@@ -65,14 +65,6 @@ export function createRemindersModule(
     scheduledHandlers: {
       [DELIVER_JOB]: (data, ctx) => deliverReminder(data, ctx, deps),
     },
-
-    dashboard: {
-      icon: 'alarm-clock',
-      sections: [
-        { id: 'general', title: 'General', fields: ['enabled'] },
-        { id: 'bounds', title: 'How far ahead', fields: ['minDuration', 'maxDuration'] },
-      ],
-    },
   };
 }
 

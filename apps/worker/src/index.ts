@@ -19,15 +19,18 @@ import {
   resolvePrecheckContext,
   ScheduledActionSweeper,
 } from '@proton/core';
+import { createPlaceholderEnvironment } from '@proton/core/placeholder-runtime';
 import { createRedisClient } from '@proton/core/redis';
 import {
   createDb,
   DrizzleBlockedMemberStore,
+  DrizzleBrandingNameStyleStore,
   DrizzleCaseRecorder,
   DrizzleGuildRuleStore,
   DrizzleMemberXpStore,
   DrizzleScheduledActionStore,
 } from '@proton/db';
+import { DrizzleAfkStore } from '@proton/module-afk';
 import { RedisMaintenanceStore } from '@proton/module-antinuke';
 import { DrizzleAppealStore } from '@proton/module-appeals';
 import { DrizzleBackupStore } from '@proton/module-backup';
@@ -48,8 +51,14 @@ import {
   RedisNoticeStore,
 } from '@proton/module-honeypot';
 import { DrizzleStickyRoleStore, RedisPendingGrantStore } from '@proton/module-joinroles';
-import { levelForXp, MAX_XP, RedisVoiceSessionStore } from '@proton/module-leveling';
+import {
+  CachedXpEventStore,
+  levelForXp,
+  MAX_XP,
+  RedisVoiceSessionStore,
+} from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
+import { DrizzleXpEventStore } from '@proton/module-leveling/xp-event-store';
 import { PostgresMessageLogStore, runMessageLogMaintenance } from '@proton/module-logging';
 import { RestGuildMemberLister } from '@proton/module-moderation/members';
 import { RedisRoleRunStore } from '@proton/module-moderation/run-store';
@@ -58,6 +67,7 @@ import { RedisBlocklistStore, refreshBlocklist } from '@proton/module-phishing';
 import { DrizzlePollStore } from '@proton/module-polls';
 import { DrizzleReminderStore } from '@proton/module-reminders';
 import {
+  RedisScreeningStore,
   SERVERLOG_ACTOR,
   SERVERLOG_MODULE_ID,
   type ServerlogDeps,
@@ -189,6 +199,13 @@ const users = createUserResolver({
   },
 });
 
+const placeholders = createPlaceholderEnvironment({
+  applicationId: env.DISCORD_APPLICATION_ID,
+  dashboardUrl: env.DASHBOARD_URL,
+  users,
+  guildState,
+});
+
 const cardImages = {
   images: new HttpImageFetcher({
     onSkip: (reason) => console.warn(`card image skipped: ${reason}`),
@@ -210,6 +227,7 @@ const serverlogDeps: ServerlogDeps = {
   emojis: logEmojis,
   burst: rateWindow,
   cache: messageCache,
+  screening: new RedisScreeningStore(moduleRedis),
 
   botUserId: env.DISCORD_APPLICATION_ID,
 
@@ -307,6 +325,7 @@ const registry = createModuleRegistry(
       notices: new RedisNoticeStore(moduleRedis),
       stats: new RedisHoneypotStatsStore(moduleRedis),
       guildState,
+      placeholders,
       blocked: blockedMembers,
       pending: new RedisHoneypotPendingStore(moduleRedis),
       dms: new RedisDmChannelStore(moduleRedis),
@@ -329,6 +348,10 @@ const registry = createModuleRegistry(
       xp: new DrizzleMemberXpStore(handle, { levelForXp, maxXp: MAX_XP }),
       activity: new DrizzleActivityStore(handle, { levelForXp }),
       sessions: new RedisVoiceSessionStore(moduleRedis),
+      guildState,
+      placeholders,
+      xpEvents: new CachedXpEventStore(new DrizzleXpEventStore(handle)),
+      applicationId: env.DISCORD_APPLICATION_ID,
       cards: cardImages,
       userProfile: async (userId) => {
         const profile = await users.resolve(userId);
@@ -352,13 +375,14 @@ const registry = createModuleRegistry(
 
       botUserId: env.DISCORD_APPLICATION_ID,
     },
-    welcome: { guildState, cards: cardImages },
+    welcome: { guildState, cards: cardImages, placeholders },
     tags: { store: new DrizzleTagStore(handle) },
     tickets: {
       store: new DrizzleTicketStore(handle),
       applicationId: env.DISCORD_APPLICATION_ID,
 
       guildState,
+      placeholders,
 
       botUserId: env.DISCORD_APPLICATION_ID,
       displayName: async (userId) => {
@@ -371,17 +395,25 @@ const registry = createModuleRegistry(
       presence: new RedisPresenceStore(moduleRedis),
       cooldown: new RedisCooldownGate(moduleRedis),
       guildState,
+      placeholders,
       botUserId: env.DISCORD_APPLICATION_ID,
     },
     reminders: { store: new DrizzleReminderStore(handle) },
-    messages: { applicationId: env.DISCORD_APPLICATION_ID },
+    messages: { applicationId: env.DISCORD_APPLICATION_ID, placeholders, guildState },
     branding: {
       assets: new DrizzleBrandingAssetStore(handle),
       roles: new DrizzleBrandingRoleStore(handle),
+      nameStyles: new DrizzleBrandingNameStyleStore(handle),
+      rest,
       botUserId: env.DISCORD_APPLICATION_ID,
       applicationId: env.DISCORD_APPLICATION_ID,
     },
-    counters: { guildState, channels: new DrizzleCounterChannelStore(handle) },
+    counters: { guildState, channels: new DrizzleCounterChannelStore(handle), placeholders },
+    afk: {
+      store: new DrizzleAfkStore(handle),
+      applicationId: env.DISCORD_APPLICATION_ID,
+      guildState,
+    },
     suggestions: {
       store: new DrizzleSuggestionStore(handle),
       applicationId: env.DISCORD_APPLICATION_ID,
@@ -397,6 +429,7 @@ const registry = createModuleRegistry(
       dirty: new RedisDirtyCounts(moduleRedis),
       bucket: new RedisEntryBucket(moduleRedis),
       drafts: new RedisDraftStore(moduleRedis),
+      placeholders,
       availability: {
         // The same cached config path every module surface already reads, so the picker never
         // offers a requirement whose owning module is switched off in this guild.

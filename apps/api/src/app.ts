@@ -1,6 +1,7 @@
 import {
   appealLinkClaimsSchema,
   BLOCK_REASON_MAX,
+  type BrandingNameStyleStore,
   blockedMemberQuerySchema,
   caseQuerySchema,
   type EventBus,
@@ -11,7 +12,9 @@ import {
   snowflakeSchema,
 } from '@proton/core';
 import type { MaintenanceStore } from '@proton/module-antinuke';
+import { brandingConfigSchema } from '@proton/module-branding/config';
 import { isAssetKind } from '@proton/module-branding/kinds';
+import { describeNameStyleStatus } from '@proton/module-branding/name-style-status';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { ticketQuerySchema, ticketStatsQuerySchema } from '@proton/module-tickets/query';
 import { Hono } from 'hono';
@@ -22,6 +25,7 @@ import { type CardPreviewService, cardPreviewQuerySchema } from './cards/preview
 import type { CaseQueryService } from './cases/service.ts';
 import type { GuildService } from './guilds/service.ts';
 import type { LeaderboardService } from './leveling/service.ts';
+import { XpEventError, type XpEventService, xpEventStartBodySchema } from './leveling/xp-events.ts';
 import { BlockedMemberError, type BlockedMemberService } from './moderation/blocked-members.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 import type { TagSearchService } from './tags/service.ts';
@@ -117,6 +121,7 @@ export interface ApiDeps {
   cards: CardPreviewService;
   cases: CaseQueryService;
   leaderboard: LeaderboardService;
+  xpEvents: XpEventService;
   tags: TagSearchService;
   tickets: TicketSearchService;
   guilds: GuildService;
@@ -124,6 +129,7 @@ export interface ApiDeps {
   blocked: BlockedMemberService;
   appeals: AppealsService;
   branding: BrandingAssetService;
+  brandingNameStyles: BrandingNameStyleStore;
   registry: ModuleRegistry;
 
   // Anti-nuke's maintenance window lives in Redis, written by the command that opens it. The
@@ -329,6 +335,46 @@ export function createApiApp(deps: ApiDeps): Hono {
     if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
 
     return c.json(await deps.leaderboard.search(c.req.param('guildId'), parsed.data));
+  });
+
+  app.get('/guilds/:guildId/leveling/xp-events', async (c) => {
+    return c.json(await deps.xpEvents.list(c.req.param('guildId')));
+  });
+
+  app.post('/guilds/:guildId/leveling/xp-events', async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+
+    const parsed = xpEventStartBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(
+        await deps.xpEvents.start({ guildId: c.req.param('guildId'), ...parsed.data, event: body }),
+      );
+    } catch (error) {
+      const { status, body: refusal } = toErrorResponse(error);
+      return c.json(refusal, status);
+    }
+  });
+
+  app.delete('/guilds/:guildId/leveling/xp-events/:eventId', async (c) => {
+    const actorId = c.req.header('x-proton-actor');
+    if (!actorId) return c.json({ error: 'invalid_body', message: 'no actor was named' }, 400);
+
+    try {
+      return c.json(
+        await deps.xpEvents.end({
+          guildId: c.req.param('guildId'),
+          eventId: c.req.param('eventId'),
+          actorId,
+        }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
   });
 
   app.get('/guilds/:guildId/tags', async (c) => {
@@ -540,6 +586,29 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
   });
 
+  app.get('/guilds/:guildId/branding/name-style/status', async (c) => {
+    const guildId = c.req.param('guildId');
+
+    try {
+      const [view, state] = await Promise.all([
+        deps.modules.get(guildId, 'branding'),
+        deps.brandingNameStyles.get(guildId),
+      ]);
+      const config = brandingConfigSchema.parse(view.config);
+
+      return c.json(
+        describeNameStyleStatus({
+          enabled: view.enabled && config.enabled,
+          requested: config.displayNameStyle,
+          state,
+        }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
   app.get('/guilds/:guildId/branding/:kind', async (c) => {
     const kind = c.req.param('kind');
     if (!isAssetKind(kind)) return c.json({ error: 'unknown_asset' }, 404);
@@ -599,9 +668,17 @@ export function createApiApp(deps: ApiDeps): Hono {
 }
 
 function toErrorResponse(error: unknown): {
-  status: 400 | 404 | 500 | 503;
+  status: 400 | 404 | 409 | 500 | 503;
   body: { error: string; message?: string };
 } {
+  if (error instanceof XpEventError) {
+    return {
+      status:
+        error.code === 'unknown_xp_event' ? 404 : error.code === 'too_many_xp_events' ? 409 : 400,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
   if (error instanceof ModuleConfigError) {
     return {
       status: error.code === 'unknown_module' ? 404 : 400,

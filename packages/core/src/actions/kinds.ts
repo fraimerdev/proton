@@ -30,13 +30,14 @@ export const ACTION_KINDS = [
   'unlock',
   'create_channel',
   'create_role',
-  'edit_role',
+  'delete_role',
   'delete_channel',
   'edit_channel',
   'set_channel_overwrite',
   'delete_channel_overwrite',
   'create_thread',
   'move_member',
+  'set_member_nickname',
   'end_poll',
   'pin_message',
   'automod_rule_create',
@@ -46,8 +47,7 @@ export const ACTION_KINDS = [
   'create_dm',
   'set_bot_nickname',
   'set_bot_profile',
-  'add_bot_role',
-  'remove_bot_role',
+  'set_bot_name_style',
 ] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
@@ -89,7 +89,7 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
 
   create_channel: Permissions.ManageChannels,
   create_role: Permissions.ManageRoles,
-  edit_role: Permissions.ManageRoles,
+  delete_role: Permissions.ManageRoles,
   delete_channel: Permissions.ManageChannels,
   edit_channel: Permissions.ManageChannels,
 
@@ -101,6 +101,8 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
   create_thread: Permissions.ViewChannel,
 
   move_member: Permissions.MoveMembers | Permissions.Connect,
+
+  set_member_nickname: Permissions.ManageNicknames,
 
   end_poll: Permissions.ViewChannel,
   pin_message: Permissions.PinMessages,
@@ -119,9 +121,7 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
   // stripped the bit still gets its images and its bio.
   set_bot_nickname: Permissions.ChangeNickname,
   set_bot_profile: 0n,
-
-  add_bot_role: Permissions.ManageRoles,
-  remove_bot_role: Permissions.ManageRoles,
+  set_bot_name_style: Permissions.ChangeNickname,
 };
 
 export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
@@ -154,7 +154,7 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
 
   create_channel: false,
   create_role: false,
-  edit_role: false,
+  delete_role: false,
   delete_channel: false,
   edit_channel: false,
   set_channel_overwrite: false,
@@ -162,6 +162,7 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   create_thread: false,
 
   move_member: true,
+  set_member_nickname: true,
 
   end_poll: false,
   pin_message: false,
@@ -179,8 +180,7 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   // which is exactly what add_role does when the member it is handed is the bot.
   set_bot_nickname: false,
   set_bot_profile: false,
-  add_bot_role: false,
-  remove_bot_role: false,
+  set_bot_name_style: false,
 };
 
 export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
@@ -211,7 +211,7 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
 
   create_channel: false,
   create_role: false,
-  edit_role: false,
+  delete_role: false,
   delete_channel: true,
   edit_channel: true,
   set_channel_overwrite: true,
@@ -221,6 +221,7 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
   // The destination, not the channel the command was typed in — Discord refuses the move unless
   // the bot could connect there itself, so that is the channel the precheck has to judge.
   move_member: true,
+  set_member_nickname: false,
 
   end_poll: true,
   pin_message: true,
@@ -232,8 +233,7 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
   create_dm: false,
   set_bot_nickname: false,
   set_bot_profile: false,
-  add_bot_role: false,
-  remove_bot_role: false,
+  set_bot_name_style: false,
 };
 
 export function isChannelScoped(kind: ActionKind): boolean {
@@ -266,7 +266,8 @@ export const PAYLOAD_PERMISSIONS: Partial<Record<ActionKind, (payload: unknown) 
       // Without this the precheck passes and Discord refuses the message instead, which is the
       // "the bot did nothing" failure §7 exists to kill.
       (parsed.data.embeds?.length ? Permissions.EmbedLinks : 0n) |
-      (parsed.data.files?.length ? Permissions.AttachFiles : 0n)
+      (parsed.data.files?.length ? Permissions.AttachFiles : 0n) |
+      (parsed.data.replyToMessageId ? Permissions.ReadMessageHistory : 0n)
     );
   },
 
@@ -371,10 +372,18 @@ export const NEVER_RECORDED_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>
   // jsonb. Recording these would write the whole image into the ledger on every reconnect.
   'set_bot_nickname',
   'set_bot_profile',
-  'add_bot_role',
-  'remove_bot_role',
+  // Proton restyling itself on saves and reconnects. Each outcome lives in branding_name_styles.
+  'set_bot_name_style',
 ]);
 
 export function isNeverRecorded(kind: ActionKind): boolean {
   return NEVER_RECORDED_KINDS.has(kind);
+}
+
+export const UPSTREAM_ON_FAILURE_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>([
+  'set_bot_name_style',
+]);
+
+export function exposesUpstreamOnFailure(kind: ActionKind): boolean {
+  return UPSTREAM_ON_FAILURE_KINDS.has(kind);
 }

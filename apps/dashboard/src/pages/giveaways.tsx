@@ -62,6 +62,16 @@ function claimUnitFor(seconds: number): ClaimUnit {
   return 'minutes';
 }
 
+function claimUnitFits(seconds: number, unit: ClaimUnit): boolean {
+  const size = CLAIM_UNIT_SECONDS[unit];
+  if (seconds % size !== 0) return false;
+
+  const amount = seconds / size;
+  return (
+    amount >= Math.ceil(CLAIM_MIN_SECONDS / size) && amount <= Math.floor(CLAIM_MAX_SECONDS / size)
+  );
+}
+
 function claimBoundsError(seconds: number): string | undefined {
   if (!Number.isInteger(seconds)) return 'Give a whole number.';
   if (seconds < CLAIM_MIN_SECONDS) return 'At least 1 minute.';
@@ -138,17 +148,12 @@ function ClaimWindowRows({ form }: { form: Form }): ReactElement {
             />
             <SegmentedControl
               label="Time to claim unit"
-              options={CLAIM_UNITS}
+              options={CLAIM_UNITS.map((option) => ({
+                ...option,
+                disabled: option.value !== unit && !claimUnitFits(seconds, option.value),
+              }))}
               value={unit}
-              onChange={(next) => {
-                setUnit(next);
-                const nextSize = CLAIM_UNIT_SECONDS[next];
-                const amount = Math.min(
-                  Math.floor(CLAIM_MAX_SECONDS / nextSize),
-                  Math.max(Math.ceil(CLAIM_MIN_SECONDS / nextSize), Math.round(seconds / nextSize)),
-                );
-                write(amount * nextSize);
-              }}
+              onChange={setUnit}
             />
           </div>
         </SettingRow>
@@ -356,7 +361,6 @@ export default function GiveawaysPage({
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={area} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -377,7 +381,13 @@ export default function GiveawaysPage({
         {area === 'access' ? <Access form={form} guildId={guildId} /> : null}
       </LoadingBoundary>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

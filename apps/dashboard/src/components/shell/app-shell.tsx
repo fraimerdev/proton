@@ -8,6 +8,9 @@ import { usePresence } from '../ui/overlay.tsx';
 import { Sidebar } from './sidebar.tsx';
 import { Topbar, type Viewer } from './topbar.tsx';
 
+// Kept equal to the drawer breakpoint in shell.css.
+const DRAWER_QUERY = '(max-width: 900px)';
+
 export function DashboardShell({
   guildId,
   guilds,
@@ -26,6 +29,7 @@ export function DashboardShell({
   children: ReactNode;
 }): ReactElement {
   const [navOpen, setNavOpen] = useState(false);
+  const [drawer, setDrawer] = useState(false);
   const pathname = useRouterState({ select: (state) => state.location.href });
   const scrim = useRef<HTMLButtonElement>(null);
   const scrimPresence = usePresence(navOpen, scrim);
@@ -42,6 +46,31 @@ export function DashboardShell({
     setNavOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    const query = window.matchMedia(DRAWER_QUERY);
+    const sync = (): void => {
+      setDrawer(query.matches);
+      if (!query.matches) setNavOpen(false);
+    };
+
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    if (!navOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      setNavOpen(false);
+      document.querySelector<HTMLElement>('.topbar-nav-toggle')?.focus();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [navOpen]);
+
   return (
     <div className="shell">
       <Topbar
@@ -55,7 +84,7 @@ export function DashboardShell({
       />
 
       <div className="shell-container shell-body">
-        <Sidebar guildId={guildId} modules={modules} open={navOpen} />
+        <Sidebar guildId={guildId} modules={modules} open={navOpen} inert={drawer && !navOpen} />
 
         {scrimPresence.present ? (
           <button

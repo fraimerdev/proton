@@ -12,11 +12,6 @@ interface MemberIndex {
 
 const Members = createContext<MemberIndex>({ byId: new Map(), pending: false });
 
-/**
- * Resolves a page's worth of snowflakes in one request rather than one per row. Discord has no
- * batch member endpoint, so the server reads them individually and caches — but asking once for
- * the whole page is still the difference between 50 round trips and 1.
- */
 export function MemberProvider({
   guildId,
   userIds,
@@ -44,10 +39,6 @@ export function useMember(userId: string | null | undefined): GuildMember | unde
   return userId ? byId.get(userId) : undefined;
 }
 
-/**
- * A member who has left the server simply is not in the answer, so the id is printed rather than a
- * name being invented for them.
- */
 export function MemberCell({
   userId,
   fallback = 'None',
@@ -79,7 +70,7 @@ export function MemberCell({
         <img className="user-avatar" src={member.avatarUrl} alt="" width={22} height={22} />
       ) : (
         <span className="user-avatar avatar-fallback" aria-hidden>
-          {member.displayName.slice(0, 2)}
+          {[...member.displayName].slice(0, 2).join('')}
         </span>
       )}
       <span className="user-name" title={`${member.username} · ${member.id}`}>

@@ -1,6 +1,8 @@
 import { NICKNAME_MAX, protonFields } from '@proton/core';
 import { z } from 'zod';
-import { TYPEFACES } from './typeface.ts';
+import { displayNameStyleSchema } from './name-style.ts';
+
+export { NICKNAME_MAX } from '@proton/core';
 
 export const MODULE_ID = 'branding';
 
@@ -12,12 +14,6 @@ export const BRANDING_SCHEMA_VERSION = 3;
 // over-long bio is refused here with a sentence the admin can act on rather than by the API with a
 // 400 that names a field they never typed.
 export const BIO_MAX = 190;
-
-// Proton's own gradient, from DESIGN.md. Its middle stop is dropped rather than approximated: a
-// Discord role gradient takes two colours, so cyan and violet are the ends of the same ramp and
-// the blue between them is simply not expressible.
-export const BRAND_CYAN = 0x0ab9fe;
-export const BRAND_VIOLET = 0x5944ec;
 
 // Not admin-editable and not in the form: the upload route writes them, and their only job is to
 // change when the image does, so a save reconciles and the fingerprint sees a new picture.
@@ -45,40 +41,11 @@ const editable = {
       description: `Shown as “About me” on Proton’s profile. Up to ${BIO_MAX} characters.`,
     }),
 
-  typeface: z.enum(TYPEFACES).default('none').register(protonFields, {
-    label: 'Typeface',
-    description:
-      'Discord has no font setting for bots, so Proton spells its name in look-alike Unicode letters. Mentions still work, but searching the member list for the plain name will not find it, and screen readers read it letter by letter.',
-  }),
-
-  nameEffect: z
-    .enum(['none', 'solid', 'gradient', 'holographic'])
-    .default('none')
-    .register(protonFields, {
-      label: 'Effect',
-      description:
-        'Colour Proton’s name with a role it creates for itself. Gradient and holographic need Discord’s Enhanced Role Colours feature.',
-    }),
-
-  primaryColor: z
-    .number()
-    .int()
-    .min(0)
-    .max(0xffffff)
-    .default(BRAND_CYAN)
-    .register(protonFields, { field: 'colour', label: 'First colour' }),
-
-  secondaryColor: z
-    .number()
-    .int()
-    .min(0)
-    .max(0xffffff)
-    .default(BRAND_VIOLET)
-    .register(protonFields, { field: 'colour', label: 'Second colour' }),
+  displayNameStyle: displayNameStyleSchema.nullable().default(null),
 
   restoreOnDisable: z.boolean().default(true).register(protonFields, {
     label: 'Reset when switched off',
-    description: 'Remove the server nickname, avatar, banner and bio.',
+    description: 'Remove the server nickname, avatar, banner, bio and display name style.',
   }),
 };
 
@@ -86,6 +53,7 @@ export const brandingConfigSchema = z.object({
   ...editable,
   avatarHash: assetHash,
   bannerHash: assetHash,
+  nameStyleNative: z.boolean().optional(),
 });
 
 // The images are uploaded through their own control, not typed into a text box, so the generated
@@ -96,23 +64,57 @@ export type BrandingConfig = z.infer<typeof brandingConfigSchema>;
 
 export const brandingDefaultConfig: BrandingConfig = brandingConfigSchema.parse({});
 
-// v1 stored avatarUrl and bannerUrl, images fetched from the Discord CDN rather than uploaded. Zod
-// would strip both silently and the next sidebar toggle — which sends no config — would persist the
-// stripped object, so the drop is made explicit here instead of being a side effect.
-export function liftStoredConfig(raw: unknown): unknown {
+const RETIRED_DEFAULT_COLOUR = 0x2a8af7;
+
+function isRetiredDefaultStyle(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+
+  const { font, effect, colours, ...extra } = value as Record<string, unknown>;
+  return (
+    font === 'gg-sans' &&
+    effect === 'solid' &&
+    Array.isArray(colours) &&
+    colours.length === 1 &&
+    colours[0] === RETIRED_DEFAULT_COLOUR &&
+    Object.keys(extra).length === 0
+  );
+}
+
+// Retired keys (v1 image URLs, look-alike typeface, role colour) are dropped here, not by Zod.
+export function liftStoredConfig(raw: unknown, current?: Record<string, unknown>): unknown {
   if (typeof raw !== 'object' || raw === null) return raw;
 
-  const { avatarUrl: _avatarUrl, bannerUrl: _bannerUrl, ...rest } = raw as Record<string, unknown>;
+  const {
+    avatarUrl: _avatarUrl,
+    bannerUrl: _bannerUrl,
+    typeface: _typeface,
+    nameEffect: _nameEffect,
+    primaryColor: _primaryColor,
+    secondaryColor: _secondaryColor,
+    ...rest
+  } = raw as Record<string, unknown>;
+
+  if (current !== undefined) return { ...rest, nameStyleNative: true };
+
+  const style = rest.displayNameStyle;
+  if (style === undefined || style === null) return rest;
+
+  // Only an unstamped row can hold the preview build's default; a stamped one chose that style.
+  const retired = rest.nameStyleNative !== true && isRetiredDefaultStyle(style);
+  // An unreadable stored style reads as none, or it would make every Branding setting unreadable.
+  if (retired || !displayNameStyleSchema.safeParse(style).success) {
+    return { ...rest, displayNameStyle: null };
+  }
 
   return rest;
 }
 
 export function isBlank(config: BrandingConfig): boolean {
   return (
-    config.nameEffect === 'none' &&
     config.nickname === undefined &&
     config.avatarHash === undefined &&
     config.bannerHash === undefined &&
-    config.bio === undefined
+    config.bio === undefined &&
+    config.displayNameStyle === null
   );
 }

@@ -1,8 +1,47 @@
 import type { GuildRole, Overwrite } from '../permissions/compute.ts';
-import type { ChannelState, GuildState } from './types.ts';
+import type { ChannelState, GuildProfile, GuildState } from './types.ts';
+
+const IMAGE_HASH = /^[A-Za-z0-9_]{1,64}$/;
 
 function str(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
+}
+
+function own(payload: Record<string, unknown>, key: string): unknown {
+  return Object.hasOwn(payload, key) ? payload[key] : undefined;
+}
+
+function imageHash(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return typeof value === 'string' && IMAGE_HASH.test(value) ? value : undefined;
+}
+
+function nullableText(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return typeof value === 'string' ? value : undefined;
+}
+
+function count(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+export function parseGuildProfile(payload: Record<string, unknown>): GuildProfile {
+  const name = str(own(payload, 'name'));
+  const iconHash = imageHash(own(payload, 'icon'));
+  const bannerHash = imageHash(own(payload, 'banner'));
+  const description = nullableText(own(payload, 'description'));
+  const rawBoostCount = own(payload, 'premium_subscription_count');
+  const boostCount = rawBoostCount === null ? null : count(rawBoostCount);
+  const boostTier = count(own(payload, 'premium_tier'));
+
+  return {
+    ...(name ? { name } : {}),
+    ...(iconHash === undefined ? {} : { iconHash }),
+    ...(bannerHash === undefined ? {} : { bannerHash }),
+    ...(description === undefined ? {} : { description }),
+    ...(boostCount === undefined ? {} : { boostCount }),
+    ...(boostTier === undefined ? {} : { boostTier }),
+  };
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -101,7 +140,6 @@ export function buildGuildState(
     break;
   }
 
-  const name = str(payload.name);
   const memberCount = payload.member_count;
 
   return {
@@ -112,8 +150,9 @@ export function buildGuildState(
     roles,
     botRoleIds,
     channels,
-    ...(name ? { name } : {}),
+    ...parseGuildProfile(payload),
     ...(typeof memberCount === 'number' ? { memberCount } : {}),
+    profileAt: now,
     updatedAt: now,
   };
 }

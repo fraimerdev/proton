@@ -1,30 +1,27 @@
-import { PREVIEW_SAMPLE } from '@proton/cards/design';
-import type { ProtonMessage } from '@proton/core';
+import { countV2Components, V2_COMPONENTS_MAX } from '@proton/core';
+import type { PathDiagnostic, SurfaceSample } from '@proton/core/placeholders';
+import { isSilentLevelUp, type LevelingConfig } from '@proton/module-leveling/config';
 import {
-  countV2Components,
-  MESSAGE_CONTENT_MAX,
-  substitute,
-  V2_COMPONENTS_MAX,
-} from '@proton/core';
-import {
-  isSilentLevelUp,
-  LEVEL_UP_PLACEHOLDERS,
-  type LevelingConfig,
-} from '@proton/module-leveling/config';
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+  LEVEL_UP_BASE_PATH,
+  LEVEL_UP_SURFACE,
+  type LevelUpPlaceholderFacts,
+} from '@proton/module-leveling/placeholders';
+import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { useMemo } from 'react';
 import { CHANNEL_TYPE, ChannelPicker } from '../../components/discord/channel-picker.tsx';
+import { sentence } from '../../components/discord/embed-editor.tsx';
 import {
-  type EditableMessage,
   EditorPreviewLayout,
   MessageEditor,
+  placeholderSlot,
 } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
 import { Button, Switch } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
-import { channelsQuery, sessionQuery } from '../../lib/queries.ts';
+import { previewMessage } from '../../lib/placeholder-preview.ts';
+import { channelsQuery } from '../../lib/queries.ts';
 import { LinkButtonRows } from './buttons.tsx';
 
 type LevelUpMessage = LevelingConfig['levelUpMessage'];
@@ -43,48 +40,41 @@ const SILENT_NOTE = 'This message is empty, so nothing is posted when a member l
 
 const PREVIEW_EMPTY = 'This message is empty, so nothing is posted.';
 
-const NEAR_LIMIT_AT = 1900;
+const CONTENT_DESCRIPTION = 'Supports Discord markdown and placeholders. Type { to add one.';
 
-const NEAR_LIMIT_NOTE = `If placeholders push this past ${MESSAGE_CONTENT_MAX} characters, the message is not posted.`;
-
-const PLACEHOLDER_HELP =
-  'Use {user}, {level} and {xp} here and in embed titles, field text, footers, button labels ' +
-  'and button links.';
+const PREVIEW_REFUSED =
+  'Filled in for this sample, the message could not be posted, so nothing would appear. The ' +
+  'preview shows it as written.';
 
 const LAYOUT_NOTE =
   'A layout is the whole message. Discord ignores any text, embeds or button rows sent with it.';
 
-const PLACEHOLDER_MEANING: Record<string, string> = {
-  '{user}': 'Mentions the member',
-  '{level}': 'The level the member reached',
-  '{xp}': 'The member’s total XP',
-};
+const PREVIEW_NOTE_CODES: ReadonlySet<string> = new Set(['output_truncated', 'invalid_url']);
 
-const VARIABLES = LEVEL_UP_PLACEHOLDERS.map((token) => ({
-  token,
-  describes: PLACEHOLDER_MEANING[token] ?? '',
-}));
+function levelUpSample(): SurfaceSample<LevelUpPlaceholderFacts> {
+  const [sample] = LEVEL_UP_SURFACE.samples;
+  if (sample === undefined) {
+    throw new Error(
+      'The level-up placeholders have no sample, so the preview cannot be filled in.',
+    );
+  }
+  return sample;
+}
 
-const TOKEN = /\{([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)\}/g;
-const KNOWN = new Set(LEVEL_UP_PLACEHOLDERS.map((token) => token.slice(1, -1)));
+const SAMPLE = levelUpSample();
 
-function collectUnknown(value: unknown, found: Set<string>): void {
-  if (typeof value === 'string') {
-    for (const match of value.matchAll(TOKEN)) {
-      const name = match[1];
-      if (name !== undefined && !KNOWN.has(name)) found.add(name);
-    }
-    return;
+function previewNotes(diagnostics: readonly PathDiagnostic[]): string[] {
+  const notes = new Set<string>();
+
+  for (const { code, message, path } of diagnostics) {
+    if (!PREVIEW_NOTE_CODES.has(code)) continue;
+
+    const label = LEVEL_UP_SURFACE.fieldAt(`${LEVEL_UP_BASE_PATH}.${path}`)?.label;
+    const text = sentence(message);
+    notes.add(label === undefined || text.startsWith(label) ? text : `${label}: ${text}`);
   }
 
-  if (Array.isArray(value)) {
-    for (const item of value) collectUnknown(item, found);
-    return;
-  }
-
-  if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) collectUnknown(item, found);
-  }
+  return [...notes];
 }
 
 function Mentions({
@@ -136,38 +126,42 @@ export function LevelUpArea({
   const config = form.value;
   const message = config.levelUpMessage;
 
-  const { user } = useSuspenseQuery(sessionQuery()).data;
   const { data: channels } = useQuery({
     ...channelsQuery(guildId),
     enabled: config.levelUpChannelId !== undefined,
   });
 
-  const channelName = (channels ?? []).find(
-    (channel) => channel.id === config.levelUpChannelId,
-  )?.name;
+  const channel = (channels ?? []).find(({ id }) => id === config.levelUpChannelId);
 
   const setMessage = (next: LevelUpMessage): void =>
     form.setValue((current) => ({ ...current, levelUpMessage: next }));
 
+  const placeholders = placeholderSlot(LEVEL_UP_SURFACE, form.templateDiagnosticsAt);
+
   const preview = useMemo(
     () =>
-      substitute(message, {
-        user: `<@${user.id}>`,
-        level: PREVIEW_SAMPLE.level,
-        xp: PREVIEW_SAMPLE.totalXp,
-      }) as Partial<ProtonMessage>,
-    [message, user.id],
+      previewMessage(
+        LEVEL_UP_SURFACE,
+        message,
+        SAMPLE,
+        channel === undefined
+          ? undefined
+          : {
+              destinationChannel: {
+                id: channel.id,
+                name: channel.name,
+                type: channel.type,
+                parentId: channel.parentId,
+              },
+            },
+      ),
+    [message, channel],
   );
 
-  const unknown = useMemo(() => {
-    const found = new Set<string>();
-    collectUnknown(message, found);
-    return [...found];
-  }, [message]);
+  const notes = useMemo(() => previewNotes(preview.diagnostics), [preview.diagnostics]);
 
   const hasLayout = message.v2.length > 0;
   const silent = isSilentLevelUp(message);
-  const content = message.content ?? '';
 
   // interactiveKeys walks the v2 tree too, so a layout's own button reports against `components`
   // where nothing is wrong. Both branches have to show it or the message cannot be fixed.
@@ -224,16 +218,12 @@ export function LevelUpArea({
             guildId={guildId}
             value={message}
             allow={{ components: false, mentions: false }}
-            variables={VARIABLES}
+            placeholders={placeholders}
             contentLabel="Level-up message"
-            contentDescription={
-              content.length >= NEAR_LIMIT_AT
-                ? `${PLACEHOLDER_HELP} ${NEAR_LIMIT_NOTE}`
-                : PLACEHOLDER_HELP
-            }
+            contentDescription={CONTENT_DESCRIPTION}
             errorAt={form.errorAt}
-            pathPrefix="levelUpMessage"
-            onChange={(next: EditableMessage) => setMessage({ ...message, ...next })}
+            pathPrefix={LEVEL_UP_BASE_PATH}
+            onChange={(next) => setMessage({ ...message, ...next })}
           />
 
           <LinkButtonRows
@@ -241,19 +231,13 @@ export function LevelUpArea({
             rows={message.components}
             errorAt={form.errorAt}
             sectionError={componentsError}
+            placeholders={placeholders}
             onChange={(components) => setMessage({ ...message, components })}
           />
         </>
       )}
 
       {silent ? <p className="leveling-note">{SILENT_NOTE}</p> : null}
-
-      {unknown.length > 0 ? (
-        <p className="leveling-note">
-          Proton does not recognise {unknown.map((name) => `{${name}}`).join(', ')}.{' '}
-          {unknown.length === 1 ? 'It is' : 'They are'} posted as written.
-        </p>
-      ) : null}
 
       <Mentions
         value={message.mentions}
@@ -267,12 +251,31 @@ export function LevelUpArea({
       editor={editor}
       previewTitle="Discord preview"
       preview={
-        <DiscordPreview
-          message={preview}
-          botName="Proton"
-          channelName={channelName}
-          empty={PREVIEW_EMPTY}
-        />
+        <>
+          <DiscordPreview
+            message={preview.message}
+            mentionNames={preview.mentionNames}
+            now={preview.now}
+            botName="Proton"
+            channelName={
+              config.levelUpChannelId === undefined
+                ? SAMPLE.facts.destinationChannel.name
+                : channel?.name
+            }
+            empty={PREVIEW_EMPTY}
+          />
+          {silent ? null : <p className="leveling-note">{preview.caption}</p>}
+          {preview.problem !== undefined ? (
+            <p className="leveling-note">
+              <span className="text-danger">{PREVIEW_REFUSED}</span>
+            </p>
+          ) : null}
+          {notes.map((note) => (
+            <p key={note} className="leveling-note">
+              {note}
+            </p>
+          ))}
+        </>
       }
     />
   );

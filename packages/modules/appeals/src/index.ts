@@ -9,6 +9,7 @@ import {
 import type { AppealsDeps } from './deps.ts';
 import { createAppealsInteractionListener } from './interactions.ts';
 import { createAppealsListener } from './listeners.ts';
+import { appealsTemplates } from './placeholders.ts';
 
 export {
   mayReview,
@@ -67,6 +68,16 @@ export {
   type NotifyOutcome,
   tellAppellant,
 } from './notify.ts';
+export {
+  APPEAL_DECISION_EVENT,
+  APPEAL_DECISION_SURFACE,
+  type AppealDecisionFacts,
+  type AppealDecisionField,
+  type AppealDecisionStatus,
+  appealDecisionFacts,
+  appealsTemplates,
+  renderAppealDecision,
+} from './placeholders.ts';
 export { DrizzleAppealStore } from './postgres-store.ts';
 export {
   APPEAL_APPROVED,
@@ -132,6 +143,8 @@ export function createAppealsModule(
     emits: ['appeals.decided'],
 
     configLimits: [{ key: 'appealPanels', path: 'panels' }],
+
+    templates: appealsTemplates,
 
     listeners: [createAppealsListener(deps), createAppealsInteractionListener(deps)],
 

@@ -50,7 +50,7 @@ export function LeaderboardArea({ guildId }: { guildId: string }): ReactElement 
         <CollectionHeader title="Leaderboard" />
 
         {query.isError ? (
-          <StatusBanner tone="danger" live="assertive">
+          <StatusBanner tone="danger" live="polite">
             {readFailure(query.error, 'this server’s leaderboard')}
           </StatusBanner>
         ) : (

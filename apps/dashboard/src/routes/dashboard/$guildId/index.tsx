@@ -1,12 +1,13 @@
 import type { ModuleSummary } from '@proton/core';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { moduleState } from '../../../components/module/page.tsx';
 import { ModuleLink } from '../../../components/module/route.tsx';
+import { useModuleToggle } from '../../../components/module/toggle.ts';
 import { Workspace } from '../../../components/shell/app-shell.tsx';
 import { GuildAvatar } from '../../../components/shell/topbar.tsx';
-import { Badge } from '../../../components/ui/controls.tsx';
+import { Badge, cx, Switch } from '../../../components/ui/controls.tsx';
 import { StatusBanner } from '../../../components/ui/feedback.tsx';
 import { Icon, type IconName } from '../../../components/ui/icon.tsx';
 import {
@@ -33,7 +34,7 @@ function CardBody({
 }: {
   icon: IconName;
   tone?: Tone | undefined;
-  title: string;
+  title: ReactNode;
   description: string;
   aside?: ReactElement | null | undefined;
 }): ReactElement {
@@ -104,28 +105,47 @@ function ModuleCard({
   meta: ModuleMeta;
   summary: ModuleSummary | undefined;
 }): ReactElement {
-  const state = summary ? moduleState(summary) : 'off';
+  const toggle = useModuleToggle(guildId, summary);
 
   return (
-    <ModuleLink
-      guildId={guildId}
-      moduleId={meta.id}
-      search={{ area: undefined }}
-      className="overview-card"
-    >
+    <div className={cx('overview-card', meta.switchOnly && 'overview-card-static')}>
       <CardBody
         icon={meta.icon}
-        title={meta.label}
+        title={
+          meta.switchOnly ? (
+            meta.label
+          ) : (
+            <ModuleLink
+              guildId={guildId}
+              moduleId={meta.id}
+              search={{ area: undefined }}
+              className="overview-card-link"
+            >
+              {meta.label}
+            </ModuleLink>
+          )
+        }
         description={meta.description}
         aside={
-          state === 'off' ? (
-            <Badge tone="neutral">Off</Badge>
-          ) : state === 'attention' ? (
-            <Badge tone="warning">Cannot run</Badge>
-          ) : null
+          <>
+            {summary && moduleState(summary) === 'attention' ? (
+              <Badge tone="warning">Cannot run</Badge>
+            ) : null}
+            <Switch
+              checked={summary?.enabled ?? false}
+              disabled={summary === undefined || toggle.busy}
+              onChange={toggle.toggle}
+              label={`${meta.label} enabled`}
+            />
+          </>
         }
       />
-    </ModuleLink>
+      {toggle.failure !== null ? (
+        <p className="overview-card-error" role="alert">
+          {toggle.failure}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -148,19 +168,28 @@ function Attention({
         }
       >
         <div className="stack stack-6" style={{ marginTop: 4 }}>
-          {blocked.map((summary) => (
-            <div key={summary.id}>
-              <ModuleLink
-                guildId={guildId}
-                moduleId={summary.id}
-                search={{ area: undefined }}
-                className="overview-attention-link"
-              >
-                {MODULE_BY_ID.get(summary.id)?.label ?? summary.name}
-              </ModuleLink>{' '}
-              — {summary.status?.disabledReason?.humanReason ?? 'Proton did not say why.'}
-            </div>
-          ))}
+          {blocked.map((summary) => {
+            const meta = MODULE_BY_ID.get(summary.id);
+            const name = meta?.label ?? summary.name;
+
+            return (
+              <div key={summary.id}>
+                {meta?.switchOnly ? (
+                  <span className="overview-attention-name">{name}</span>
+                ) : (
+                  <ModuleLink
+                    guildId={guildId}
+                    moduleId={summary.id}
+                    search={{ area: undefined }}
+                    className="overview-attention-link"
+                  >
+                    {name}
+                  </ModuleLink>
+                )}{' '}
+                — {summary.status?.disabledReason?.humanReason ?? 'Proton did not say why.'}
+              </div>
+            );
+          })}
         </div>
       </StatusBanner>
     </div>

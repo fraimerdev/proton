@@ -23,7 +23,7 @@ import {
   FORM_STYLE_OPTIONS,
   moveInList,
   shownInModal,
-  slugify,
+  slugTyping,
   type TicketsForm,
   uniqueSlug,
 } from './shape.ts';
@@ -208,7 +208,7 @@ export function FormBuilder({
                         invalid={idError !== undefined}
                         value={field.id}
                         onChange={(event) =>
-                          patch(at, { id: slugify(event.currentTarget.value, FIELD_ID_MAX) })
+                          patch(at, { id: slugTyping(event.currentTarget.value, FIELD_ID_MAX) })
                         }
                       />
                     </DetailField>

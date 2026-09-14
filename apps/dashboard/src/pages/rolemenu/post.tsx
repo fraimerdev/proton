@@ -1,6 +1,7 @@
 import type { RolemenuMenu } from '@proton/module-rolemenu/config';
 import { useMutation } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
+import { useEffect } from 'react';
 import { Button } from '../../components/ui/controls.tsx';
 import { AsyncOperationStatus, type AsyncPhase } from '../../components/ui/feedback.tsx';
 import { saveFailure } from '../../lib/errors.ts';
@@ -52,10 +53,6 @@ function askedLabel(refreshing: boolean, channelName: string | undefined): strin
     : `Asked Proton to post it. Check ${where} in Discord to confirm it appeared.`;
 }
 
-/**
- * Asked, not posted: the api records the request and the worker is the only process that talks to
- * Discord, so the success wording never claims the message went out.
- */
 export function PostAction({
   guildId,
   moduleId,
@@ -77,6 +74,11 @@ export function PostAction({
     mutationFn: () => postModulePanel({ data: { guildId, moduleId, panelId: menu.id } }),
     onSuccess: () => onPosted?.(),
   });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the menu id is the trigger, not an input
+  useEffect(() => {
+    post.reset();
+  }, [menu.id]);
 
   const phase: AsyncPhase = post.isPending
     ? 'working'

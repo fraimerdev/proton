@@ -1,5 +1,5 @@
 import type { EntitlementTier, MessageButton, ProtonMessage, V2Component } from '@proton/core';
-import { substitute } from '@proton/core';
+import type { PlaceholderSurface, SurfaceSample } from '@proton/core/placeholders';
 import type { HoneypotConfig } from '@proton/module-honeypot/config';
 import {
   APPEAL_KEY,
@@ -12,41 +12,58 @@ import {
 import {
   appendRow,
   caughtLabel,
-  consequenceOf,
-  DM_ACTION_WORD,
   layoutFor,
-  purgeSentence,
+  noticePlaceholderFacts,
 } from '@proton/module-honeypot/notice';
+import {
+  HONEYPOT_DM_SURFACE,
+  HONEYPOT_NOTICE_SURFACE,
+  type HoneypotDmFacts,
+  type HoneypotNoticeFacts,
+} from '@proton/module-honeypot/placeholders';
+import { dmPlaceholderFacts } from '@proton/module-honeypot/render';
 import type { ModuleForm } from '../../components/module/form.ts';
+import { type MentionNames, previewMessage, previewText } from '../../lib/placeholder-preview.ts';
+
+export { type ConfigErrors, configErrors } from '../../components/discord/embed-editor.tsx';
 
 export type HoneypotForm = ModuleForm<HoneypotConfig>;
 
-export interface ConfigErrors {
-  at: (path: string) => string | undefined;
-  under: (path: string) => string | undefined;
+export interface NoticePreview {
+  v2: V2Component[] | null;
+  caption: string;
+  channelName: string | undefined;
+  mentionNames: MentionNames;
+  now: number;
 }
 
-export function configErrors(form: HoneypotForm): ConfigErrors {
-  return {
-    at: form.errorAt,
-    under: (path) => {
-      for (const [key, message] of form.errors) {
-        if (key === path || key.startsWith(`${path}.`)) return message;
-      }
-      return undefined;
-    },
-  };
+export interface DmPreview {
+  v2: V2Component[] | null;
+  caption: string;
+  builtIn: boolean;
+  mentionNames: MentionNames;
+  now: number;
 }
+
+const SAMPLE_APPEAL_URL = 'https://prtn.xyz/appeal/sample';
+
+function sampleOf<F>(surface: PlaceholderSurface<F>): SurfaceSample<F> {
+  const [sample] = surface.samples;
+  if (sample === undefined) {
+    throw new Error(`The ${surface.label} placeholders have no sample, so it cannot be previewed.`);
+  }
+  return sample;
+}
+
+const NOTICE_SAMPLE = sampleOf(HONEYPOT_NOTICE_SURFACE);
+
+const DM_SAMPLE = sampleOf(HONEYPOT_DM_SURFACE);
 
 export function armedChannelIds(config: HoneypotConfig): string[] {
   return config.channels.filter((channel) => channel.enabled).map((channel) => channel.channelId);
 }
 
-/**
- * Which text display "Hide channel purpose" overwrites: the second one in the first container
- * that holds two. Kept in step with replaceBody in the module, which walks containers in order and
- * leaves one with a single text display alone rather than stopping at it.
- */
+// Kept in step with replaceBody in the module: a container with one text display is passed over.
 export function overriddenBodyPath(v2: readonly V2Component[]): string | undefined {
   for (const [index, component] of v2.entries()) {
     if (component.kind !== 'container') continue;
@@ -80,63 +97,97 @@ function replaceBody(v2: readonly V2Component[], body: string): V2Component[] {
   });
 }
 
-export function noticeVariables(config: HoneypotConfig): Record<string, string> {
-  return { consequence: consequenceOf(config.action), purge: purgeSentence(config) };
+function noticeWording(config: HoneypotConfig): Pick<HoneypotNoticeFacts, 'consequence' | 'purge'> {
+  const { channel, caught } = NOTICE_SAMPLE.facts;
+  const { consequence, purge } = noticePlaceholderFacts(config, channel.id, caught);
+  return { consequence, purge };
 }
 
-/** What buildNoticeComponents posts, in Proton's own vocabulary so DiscordPreview can draw it. */
-export function noticePreview(
-  config: HoneypotConfig,
-  tier: EntitlementTier,
-  caught: number,
-): V2Component[] {
-  const vars = noticeVariables(config);
-  const substituted = substitute(layoutFor(config, 'noticeLayout', tier), vars) as ProtonMessage;
+function noticeLayout(config: HoneypotConfig, tier: EntitlementTier): ProtonMessage {
+  const layout = layoutFor(config, 'noticeLayout', tier);
 
-  const withBody = config.hideWhatIsAHoneypot
-    ? replaceBody(substituted.v2, substitute(QUIET_NOTICE_BODY, vars) as string)
-    : substituted.v2;
-
-  if (!config.noticeCounterButton) return withBody;
-
-  return appendRow(withBody, {
-    kind: 'row',
-    row: {
-      kind: 'buttons',
-      buttons: [
-        {
-          key: COUNTER_KEY,
-          style: 'secondary',
-          label: caughtLabel(config.action, caught),
-          emoji: { name: HONEYPOT_POT },
-        },
-      ],
-    },
-  });
+  return config.hideWhatIsAHoneypot
+    ? { ...layout, v2: replaceBody(layout.v2, QUIET_NOTICE_BODY) }
+    : layout;
 }
 
-export function quietNoticeBody(config: HoneypotConfig): string {
-  return substitute(QUIET_NOTICE_BODY, noticeVariables(config)) as string;
+export function noticePreview(config: HoneypotConfig, tier: EntitlementTier): NoticePreview {
+  const { channel, caught } = NOTICE_SAMPLE.facts;
+  const rendered = previewMessage(
+    HONEYPOT_NOTICE_SURFACE,
+    noticeLayout(config, tier),
+    NOTICE_SAMPLE,
+    noticeWording(config),
+  );
+  const shown = {
+    caption: rendered.caption,
+    channelName: channel.name,
+    mentionNames: rendered.mentionNames,
+    now: rendered.now,
+  };
+
+  if (rendered.problem !== undefined) return { ...shown, v2: null };
+  if (!config.noticeCounterButton) return { ...shown, v2: rendered.message.v2 };
+
+  return {
+    ...shown,
+    v2: appendRow(rendered.message.v2, {
+      kind: 'row',
+      row: {
+        kind: 'buttons',
+        buttons: [
+          {
+            key: COUNTER_KEY,
+            style: 'secondary',
+            label: caughtLabel(config.action, caught),
+            emoji: { name: HONEYPOT_POT },
+          },
+        ],
+      },
+    }),
+  };
 }
 
-export function dmVariables(config: HoneypotConfig, guildName: string): Record<string, string> {
-  return { server: guildName, action: DM_ACTION_WORD[config.action] };
+export function quietNoticeBody(config: HoneypotConfig, path: string): string {
+  return previewText(
+    HONEYPOT_NOTICE_SURFACE,
+    path,
+    QUIET_NOTICE_BODY,
+    NOTICE_SAMPLE,
+    noticeWording(config),
+  ).text;
 }
 
 export function dmOffersAppeal(config: HoneypotConfig): boolean {
   return config.action === 'ban' && (config.appealPanelId ?? '') !== '';
 }
 
-/** What renderDirectMessage sends, minus the per-recipient appeal address Proton mints at send. */
-export function dmPreview(
+function dmWording(
   config: HoneypotConfig,
-  tier: EntitlementTier,
-  guildName: string,
-): V2Component[] {
-  const substituted = substitute(
-    layoutFor(config, 'dmLayout', tier),
-    dmVariables(config, guildName),
-  ) as ProtonMessage;
+): Pick<HoneypotDmFacts, 'action' | 'appealUrl' | 'inviteUrl'> {
+  const { action, appealUrl, inviteUrl } = dmPlaceholderFacts(config, {
+    guildName: DM_SAMPLE.facts.guildName,
+    appealUrl: dmOffersAppeal(config) ? SAMPLE_APPEAL_URL : undefined,
+  });
+  return { action, appealUrl, inviteUrl };
+}
+
+export function dmPreview(config: HoneypotConfig, tier: EntitlementTier): DmPreview {
+  const wording = dmWording(config);
+  const render = (from: EntitlementTier) =>
+    previewMessage(HONEYPOT_DM_SURFACE, layoutFor(config, 'dmLayout', from), DM_SAMPLE, wording);
+
+  const own = render(tier);
+  const builtIn = own.problem !== undefined && tier !== 'free';
+  const rendered = builtIn ? render('free') : own;
+  const shown = {
+    caption: rendered.caption,
+    builtIn,
+    mentionNames: rendered.mentionNames,
+    now: rendered.now,
+  };
+
+  if (rendered.problem !== undefined) return { ...shown, v2: null };
 
   const extra: V2Component[] = [
     { kind: 'separator', divider: true, spacing: 'small' },
@@ -145,18 +196,21 @@ export function dmPreview(
 
   const buttons: MessageButton[] = [];
 
-  if (dmOffersAppeal(config)) {
-    buttons.push({ key: APPEAL_KEY, style: 'link', label: 'Appeal', url: '' });
+  if (wording.appealUrl) {
+    buttons.push({ key: APPEAL_KEY, style: 'link', label: 'Appeal', url: wording.appealUrl });
   }
 
-  if (config.offerWayBackIn && config.inviteUrl) {
-    buttons.push({ key: INVITE_KEY, style: 'link', label: 'Rejoin', url: config.inviteUrl });
+  if (wording.inviteUrl) {
+    buttons.push({ key: INVITE_KEY, style: 'link', label: 'Rejoin', url: wording.inviteUrl });
   }
 
   if (buttons.length > 0) extra.push({ kind: 'row', row: { kind: 'buttons', buttons } });
 
-  return extra.reduce<V2Component[]>(
-    (carried, component) => appendRow(carried, component),
-    [...substituted.v2],
-  );
+  return {
+    ...shown,
+    v2: extra.reduce<V2Component[]>(
+      (carried, component) => appendRow(carried, component),
+      [...rendered.message.v2],
+    ),
+  };
 }

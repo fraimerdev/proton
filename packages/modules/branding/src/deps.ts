@@ -1,9 +1,14 @@
+import type { BrandingNameStyleStore, RestProxyClient } from '@proton/core';
 import type { BrandingAssetStore, BrandingRoleStore } from './store.ts';
 
 export interface BrandingDeps {
   assets?: BrandingAssetStore;
 
   roles?: BrandingRoleStore;
+
+  nameStyles?: BrandingNameStyleStore;
+
+  rest?: RestProxyClient;
 
   botUserId?: string;
 
@@ -18,7 +23,19 @@ export function describeUnbound(deps: BrandingDeps): string[] {
   }
 
   if (!deps.roles) {
-    missing.push('no role store is bound, so a coloured name cannot be kept between restarts');
+    missing.push(
+      'no role store is bound, so the colour role an earlier Proton made cannot be found and deleted',
+    );
+  }
+
+  if (!deps.nameStyles) {
+    missing.push('no name style store is bound, so the display name style cannot be applied');
+  }
+
+  if (!deps.rest) {
+    missing.push(
+      'no REST client is bound, so Proton cannot read its display name style back from Discord',
+    );
   }
 
   if (!deps.botUserId) {

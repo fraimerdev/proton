@@ -1,12 +1,7 @@
 import { encodeCustomId, type TicketPriority } from '@proton/core';
 import { ButtonStyle, ComponentType } from 'discord-api-types/v10';
-import {
-  MODULE_ID,
-  PRIORITY_LABELS,
-  renderOpeningMessage,
-  type TicketPanel,
-  type TicketType,
-} from './config.ts';
+import { MODULE_ID, PRIORITY_LABELS, type TicketPanel, type TicketType } from './config.ts';
+import { renderTicketWelcome, type TicketPlaceholderFacts } from './placeholders.ts';
 import type { Ticket, TicketFormAnswer, TicketParticipant } from './store.ts';
 
 export const OPEN_ACTION = 'open';
@@ -195,6 +190,18 @@ export interface TicketView {
   staffRoleIds: readonly string[];
   answers: readonly TicketFormAnswer[];
   participants: readonly TicketParticipant[];
+  facts?: TicketPlaceholderFacts | undefined;
+}
+
+function viewFacts(view: TicketView): TicketPlaceholderFacts {
+  return {
+    ticket: view.ticket,
+    typeName: view.typeName,
+    ownerId: view.ticket.ownerId,
+    answers: view.answers,
+    server: null,
+    bot: null,
+  };
 }
 
 export function describeStatus(ticket: Ticket): string {
@@ -325,6 +332,7 @@ export function buildOptionRows(view: TicketView): BuildResult<Record<string, un
 export function buildWelcomeComponents(
   view: TicketView,
   welcomeTemplate: string,
+  now = Date.now(),
 ): BuildResult<Record<string, unknown>[]> {
   const { ticket } = view;
 
@@ -335,7 +343,7 @@ export function buildWelcomeComponents(
 
   const body: Record<string, unknown>[] = [
     text(`## Ticket #${ticket.number}`),
-    text(renderOpeningMessage(welcomeTemplate, ticket.ownerId)),
+    text(renderTicketWelcome(welcomeTemplate, view.facts ?? viewFacts(view), now)),
     separator(),
     text(
       `**Type**\n${view.typeName}\n\n**Priority**\n${describePriority(ticket.priority)}` +

@@ -15,14 +15,14 @@ import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { EmojiGlyph } from '../../components/discord/emoji-picker.tsx';
 import { MemberCell, MemberProvider } from '../../components/discord/member.tsx';
+import { useModuleNavigate, useModuleSearch } from '../../components/module/route.tsx';
 import { Badge, Button, Chip, SearchField, Select } from '../../components/ui/controls.tsx';
-import { EmptyState, StatusBanner } from '../../components/ui/feedback.tsx';
+import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Icon } from '../../components/ui/icon.tsx';
 import { Pair, Pairs } from '../../components/ui/layout.tsx';
 import { Dialog, MenuButton } from '../../components/ui/overlay.tsx';
 import { type Column, DataTable, Pagination } from '../../components/ui/table.tsx';
 import { readFailure } from '../../lib/errors.ts';
-import { useTicketNav, useTicketSearch } from './nav.ts';
 import { QUEUE_FILTERS, queueQuery, sortOf, statusOf } from './queries.ts';
 import { priorityHex, STATUS_LABELS, type TicketsForm } from './shape.ts';
 
@@ -91,8 +91,8 @@ export function QueueArea({
   moduleId: string;
 }): ReactElement {
   const config = form.value;
-  const search = useTicketSearch();
-  const go = useTicketNav(guildId, moduleId);
+  const search = useModuleSearch();
+  const go = useModuleNavigate(guildId, moduleId);
 
   const [priority, setPriority] = useState<TicketPriority | ''>(QUEUE_FILTERS.priority);
   const [typeId, setTypeId] = useState(QUEUE_FILTERS.typeId);
@@ -309,10 +309,16 @@ export function QueueArea({
     },
   ];
 
-  // Filtered emptiness gets its own state below, because that one carries a Clear filters action
-  // and DataTable's built-in empty takes no actions.
   const empty = filtered
-    ? undefined
+    ? {
+        icon: 'magnifying-glass' as const,
+        title: 'No tickets match these filters',
+        body: (
+          <Button size="sm" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        ),
+      }
     : config.types.length === 0
       ? { icon: 'ticket' as const, title: 'No tickets', body: NO_TYPES }
       : { icon: 'ticket' as const, title: 'No tickets' };
@@ -438,19 +444,6 @@ export function QueueArea({
           }
         />
       )}
-
-      {rows.length === 0 && filtered && !query.isPending && !query.isError ? (
-        <EmptyState
-          icon="magnifying-glass"
-          title="No tickets match these filters"
-          inset
-          actions={
-            <Button size="sm" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          }
-        />
-      ) : null}
 
       <TicketDetail
         guildId={guildId}

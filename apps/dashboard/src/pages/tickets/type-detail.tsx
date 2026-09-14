@@ -7,23 +7,23 @@ import {
 } from '@proton/core';
 import {
   CATEGORY_CHANNEL_TYPE,
-  NUMBER_PLACEHOLDER,
   PRIORITY_LABELS,
-  renderChannelName,
-  renderOpeningMessage,
   staffRolesFor,
   TEXT_CHANNEL_TYPE,
   type TicketsConfig,
   type TicketType,
-  USER_PLACEHOLDER,
 } from '@proton/module-tickets/config';
+import { TICKET_NAME_SURFACE, TICKET_WELCOME_SURFACE } from '@proton/module-tickets/placeholders';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
+import { useMemo } from 'react';
 import { ChannelPicker } from '../../components/discord/channel-picker.tsx';
 import { EmojiPicker } from '../../components/discord/emoji-picker.tsx';
 import { DurationInput } from '../../components/discord/inputs.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RoleMultiPicker, RoleName } from '../../components/discord/role-picker.tsx';
+import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
+import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import {
   Button,
   Chip,
@@ -39,17 +39,22 @@ import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { rolesQuery } from '../../lib/queries.ts';
 import { FormBuilder } from './form-builder.tsx';
 import {
+  answerPlaceholders,
   CLAIM_MODE_OPTIONS,
   modalFields,
+  namePreview,
+  namesEachTicket,
+  openingPreview,
   opensAModal,
   PRIORITY_OPTIONS,
-  SAMPLE_OPENER,
   SAMPLE_TICKET_NUMBER,
-  SAMPLE_USER_ID,
+  sampleAnswer,
   TICKET_ACCENT,
   type TicketsForm,
   TRANSCRIPT_OPTIONS,
   updateTypeAt,
+  useTemplateField,
+  useTicketTemplates,
 } from './shape.ts';
 
 const NAME_MAX = 64;
@@ -72,7 +77,8 @@ const NO_DELETE_NOTE =
   'Archive on close is on.';
 
 const NO_PLACEHOLDER =
-  'Without {number} or {user}, every ticket of this type gets the same channel name.';
+  'Without the ticket number or the member in it, such as {ticket.number} or {user.username}, ' +
+  'every ticket of this type gets the same channel name.';
 
 const RESOLVED_ROLES = 'All staff roles for this ticket type:';
 
@@ -81,8 +87,6 @@ const MENTION_NOTE =
   'notify anyone.';
 
 const PER_TYPE_LIMIT = 'Checked alongside the limit in Settings. The lower of the two applies.';
-
-const PREVIEW_NOTE = 'The ticket number and answers are examples.';
 
 const PRIORITY_SLOT =
   'The priority question counts toward Discord’s limit of 5 questions, so the last question below ' +
@@ -158,14 +162,14 @@ function OptionalDuration({
   );
 }
 
-function welcomePreview(config: TicketsConfig, type: TicketType): V2Component[] {
+function welcomePreview(config: TicketsConfig, type: TicketType, opening: string): V2Component[] {
   const staff = staffRolesFor(config, type)
     .map((roleId) => `<@&${roleId}>`)
     .join(' ');
 
   const children: ContainerChild[] = [
     { kind: 'text', content: `## Ticket #${SAMPLE_TICKET_NUMBER}` },
-    { kind: 'text', content: renderOpeningMessage(type.welcomeMessage, SAMPLE_USER_ID) },
+    { kind: 'text', content: opening },
     { kind: 'separator', divider: true, spacing: 'small' },
     {
       kind: 'text',
@@ -183,7 +187,7 @@ function welcomePreview(config: TicketsConfig, type: TicketType): V2Component[] 
       {
         kind: 'text',
         content: asked
-          .map((field) => `**${field.label || 'Untitled question'}**\n${field.placeholder ?? '…'}`)
+          .map((field) => `**${field.label || 'Untitled question'}**\n${sampleAnswer(field)}`)
           .join('\n\n'),
       },
     );
@@ -210,13 +214,11 @@ export function TypeDetail({
   guildId,
   type,
   index,
-  onBack,
 }: {
   form: TicketsForm;
   guildId: string;
   type: TicketType;
   index: number;
-  onBack: () => void;
 }): ReactElement {
   const config = form.value;
   const path = `types.${index}`;
@@ -226,11 +228,9 @@ export function TypeDetail({
   const resolvedStaff = staffRolesFor(config, type);
 
   const pattern = type.namePattern ?? config.namePattern;
-  const sample = renderChannelName(pattern, SAMPLE_TICKET_NUMBER, SAMPLE_OPENER, type.name);
+  const sample = namePreview(`${path}.namePattern`, pattern, type.name);
   const patternMissesPlaceholder =
-    type.namePattern !== undefined &&
-    !type.namePattern.includes(NUMBER_PLACEHOLDER) &&
-    !type.namePattern.includes(USER_PLACEHOLDER);
+    type.namePattern !== undefined && !namesEachTicket(type.namePattern);
 
   const closeMs = tryParseDuration(type.autoCloseAfter ?? '');
   const warnMs = tryParseDuration(type.inactivityWarnAfter ?? '');
@@ -240,14 +240,33 @@ export function TypeDetail({
 
   const patch = (change: Partial<TicketType>): void => updateTypeAt(form, index, change);
 
+  const report = useTicketTemplates(form);
+  const answers = useMemo(() => answerPlaceholders([type]), [type]);
+
+  const setNamePattern = (next: string): void =>
+    patch({ namePattern: next === '' ? undefined : next });
+
+  const namePattern = useTemplateField({
+    surface: TICKET_NAME_SURFACE,
+    report,
+    path: `${path}.namePattern`,
+    onChange: setNamePattern,
+    error: form.errorAt(`${path}.namePattern`),
+  });
+
+  const opening = useTemplateField({
+    surface: TICKET_WELCOME_SURFACE,
+    report,
+    path: `${path}.welcomeMessage`,
+    onChange: (welcomeMessage) => patch({ welcomeMessage }),
+    error: form.errorAt(`${path}.welcomeMessage`),
+    dynamic: answers,
+  });
+
+  const openingSample = openingPreview(type, index);
+
   return (
     <>
-      <div className="tickets-detail-back">
-        <Button tone="ghost" size="sm" icon="caret-left" onClick={onBack}>
-          Back to ticket types
-        </Button>
-      </div>
-
       <Section label="Details">
         <Rows>
           <SettingRow title="ID" note={ID_FIXED}>
@@ -335,32 +354,35 @@ export function TypeDetail({
           <SettingRow
             title="Name pattern"
             description={`Leave empty to use the default pattern, ${config.namePattern}.`}
-            error={form.errorAt(`${path}.namePattern`)}
+            error={namePattern.error}
             note={
               <>
                 {patternMissesPlaceholder ? (
                   <span className="text-warning">{NO_PLACEHOLDER} </span>
                 ) : null}
-                Ticket {SAMPLE_TICKET_NUMBER}, opened by {SAMPLE_OPENER}, type {type.name}:{' '}
-                <span className="mono">#{sample}</span>
+                {sample.caption}. Channel: <span className="mono">#{sample.text}</span>
               </>
             }
           >
-            <TextInput
-              width="md"
-              aria-label="Name pattern"
-              spellCheck={false}
-              placeholder={config.namePattern}
-              maxLength={NAME_PATTERN_MAX}
-              invalid={form.errorAt(`${path}.namePattern`) !== undefined}
-              value={type.namePattern ?? ''}
-              onChange={(event) =>
-                patch({
-                  namePattern:
-                    event.currentTarget.value === '' ? undefined : event.currentTarget.value,
-                })
-              }
-            />
+            <div className="message-field">
+              <TextInput
+                {...namePattern.autocomplete.field}
+                width="md"
+                aria-label="Name pattern"
+                aria-describedby={namePattern.describedBy}
+                spellCheck={false}
+                placeholder={config.namePattern}
+                maxLength={NAME_PATTERN_MAX}
+                invalid={namePattern.invalid}
+                value={type.namePattern ?? ''}
+                onChange={(event) => setNamePattern(event.currentTarget.value)}
+              />
+              <PlaceholderSuggestions autocomplete={namePattern.autocomplete} />
+              <TemplateDiagnostics
+                id={namePattern.diagnosticsId}
+                diagnostics={namePattern.diagnostics}
+              />
+            </div>
           </SettingRow>
         </Rows>
       </Section>
@@ -421,18 +443,27 @@ export function TypeDetail({
             <Rows>
               <SettingRow
                 title="Opening message"
-                description="Posted in the new ticket channel. {user} mentions the member who opened it."
-                error={form.errorAt(`${path}.welcomeMessage`)}
+                description="Posted in the new ticket channel."
+                error={opening.error}
                 stacked
               >
-                <TextArea
-                  aria-label="Opening message"
-                  rows={6}
-                  maxLength={WELCOME_MAX}
-                  invalid={form.errorAt(`${path}.welcomeMessage`) !== undefined}
-                  value={type.welcomeMessage}
-                  onChange={(event) => patch({ welcomeMessage: event.currentTarget.value })}
-                />
+                <div className="message-field">
+                  <TextArea
+                    {...opening.autocomplete.field}
+                    aria-label="Opening message"
+                    aria-describedby={opening.describedBy}
+                    rows={6}
+                    maxLength={WELCOME_MAX}
+                    invalid={opening.invalid}
+                    value={type.welcomeMessage}
+                    onChange={(event) => patch({ welcomeMessage: event.currentTarget.value })}
+                  />
+                  <PlaceholderSuggestions autocomplete={opening.autocomplete} />
+                  <TemplateDiagnostics
+                    id={opening.diagnosticsId}
+                    diagnostics={opening.diagnostics}
+                  />
+                </div>
               </SettingRow>
 
               <SettingRow
@@ -452,8 +483,12 @@ export function TypeDetail({
             <div className="editor-preview-head">
               <span className="editor-preview-title">In the ticket channel</span>
             </div>
-            <DiscordPreview message={{ v2: welcomePreview(config, type) }} />
-            <p className="tickets-preview-note">{PREVIEW_NOTE}</p>
+            <DiscordPreview
+              message={{ v2: welcomePreview(config, type, openingSample.text) }}
+              mentionNames={openingSample.mentionNames}
+              now={openingSample.now}
+            />
+            <p className="tickets-preview-note">{openingSample.caption}</p>
           </div>
         </div>
 

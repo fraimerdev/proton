@@ -3,10 +3,15 @@ import {
   encodeCustomId,
   MESSAGE_FLAG_IS_COMPONENTS_V2,
   type ProtonMessage,
-  substitute,
   toDiscordMessage,
   type V2Component,
 } from '@proton/core';
+import {
+  type BotFacts,
+  type ChannelFacts,
+  renderMessageTemplate,
+  type ServerFacts,
+} from '@proton/core/placeholders';
 import { ComponentType } from 'discord-api-types/v10';
 import {
   DEFAULT_DM_MESSAGE,
@@ -18,6 +23,11 @@ import {
   MODULE_ID,
 } from './config.ts';
 import { COUNTER_KEY, HONEYPOT_POT, QUIET_NOTICE_BODY, RECOVERY_ADVICE } from './layout.ts';
+import {
+  HONEYPOT_NOTICE_SURFACE,
+  type HoneypotNoticeFacts,
+  layoutPlaceholderKeys,
+} from './placeholders.ts';
 
 export const STATS_ACTION = 'stats';
 
@@ -106,33 +116,69 @@ export type NoticeResult =
   | { ok: true; components: Record<string, unknown>[]; flags: number }
   | { ok: false; humanReason: string };
 
+export interface NoticeExtra {
+  guildId?: string | undefined;
+  server?: ServerFacts | null | undefined;
+  bot?: BotFacts | null | undefined;
+  channel?: ChannelFacts | undefined;
+  now?: number | undefined;
+}
+
+export function noticePlaceholderFacts(
+  config: HoneypotConfig,
+  channelId: string,
+  caught: number,
+  extra: NoticeExtra = {},
+): HoneypotNoticeFacts {
+  return {
+    guildId: extra.guildId ?? '',
+    consequence: CONSEQUENCE[config.action],
+    purge: purgeSentence(config),
+    caught,
+    channel: extra.channel ?? { id: channelId },
+    server: extra.server ?? null,
+    bot: extra.bot ?? null,
+  };
+}
+
+function noticeLayout(config: HoneypotConfig, tier: EntitlementTier | undefined): ProtonMessage {
+  const layout = layoutFor(config, 'noticeLayout', tier);
+
+  return config.hideWhatIsAHoneypot
+    ? { ...layout, v2: replaceBody(layout.v2, QUIET_NOTICE_BODY) }
+    : layout;
+}
+
+export function noticePlaceholderKeys(
+  config: HoneypotConfig,
+  tier: EntitlementTier | undefined,
+): Set<string> {
+  return layoutPlaceholderKeys(HONEYPOT_NOTICE_SURFACE, noticeLayout(config, tier));
+}
+
 export function buildNoticeComponents(
   config: HoneypotConfig,
   channelId: string,
   caught: number,
   tier: EntitlementTier | undefined,
+  extra: NoticeExtra = {},
 ): NoticeResult {
   const customId = encodeCustomId(MODULE_ID, STATS_ACTION, channelId);
   if (!customId.ok) return { ok: false, humanReason: customId.humanReason };
 
-  const layout = layoutFor(config, 'noticeLayout', tier);
+  const now = extra.now ?? Date.now();
+  const facts = noticePlaceholderFacts(config, channelId, caught, extra);
 
-  const body = config.hideWhatIsAHoneypot
-    ? (substitute(QUIET_NOTICE_BODY, {
-        consequence: CONSEQUENCE[config.action],
-        purge: purgeSentence(config),
-      }) as string)
-    : undefined;
-
-  const substituted = substitute(layout, {
-    consequence: CONSEQUENCE[config.action],
-    purge: purgeSentence(config),
-  }) as ProtonMessage;
-
-  const withBody = body ? replaceBody(substituted.v2, body) : substituted.v2;
+  const rendered = renderMessageTemplate(
+    noticeLayout(config, tier),
+    HONEYPOT_NOTICE_SURFACE,
+    HONEYPOT_NOTICE_SURFACE.build(facts, { now }),
+    { now, basePath: 'noticeLayout' },
+  );
+  if (!rendered.ok) return { ok: false, humanReason: rendered.humanReason };
 
   const v2 = config.noticeCounterButton
-    ? appendRow(withBody, {
+    ? appendRow(rendered.message.v2, {
         kind: 'row',
         row: {
           kind: 'buttons',
@@ -146,10 +192,10 @@ export function buildNoticeComponents(
           ],
         },
       })
-    : withBody;
+    : rendered.message.v2;
 
-  const rendered = toDiscordMessage(
-    { ...substituted, v2 },
+  const message = toDiscordMessage(
+    { ...rendered.message, v2 },
     {
       customIdFor: () => customId.customId,
     },
@@ -157,7 +203,7 @@ export function buildNoticeComponents(
 
   return {
     ok: true,
-    components: (rendered.components ?? []) as unknown as Record<string, unknown>[],
+    components: (message.components ?? []) as unknown as Record<string, unknown>[],
     flags: MESSAGE_FLAG_IS_COMPONENTS_V2,
   };
 }

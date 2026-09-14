@@ -1,23 +1,25 @@
 import { limitFor, protonFields, snowflakeSchema } from '@proton/core';
+import { mentionsAny } from '@proton/core/placeholders';
 import { z } from 'zod';
+import { COUNT_PLACEHOLDER, COUNTER_SOURCES } from './constants.ts';
+import { COUNT_KEYS, COUNTER_SURFACE } from './placeholders.ts';
+
+export {
+  CHANNEL_NAME_MAX,
+  COUNT_PLACEHOLDER,
+  COUNTER_SOURCES,
+  type CounterSource,
+} from './constants.ts';
 
 export const MODULE_ID = 'counters';
 
-export const CHANNEL_NAME_MAX = 100;
-
 export const TEMPLATE_MAX = 90;
-
-export const COUNT_PLACEHOLDER = '{count}';
 
 export const COUNTERS_CEILING = limitFor('pro', 'counters');
 
 // A rename sits in its own far tighter bucket than any other channel edit — two per ten minutes
 // per channel — so this is a floor, not a default, and there is deliberately no setting for it.
 export const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
-
-export const COUNTER_SOURCES = ['members', 'roles', 'channels'] as const;
-
-export type CounterSource = (typeof COUNTER_SOURCES)[number];
 
 export const COUNTER_ID_MAX = 32;
 
@@ -64,12 +66,16 @@ export const counterSchema = z.preprocess(
       .string()
       .min(1)
       .max(TEMPLATE_MAX)
-      .refine((value) => value.includes(COUNT_PLACEHOLDER), {
-        message:
-          `a counter template needs ${COUNT_PLACEHOLDER} in it — that is where the number goes, ` +
-          'as in “Members: {count}”. Without it the channel would be renamed to a fixed string ' +
-          'that never changes.',
-      })
+      .refine(
+        (value) =>
+          value.includes(COUNT_PLACEHOLDER) || mentionsAny(COUNTER_SURFACE, value, COUNT_KEYS),
+        {
+          message:
+            `a counter template needs a count in it, such as ${COUNT_PLACEHOLDER} or ` +
+            '{count.roles} — that is where the number goes, as in “Members: {count}”. Without ' +
+            'one the channel would be renamed to a fixed string that never changes.',
+        },
+      )
       .register(protonFields, {
         label: 'Name template',
       }),

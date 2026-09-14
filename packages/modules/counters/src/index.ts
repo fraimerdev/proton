@@ -9,6 +9,7 @@ import {
 } from './config.ts';
 import type { CountersDeps } from './deps.ts';
 import { createCountersListener } from './listener.ts';
+import { countersTemplates } from './placeholders.ts';
 import { createRefreshHandler, REFRESH_JOB } from './refresh.ts';
 
 export { countersCommand, countersCommands } from './commands.ts';
@@ -52,6 +53,15 @@ export {
 } from './listener.ts';
 export { NO_STATE, NO_STORE, NOT_WIRED, renameChannel, reply } from './perform.ts';
 export {
+  COUNT_KEYS,
+  COUNTER_EVENT,
+  COUNTER_SURFACE,
+  type CounterPlaceholderFacts,
+  countersTemplates,
+  countFor,
+  renderCounterName,
+} from './placeholders.ts';
+export {
   createRefreshHandler,
   REFRESH_JOB,
   REFRESH_KEY,
@@ -60,12 +70,12 @@ export {
   refreshKeyRoot,
 } from './refresh.ts';
 export {
+  type BlankCounter,
   type CounterCreation,
   type CounterEdit,
   type CounterFailure,
   type CounterPlan,
   type CreationFailure,
-  countFor,
   NO_COUNTERS,
   plan,
   type RefreshOutcome,
@@ -106,6 +116,8 @@ export function createCountersModule(
 
     schedules: [REFRESH_JOB],
     scheduledHandlers: { [REFRESH_JOB]: createRefreshHandler(deps) },
+
+    templates: countersTemplates,
 
     dashboard: {
       icon: 'hash',

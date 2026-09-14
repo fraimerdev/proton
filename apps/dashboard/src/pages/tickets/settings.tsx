@@ -1,12 +1,26 @@
-import { renderChannelName, TEXT_CHANNEL_TYPE } from '@proton/module-tickets/config';
+import { TEXT_CHANNEL_TYPE } from '@proton/module-tickets/config';
+import {
+  TICKET_BLACKLIST_SURFACE,
+  TICKET_CLOSE_SURFACE,
+  TICKET_NAME_SURFACE,
+} from '@proton/module-tickets/placeholders';
 import type { ReactElement } from 'react';
 import { ChannelPicker } from '../../components/discord/channel-picker.tsx';
 import { DurationInput } from '../../components/discord/inputs.tsx';
+import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RoleMultiPicker } from '../../components/discord/role-picker.tsx';
+import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
+import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import { NumberStepper, TextArea, TextInput } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { listCeiling } from '../../lib/limits.ts';
-import { SAMPLE_OPENER, SAMPLE_TICKET_NUMBER, type TicketsForm } from './shape.ts';
+import {
+  closingPreview,
+  namePreview,
+  type TicketsForm,
+  useTemplateField,
+  useTicketTemplates,
+} from './shape.ts';
 
 const NAME_PATTERN_MAX = 100;
 const CLOSE_CONFIRMATION_MAX = 2000;
@@ -18,8 +32,8 @@ const NO_STAFF_ANYWHERE =
   'see it.';
 
 const BLACKLIST_NOTE =
-  'Shown to blacklisted members when they try to open a ticket. Use /ticket blacklist in Discord ' +
-  'to add or remove members.';
+  'Shown to blacklisted members when they try to open a ticket. Proton adds the reason and when ' +
+  'the block lifts below it. Use /ticket blacklist in Discord to add or remove members.';
 
 export function SettingsArea({
   form,
@@ -30,6 +44,7 @@ export function SettingsArea({
 }): ReactElement {
   const config = form.value;
   const tier = form.view.tier;
+  const report = useTicketTemplates(form);
 
   const noStaffAnywhere =
     config.staffRoleIds.length === 0 &&
@@ -38,12 +53,41 @@ export function SettingsArea({
   const perUserCeiling = listCeiling(tier, 'openTicketsPerUser');
   const overPlan = config.maxOpenPerUser > perUserCeiling;
 
-  const sample = renderChannelName(
-    config.namePattern,
-    SAMPLE_TICKET_NUMBER,
-    SAMPLE_OPENER,
-    'Support',
-  );
+  const setNamePattern = (namePattern: string): void =>
+    form.setValue((current) => ({ ...current, namePattern }));
+
+  const setCloseConfirmation = (closeConfirmation: string): void =>
+    form.setValue((current) => ({ ...current, closeConfirmation }));
+
+  const setBlacklistMessage = (blacklistMessage: string): void =>
+    form.setValue((current) => ({ ...current, blacklistMessage }));
+
+  const name = useTemplateField({
+    surface: TICKET_NAME_SURFACE,
+    report,
+    path: 'namePattern',
+    onChange: setNamePattern,
+    error: form.errorAt('namePattern'),
+  });
+
+  const closing = useTemplateField({
+    surface: TICKET_CLOSE_SURFACE,
+    report,
+    path: 'closeConfirmation',
+    onChange: setCloseConfirmation,
+    error: form.errorAt('closeConfirmation'),
+  });
+
+  const blacklist = useTemplateField({
+    surface: TICKET_BLACKLIST_SURFACE,
+    report,
+    path: 'blacklistMessage',
+    onChange: setBlacklistMessage,
+    error: form.errorAt('blacklistMessage'),
+  });
+
+  const sampleName = namePreview('namePattern', config.namePattern);
+  const sampleClosing = closingPreview(config.closeConfirmation);
 
   return (
     <>
@@ -71,47 +115,62 @@ export function SettingsArea({
         <Rows>
           <SettingRow
             title="Name pattern"
-            description="How new ticket channels are named, using {number}, {user} and {type}. Ticket types can set their own."
-            error={form.errorAt('namePattern')}
+            description="How new ticket channels are named. Ticket types can set their own."
+            error={name.error}
             note={
               <>
-                Ticket {SAMPLE_TICKET_NUMBER}, opened by {SAMPLE_OPENER}, type Support:{' '}
-                <span className="mono">#{sample}</span>
+                {sampleName.caption}. Channel: <span className="mono">#{sampleName.text}</span>
               </>
             }
           >
-            <TextInput
-              width="md"
-              aria-label="Name pattern"
-              maxLength={NAME_PATTERN_MAX}
-              spellCheck={false}
-              invalid={form.errorAt('namePattern') !== undefined}
-              value={config.namePattern}
-              onChange={(event) =>
-                form.setValue((current) => ({ ...current, namePattern: event.currentTarget.value }))
-              }
-            />
+            <div className="message-field">
+              <TextInput
+                {...name.autocomplete.field}
+                width="md"
+                aria-label="Name pattern"
+                aria-describedby={name.describedBy}
+                maxLength={NAME_PATTERN_MAX}
+                spellCheck={false}
+                invalid={name.invalid}
+                value={config.namePattern}
+                onChange={(event) => setNamePattern(event.currentTarget.value)}
+              />
+              <PlaceholderSuggestions autocomplete={name.autocomplete} />
+              <TemplateDiagnostics id={name.diagnosticsId} diagnostics={name.diagnostics} />
+            </div>
           </SettingRow>
 
           <SettingRow
             title="Closing message"
             description="Posted in the ticket channel when it closes."
-            error={form.errorAt('closeConfirmation')}
+            error={closing.error}
             stacked
           >
-            <TextArea
-              aria-label="Closing message"
-              rows={3}
-              maxLength={CLOSE_CONFIRMATION_MAX}
-              invalid={form.errorAt('closeConfirmation') !== undefined}
-              value={config.closeConfirmation}
-              onChange={(event) =>
-                form.setValue((current) => ({
-                  ...current,
-                  closeConfirmation: event.currentTarget.value,
-                }))
-              }
-            />
+            <div className="stack stack-12">
+              <div className="message-field">
+                <TextArea
+                  {...closing.autocomplete.field}
+                  aria-label="Closing message"
+                  aria-describedby={closing.describedBy}
+                  rows={3}
+                  maxLength={CLOSE_CONFIRMATION_MAX}
+                  invalid={closing.invalid}
+                  value={config.closeConfirmation}
+                  onChange={(event) => setCloseConfirmation(event.currentTarget.value)}
+                />
+                <PlaceholderSuggestions autocomplete={closing.autocomplete} />
+                <TemplateDiagnostics id={closing.diagnosticsId} diagnostics={closing.diagnostics} />
+              </div>
+
+              <div>
+                <DiscordPreview
+                  message={{ content: sampleClosing.text }}
+                  mentionNames={sampleClosing.mentionNames}
+                  now={sampleClosing.now}
+                />
+                <p className="tickets-preview-note">{sampleClosing.caption}</p>
+              </div>
+            </div>
           </SettingRow>
         </Rows>
       </Section>
@@ -180,23 +239,27 @@ export function SettingsArea({
 
           <SettingRow
             title="Blacklist message"
-            error={form.errorAt('blacklistMessage')}
+            error={blacklist.error}
             note={BLACKLIST_NOTE}
             stacked
           >
-            <TextArea
-              aria-label="Blacklist message"
-              rows={2}
-              maxLength={BLACKLIST_MESSAGE_MAX}
-              invalid={form.errorAt('blacklistMessage') !== undefined}
-              value={config.blacklistMessage}
-              onChange={(event) =>
-                form.setValue((current) => ({
-                  ...current,
-                  blacklistMessage: event.currentTarget.value,
-                }))
-              }
-            />
+            <div className="message-field">
+              <TextArea
+                {...blacklist.autocomplete.field}
+                aria-label="Blacklist message"
+                aria-describedby={blacklist.describedBy}
+                rows={2}
+                maxLength={BLACKLIST_MESSAGE_MAX}
+                invalid={blacklist.invalid}
+                value={config.blacklistMessage}
+                onChange={(event) => setBlacklistMessage(event.currentTarget.value)}
+              />
+              <PlaceholderSuggestions autocomplete={blacklist.autocomplete} />
+              <TemplateDiagnostics
+                id={blacklist.diagnosticsId}
+                diagnostics={blacklist.diagnostics}
+              />
+            </div>
           </SettingRow>
         </Rows>
       </Section>

@@ -11,6 +11,10 @@ export const queryKeys = {
   channels: (guildId: string) => ['guild', guildId, 'channels'] as const,
   roles: (guildId: string) => ['guild', guildId, 'roles'] as const,
   emojis: (guildId: string) => ['guild', guildId, 'emojis'] as const,
+  protonAccount: (guildId: string) => ['guild', guildId, 'proton-account'] as const,
+  nameStyleStatus: (guildId: string) =>
+    ['guild', guildId, 'branding', 'name-style-status'] as const,
+  xpEvents: (guildId: string) => ['guild', guildId, 'leveling', 'xp-events'] as const,
   view: (guildId: string, viewId: string, search: unknown) =>
     ['guild', guildId, 'view', viewId, search] as const,
 };

@@ -14,7 +14,7 @@ const ROLE_MAX = 20;
 const CHANNEL_MAX = 50;
 
 const ROLE_CEILING =
-  'Discord allows up to 20 exempt roles on an AutoMod rule, and Proton copies this list into its rules.';
+  'You\'re allowed to add up to 20 exempt roles on an AutoMod rule.';
 
 export function ExemptionsArea({ form, guildId }: { form: Form; guildId: string }): ReactElement {
   const config = form.value;
@@ -22,7 +22,6 @@ export function ExemptionsArea({ form, guildId }: { form: Form; guildId: string 
   return (
     <Section
       label="Skipped messages"
-      intro="No check runs on these messages. Exempt roles and channels also apply to the Discord AutoMod rules Proton creates."
     >
       <Rows>
         <SettingRow
@@ -31,8 +30,7 @@ export function ExemptionsArea({ form, guildId }: { form: Form; guildId: string 
           badge={
             <LimitCounter used={config.exemptRoleIds.length} ceiling={ROLE_MAX} label="roles" />
           }
-          note={config.exemptRoleIds.length >= ROLE_MAX ? ROLE_CEILING : undefined}
-          error={form.errorAt('exemptRoleIds')}
+          error={form.errorAt('exemptRoleIds') ?? config.exemptRoleIds.length >= ROLE_MAX ? ROLE_CEILING : undefined}
           stacked
         >
           <RoleMultiPicker

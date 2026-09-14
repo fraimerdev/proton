@@ -11,8 +11,7 @@ import type { ModuleSearch } from '../../components/module/route.tsx';
 import { LIVE, queryKeys, STALE } from '../../lib/query-keys.ts';
 import { searchCases } from '../../server/modules.ts';
 
-// 25 and 50 only: a row carries a target and a moderator, so fifty rows already reach the hundred
-// ids getGuildMembers accepts. A hundred-row page would print half its names as raw ids.
+// No 100: fifty rows already reach the hundred member ids getGuildMembers accepts.
 export const PAGE_SIZES = [25, 50] as const;
 
 export const DEFAULT_PAGE_SIZE: number = PAGE_SIZES[1];

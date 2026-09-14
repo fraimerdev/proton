@@ -12,6 +12,7 @@ import type { HoneypotDeps } from './deps.ts';
 import { createHoneypotStatsListener } from './interactions.ts';
 import { createHoneypotListener } from './listener.ts';
 import { createHoneypotPendingListener } from './pending.ts';
+import { honeypotTemplates } from './placeholders.ts';
 import { PUNISH_JOB } from './punish.ts';
 import { createPunishHandler } from './punish-handler.ts';
 import { createHoneypotNoticeListener } from './service.ts';
@@ -132,7 +133,10 @@ export {
   DM_ACTION_WORD,
   type LayoutSlot,
   layoutFor,
+  type NoticeExtra,
   type NoticeResult,
+  noticePlaceholderFacts,
+  noticePlaceholderKeys,
   purgeSentence,
   STATS_ACTION,
   type StatsView,
@@ -143,6 +147,17 @@ export {
   markSettled,
   type PendingOutcome,
 } from './pending.ts';
+export {
+  HONEYPOT_DM_EVENT,
+  HONEYPOT_DM_SURFACE,
+  HONEYPOT_NOTICE_EVENT,
+  HONEYPOT_NOTICE_SURFACE,
+  type HoneypotDmFacts,
+  type HoneypotNoticeFacts,
+  honeypotTemplates,
+  layoutPlaceholderKeys,
+  usesNamespace,
+} from './placeholders.ts';
 export {
   type Punishment,
   planTrap,
@@ -216,6 +231,8 @@ export function createHoneypotModule(
     schemaVersion: HONEYPOT_SCHEMA_VERSION,
 
     liftStoredConfig,
+
+    templates: honeypotTemplates,
 
     // MessageContent is declared because "Quote the message" puts what was posted in the incident
     // log. Nothing branches on the body — the trap is still that a message exists at all — but

@@ -1,14 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 import { NEVER_RECORDED_KINDS, Permissions } from '@proton/core';
+import { brandingConfigSchema, liftStoredConfig } from '../src/config.ts';
 import { imageMime } from '../src/image.ts';
 import { brandingModule } from '../src/index.ts';
 import { impersonationReason, normaliseName } from '../src/names.ts';
-import { diverges, observedProfile } from '../src/profile.ts';
+import { diverges, fingerprint, observedProfile } from '../src/profile.ts';
 import {
   AVATAR_HASH,
   BANNER_HASH,
   BOT,
   configChanged,
+  GUILD,
   guildAvailable,
   harness,
   PNG_DATA_URI,
@@ -100,13 +102,8 @@ describe('when a permission is missing', () => {
     expect(warning?.message).toContain('this server');
   });
 
-  test('the module asks for Change Nickname and Manage Roles, so the invite does too', () => {
-    // Manage Roles is the colour half: Discord cannot colour a bot's name directly, so Proton
-    // makes a role, colours it, and wears it.
-    expect(brandingModule.requiredPermissions).toEqual([
-      Permissions.ChangeNickname,
-      Permissions.ManageRoles,
-    ]);
+  test('the module needs only Change Nickname to run', () => {
+    expect(brandingModule.requiredPermissions).toEqual([Permissions.ChangeNickname]);
   });
 });
 
@@ -288,5 +285,141 @@ describe('image data', () => {
     expect(imageMime(new Uint8Array([0xff, 0xd8, 0xff]))).toBe('image/jpeg');
     expect(imageMime(new Uint8Array([0x47, 0x49, 0x46, 0x38]))).toBe('image/gif');
     expect(imageMime(new Uint8Array([0x00, 0x01, 0x02, 0x03]))).toBeNull();
+  });
+});
+
+const BOLD_DREAMLINER =
+  '\u{1D403}\u{1D42B}\u{1D41E}\u{1D41A}\u{1D426}\u{1D425}\u{1D422}\u{1D427}\u{1D41E}\u{1D42B}';
+
+const STYLED_ROW = { enabled: true, ...FULL, typeface: 'bold' };
+
+describe('a server still wearing a nickname in the retired look-alike letters', () => {
+  test('reconcile puts the plain nickname back over the styled one Discord holds', async () => {
+    const h = harness();
+
+    await h.listen(
+      guildAvailable({ nick: BOLD_DREAMLINER, avatar: 'a1', banner: 'b1' }),
+      brandingConfigSchema.parse(STYLED_ROW),
+    );
+
+    expect(h.bodies()).toEqual([{ nick: 'Dreamliner' }]);
+  });
+
+  test('the next save sends the plain nickname', async () => {
+    const h = harness();
+
+    await h.listen(configChanged(), brandingConfigSchema.parse(liftStoredConfig(STYLED_ROW)));
+
+    expect(h.bodies()).toEqual([
+      { avatar: PNG_DATA_URI, banner: PNG_DATA_URI, bio: 'The friendly one.' },
+      { nick: 'Dreamliner' },
+    ]);
+  });
+
+  test('a save of only the display name style still reaches Discord with nothing', async () => {
+    const h = harness();
+
+    await h.listen(
+      configChanged({ changedKeys: ['displayNameStyle'] }),
+      brandingConfigSchema.parse(STYLED_ROW),
+    );
+
+    expect(h.calls()).toHaveLength(0);
+  });
+
+  test('/branding sends the plain nickname', async () => {
+    const h = harness();
+
+    await h.command(brandingConfigSchema.parse(STYLED_ROW));
+
+    expect(h.bodies()).toEqual([
+      { avatar: PNG_DATA_URI, banner: PNG_DATA_URI, bio: 'The friendly one.' },
+      { nick: 'Dreamliner' },
+    ]);
+  });
+
+  test('the manifest no longer lays out a field for it', () => {
+    const fields = brandingModule.dashboard?.sections.flatMap((section) => section.fields) ?? [];
+
+    expect(fields).toContain('nickname');
+    expect(fields).not.toContain('typeface');
+  });
+});
+
+describe('the manifest', () => {
+  test('declares the display name style kind and lays out its section', () => {
+    expect(brandingModule.actionKinds).toContain('set_bot_name_style');
+    expect(brandingModule.dashboard?.sections.find((section) => section.id === 'style')).toEqual({
+      id: 'style',
+      title: 'Display name style',
+      fields: ['displayNameStyle'],
+    });
+  });
+
+  test('refuses a changed style Discord does not offer, and lets an unchanged one through', () => {
+    const before = brandingConfigSchema.parse({
+      displayNameStyle: { font: 'monkey-bars', effect: 'solid', colours: [0] },
+    });
+
+    expect(brandingModule.refineWrite?.(before, before)).toEqual([]);
+    expect(brandingModule.refineWrite?.({ ...before, nickname: 'Kestrel' }, before)).toEqual([]);
+    expect(brandingModule.refineWrite?.({ ...before, displayNameStyle: null }, before)).toEqual([]);
+
+    const journal = brandingConfigSchema.parse({
+      displayNameStyle: { font: 'journal', effect: 'solid', colours: [0] },
+    });
+    expect(brandingModule.refineWrite?.(journal, before)).toEqual([
+      { path: 'displayNameStyle.font', message: 'Journal is not available for apps yet.' },
+    ]);
+
+    const short = brandingConfigSchema.parse({
+      displayNameStyle: { font: 'tempo', effect: 'gradient', colours: [0] },
+    });
+    expect(brandingModule.refineWrite?.(short, before)).toEqual([
+      { path: 'displayNameStyle.colours', message: 'Gradient takes two colours, not 1.' },
+    ]);
+  });
+});
+
+describe('idempotency keys', () => {
+  test('a save keys every leg on its audit id', async () => {
+    const h = harness();
+
+    await h.listen(configChanged({ auditId: 'audit-7' }), FULL);
+
+    expect(h.keys()).toEqual([
+      `branding:${GUILD}:audit-7:profile`,
+      `branding:${GUILD}:audit-7:nickname`,
+    ]);
+  });
+
+  test('reconcile keys on what is wanted and what Discord holds', async () => {
+    const h = harness();
+
+    await h.listen(guildAvailable({ nick: 'Something else', avatar: 'a1', banner: 'b1' }), FULL);
+
+    const wanted = fingerprint({
+      nickname: 'Dreamliner',
+      avatarHash: AVATAR_HASH,
+      bannerHash: BANNER_HASH,
+      bio: 'The friendly one.',
+    });
+    const held = fingerprint({
+      nickname: 'Something else',
+      avatarHash: 'set',
+      bannerHash: 'set',
+      bio: null,
+    });
+
+    expect(h.keys()).toEqual([`branding:${GUILD}:${wanted}:${held}:nickname`]);
+  });
+
+  test('/branding derives each step from the interaction key', async () => {
+    const h = harness();
+
+    await h.command(FULL);
+
+    const [base = ''] = h.keys();
+    expect(h.keys()).toEqual([base, `${base}:profile`, `${base}:nickname`, `${base}:report`]);
   });
 });

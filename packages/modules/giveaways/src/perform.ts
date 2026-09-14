@@ -14,6 +14,7 @@ import {
   type ModuleContext,
   type RespondTo,
 } from '@proton/core';
+import { clipGraphemes } from '@proton/core/placeholders';
 import { type GiveawaysConfig, MODULE_ID } from './config.ts';
 import { type MessageComponent, V2_FLAGS } from './message.ts';
 
@@ -430,7 +431,7 @@ export async function dmWinner(
       record: false,
       payload: {
         channelId,
-        content: content.slice(0, MESSAGE_CONTENT_MAX),
+        content: clipGraphemes(content, MESSAGE_CONTENT_MAX),
         allowedMentions: MENTIONS_OFF,
       },
     },

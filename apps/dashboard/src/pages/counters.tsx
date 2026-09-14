@@ -1,4 +1,5 @@
 import { countersConfigSchema } from '@proton/module-counters/config';
+import { countersTemplates } from '@proton/module-counters/placeholders';
 import type { ReactElement } from 'react';
 import { useModuleForm } from '../components/module/form.ts';
 import {
@@ -20,7 +21,12 @@ import { brokenCounters, TemplateName } from './counters/shape.tsx';
 const GONE = 'It may have been removed.';
 
 export default function CountersPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: countersConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: countersConfigSchema,
+    templates: countersTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
   const search = useModuleSearch();
   const go = useModuleNavigate(guildId, meta.id);
@@ -65,7 +71,6 @@ export default function CountersPage({ guildId, meta, summary }: ModulePageProps
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -115,6 +120,7 @@ export default function CountersPage({ guildId, meta, summary }: ModulePageProps
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         disabled={broken.size > 0}
         note={broken.size > 0 ? blockedNote(counters, broken, counter?.id) : undefined}
         onSave={form.save}

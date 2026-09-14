@@ -51,7 +51,6 @@ export default function AutomodPage({
     <>
       <ModuleHeader
         meta={meta}
-        subtitle="Screen messages for spam and unwanted content, and manage Discord AutoMod rules."
         actions={
           <ModuleSwitch
             name={meta.label}
@@ -66,7 +65,6 @@ export default function AutomodPage({
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={area} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -87,6 +85,7 @@ export default function AutomodPage({
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         onSave={form.save}
         onReset={form.reset}
         note="Saving also updates this server’s Discord AutoMod rules."

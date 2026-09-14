@@ -155,7 +155,9 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
   const burstOnly = paths.every((profile) => profile.burst);
 
   const ageError =
-    ageConflict ?? form.errorAt('brandNewAccountAge') ?? form.errorAt('newAccountAge');
+    ageConflict !== undefined
+      ? `Brand-new account age ${ageConflict}.`
+      : (form.errorAt('brandNewAccountAge') ?? form.errorAt('newAccountAge'));
   const rateError = form.errorAt('joinThreshold') ?? form.errorAt('joinWindow');
 
   return (
@@ -174,7 +176,6 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -197,67 +198,10 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
       </ModuleBanners>
 
       <Section label="Detection">
-        <Panel className="antiraid-rule">
-          <p className="antiraid-rule-line">
-            Proton treats it as a raid when <strong>{config.joinThreshold}</strong> members join
-            within <strong>{humaniseDuration(config.joinWindow)}</strong>. Each new member is scored
-            out of {MAX_JOIN_SCORE}. At <strong>{config.scoreThreshold}</strong> or higher, Proton{' '}
-            {RESPONSE_ACTIVE[config.response]}.
-          </p>
-
-          {agesOrdered ? (
-            <>
-              <p className="antiraid-paths-label">Ways to reach {config.scoreThreshold}</p>
-
-              <ul className="antiraid-paths">
-                {paths.map((profile) => (
-                  <li className="antiraid-path" key={profileKey(profile)}>
-                    <span className="antiraid-path-terms">
-                      {pathTerms(profile, brandNewAge, newAge).map((term, index) => (
-                        <span className="antiraid-term" key={term.label}>
-                          {index > 0 ? <span className="antiraid-term-plus">+</span> : null}
-                          {term.label}
-                          <span className="antiraid-term-weight">{term.weight}</span>
-                        </span>
-                      ))}
-                    </span>
-
-                    {profile.burst ? null : <Badge tone="warning">No raid needed</Badge>}
-
-                    <span className="antiraid-path-total">
-                      <span className="antiraid-path-equals">=</span>
-                      {profileScore(profile)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-
-              {burstOnly ? (
-                <p className="antiraid-rule-note">
-                  No member can reach {config.scoreThreshold} outside a raid, so Proton only acts
-                  during one.
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="antiraid-rule-note antiraid-rule-note-warning">
-              {ageConflict !== undefined
-                ? `Brand-new account age ${ageConflict}.`
-                : 'One of the account ages is not a valid duration, so Proton cannot score new members.'}{' '}
-              Fix them below.
-            </p>
-          )}
-
-          <p className="antiraid-rule-note">
-            Bots are never screened. If an account’s age or avatar cannot be read, Proton scores the
-            member without that signal instead of guessing.
-          </p>
-        </Panel>
-
         <Rows>
           <SettingRow
             title="Join rate"
-            description={`How many joins within the window count as a raid. Members who join during a raid score ${SIGNAL_WEIGHTS.joinBurst}.`}
+            description={`How many joins within the window count as a raid.`}
             stacked
             error={rateError}
           >
@@ -367,7 +311,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
 
       <Section
         label="Response"
-        intro={`Members who score ${config.scoreThreshold} or higher are ${RESPONSE_OUTCOMES[config.response]}, even outside a raid.`}
+        intro={`Members who score ${config.scoreThreshold} or higher are ${RESPONSE_OUTCOMES[config.response]}${burstOnly ? '' : ', even outside a raid'}.`}
       >
         <Rows>
           <SettingRow
@@ -474,7 +418,13 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
         </Rows>
       </Section>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

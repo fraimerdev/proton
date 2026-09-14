@@ -1,24 +1,41 @@
 import type { ContainerChild, V2Component } from '@proton/core';
+import { clipGraphemes, DISCORD_TEXT_LIMITS, SAMPLE_NOW } from '@proton/core/placeholders';
 import type { AppealPanel } from '@proton/module-appeals/config';
+import {
+  APPEAL_DECISION_SURFACE,
+  appealDecisionFacts,
+  renderAppealDecision,
+} from '@proton/module-appeals/placeholders';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { Button, TextArea } from '../../components/ui/controls.tsx';
 import { SegmentedTabs } from '../../components/ui/tabs.tsx';
+import { SAMPLE_MENTION_NAMES } from '../../lib/placeholder-preview.ts';
 import { panelTitle } from './shape.ts';
 
-// Duplicated from appeals/src/review.ts, which has no browser-safe subpath. If the module's accent
-// colours change, these change with them or the preview lies about the card Discord receives.
+// Mirrors the accents in appeals/src/review.ts; the preview lies if the two drift apart.
 const APPEAL_OPEN = 0xf0b752;
 const APPEAL_APPROVED = 0x4fcf95;
 const APPEAL_DENIED = 0xff7a86;
 
 const ANSWER_MAX_SHOWN = 900;
 
-const SAMPLE_NUMBER = 1;
 const SAMPLE_USER = '<@000000000000000000>';
 
 type CardStatus = 'open' | 'approved' | 'denied';
+
+type DecisionStatus = Exclude<CardStatus, 'open'>;
+
+function decisionSample(): { number: number; filedAt: number; decidedAt: number | null } {
+  const sample = APPEAL_DECISION_SURFACE.samples[0];
+  if (sample === undefined) {
+    throw new Error('The decision message placeholders have no sample, so it cannot be previewed.');
+  }
+  return sample.facts.appeal;
+}
+
+const SAMPLE_APPEAL = decisionSample();
 
 function quoted(value: string): string {
   const cut = value.length > ANSWER_MAX_SHOWN ? `${value.slice(0, ANSWER_MAX_SHOWN)}…` : value;
@@ -33,7 +50,7 @@ function reviewCard(panel: AppealPanel, status: CardStatus): V2Component {
   const children: ContainerChild[] = [
     {
       kind: 'text',
-      content: `## Appeal #${SAMPLE_NUMBER}${verdict}\n**${panelTitle(panel)}** · ${SAMPLE_USER}`,
+      content: `## Appeal #${SAMPLE_APPEAL.number}${verdict}\n**${panelTitle(panel)}** · ${SAMPLE_USER}`,
     },
   ];
 
@@ -159,17 +176,35 @@ export function PanelPreview({
   );
 }
 
+export function decisionPreview(panel: AppealPanel, status: DecisionStatus): string {
+  const approved = status === 'approved';
+  const facts = appealDecisionFacts({ ...SAMPLE_APPEAL, status }, panel);
+  const lookup = APPEAL_DECISION_SURFACE.build(facts, { now: SAMPLE_NOW });
+
+  const template = approved ? panel.approvedMessage : panel.deniedMessage;
+  const verdict = renderAppealDecision(template, lookup, 'discord_text', SAMPLE_NOW).output;
+  const rejoin = approved && panel.rejoinUrl ? `\n\n${panel.rejoinUrl}` : '';
+
+  const whole = `**Appeal #${SAMPLE_APPEAL.number}**\n${verdict}${rejoin}`;
+  return clipGraphemes(whole, DISCORD_TEXT_LIMITS.content);
+}
+
+export function decisionCaption(panel: AppealPanel): string {
+  return `Sample: appeal #${SAMPLE_APPEAL.number} on “${panelTitle(panel)}”, filed two days before it was decided.`;
+}
+
 export function DecisionDm({
   panel,
   status,
 }: {
   panel: AppealPanel;
-  status: 'approved' | 'denied';
+  status: DecisionStatus;
 }): ReactElement {
-  const verdict = status === 'approved' ? panel.approvedMessage : panel.deniedMessage;
-  const rejoin = status === 'approved' && panel.rejoinUrl ? `\n\n${panel.rejoinUrl}` : '';
-
   return (
-    <DiscordPreview message={{ content: `**Appeal #${SAMPLE_NUMBER}**\n${verdict}${rejoin}` }} />
+    <DiscordPreview
+      message={{ content: decisionPreview(panel, status) }}
+      mentionNames={SAMPLE_MENTION_NAMES}
+      now={SAMPLE_NOW}
+    />
   );
 }

@@ -4,10 +4,6 @@ import { ModuleLink } from '../module/route.tsx';
 import { cx, useSlidingIndicator } from './controls.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
-/**
- * Major workspace modes, as real links: the area lives in the URL so a tab can be bookmarked,
- * opened in a new tab and linked to from elsewhere in the product.
- */
 export function AreaTabs({
   guildId,
   moduleId,
@@ -50,7 +46,6 @@ export function AreaTabs({
   );
 }
 
-/** Closely related configuration surfaces, switched in place rather than navigated to. */
 export function SegmentedTabs<T extends string>({
   items,
   value,
@@ -89,7 +84,6 @@ export function SegmentedTabs<T extends string>({
   );
 }
 
-/** Segmented tabs that keep their choice in the URL, for a surface worth linking to. */
 export function SegmentedTabLinks({
   guildId,
   moduleId,
@@ -101,27 +95,26 @@ export function SegmentedTabLinks({
   areas: readonly AreaMeta[];
   current: string;
 }): ReactElement {
-  const { track, indicator } = useSlidingIndicator<HTMLDivElement>(
+  const { track, indicator } = useSlidingIndicator<HTMLElement>(
     areas.findIndex((area) => area.id === current),
     areas.map((area) => area.id).join(' '),
   );
 
   return (
-    <div ref={track} role="tablist" aria-label="Sections" className="segmented">
+    <nav ref={track} aria-label="Sections" className="segmented">
       <span ref={indicator} className="segmented-thumb" aria-hidden />
       {areas.map((area) => (
         <ModuleLink
           key={area.id}
-          role="tab"
           guildId={guildId}
           moduleId={moduleId}
           search={{ area: area.id }}
           className="segmented-option"
-          aria-selected={area.id === current}
+          aria-current={area.id === current ? 'page' : undefined}
         >
           {area.label}
         </ModuleLink>
       ))}
-    </div>
+    </nav>
   );
 }

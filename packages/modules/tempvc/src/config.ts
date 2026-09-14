@@ -4,25 +4,20 @@ import {
   snowflakeSchema,
   tryParseDuration,
 } from '@proton/core';
+import { mentionsAny } from '@proton/core/placeholders';
 import { z } from 'zod';
+import { CHANNEL_NAME_MAX, NAME_PLACEHOLDERS } from './constants.ts';
+import { renderTempVcName, TEMPVC_NAME_SURFACE, TEMPVC_OWNER_KEYS } from './placeholders.ts';
+
+export { CHANNEL_NAME_MAX, NAME_PLACEHOLDERS, type NamePlaceholder } from './constants.ts';
 
 export const MODULE_ID = 'tempvc';
-
-export const CHANNEL_NAME_MAX = 100;
 
 export const HUBS_CEILING = 40;
 
 export const VOICE_CHANNEL_TYPE = 2;
 
 export const CATEGORY_CHANNEL_TYPE = 4;
-
-/**
- * What a name template may stand in for. `{user}` is kept as an alias of `{displayName}` because
- * every stored template already uses it and renaming it would rewrite every guild's config.
- */
-export const NAME_PLACEHOLDERS = ['{user}', '{displayName}', '{username}', '{userId}'] as const;
-
-export type NamePlaceholder = (typeof NAME_PLACEHOLDERS)[number];
 
 export const OWNER_PLACEHOLDER = '{user}';
 
@@ -124,6 +119,17 @@ function boundedDuration(fallback: string, minMs: number, maxMs: number) {
 export const EMPTY_DELETE_DELAY_DEFAULT = '5s';
 export const CREATION_COOLDOWN_DEFAULT = '5s';
 
+const OWNER_NAMES = [...TEMPVC_OWNER_KEYS.map((key) => `{${key}}`), ...NAME_PLACEHOLDERS].join(
+  ', ',
+);
+
+function namesTheOwner(template: string): boolean {
+  return (
+    NAME_PLACEHOLDERS.some((placeholder) => template.includes(placeholder)) ||
+    mentionsAny(TEMPVC_NAME_SURFACE, template, TEMPVC_OWNER_KEYS)
+  );
+}
+
 export const tempVcHubSchema = z.object({
   channelId: snowflakeSchema,
 
@@ -137,8 +143,8 @@ export const tempVcHubSchema = z.object({
     .min(1)
     .max(CHANNEL_NAME_MAX)
     .default(DEFAULT_NAME_TEMPLATE)
-    .refine((value) => NAME_PLACEHOLDERS.some((placeholder) => value.includes(placeholder)), {
-      message: `a name template needs one of ${NAME_PLACEHOLDERS.join(', ')} in it, or every channel it makes has the same name.`,
+    .refine(namesTheOwner, {
+      message: `a name template needs one of ${OWNER_NAMES} in it, or every channel it makes has the same name.`,
     }),
 
   userLimit: z.number().int().min(0).max(99).default(0),
@@ -274,19 +280,7 @@ export interface NameFacts {
 }
 
 export function renderChannelName(template: string, facts: NameFacts): string {
-  const filled = template
-    .split('{displayName}')
-    .join(facts.displayName)
-    .split(OWNER_PLACEHOLDER)
-    .join(facts.displayName)
-    .split('{username}')
-    .join(facts.username)
-    .split('{userId}')
-    .join(facts.userId)
-    .trim();
-
-  // Discord refuses an empty name, and a template of nothing but placeholders can produce one.
-  return (filled.length === 0 ? facts.displayName : filled).slice(0, CHANNEL_NAME_MAX);
+  return renderTempVcName(template, { owner: facts, hub: null, server: null }, Date.now()).output;
 }
 
 export function allows(hub: TempVcHub, control: OwnerControl): boolean {

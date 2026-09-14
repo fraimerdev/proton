@@ -18,6 +18,7 @@ import {
   fetchGuildEmojis,
   fetchGuildMembers,
   fetchGuildRoles,
+  fetchProtonAccount,
   fetchUserGuilds,
 } from '../lib/discord.ts';
 import { getDiscordAccessToken } from '../lib/discord-token.ts';
@@ -130,6 +131,13 @@ export const getGuildEmojis = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])
   .validator(z.object({ guildId: z.string().min(1) }))
   .handler(({ data }) => fetchGuildEmojis(env.REST_PROXY_URL, data.guildId));
+
+export const getProtonAccount = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(z.object({ guildId: z.string().min(1) }))
+  .handler(({ data }) =>
+    fetchProtonAccount(env.REST_PROXY_URL, data.guildId, env.DISCORD_CLIENT_ID),
+  );
 
 // Discord has no batch member endpoint, so fetchGuildMembers is one upstream call per id. A 50-row
 // case page carries up to 100 distinct ids and the next page carries most of the same ones, so the

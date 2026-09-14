@@ -66,7 +66,6 @@ export default function CasesPage({ guildId, meta, summary }: ModulePageProps): 
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}

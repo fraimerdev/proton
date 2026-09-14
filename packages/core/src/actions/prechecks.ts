@@ -12,6 +12,7 @@ export interface PrecheckInput {
   channelId?: string;
   channelOverwritesUnknown?: boolean;
   threadParentId?: string;
+  role?: { id: string; position: number };
   target?: { id: string; highestRolePosition: number };
 
   // Off for a kind Discord does not rank, so the owner and hierarchy gates below are skipped while
@@ -47,6 +48,15 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
     return {
       code: 'missing_permission',
       humanReason: `I'm missing the ${names} permission${labels.length === 1 ? '' : 's'} in ${whereItIsMissing(input)}.`,
+    };
+  }
+
+  if (input.role && input.role.position >= input.botHighestRolePosition) {
+    return {
+      code: 'role_hierarchy',
+      humanReason:
+        `The <@&${input.role.id}> role is above or equal to my highest role, so I can't ` +
+        'manage it. Move my role above it in Server Settings → Roles.',
     };
   }
 

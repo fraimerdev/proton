@@ -48,8 +48,8 @@ echo "==> moving warn escalation rate windows"
 "$BUN" --env-file="$ROOT/.env" "$ROOT/apps/worker/src/move-escalation-windows.ts" ||
   stopped_and_failed "moving warn escalation rate windows"
 
-# The gateway is excluded on purpose: Discord allows 1000 session starts a day and every restart
-# spends one, so it is reloaded only when its own code changed. Pass --with-gateway for that.
+# The gateway is excluded on purpose: a restart pauses event intake (it resumes; see DEPLOY.md), so
+# it is reloaded only when its own code changed. Pass --with-gateway for that.
 SERVICES="proton-rest-proxy proton-api proton-worker proton-dashboard"
 if [ "$WITH_GATEWAY" -eq 1 ]; then
   SERVICES="$SERVICES proton-gateway"

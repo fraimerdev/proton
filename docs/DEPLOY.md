@@ -314,12 +314,24 @@ bash /srv/proton/deploy/deploy.sh
 ```
 
 That pulls, installs, builds, migrates, reloads and smoke-tests. It deliberately leaves the gateway
-alone: Discord allows 1000 session starts per day and every gateway boot spends one, so restart it
-only when its own code changed:
+alone — every restart is a pause in event intake — so restart it only when its own code changed:
 
 ```bash
 bash /srv/proton/deploy/deploy.sh --with-gateway
 ```
+
+A gateway restart resumes; it does not identify. On `SIGINT` or `SIGTERM` the gateway stops taking
+new events, closes its connection with a code that keeps the Discord session alive, waits up to 7
+seconds for events still on their way to the bus, and exits without deleting its session from
+Redis — well inside pm2's 15-second `kill_timeout`. The new process resumes after the newest event
+that reached the bus together with every event before it, and Discord replays everything after that,
+including what happened while the gateway was down. An event that did not reach the bus within those 7 seconds is logged as
+`still unpublished` and replayed too, so the worker may see it twice, which it already assumes.
+
+That spends none of the 1000 session starts Discord allows per day, with two exceptions: Discord has
+invalidated the session, or the gateway stayed down longer than the few minutes Discord keeps a
+closed session resumable. Either way the new process identifies, spends one, and whatever happened in
+the gap is not replayed.
 
 pm2 runs these in fork mode, so a reload is a restart — expect a second or two of 502s on the
 dashboard. The api and worker are stopped before migrations run and start again on the new code, so
@@ -344,10 +356,15 @@ bash deploy/deploy.sh --no-pull
 
 Migrations do not roll back. A release that changed the schema needs a forward fix, not a checkout.
 
-Rolling back past the `branding` module is the one case where a checkout is not enough. Proton wears
+Rolling back past the `branding` module is one case where a checkout is not enough. Proton wears
 a per-server nickname, avatar, banner and bio that live on Discord, not in this repo, and removing
 the code that sets them does not remove them — it removes the only thing that could. Switch the
 module off in each affected server first, let the teardown run, and only then roll back.
+
+Rolling back past the `afk` module is the other. The `[AFK]` tags it adds to members' nicknames live
+on Discord too, and once the code is gone nothing is left to take them off. Switch AFK off in
+each affected server first, let the teardown end every AFK status and put the nicknames back, and
+only then roll back.
 
 ## 12. Backups
 
@@ -396,9 +413,21 @@ script already loads the same file.
 registered exactly as `https://prtn.xyz/api/auth/callback/discord`, or nginx is not passing
 `Host`/`X-Forwarded-Proto`, or `BETTER_AUTH_URL` is not `https://prtn.xyz`.
 
-**Gateway reconnect loop.** Session starts are capped at 1000/day; a crash loop burns them and
-Discord will refuse to identify. Stop it (`pm2 stop proton-gateway`), fix the cause, then start it
-once. Session and resume state live in Redis, so a clean restart resumes rather than identifies.
+**Gateway reconnect loop.** Every restart resumes the session stored in Redis and spends no
+identify, so restarts alone do not burn session starts. A loop that keeps losing the session does —
+Discord invalidated it, or the process stays down past the resume window — because each of those
+boots identifies, and session starts are capped at 1000/day. Once they run out the gateway will not
+even boot to resume: it fails at startup with `Not enough sessions remaining to spawn`. Stop it
+(`pm2 stop proton-gateway`), fix the cause, then start it once. Do not delete
+`proton:gateway:session:*` from Redis to get a clean start: that forces an identify and gives up the
+events Discord would have replayed.
+
+**Gateway exits with `gave up publishing`.** An event could not reach the bus after every retry — six
+attempts of up to 5 seconds each, with 51 seconds of backoff between them. Rather than carry on past
+it, the gateway logs the event's type, id, shard and sequence and exits with code 1, keeping its
+session. pm2 starts it again, the new process resumes from before that event, and Discord replays it
+and everything after it. The bus is Redis, so start there (`redis-cli ping`); until it accepts
+writes, every run ends the same way.
 
 **Slow `bun install` on the VPS.** `bunfig.toml` pins `backend = "copyfile"` for Windows. It is
 correct but slower on Linux; you can override per-run with `bun install --backend=hardlink`.

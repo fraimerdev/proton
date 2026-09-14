@@ -115,7 +115,6 @@ export function encodedLength(menuId: string, key: string): number {
   return encoded.ok ? encoded.customId.length : encoded.length;
 }
 
-/** How many characters a key may still spend once this menu id has taken its share of the 100. */
 export function keyBudget(menuId: string): number {
   return MAX_CUSTOM_ID_LENGTH - encodedLength(menuId, '');
 }
@@ -130,10 +129,6 @@ export function tooLongReason(menuId: string, key: string, length: number): stri
 
 export type Problems = ReadonlyMap<string, string>;
 
-/**
- * Every rule the module's own schema enforces, evaluated on each keystroke rather than on save, so
- * a key that is one character too long for a custom_id says so before the admin leaves the field.
- */
 export function liveProblems(config: RolemenuConfig): Problems {
   const problems = new Map<string, string>();
   const seenIds = new Set<string>();
@@ -228,10 +223,7 @@ export function menuIds(config: RolemenuConfig): Set<string> {
   return new Set(config.menus.map((menu) => menu.id));
 }
 
-/**
- * The url carries the menu id, and the id is editable, so the url stops matching the instant it is
- * typed into. Holding the index the url last resolved to is what keeps the editor open mid-rename.
- */
+// Holds the last matched index: the id is editable, so a plain lookup closes the editor mid-rename.
 export function useMenuIndex(menus: readonly RolemenuMenu[], id: string | undefined): number {
   const [held, setHeld] = useState(-1);
 

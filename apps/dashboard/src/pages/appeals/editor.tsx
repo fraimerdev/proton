@@ -1,9 +1,17 @@
 import type { AppealPanel, ApproveAction } from '@proton/module-appeals/config';
 import { reviewChannelFor } from '@proton/module-appeals/config';
+import { APPEAL_DECISION_SURFACE } from '@proton/module-appeals/placeholders';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
+import { useId } from 'react';
 import { ChannelPicker } from '../../components/discord/channel-picker.tsx';
 import { ModuleLink } from '../../components/module/route.tsx';
+import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
+import {
+  TemplateDiagnostics,
+  visibleDiagnostics,
+} from '../../components/placeholders/template-diagnostics.tsx';
+import { usePlaceholderAutocomplete } from '../../components/placeholders/use-placeholder-autocomplete.ts';
 import {
   IconButton,
   NumberStepper,
@@ -14,7 +22,7 @@ import {
 } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { channelsQuery } from '../../lib/queries.ts';
-import { DecisionDm, PanelPreview } from './preview.tsx';
+import { DecisionDm, decisionCaption, PanelPreview } from './preview.tsx';
 import { QuestionsSection } from './questions.tsx';
 import {
   type AppealsForm,
@@ -35,6 +43,62 @@ function Counter({ used, ceiling }: { used: number; ceiling: number }): ReactEle
     <span className="field-hint appeals-counter">
       {used} / {ceiling}
     </span>
+  );
+}
+
+function DecisionField({
+  form,
+  panel,
+  index,
+  which,
+  title,
+}: {
+  form: AppealsForm;
+  panel: AppealPanel;
+  index: number;
+  which: 'approvedMessage' | 'deniedMessage';
+  title: string;
+}): ReactElement {
+  const id = useId();
+  const path = `panels.${index}.${which}`;
+  const value = panel[which];
+
+  const change = (next: string): void =>
+    updatePanel(form, panel.id, (current) =>
+      which === 'approvedMessage'
+        ? { ...current, approvedMessage: next }
+        : { ...current, deniedMessage: next },
+    );
+
+  const diagnostics = form.templateDiagnosticsAt(path);
+  const autocomplete = usePlaceholderAutocomplete({
+    surface: APPEAL_DECISION_SURFACE,
+    path,
+    onChange: change,
+  });
+
+  const error = form.errorAt(path);
+  const explained = error !== undefined && diagnostics.some(({ message }) => message === error);
+  const listed = visibleDiagnostics(diagnostics).shown.length > 0;
+
+  return (
+    <SettingRow stacked title={title} error={explained ? undefined : error}>
+      <div className="stack stack-4">
+        <TextArea
+          {...autocomplete.field}
+          rows={2}
+          aria-label={title}
+          aria-describedby={listed ? id : undefined}
+          maxLength={MESSAGE_MAX}
+          invalid={error !== undefined}
+          value={value}
+          onChange={(event) => change(event.currentTarget.value)}
+        />
+        <PlaceholderSuggestions autocomplete={autocomplete} />
+        {listed ? <TemplateDiagnostics id={id} diagnostics={diagnostics} /> : null}
+        <Counter used={value.length} ceiling={MESSAGE_MAX} />
+      </div>
+    </SettingRow>
   );
 }
 
@@ -252,8 +316,7 @@ export function PanelEditor({
                 value={panel.onApprove}
                 onChange={(value) => {
                   const next = value as ApproveAction;
-                  // Cleared rather than kept hidden: a rejoin link is still appended to an accepted
-                  // appeal's DM whatever this is set to, so leaving one behind sends it invisibly.
+                  // Cleared, not hidden: an accepted appeal's DM still appends any rejoin link.
                   patch((current) =>
                     next === 'nothing'
                       ? { ...setOptional(current, 'rejoinUrl', ''), onApprove: next }
@@ -310,47 +373,22 @@ export function PanelEditor({
           </Rows>
         </Section>
 
-        <Section label="Direct messages">
+        <Section label="Direct messages" intro="Type { to add a placeholder.">
           <Rows>
-            <SettingRow
-              stacked
+            <DecisionField
+              form={form}
+              panel={panel}
+              index={index}
+              which="approvedMessage"
               title="Accepted message"
-              error={form.errorAt(`${path}.approvedMessage`)}
-            >
-              <div className="stack stack-4">
-                <TextArea
-                  rows={2}
-                  aria-label="Accepted message"
-                  maxLength={MESSAGE_MAX}
-                  invalid={form.errorAt(`${path}.approvedMessage`) !== undefined}
-                  value={panel.approvedMessage}
-                  onChange={(event) =>
-                    patch((current) => ({ ...current, approvedMessage: event.currentTarget.value }))
-                  }
-                />
-                <Counter used={panel.approvedMessage.length} ceiling={MESSAGE_MAX} />
-              </div>
-            </SettingRow>
-
-            <SettingRow
-              stacked
+            />
+            <DecisionField
+              form={form}
+              panel={panel}
+              index={index}
+              which="deniedMessage"
               title="Turned-down message"
-              error={form.errorAt(`${path}.deniedMessage`)}
-            >
-              <div className="stack stack-4">
-                <TextArea
-                  rows={2}
-                  aria-label="Turned-down message"
-                  maxLength={MESSAGE_MAX}
-                  invalid={form.errorAt(`${path}.deniedMessage`) !== undefined}
-                  value={panel.deniedMessage}
-                  onChange={(event) =>
-                    patch((current) => ({ ...current, deniedMessage: event.currentTarget.value }))
-                  }
-                />
-                <Counter used={panel.deniedMessage.length} ceiling={MESSAGE_MAX} />
-              </div>
-            </SettingRow>
+            />
           </Rows>
 
           <div className="stack stack-16 appeals-dm">
@@ -362,6 +400,7 @@ export function PanelEditor({
               <span className="editor-preview-title">Turned down</span>
               <DecisionDm panel={panel} status="denied" />
             </div>
+            <p className="text-muted text-xs">{decisionCaption(panel)}</p>
           </div>
         </Section>
       </div>

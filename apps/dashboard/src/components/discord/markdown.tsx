@@ -1,14 +1,120 @@
 import type { ReactElement, ReactNode } from 'react';
+import { useSyncExternalStore } from 'react';
 
-/**
- * Enough of Discord's markdown for a preview to be honest about what a message will look like:
- * bold, italic, underline, strike, spoiler, inline code, links, mentions, custom emoji, headings,
- * blockquotes, lists and fenced code. It is a preview, not a renderer — anything it does not know
- * survives as plain text rather than disappearing.
- */
+export type MentionNames = ReadonlyMap<string, string>;
 
-const TOKEN =
-  /(```(?:[a-z0-9+-]*\n)?[\s\S]*?```)|(`[^`\n]+`)|(\*\*\*[^*]+\*\*\*)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*\n]+\*)|(_[^_\n]+_)|(~~[^~]+~~)|(\|\|[\s\S]+?\|\|)|(<a?:\w+:\d+>)|(<@!?\d+>)|(<@&\d+>)|(<#\d+>)|(<t:\d+(?::[tTdDfFR])?>)|(https?:\/\/\S+)/g;
+export interface MarkdownContext {
+  mentionNames?: MentionNames | undefined;
+  now?: number | undefined;
+}
+
+interface InlineOptions extends MarkdownContext {
+  rich: boolean;
+}
+
+export interface TimestampFormat {
+  locale?: string | undefined;
+  timeZone?: string | undefined;
+}
+
+const RULES = [
+  ['escape', /\\[^0-9A-Za-z\s]/],
+  ['codeblock', /```(?:[a-z0-9+-]*\n)?[\s\S]*?```/],
+  ['code', /`[^`\n]+`/],
+  ['boldItalic', /\*\*\*(?:\\[\s\S]|[^*\\])+\*\*\*/],
+  ['bold', /\*\*(?:\\[\s\S]|[^*\\])+\*\*/],
+  ['underline', /__(?:\\[\s\S]|[^_\\])+__/],
+  ['italic', /\*(?:\\[^\n]|[^*\\\n])+\*|_(?:\\[^\n]|[^_\\\n])+_/],
+  ['strike', /~~(?:\\[\s\S]|[^~\\])+~~/],
+  ['spoiler', /\|\|[\s\S]+?\|\|/],
+  ['emoji', /<a?:\w+:\d+>/],
+  ['user', /<@!?\d+>/],
+  ['role', /<@&\d+>/],
+  ['channel', /<#\d+>/],
+  ['timestamp', /<t:-?\d+(?::[tTdDfFR])?>/],
+  ['link', /https?:\/\/\S+/],
+] as const;
+
+type TokenKind = (typeof RULES)[number][0];
+
+const TOKEN = new RegExp(RULES.map(([, rule]) => `(${rule.source})`).join('|'), 'g');
+
+const FENCE = /```(?:[a-z0-9+-]*\n)?[\s\S]*?```/g;
+
+const DATE_STYLES: Readonly<Record<string, Intl.DateTimeFormatOptions>> = {
+  t: { timeStyle: 'short' },
+  T: { timeStyle: 'medium' },
+  d: { dateStyle: 'short' },
+  D: { dateStyle: 'long' },
+  F: { dateStyle: 'full', timeStyle: 'short' },
+};
+
+const LONG_DATE_TIME: Intl.DateTimeFormatOptions = { dateStyle: 'long', timeStyle: 'short' };
+
+const RELATIVE_UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [
+  ['year', 31_536_000],
+  ['month', 2_592_000],
+  ['day', 86_400],
+  ['hour', 3_600],
+  ['minute', 60],
+];
+
+const SECONDS = ['second', 1] as const;
+
+// The server and the hydrating render must print the same text, so the viewer's zone waits for hydration.
+const FIRST_PAINT: TimestampFormat = { locale: 'en-GB', timeZone: 'UTC' };
+
+export function formatDiscordTimestamp(
+  seconds: number,
+  style: string,
+  now: number,
+  { locale, timeZone }: TimestampFormat = {},
+): string | undefined {
+  const at = seconds * 1000;
+  if (Number.isNaN(new Date(at).getTime())) return undefined;
+
+  if (style === 'R') {
+    const delta = seconds - now / 1000;
+    const [unit, size] = RELATIVE_UNITS.find(([, span]) => Math.abs(delta) >= span) ?? SECONDS;
+    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(
+      Math.trunc(delta / size) || 0,
+      unit,
+    );
+  }
+
+  const options = DATE_STYLES[style] ?? LONG_DATE_TIME;
+  return new Intl.DateTimeFormat(
+    locale,
+    timeZone === undefined ? options : { ...options, timeZone },
+  ).format(at);
+}
+
+const subscribeToNothing = (): (() => void) => () => undefined;
+
+function useHydrated(): boolean {
+  return useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
+}
+
+function Timestamp({ token, now }: { token: string; now: number | undefined }): ReactElement {
+  const hydrated = useHydrated();
+  const [, digits = '', style = 'f'] = /^<t:(-?\d+)(?::(\w))?>$/.exec(token) ?? [];
+  const seconds = Number(digits);
+
+  const text = hydrated
+    ? formatDiscordTimestamp(seconds, style, now ?? Date.now())
+    : formatDiscordTimestamp(
+        seconds,
+        style === 'R' && now === undefined ? 'f' : style,
+        now ?? 0,
+        FIRST_PAINT,
+      );
+
+  return <span className="dc-mention">{text ?? token}</span>;
+}
 
 function emoji(token: string): ReactElement {
   const match = /^<(a)?:(\w+):(\d+)>$/.exec(token);
@@ -26,92 +132,116 @@ function emoji(token: string): ReactElement {
   );
 }
 
-function inline(text: string, keyPrefix: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  let cursor = 0;
-  let index = 0;
+function mention(
+  kind: 'user' | 'role' | 'channel',
+  token: string,
+  names: MentionNames | undefined,
+): string {
+  const id = /\d+/.exec(token)?.[0];
+  const name = id === undefined ? undefined : names?.get(id);
+  return `${kind === 'channel' ? '#' : '@'}${name ?? kind}`;
+}
 
-  for (const match of text.matchAll(TOKEN)) {
-    const at = match.index;
-    if (at > cursor) out.push(text.slice(cursor, at));
+function codeBody(fence: string): string {
+  return fence.replace(/^```(?:[a-z0-9+-]*\n)?/, '').replace(/```$/, '');
+}
 
-    const token = match[0];
-    const key = `${keyPrefix}-${index++}`;
+function kindOf(match: RegExpMatchArray): TokenKind {
+  const at = RULES.findIndex((_, index) => match[index + 1] !== undefined);
+  return RULES[at]?.[0] ?? 'link';
+}
 
-    if (match[1] !== undefined) {
-      const body = token.replace(/^```(?:[a-z0-9+-]*\n)?/, '').replace(/```$/, '');
-      out.push(
+function tokenNode(kind: TokenKind, token: string, key: string, options: InlineOptions): ReactNode {
+  switch (kind) {
+    case 'escape':
+      return token.slice(1);
+    case 'codeblock':
+      return (
         <span className="dc-codeblock" key={key}>
-          {body}
-        </span>,
+          {codeBody(token)}
+        </span>
       );
-    } else if (match[2] !== undefined) {
-      out.push(
+    case 'code':
+      return (
         <span className="dc-code" key={key}>
           {token.slice(1, -1)}
-        </span>,
+        </span>
       );
-    } else if (match[3] !== undefined) {
-      out.push(
+    case 'boldItalic':
+      return (
         <strong key={key}>
-          <em>{inline(token.slice(3, -3), key)}</em>
-        </strong>,
+          <em>{inline(token.slice(3, -3), key, options)}</em>
+        </strong>
       );
-    } else if (match[4] !== undefined) {
-      out.push(<strong key={key}>{inline(token.slice(2, -2), key)}</strong>);
-    } else if (match[5] !== undefined) {
-      out.push(<u key={key}>{inline(token.slice(2, -2), key)}</u>);
-    } else if (match[6] !== undefined || match[7] !== undefined) {
-      out.push(<em key={key}>{inline(token.slice(1, -1), key)}</em>);
-    } else if (match[8] !== undefined) {
-      out.push(<s key={key}>{inline(token.slice(2, -2), key)}</s>);
-    } else if (match[9] !== undefined) {
-      out.push(
+    case 'bold':
+      return <strong key={key}>{inline(token.slice(2, -2), key, options)}</strong>;
+    case 'underline':
+      return <u key={key}>{inline(token.slice(2, -2), key, options)}</u>;
+    case 'italic':
+      return <em key={key}>{inline(token.slice(1, -1), key, options)}</em>;
+    case 'strike':
+      return <s key={key}>{inline(token.slice(2, -2), key, options)}</s>;
+    case 'spoiler':
+      return (
         <span
           key={key}
           style={{ background: 'var(--dc-bg-tertiary)', borderRadius: 3, color: 'transparent' }}
           title="Spoiler"
         >
           {token.slice(2, -2)}
-        </span>,
+        </span>
       );
-    } else if (match[10] !== undefined) {
-      out.push(<span key={key}>{emoji(token)}</span>);
-    } else if (match[11] !== undefined || match[12] !== undefined || match[13] !== undefined) {
-      // The id is all a preview has; resolving it would mean a member/role/channel lookup per
-      // keystroke, and the shape is what the author is checking here.
-      const glyph = match[13] !== undefined ? '#' : '@';
-      out.push(
+    case 'emoji':
+      return <span key={key}>{emoji(token)}</span>;
+    case 'user':
+    case 'role':
+    case 'channel':
+      return options.rich ? (
         <span className="dc-mention" key={key}>
-          {glyph}
-          {match[13] !== undefined ? 'channel' : match[12] !== undefined ? 'role' : 'user'}
-        </span>,
+          {mention(kind, token, options.mentionNames)}
+        </span>
+      ) : (
+        token
       );
-    } else if (match[14] !== undefined) {
-      const seconds = Number(/<t:(\d+)/.exec(token)?.[1] ?? '0');
-      out.push(
-        <span className="dc-mention" key={key}>
-          {new Date(seconds * 1000).toLocaleString()}
-        </span>,
-      );
-    } else {
-      out.push(
+    case 'timestamp':
+      return options.rich ? <Timestamp key={key} token={token} now={options.now} /> : token;
+    case 'link':
+      return options.rich ? (
         <a className="dc-link" href={token} key={key} rel="noreferrer noopener" target="_blank">
           {token}
-        </a>,
+        </a>
+      ) : (
+        token
       );
-    }
+  }
+}
 
+function inline(text: string, keyPrefix: string, options: InlineOptions): ReactNode[] {
+  const out: ReactNode[] = [];
+  let cursor = 0;
+  let index = 0;
+
+  const push = (node: ReactNode): void => {
+    const last = out.length - 1;
+    const previous = out[last];
+    if (typeof node === 'string' && typeof previous === 'string') out[last] = `${previous}${node}`;
+    else out.push(node);
+  };
+
+  for (const match of text.matchAll(TOKEN)) {
+    const at = match.index;
+    if (at > cursor) push(text.slice(cursor, at));
+
+    const token = match[0];
+    push(tokenNode(kindOf(match), token, `${keyPrefix}-${index++}`, options));
     cursor = at + token.length;
   }
 
-  if (cursor < text.length) out.push(text.slice(cursor));
+  if (cursor < text.length) push(text.slice(cursor));
   return out;
 }
 
-export function DiscordMarkdown({ text }: { text: string }): ReactElement | null {
-  if (text.trim() === '') return null;
-
+function lineBlocks(text: string, options: InlineOptions): ReactNode[] {
   const lines = text.split('\n');
   const blocks: ReactNode[] = [];
   let quote: string[] = [];
@@ -120,7 +250,7 @@ export function DiscordMarkdown({ text }: { text: string }): ReactElement | null
     if (quote.length === 0) return;
     blocks.push(
       <span className="dc-blockquote" key={`q-${at}`}>
-        <span>{inline(quote.join('\n'), `q-${at}`)}</span>
+        <span>{inline(quote.join('\n'), `q-${at}`, options)}</span>
       </span>,
     );
     quote = [];
@@ -140,7 +270,7 @@ export function DiscordMarkdown({ text }: { text: string }): ReactElement | null
       blocks.push(
         // biome-ignore lint/suspicious/noArrayIndexKey: a line's position in the text is its identity
         <span className={`dc-heading-${level}`} key={index}>
-          {inline(heading[2] ?? '', `h-${index}`)}
+          {inline(heading[2] ?? '', `h-${index}`, options)}
         </span>,
       );
       return;
@@ -152,7 +282,7 @@ export function DiscordMarkdown({ text }: { text: string }): ReactElement | null
         // biome-ignore lint/suspicious/noArrayIndexKey: a line's position in the text is its identity
         <span key={index} style={{ display: 'block', paddingLeft: 16, textIndent: -10 }}>
           {'• '}
-          {inline(bullet[1] ?? '', `b-${index}`)}
+          {inline(bullet[1] ?? '', `b-${index}`, options)}
         </span>,
       );
       return;
@@ -163,17 +293,51 @@ export function DiscordMarkdown({ text }: { text: string }): ReactElement | null
       blocks.push(
         // biome-ignore lint/suspicious/noArrayIndexKey: a line's position in the text is its identity
         <span className="dc-small" key={index} style={{ display: 'block' }}>
-          {inline(subtext[1] ?? '', `s-${index}`)}
+          {inline(subtext[1] ?? '', `s-${index}`, options)}
         </span>,
       );
       return;
     }
 
     // biome-ignore lint/suspicious/noArrayIndexKey: a line's position in the text is its identity
-    blocks.push(<span key={index}>{inline(line, `l-${index}`)}</span>);
+    blocks.push(<span key={index}>{inline(line, `l-${index}`, options)}</span>);
   });
 
   flushQuote(lines.length);
+  return blocks;
+}
+
+export function InlineDiscordMarkdown({ text }: { text: string }): ReactElement {
+  return <>{inline(text, 'i', { rich: false })}</>;
+}
+
+export function DiscordMarkdown({
+  text,
+  mentionNames,
+  now,
+}: { text: string } & MarkdownContext): ReactElement | null {
+  if (text.trim() === '') return null;
+
+  const options: InlineOptions = { mentionNames, now, rich: true };
+  const blocks: ReactNode[] = [];
+  let cursor = 0;
+
+  const prose = (segment: string): void => {
+    if (segment !== '') blocks.push(...lineBlocks(segment, options));
+  };
+
+  for (const fence of text.matchAll(FENCE)) {
+    prose(text.slice(cursor, fence.index).replace(/\n$/, ''));
+    blocks.push(
+      <span className="dc-codeblock" key={`code-${fence.index}`}>
+        {codeBody(fence[0])}
+      </span>,
+    );
+    cursor = fence.index + fence[0].length;
+    if (text.charAt(cursor) === '\n') cursor += 1;
+  }
+
+  prose(text.slice(cursor));
 
   return (
     <>

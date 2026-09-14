@@ -23,10 +23,6 @@ export const pingModule: ModuleManifest<typeof pingConfigSchema> = {
   requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
   actionKinds: ['interaction_reply'],
   commands: [pingCommand],
-  dashboard: {
-    icon: 'activity',
-    sections: [{ id: 'general', title: 'General', fields: [] }],
-  },
 };
 
 export default pingModule;

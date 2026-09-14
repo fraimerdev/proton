@@ -1,3 +1,4 @@
+@import "./modules/afk.css";
 @import "./modules/antinuke.css";
 @import "./modules/antiraid.css";
 @import "./modules/appeals.css";
@@ -7,7 +8,6 @@
 @import "./modules/cases.css";
 @import "./modules/counters.css";
 @import "./modules/giveaways.css";
-@import "./modules/help.css";
 @import "./modules/honeypot.css";
 @import "./modules/joinroles.css";
 @import "./modules/leveling.css";
@@ -16,9 +16,6 @@
 @import "./modules/moderation.css";
 @import "./modules/permissions.css";
 @import "./modules/phishing.css";
-@import "./modules/ping.css";
-@import "./modules/polls.css";
-@import "./modules/reminders.css";
 @import "./modules/rolemenu.css";
 @import "./modules/serverlog.css";
 @import "./modules/starboard.css";

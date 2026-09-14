@@ -15,20 +15,24 @@ import {
   TEMPLATE_NAME_MAX,
   withFreshKeys,
 } from '@proton/module-messages/config';
+import { MESSAGES_REPLY_SURFACE } from '@proton/module-messages/placeholders';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { ChannelPicker, POSTABLE_CHANNEL_TYPES } from '../../components/discord/channel-picker.tsx';
+import { type PlaceholderSlot, sentence } from '../../components/discord/embed-editor.tsx';
 import { DurationInput } from '../../components/discord/inputs.tsx';
 import {
   type EditableMessage,
   EditorPreviewLayout,
   MessageEditor,
+  placeholderSlot,
 } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RolePicker } from '../../components/discord/role-picker.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
-import { ModuleLink, useModuleNavigate } from '../../components/module/route.tsx';
+import { useModuleNavigate } from '../../components/module/route.tsx';
+import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import {
   CollectionButtonRow,
   CollectionHeader,
@@ -61,9 +65,14 @@ import {
   mentionCaption,
   newButtonRow,
   newSelectRow,
+  type PreviewNote,
+  replyPreview,
   scheduleSummary,
   startHasPassed,
+  templateChecks,
   templateContents,
+  templatePreview,
+  templateSurface,
   uniqueName,
   V2_PRESS_UNROUTABLE,
 } from './shared.ts';
@@ -108,6 +117,19 @@ const SCHEDULE_OFF_HELP = 'Switch off to stop posting without removing the sched
 const NO_PALETTE = 'Create one under Saved rows.';
 
 const NOTHING_YET = 'Add buttons or a dropdown that give members a role or reply to them.';
+
+const PLACEHOLDERS_HELP =
+  'Off: text in {braces} is posted exactly as written. On: {server.name} and the other ' +
+  'placeholders are filled in each time this template is posted, and {{ writes a literal {.';
+
+const CONTENT_AS_WRITTEN =
+  'Supports Discord markdown. Text in {braces} is posted as written, not replaced.';
+
+const CONTENT_FILLED_IN = 'Supports Discord markdown and placeholders. Type { to add one.';
+
+const PREVIEW_REFUSED =
+  'Filled in for this sample, this template could not be posted, so nothing would appear. Check ' +
+  'the links and any text that could come out empty. The preview shows it as written.';
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All templates' },
@@ -155,22 +177,30 @@ function previewOf(template: SavedMessage): Partial<ProtonMessage> {
   };
 }
 
+function noteText({ label, message }: PreviewNote): string {
+  const text = sentence(message);
+  return label === undefined || text.startsWith(label) ? text : `${label}: ${text}`;
+}
+
 export function TemplatesArea(props: AreaProps): ReactElement {
+  const go = useModuleNavigate(props.guildId, props.moduleId);
   const template = props.index >= 0 ? props.form.value.templates[props.index] : undefined;
 
   if (template) return <TemplateEditor {...props} template={template} />;
 
   if (props.search.id !== undefined) {
     return (
-      <EmptyState icon="chat-centered-text" title="Template not found" inset>
-        It may have been renamed or deleted.{' '}
-        <ModuleLink
-          guildId={props.guildId}
-          moduleId={props.moduleId}
-          search={{ area: 'templates' }}
-        >
-          Back to templates
-        </ModuleLink>
+      <EmptyState
+        icon="chat-centered-text"
+        title="Template not found"
+        inset
+        actions={
+          <Button tone="primary" onClick={() => go({ area: 'templates', id: undefined })}>
+            Back to templates
+          </Button>
+        }
+      >
+        It may have been renamed or deleted.
       </EmptyState>
     );
   }
@@ -241,7 +271,7 @@ function TemplateList({ guildId, moduleId, form, search }: AreaProps): ReactElem
         limitLabel={LIMIT_LABELS.savedTemplates}
         actions={
           <>
-            {templates.length > 8 ? (
+            {templates.length > 8 || term !== '' ? (
               <SearchField
                 value={term}
                 label="Search templates"
@@ -374,6 +404,7 @@ function TemplateEditor({
   const [removing, setRemoving] = useState(false);
   const [switched, setSwitched] = useState(false);
   const recent = useRecent();
+  const elsewhereId = useId();
 
   const path = `templates.${index}`;
   const rows = template.components;
@@ -425,8 +456,25 @@ function TemplateEditor({
 
   const channel = (channels.data ?? []).find((entry) => entry.id === template.schedule?.channelId);
 
-  // The saved name, so the rename warning appears on an actual rename rather than on every
-  // template that has ever had a button.
+  const optedIn = template.placeholders === true;
+
+  const checks = useMemo(
+    () => templateChecks(template, index, form.value, form.view.config),
+    [template, index, form.value, form.view.config],
+  );
+
+  const messageSlot = placeholderSlot(templateSurface(template), checks.at);
+  const replySlot = placeholderSlot(MESSAGES_REPLY_SURFACE, checks.at);
+  const placeholders: PlaceholderSlot | undefined = optedIn
+    ? (field, render) => replySlot(field, render) ?? messageSlot(field, render)
+    : undefined;
+
+  const preview = useMemo(
+    () => templatePreview(template, index, channel),
+    [template, index, channel],
+  );
+
+  // Compared with the saved name, so the rename warning shows only on an actual rename.
   const savedName = (form.view.config.templates as { name?: string }[] | undefined)?.[index]?.name;
   const renaming = savedName !== undefined && savedName !== template.name;
 
@@ -535,6 +583,14 @@ function TemplateEditor({
                     }
                   />
                 </SettingRow>
+
+                <SettingRow title="Fill in placeholders" description={PLACEHOLDERS_HELP}>
+                  <Switch
+                    label="Fill in placeholders"
+                    checked={optedIn}
+                    onChange={(next) => setTemplate({ ...template, placeholders: next })}
+                  />
+                </SettingRow>
               </Rows>
             </Section>
 
@@ -550,6 +606,8 @@ function TemplateEditor({
                   </StatusBanner>
                 ) : null}
 
+                <TemplateDiagnostics id={elsewhereId} diagnostics={checks.elsewhere} />
+
                 <div className="messages-layout-drop">
                   <Button tone="danger-quiet" icon="trash" onClick={() => setDropV2(true)}>
                     Replace with text and embeds
@@ -564,14 +622,17 @@ function TemplateEditor({
                   </StatusBanner>
                 ) : null}
 
+                <TemplateDiagnostics id={elsewhereId} diagnostics={checks.elsewhere} />
+
                 <MessageEditor
                   guildId={guildId}
                   value={templateMessage(template)}
                   pathPrefix={path}
                   errorAt={(at) => form.errorAt(at)}
                   allow={{ components: false }}
+                  placeholders={placeholders}
                   contentLabel="Message text"
-                  contentDescription="Supports Discord markdown. Text in {braces} is posted as written, not replaced."
+                  contentDescription={optedIn ? CONTENT_FILLED_IN : CONTENT_AS_WRITTEN}
                   onChange={(next) =>
                     setTemplate({
                       ...template,
@@ -635,7 +696,9 @@ function TemplateEditor({
                   ) : (
                     <Rows>
                       {rows.map((row, rowIndex) => {
-                        const rowError = form.errorAt(`${path}.components.${rowIndex}`);
+                        const rowPath = `${path}.components.${rowIndex}`;
+                        const rowError = form.errorAt(rowPath);
+                        const needsFixing = rowError !== undefined || checks.blocksUnder(rowPath);
 
                         return (
                           <ExpandableRow
@@ -646,7 +709,7 @@ function TemplateEditor({
                             description={rowError ?? describeRow(row)}
                             defaultOpen={rows.length === 1}
                             control={
-                              rowError !== undefined ? (
+                              needsFixing ? (
                                 <Badge tone="danger">Needs fixing</Badge>
                               ) : (
                                 <Badge tone="neutral">
@@ -660,7 +723,9 @@ function TemplateEditor({
                                 row={row}
                                 keys={keys}
                                 errorAt={(at) => form.errorAt(at)}
-                                prefix={`${path}.components.${rowIndex}`}
+                                placeholders={placeholders}
+                                previewReply={optedIn ? replyPreview : undefined}
+                                prefix={rowPath}
                                 onChange={(next) =>
                                   setRows(rows.map((held, at) => (at === rowIndex ? next : held)))
                                 }
@@ -707,10 +772,26 @@ function TemplateEditor({
         preview={
           <>
             <DiscordPreview
-              message={previewOf(template)}
-              channelName={channel?.name}
+              message={previewOf(preview.message)}
+              mentionNames={preview.mentionNames}
+              now={preview.now}
+              channelName={preview.channelName}
               empty="Nothing to preview. Add text, an embed, a button or a dropdown."
             />
+            {preview.caption !== undefined ? (
+              <p className="messages-preview-note text-xs text-muted">{preview.caption}</p>
+            ) : null}
+            {preview.refused ? (
+              <p className="messages-preview-note text-xs text-danger">{PREVIEW_REFUSED}</p>
+            ) : null}
+            {preview.notes.map((note) => (
+              <p
+                key={`${note.label ?? ''}|${note.message}`}
+                className="messages-preview-note text-xs text-muted"
+              >
+                {noteText(note)}
+              </p>
+            ))}
             <p className="messages-preview-note text-xs text-muted">
               {mentionCaption(template.mentions)}
             </p>

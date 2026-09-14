@@ -69,9 +69,10 @@ describe('messagesConfigSchema', () => {
       v2: [],
     };
 
-    expect(messagesConfigSchema.parse({ enabled: true, templates: [saved] }).templates[0]).toEqual(
-      saved,
-    );
+    expect(messagesConfigSchema.parse({ enabled: true, templates: [saved] }).templates[0]).toEqual({
+      ...saved,
+      placeholders: false,
+    });
   });
 
   test('fills in the parts a message did not name rather than dropping the row', () => {
@@ -81,6 +82,43 @@ describe('messagesConfigSchema', () => {
 
     expect(parsed.templates[0]?.components).toEqual([]);
     expect(parsed.templates[0]?.mentions).toEqual(DEFAULT_MENTION_POLICY);
+  });
+});
+
+describe('the placeholders switch on a template', () => {
+  test('a template saved before the switch existed reads as off, so its braces stay literal', () => {
+    const parsed = messagesConfigSchema.parse({
+      templates: [{ name: 'rules', content: 'Welcome to {server}' }],
+    });
+
+    expect(parsed.templates[0]?.placeholders).toBe(false);
+    expect(parsed.templates[0]?.content).toBe('Welcome to {server}');
+  });
+
+  test('keeps the switch when an admin turned it on', () => {
+    const parsed = messagesConfigSchema.parse({
+      templates: [{ name: 'rules', content: 'Welcome to {server.name}', placeholders: true }],
+    });
+
+    expect(parsed.templates[0]?.placeholders).toBe(true);
+  });
+
+  test('re-parsing a parsed config keeps the switch exactly as it was', () => {
+    const once = messagesConfigSchema.parse({
+      templates: [
+        { name: 'on', content: 'a', placeholders: true },
+        { name: 'off', content: 'b' },
+      ],
+    });
+    const twice = messagesConfigSchema.parse({ ...once, enabled: true });
+
+    expect(twice.templates.map((template) => template.placeholders)).toEqual([true, false]);
+  });
+
+  test('a switch that is not a yes or no is refused rather than read as on', () => {
+    expect(
+      templatesSchema.safeParse([{ name: 'rules', content: 'a', placeholders: 'yes' }]).success,
+    ).toBe(false);
   });
 });
 

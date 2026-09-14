@@ -49,14 +49,22 @@ local member = ARGV[4]
 -- the cutoff would land in the wrong millisecond.
 redis.call('ZREMRANGEBYSCORE', key, '-inf', string.format('%.0f', nowMs - windowMs))
 
+-- A crossing ends when its occurrence leaves the window, on the caller's clock; PX runs on Redis's.
+-- Before the ZADD, or a replayed crossing that had aged out would re-add itself and look current.
+local crossedBy = redis.call('GET', crossedKey)
+if crossedBy and not redis.call('ZSCORE', key, crossedBy) then
+  redis.call('DEL', crossedKey)
+  crossedBy = false
+end
+
 -- NX so a redelivered event keeps its original score and adds nothing.
 local added = redis.call('ZADD', key, 'NX', ARGV[1], member)
 local count = redis.call('ZCARD', key)
 
 -- The window is worthless once every occurrence in it has aged out.
 redis.call('PEXPIRE', key, ARGV[2])
+if crossedBy then redis.call('PEXPIRE', crossedKey, ARGV[2]) end
 
-local crossedBy = redis.call('GET', crossedKey)
 local tripped = 0
 
 if crossedBy == member then
@@ -65,9 +73,6 @@ if crossedBy == member then
   -- downstream of the trip still trips when the bus redelivers it.
   tripped = 1
 elseif not crossedBy and added == 1 and count == limit then
-  -- The crossing. Remember which occurrence it was, for exactly as long as the
-  -- window it crossed: once that has drained the next genuine crossing is a new
-  -- one and must be allowed to trip again.
   redis.call('SET', crossedKey, member, 'PX', ARGV[2])
   tripped = 1
 end

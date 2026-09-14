@@ -3,8 +3,6 @@ import type { IconName } from '../../components/ui/icon-set.gen.ts';
 export interface AreaMeta {
   id: string;
   label: string;
-  /** Underline tabs for major workspace modes; segmented for closely related config surfaces. */
-  style?: 'tabs' | 'segmented';
 }
 
 export interface ModuleMeta {
@@ -13,12 +11,11 @@ export interface ModuleMeta {
   description: string;
   icon: IconName;
   group: NavGroupId;
-  /** Shown under the title only where it carries information the title does not. */
   subtitle?: string;
-  /** What an admin might type instead of the label. Searched alongside it and the field labels. */
   aliases: readonly string[];
   areas?: readonly AreaMeta[];
   areaStyle?: 'tabs' | 'segmented';
+  switchOnly?: true;
 }
 
 export type NavGroupId =
@@ -44,7 +41,6 @@ const T = 'tabs' as const;
 const S = 'segmented' as const;
 
 export const MODULES: readonly ModuleMeta[] = [
-  // ------------------------------------------------------------- joining
   {
     id: 'verification',
     label: 'Verification',
@@ -64,15 +60,7 @@ export const MODULES: readonly ModuleMeta[] = [
     description: 'Give roles to new members and bots, and restore roles on rejoin.',
     icon: 'user-plus',
     group: 'joining',
-    aliases: [
-      'autorole',
-      'auto role',
-      'auto roles',
-      'join role',
-      'sticky roles',
-      'on join',
-      'people',
-    ],
+    aliases: ['autorole', 'auto role', 'auto roles', 'join role', 'sticky roles', 'on join'],
     areaStyle: S,
     areas: [
       { id: 'people', label: 'Members' },
@@ -83,8 +71,9 @@ export const MODULES: readonly ModuleMeta[] = [
   },
   {
     id: 'welcome',
-    label: 'Welcome & Goodbye',
-    description: 'Send a message and optional image card when someone joins or leaves.',
+    label: 'Welcomer',
+    description:
+      'Send a message when someone joins, leaves or boosts, with an optional image card.',
     icon: 'hand-waving',
     group: 'joining',
     aliases: [
@@ -95,16 +84,20 @@ export const MODULES: readonly ModuleMeta[] = [
       'farewell',
       'leave message',
       'welcome card',
+      'boost',
+      'booster',
+      'server boost',
+      'nitro boost',
     ],
     areaStyle: S,
     areas: [
       { id: 'welcome', label: 'Welcome' },
       { id: 'goodbye', label: 'Goodbye' },
+      { id: 'boost', label: 'Boosts' },
       { id: 'card', label: 'Card' },
     ],
   },
 
-  // -------------------------------------------------------------- safety
   {
     id: 'automod',
     label: 'Automod',
@@ -150,7 +143,7 @@ export const MODULES: readonly ModuleMeta[] = [
     description: 'Catch spam bots and hacked accounts that post in bait channels.',
     icon: 'bug',
     group: 'safety',
-    aliases: ['bait', 'trap', 'spam trap', 'bait channel', 'decoy', 'what happens'],
+    aliases: ['bait', 'trap', 'spam trap', 'bait channel', 'decoy'],
     areaStyle: T,
     areas: [
       { id: 'channels', label: 'Bait channels' },
@@ -163,7 +156,6 @@ export const MODULES: readonly ModuleMeta[] = [
     ],
   },
 
-  // -------------------------------------------------------------- people
   {
     id: 'moderation',
     label: 'Moderation',
@@ -206,7 +198,7 @@ export const MODULES: readonly ModuleMeta[] = [
     description: 'Create ban appeal forms and review submissions in a channel.',
     icon: 'scales',
     group: 'people',
-    aliases: ['appeal', 'unban request', 'appeal form', 'review settings'],
+    aliases: ['appeal', 'unban request', 'appeal form'],
     areaStyle: T,
     areas: [
       { id: 'forms', label: 'Appeal forms' },
@@ -223,7 +215,6 @@ export const MODULES: readonly ModuleMeta[] = [
     aliases: ['command permissions', 'who can use', 'allowed roles', 'command access'],
   },
 
-  // ------------------------------------------------------------- members
   {
     id: 'tickets',
     label: 'Tickets',
@@ -280,10 +271,22 @@ export const MODULES: readonly ModuleMeta[] = [
     description: 'Give members XP for messages and voice time, with role rewards.',
     icon: 'trend-up',
     group: 'members',
-    aliases: ['levels', 'xp', 'rank', 'rank card', 'leaderboard', 'role rewards'],
+    aliases: [
+      'levels',
+      'xp',
+      'rank',
+      'rank card',
+      'leaderboard',
+      'role rewards',
+      'multiplier',
+      'xp multiplier',
+      'double xp',
+      'xp event',
+    ],
     areaStyle: T,
     areas: [
       { id: 'xp', label: 'Earning XP' },
+      { id: 'events', label: 'XP events' },
       { id: 'levelup', label: 'Level-up' },
       { id: 'rewards', label: 'Role rewards' },
       { id: 'card', label: 'Rank card' },
@@ -311,6 +314,7 @@ export const MODULES: readonly ModuleMeta[] = [
     icon: 'chart-bar',
     group: 'members',
     aliases: ['poll', 'vote', 'voting'],
+    switchOnly: true,
   },
   {
     id: 'suggestions',
@@ -334,14 +338,7 @@ export const MODULES: readonly ModuleMeta[] = [
     description: 'Give members their own voice channel when they join a creator channel.',
     icon: 'speaker-high',
     group: 'members',
-    aliases: [
-      'temp vc',
-      'temporary voice',
-      'join to create',
-      'voice hub',
-      'auto voice',
-      'global settings',
-    ],
+    aliases: ['temp vc', 'temporary voice', 'join to create', 'voice hub', 'auto voice'],
     areaStyle: T,
     areas: [
       { id: 'hubs', label: 'Creator channels' },
@@ -355,6 +352,16 @@ export const MODULES: readonly ModuleMeta[] = [
     icon: 'alarm',
     group: 'members',
     aliases: ['remind', 'remindme', 'reminder'],
+    switchOnly: true,
+  },
+  {
+    id: 'afk',
+    label: 'AFK',
+    description:
+      'Tell people who ping an away member why they’re away, and recap what they missed.',
+    icon: 'moon',
+    group: 'members',
+    aliases: ['away', 'away from keyboard', 'brb', 'afk status', 'away message'],
   },
   {
     id: 'counters',
@@ -365,14 +372,13 @@ export const MODULES: readonly ModuleMeta[] = [
     aliases: ['counter channels', 'member count', 'stats channels', 'count channel'],
   },
 
-  // ------------------------------------------------------------- written
   {
     id: 'serverlog',
     label: 'Server Logs',
     description: 'Post member, role, channel and moderation events to log channels.',
     icon: 'scroll',
     group: 'written',
-    aliases: ['audit log', 'event log', 'logs', 'log channel', 'mod log', 'individual events'],
+    aliases: ['audit log', 'event log', 'logs', 'log channel', 'mod log'],
     areaStyle: T,
     areas: [
       { id: 'categories', label: 'Categories' },
@@ -389,7 +395,6 @@ export const MODULES: readonly ModuleMeta[] = [
     aliases: ['message log', 'retention', 'privacy', 'store messages', 'data'],
   },
 
-  // -------------------------------------------------------------- server
   {
     id: 'branding',
     label: 'Branding',
@@ -418,6 +423,7 @@ export const MODULES: readonly ModuleMeta[] = [
     icon: 'question',
     group: 'server',
     aliases: ['commands', 'docs', 'documentation'],
+    switchOnly: true,
   },
   {
     id: 'ping',
@@ -426,6 +432,7 @@ export const MODULES: readonly ModuleMeta[] = [
     icon: 'pulse',
     group: 'server',
     aliases: ['latency', 'uptime', 'pong', 'alive'],
+    switchOnly: true,
   },
 ];
 
@@ -433,10 +440,6 @@ export const MODULE_BY_ID: ReadonlyMap<string, ModuleMeta> = new Map(
   MODULES.map((module) => [module.id, module]),
 );
 
-/**
- * Operational destinations, not modules: each is a view onto records that a module owns, so it
- * links into that module's own route rather than getting a second page that could disagree with it.
- */
 export interface RecordLink {
   id: string;
   label: string;
@@ -475,10 +478,6 @@ export const RECORD_LINKS: readonly RecordLink[] = [
 
 export const MODULE_ICON_NAMES: readonly IconName[] = MODULES.map((module) => module.icon);
 export const RECORD_ICON_NAMES: readonly IconName[] = RECORD_LINKS.map((link) => link.icon);
-
-export function moduleMeta(moduleId: string): ModuleMeta | undefined {
-  return MODULE_BY_ID.get(moduleId);
-}
 
 export function areaMeta(module: ModuleMeta, areaId: string | undefined): AreaMeta | undefined {
   if (!module.areas) return undefined;

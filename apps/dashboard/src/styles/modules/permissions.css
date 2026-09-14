@@ -1,5 +1,3 @@
-/* permissions page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
-
 .permissions-note {
   color: var(--text-muted);
   font-size: var(--text-secondary-size);

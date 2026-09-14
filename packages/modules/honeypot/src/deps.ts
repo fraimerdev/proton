@@ -1,4 +1,10 @@
-import type { BlockedMemberStore, GuildStateStore } from '@proton/core';
+import type { BlockedMemberStore, GuildState, GuildStateStore, ModuleContext } from '@proton/core';
+import {
+  type BotFacts,
+  type PlaceholderEnvironment,
+  PROTON_SUPPORT_URL,
+} from '@proton/core/placeholders';
+import { type HoneypotConfig, MODULE_ID } from './config.ts';
 import type {
   DmChannelStore,
   HoneypotLock,
@@ -29,6 +35,8 @@ export interface HoneypotDeps {
   linkSecret?: string;
 
   linkBaseUrl?: string;
+
+  placeholders?: PlaceholderEnvironment;
 
   now?(): number;
 }
@@ -72,4 +80,48 @@ export function describeUnbound(what: string, unbound: readonly string[]): strin
     'The process running modules must call createHoneypotModule({ ' +
     `${unbound.map((port) => PORT_HINTS[port] ?? port).join(', ')} }).`
   );
+}
+
+function reasonOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+export function placeholderClock(deps: HoneypotDeps): number {
+  return deps.placeholders?.now() ?? deps.now?.() ?? Date.now();
+}
+
+export async function readGuildState(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+): Promise<GuildState | null> {
+  if (!deps.guildState) return null;
+
+  try {
+    return await deps.guildState.get(ctx.guildId);
+  } catch (error) {
+    ctx.logger.warn(
+      "honeypot could not read this server's cached details, so its server and channel " +
+        `placeholders have no value: ${reasonOf(error)}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+    return null;
+  }
+}
+
+export async function readBotFacts(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+): Promise<BotFacts | null> {
+  if (!deps.placeholders) return null;
+
+  try {
+    return await deps.placeholders.bot();
+  } catch (error) {
+    ctx.logger.warn(
+      'Proton could not read its own profile, so its name and avatar render as nothing in this ' +
+        `honeypot message: ${reasonOf(error)}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+    return { id: deps.placeholders.applicationId, name: null, supportUrl: PROTON_SUPPORT_URL };
+  }
 }

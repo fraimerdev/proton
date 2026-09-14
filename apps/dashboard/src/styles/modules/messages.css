@@ -1,5 +1,3 @@
-/* messages page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
-
 .messages-crumb {
   color: inherit;
   text-decoration: none;
@@ -18,8 +16,6 @@
   margin-bottom: 14px;
 }
 
-/* A component's controls read left to right in one wrapping line, each under its own label, so a
-   narrow editor column folds them rather than shrinking them. */
 .messages-fields {
   display: flex;
   flex-wrap: wrap;

@@ -37,7 +37,14 @@ import {
   transfer,
   unclaim,
 } from './controls.ts';
-import { bindStore, describeUnbound, nameOf, type TicketsDeps } from './deps.ts';
+import {
+  bindStore,
+  clockOf,
+  describeUnbound,
+  nameOf,
+  type TicketsDeps,
+  ticketFacts,
+} from './deps.ts';
 import {
   buildInfoComponents,
   describePriority,
@@ -45,6 +52,7 @@ import {
   type TicketView,
 } from './interface.ts';
 import { closeTicket, deleteTicket, openTicket, reopenTicket } from './lifecycle.ts';
+import { renderTicketText, TICKET_RESPONSE_SURFACE } from './placeholders.ts';
 import { sendPanel } from './post.ts';
 import type { Ticket, TicketStore } from './store.ts';
 import { buildTranscript } from './transcript-delivery.ts';
@@ -477,7 +485,7 @@ export function ticketCommand(deps: TicketsDeps): Command {
         case 'list':
           return list(ctx, store);
         case 'response':
-          return quickResponse(ctx, store);
+          return quickResponse(ctx, store, deps);
         case 'stats':
           return stats(ctx, store, deps);
         default:
@@ -833,6 +841,7 @@ async function list(ctx: CommandContext<TicketsConfig>, store: TicketStore): Pro
 async function quickResponse(
   ctx: CommandContext<TicketsConfig>,
   store: TicketStore,
+  deps: TicketsDeps,
 ): Promise<void> {
   const ticket = await resolve(ctx, store);
   if (!ticket) return;
@@ -857,6 +866,17 @@ async function quickResponse(
     return;
   }
 
+  const facts = await ticketFacts({
+    ctx,
+    deps,
+    store,
+    surface: TICKET_RESPONSE_SURFACE,
+    template: saved.content,
+    ticket,
+    typeName: typeFor(ctx.config, ticket.typeId)?.name ?? ticket.typeId,
+    actor: { id: ctx.userId, name: ctx.actorDisplayName, nick: ctx.actorNick },
+  });
+
   const posted = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -867,7 +887,12 @@ async function quickResponse(
     record: false,
     payload: {
       channelId: ticket.channelId,
-      content: saved.content,
+      content: renderTicketText(
+        TICKET_RESPONSE_SURFACE,
+        saved.content,
+        facts,
+        clockOf(deps).getTime(),
+      ),
       allowedMentions: { parse: [], users: [ticket.ownerId] },
     },
   });

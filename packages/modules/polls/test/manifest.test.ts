@@ -46,13 +46,4 @@ describe('the polls manifest', () => {
   test('needs no intent the gateway does not already ask Discord for', () => {
     expect(registered().requiredIntents() & ~DEFAULT_INTENTS).toBe(0);
   });
-
-  test('every dashboard field is a real config key', () => {
-    const manifest = createPollsModule();
-    const keys = new Set(Object.keys(manifest.configSchema.shape));
-
-    for (const section of manifest.dashboard?.sections ?? []) {
-      for (const field of section.fields) expect(keys.has(field)).toBe(true);
-    }
-  });
 });

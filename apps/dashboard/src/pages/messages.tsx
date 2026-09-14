@@ -1,4 +1,5 @@
 import { messagesConfigSchema } from '@proton/module-messages/config';
+import { messagesTemplates } from '@proton/module-messages/placeholders';
 import type { ReactElement } from 'react';
 import { useModuleForm } from '../components/module/form.ts';
 import {
@@ -35,7 +36,12 @@ export default function MessagesPage({
   summary,
   area,
 }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: messagesConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: messagesConfigSchema,
+    templates: messagesTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
   const search = useModuleSearch();
 
@@ -93,7 +99,6 @@ export default function MessagesPage({
       <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas ?? []} current={current} />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -138,6 +143,7 @@ export default function MessagesPage({
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         onSave={form.save}
         onReset={form.reset}
         note={blocking}

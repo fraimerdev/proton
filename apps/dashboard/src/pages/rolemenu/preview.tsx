@@ -21,11 +21,6 @@ function labelOf(key: string, label: string | undefined): string {
   return label ?? key;
 }
 
-/**
- * The four values Discord sees are fixed in the module's own message builder — secondary buttons,
- * "Choose one"/"Choose your roles", and at most one pick in unique mode — so the page offers no
- * control for any of them and simply mirrors them here.
- */
 export function previewRows(menu: RolemenuMenu): ActionRow[] {
   if (menu.kind === 'reaction' || menu.bindings.length === 0) return [];
 

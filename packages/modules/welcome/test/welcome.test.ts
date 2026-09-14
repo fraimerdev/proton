@@ -4,31 +4,57 @@ import type {
   ActionRequest,
   ActionResult,
   Attachment,
+  CaseInput,
+  CaseRecorder,
+  DedupeStore,
   Logger,
+  PrecheckInput,
   ProtonEvent,
+  RestProxyClient,
+  RestRequestOptions,
+  RestResponse,
 } from '@proton/core';
-import { ModuleRegistry, Permissions } from '@proton/core';
+import {
+  DefaultActionExecutor,
+  ModuleRegistry,
+  newId,
+  Permissions,
+  requiredPermissionsFor,
+} from '@proton/core';
+import { SAMPLE_NOW } from '@proton/core/placeholders';
 import { dispatch } from '@proton/fixtures';
 import { normalise } from '@proton/gateway/normaliser';
 import { GatewayIntentBits } from 'discord-api-types/v10';
 import type { WelcomeConfig } from '../src/config.ts';
 import {
+  DEFAULT_BOOST_MESSAGE,
   DEFAULT_GOODBYE_MESSAGE,
   DEFAULT_WELCOME_MESSAGE,
   type GreetingMessage,
   greetingMessageSchema,
   isSilentGreeting,
-  renderGreeting,
   welcomeConfigSchema,
   welcomeDefaultConfig,
   welcomeFormSchema,
 } from '../src/config.ts';
 import { createWelcomeModule, welcomeModule } from '../src/index.ts';
-import { createGreetingListener, readGreetingTarget } from '../src/listeners.ts';
+import {
+  createBoostListener,
+  createGreetingListener,
+  readGreetingTarget,
+} from '../src/listeners.ts';
+import {
+  type GreetingPlaceholderFacts,
+  renderGreetingMessage,
+  WELCOME_JOIN_SURFACE,
+} from '../src/placeholders.ts';
 
 const GUILD = '900000000000000001';
 const CHANNEL = '500000000000000001';
 const MEMBER = '100000000000000002';
+const BOOSTER = '100000000000000001';
+const NOTICE_CHANNEL = '500000000000000009';
+const BOOST_CHANNEL = '500000000000000002';
 
 class RecordingExecutor implements ActionExecutor {
   readonly requests: ActionRequest[] = [];
@@ -85,11 +111,95 @@ function leaveEvent(): ProtonEvent {
   return event;
 }
 
-describe('renderGreeting', () => {
-  const facts = { userId: MEMBER, username: 'Newcomer', guildName: 'Proton', memberCount: 42 };
+function boostEvent(type: number, d: Record<string, unknown> = {}): ProtonEvent {
+  const raw = dispatch('messageCreate');
+  raw.d = { ...raw.d, type, content: '', channel_id: NOTICE_CHANNEL, ...d };
+  const event = normalise(raw)[0];
+  if (!event) throw new Error('MESSAGE_CREATE did not normalise');
+  return event;
+}
+
+class MemoryDedupe implements DedupeStore {
+  readonly #claimed = new Set<string>();
+
+  async claim(key: string): Promise<boolean> {
+    if (this.#claimed.has(key)) return false;
+    this.#claimed.add(key);
+    return true;
+  }
+
+  async release(key: string): Promise<void> {
+    this.#claimed.delete(key);
+  }
+
+  async has(key: string): Promise<boolean> {
+    return this.#claimed.has(key);
+  }
+}
+
+class MemoryRecorder implements CaseRecorder {
+  async record(_input: CaseInput): Promise<{ caseId: string }> {
+    return { caseId: newId() };
+  }
+}
+
+class FakeRest implements RestProxyClient {
+  readonly calls: RestRequestOptions[] = [];
+
+  async request(options: RestRequestOptions): Promise<RestResponse> {
+    this.calls.push(options);
+    return { status: 200, body: {} };
+  }
+}
+
+function prechecked(botChannelPermissions: bigint): {
+  executor: ActionExecutor;
+  rest: FakeRest;
+} {
+  const rest = new FakeRest();
+  const executor = new DefaultActionExecutor({
+    dedupe: new MemoryDedupe(),
+    rest,
+    recorder: new MemoryRecorder(),
+    resolveContext: async (request): Promise<PrecheckInput> => {
+      const payload = (request.payload ?? {}) as Record<string, unknown>;
+      return {
+        guildId: GUILD,
+        guildOwnerId: '200000000000000001',
+        botUserId: '300000000000000001',
+        botHighestRolePosition: 10,
+        botChannelPermissions,
+        requiredPermissions: requiredPermissionsFor(request.kind, request.payload),
+        ...(typeof payload.channelId === 'string' ? { channelId: payload.channelId } : {}),
+      };
+    },
+  });
+
+  return { executor, rest };
+}
+
+describe('renderGreetingMessage', () => {
+  const facts: GreetingPlaceholderFacts = {
+    user: { id: MEMBER, username: 'Newcomer', globalName: null, avatarHash: null },
+    member: { nick: null },
+    server: { id: GUILD, name: 'Proton', memberCount: 42 },
+    destinationChannel: { id: CHANNEL },
+    bot: null,
+    eventId: 'join-1',
+    occurredAt: SAMPLE_NOW,
+  };
+
+  function rendered(
+    message: GreetingMessage,
+    given: GreetingPlaceholderFacts = facts,
+  ): GreetingMessage {
+    const result = renderGreetingMessage(message, WELCOME_JOIN_SURFACE, given, SAMPLE_NOW);
+    if (!result.ok) throw new Error(result.humanReason);
+    return result.message;
+  }
 
   function content(template: string): string | undefined {
-    return renderGreeting(greeting(template), facts).content;
+    return rendered(greeting(template)).content;
   }
 
   test('substitutes every placeholder', () => {
@@ -111,19 +221,19 @@ describe('renderGreeting', () => {
   });
 
   test('a substituted value is not itself expanded', () => {
-    const hostile = { ...facts, username: '{server}' };
+    const hostile = { ...facts, user: { ...facts.user, username: '{server}' } };
 
-    expect(renderGreeting(greeting('{username}'), hostile).content).toBe('{server}');
+    expect(rendered(greeting('{username}'), hostile).content).toBe('{server}');
   });
 
   test('truncates to Discord’s 2000-character limit rather than sending nothing', () => {
-    const huge = { ...facts, guildName: 'P'.repeat(3000) };
+    const huge = { ...facts, server: { id: GUILD, name: 'P'.repeat(3000), memberCount: 42 } };
 
-    expect(renderGreeting(greeting('Welcome to {server}'), huge).content).toHaveLength(2000);
+    expect(rendered(greeting('Welcome to {server}'), huge).content).toHaveLength(2000);
   });
 
   test('substitutes inside an embed, not only in the content', () => {
-    const rendered = renderGreeting(
+    const embedded = rendered(
       greeting({
         embeds: [
           {
@@ -133,18 +243,17 @@ describe('renderGreeting', () => {
           },
         ],
       }),
-      facts,
     );
 
-    expect(rendered.embeds[0]?.title).toBe('Welcome to Proton');
-    expect(rendered.embeds[0]?.description).toBe('Say hello to Newcomer');
-    expect(rendered.embeds[0]?.fields?.[0]?.value).toBe('You are #42');
+    expect(embedded.embeds[0]?.title).toBe('Welcome to Proton');
+    expect(embedded.embeds[0]?.description).toBe('Say hello to Newcomer');
+    expect(embedded.embeds[0]?.fields?.[0]?.value).toBe('You are #42');
   });
 
   test('leaves the stored message untouched, so the next join renders the tokens again', () => {
     const stored = greeting('Welcome to {server}');
 
-    renderGreeting(stored, facts);
+    rendered(stored);
 
     expect(stored.content).toBe('Welcome to {server}');
   });
@@ -198,6 +307,37 @@ describe('a greeting stored before it could hold an embed', () => {
   test('the defaults are the same messages, in the new shape', () => {
     expect(welcomeDefaultConfig.welcomeMessage.content).toBe(DEFAULT_WELCOME_MESSAGE);
     expect(welcomeDefaultConfig.goodbyeMessage.content).toBe(DEFAULT_GOODBYE_MESSAGE);
+    expect(welcomeDefaultConfig.boostMessage.content).toBe(DEFAULT_BOOST_MESSAGE);
+  });
+});
+
+describe('a config stored before boosts existed', () => {
+  const stored = {
+    enabled: true,
+    welcomeChannelId: CHANNEL,
+    welcomeMessage: 'Welcome to {server}!',
+    goodbyeChannelId: CHANNEL,
+    goodbyeMessage: 'Bye {username}.',
+    card: true,
+    preset: 'midnight',
+  };
+
+  test('parses, with boosts off, no boost channel and the default thanks', () => {
+    const parsed = welcomeConfigSchema.parse(stored);
+
+    expect(parsed.boostEnabled).toBe(false);
+    expect(parsed.boostChannelId).toBeUndefined();
+    expect(parsed.boostMessage.content).toBe(DEFAULT_BOOST_MESSAGE);
+  });
+
+  test('keeps every key it already had', () => {
+    const parsed = welcomeConfigSchema.parse(stored);
+
+    expect(parsed.welcomeChannelId).toBe(CHANNEL);
+    expect(parsed.welcomeMessage.content).toBe('Welcome to {server}!');
+    expect(parsed.goodbyeMessage.content).toBe('Bye {username}.');
+    expect(parsed.card).toBe(true);
+    expect(welcomeConfigSchema.parse(parsed)).toEqual(parsed);
   });
 });
 
@@ -257,8 +397,10 @@ describe('what a greeting refuses', () => {
 });
 
 describe('the generated form', () => {
-  test('omits the two messages, which the message builder panel edits instead', () => {
+  test('omits the three messages, which the message builder panel edits instead', () => {
     expect(Object.keys(welcomeFormSchema.shape).sort()).toEqual([
+      'boostChannelId',
+      'boostEnabled',
       'card',
       'cardAccent',
       'cardBackgroundUrl',
@@ -539,6 +681,211 @@ describe('greeting listener', () => {
   });
 });
 
+describe('boost listener', () => {
+  function boostConfig(overrides: Record<string, unknown> = {}): WelcomeConfig {
+    return config({ boostEnabled: true, ...overrides });
+  }
+
+  const proton = { get: async () => ({ name: 'Proton', memberCount: 42 }) };
+
+  test('thanks the booster for a boost notice', async () => {
+    const executor = new RecordingExecutor();
+    const listener = createBoostListener({ guildState: proton });
+    const event = boostEvent(8);
+
+    await listener.handler(event, {
+      guildId: GUILD,
+      config: boostConfig(),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(executor.requests).toHaveLength(1);
+    expect(executor.requests[0]?.kind).toBe('send');
+    expect(executor.requests[0]?.idempotencyKey).toBe(`${event.id}:boost`);
+    expect(payloadOf(executor).content).toBe(`Thanks for boosting **Proton**, <@${BOOSTER}>!`);
+    expect(payloadOf(executor).allowedMentions).toEqual({ parse: ['roles', 'users'] });
+  });
+
+  test('thanks the booster when the boost also reached a new level', async () => {
+    const executor = new RecordingExecutor();
+    const listener = createBoostListener({ guildState: proton });
+
+    await listener.handler(boostEvent(10), {
+      guildId: GUILD,
+      config: boostConfig({ boostMessage: '{username} boosted {server} to #{memberCount}' }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(executor.requests).toHaveLength(1);
+    expect(payloadOf(executor).content).toBe('Tester boosted Proton to #42');
+  });
+
+  test('posts where Discord posted its boost notice when no boost channel is set', async () => {
+    const executor = new RecordingExecutor();
+
+    await createBoostListener().handler(boostEvent(8), {
+      guildId: GUILD,
+      config: boostConfig(),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(payloadOf(executor).channelId).toBe(NOTICE_CHANNEL);
+  });
+
+  test('posts in the boost channel when one is set', async () => {
+    const executor = new RecordingExecutor();
+
+    await createBoostListener().handler(boostEvent(9), {
+      guildId: GUILD,
+      config: boostConfig({ boostChannelId: BOOST_CHANNEL }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(payloadOf(executor).channelId).toBe(BOOST_CHANNEL);
+  });
+
+  test('names the booster by their server nickname when the notice carries one', async () => {
+    const executor = new RecordingExecutor();
+
+    await createBoostListener().handler(
+      boostEvent(11, { member: { nick: 'Sparkle', roles: [] } }),
+      {
+        guildId: GUILD,
+        config: boostConfig({ boostMessage: 'Thank you, {username}' }),
+        executor,
+        logger: collectingLogger().logger,
+      },
+    );
+
+    expect(payloadOf(executor).content).toBe('Thank you, Sparkle');
+  });
+
+  test('never attaches a card, even with welcome cards on', async () => {
+    const executor = new RecordingExecutor();
+    let renders = 0;
+    const listener = createBoostListener({
+      render: async () => {
+        renders += 1;
+        return new Uint8Array([137, 80]);
+      },
+    });
+
+    await listener.handler(boostEvent(8), {
+      guildId: GUILD,
+      config: boostConfig({ card: true }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(payloadOf(executor).files).toBeUndefined();
+    expect(renders).toBe(0);
+  });
+
+  test('an ordinary message and a reply are not boosts, and cost no cache lookup', async () => {
+    const executor = new RecordingExecutor();
+    let lookups = 0;
+    const listener = createBoostListener({
+      guildState: {
+        get: async () => {
+          lookups += 1;
+          return {};
+        },
+      },
+    });
+    const ctx = {
+      guildId: GUILD,
+      config: boostConfig(),
+      executor,
+      logger: collectingLogger().logger,
+    };
+
+    await listener.handler(boostEvent(0), ctx);
+    await listener.handler(boostEvent(19), ctx);
+
+    expect(executor.requests).toEqual([]);
+    expect(lookups).toBe(0);
+  });
+
+  test('a boost notice with a bot as its author is ignored', async () => {
+    const executor = new RecordingExecutor();
+    const { logger, lines } = collectingLogger();
+
+    await createBoostListener().handler(
+      boostEvent(8, { author: { id: BOOSTER, username: 'robot', bot: true } }),
+      { guildId: GUILD, config: boostConfig(), executor, logger },
+    );
+
+    expect(executor.requests).toEqual([]);
+    expect(lines).toEqual([]);
+  });
+
+  test('switched off, a boost posts nothing', async () => {
+    const executor = new RecordingExecutor();
+    const { logger, lines } = collectingLogger();
+
+    await createBoostListener().handler(boostEvent(8), {
+      guildId: GUILD,
+      config: config(),
+      executor,
+      logger,
+    });
+
+    expect(executor.requests).toEqual([]);
+    expect(lines).toEqual([]);
+  });
+
+  test('an empty boost message says nothing', async () => {
+    const executor = new RecordingExecutor();
+
+    await createBoostListener().handler(boostEvent(8), {
+      guildId: GUILD,
+      config: boostConfig({ boostMessage: '' }),
+      executor,
+      logger: collectingLogger().logger,
+    });
+
+    expect(executor.requests).toEqual([]);
+  });
+
+  test('a channel Proton cannot send in is reported with the permission and the channel', async () => {
+    const { executor, rest } = prechecked(Permissions.ViewChannel);
+    const { logger, lines } = collectingLogger();
+
+    await createBoostListener().handler(boostEvent(8), {
+      guildId: GUILD,
+      config: boostConfig({ boostChannelId: BOOST_CHANNEL }),
+      executor,
+      logger,
+    });
+
+    expect(rest.calls).toEqual([]);
+    expect(lines.join(' ')).toContain(
+      `I'm missing the Send Messages permission in <#${BOOST_CHANNEL}>`,
+    );
+  });
+
+  test('a redelivered boost notice is sent once', async () => {
+    const { executor, rest } = prechecked(Permissions.ViewChannel | Permissions.SendMessages);
+    const listener = createBoostListener();
+    const ctx = {
+      guildId: GUILD,
+      config: boostConfig(),
+      executor,
+      logger: collectingLogger().logger,
+    };
+
+    await listener.handler(boostEvent(9), ctx);
+    await listener.handler(boostEvent(9), ctx);
+
+    expect(rest.calls).toHaveLength(1);
+    expect(rest.calls[0]?.path).toBe(`/channels/${NOTICE_CHANNEL}/messages`);
+  });
+});
+
 describe('welcome manifest', () => {
   test('registers cleanly, so the dashboard can render it', () => {
     const registry = new ModuleRegistry();
@@ -554,6 +901,35 @@ describe('welcome manifest', () => {
   test('defaults are off, so an unconfigured guild gets nothing', () => {
     expect(welcomeDefaultConfig.enabled).toBe(false);
     expect(welcomeDefaultConfig.card).toBe(false);
+    expect(welcomeDefaultConfig.boostEnabled).toBe(false);
+  });
+
+  test('subscribes to the messages boost notices arrive as', () => {
+    expect(welcomeModule.listeners?.flatMap((listener) => listener.types)).toContain(
+      'message.created',
+    );
+  });
+
+  test('every dashboard section names a field the form has', () => {
+    const formKeys = new Set(Object.keys(welcomeFormSchema.shape));
+    const fields = welcomeModule.dashboard?.sections.flatMap((section) => section.fields) ?? [];
+
+    expect(fields).toContain('boostEnabled');
+    expect(fields).toContain('boostChannelId');
+    expect(fields.filter((field) => !formKeys.has(field))).toEqual([]);
+  });
+
+  test('reports a missing Guild Messages intent, which boost notices need', () => {
+    const registry = new ModuleRegistry();
+    registry.register(welcomeModule);
+
+    const status = registry.evaluate('welcome', {
+      grantedIntents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMembers,
+      botPermissions: Permissions.ViewChannel | Permissions.SendMessages,
+    });
+
+    expect(status.enabled).toBe(false);
+    expect(status.disabledReason?.humanReason).toContain('Guild Messages');
   });
 
   test('reports the missing privileged intent by name', () => {
@@ -574,7 +950,8 @@ describe('welcome manifest', () => {
     registry.register(welcomeModule);
 
     const status = registry.evaluate('welcome', {
-      grantedIntents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMembers,
+      grantedIntents:
+        GatewayIntentBits.Guilds | GatewayIntentBits.GuildMembers | GatewayIntentBits.GuildMessages,
       botPermissions: Permissions.ViewChannel,
     });
 

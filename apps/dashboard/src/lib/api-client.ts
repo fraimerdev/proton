@@ -27,6 +27,10 @@ import {
   panelRequestResultSchema,
   verificationRequestResultSchema,
 } from '@proton/core';
+import {
+  type NameStyleStatus,
+  nameStyleStatusSchema,
+} from '@proton/module-branding/name-style-status';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
 import type { TicketQuery, TicketSearchResult } from '@proton/module-tickets/query';
 import type { z } from 'zod';
@@ -215,6 +219,10 @@ export class ApiClient {
     return fetch(`${this.#baseUrl}/guilds/${guildId}/cards/preview?${queryString(query)}`, {
       headers: { 'x-proton-secret': this.#secret },
     });
+  }
+
+  getNameStyleStatus(guildId: string): Promise<NameStyleStatus> {
+    return this.#parsed(`/guilds/${guildId}/branding/name-style/status`, nameStyleStatusSchema);
   }
 
   brandingAsset(guildId: string, kind: string): Promise<Response> {

@@ -79,7 +79,7 @@ export interface StarboardState {
 
 export type StarboardDecision =
   | { action: 'create'; count: number }
-  | { action: 'edit'; boardMessageId: string; count: number }
+  | { action: 'edit'; boardMessageId: string; fromCount: number; count: number }
   | { action: 'delete'; boardMessageId: string }
   | { action: 'none'; reason: 'below_threshold' | 'unchanged' };
 
@@ -89,7 +89,12 @@ export function decide(state: StarboardState): StarboardDecision {
   if (count >= threshold) {
     if (post === null) return { action: 'create', count };
     if (post.starCount === count) return { action: 'none', reason: 'unchanged' };
-    return { action: 'edit', boardMessageId: post.boardMessageId, count };
+    return {
+      action: 'edit',
+      boardMessageId: post.boardMessageId,
+      fromCount: post.starCount,
+      count,
+    };
   }
 
   if (post !== null) return { action: 'delete', boardMessageId: post.boardMessageId };

@@ -8,9 +8,7 @@ import {
   appealQuestionSchema,
   PANEL_ID_MAX,
 } from '@proton/module-appeals/config';
-import { useCallback } from 'react';
 import type { ModuleForm } from '../../components/module/form.ts';
-import { useModuleNavigate, useModuleSearch } from '../../components/module/route.tsx';
 
 export type AppealsForm = ModuleForm<AppealsConfig>;
 
@@ -39,37 +37,12 @@ export const OUTCOME_CHIP: Record<ApproveAction, string> = {
   nothing: 'No action on accept',
 };
 
-export interface AppealsSearch {
-  area?: string | undefined;
-  id?: string | undefined;
-  q?: string | undefined;
-}
-
-export function useAppealsSearch(): AppealsSearch {
-  return useModuleSearch();
-}
-
-export function useAppealsNav(guildId: string, moduleId: string): (patch: AppealsSearch) => void {
-  const go = useModuleNavigate(guildId, moduleId);
-
-  return useCallback(
-    (patch: AppealsSearch) => {
-      go(patch);
-    },
-    [go],
-  );
-}
-
 export function panelIds(config: AppealsConfig, except?: string): Set<string> {
   return new Set(config.panels.filter((panel) => panel.id !== except).map((panel) => panel.id));
 }
 
 export function questionKeys(panel: AppealPanel, except?: number): Set<string> {
   return new Set(panel.questions.filter((_, at) => at !== except).map((question) => question.key));
-}
-
-export function panelIndex(config: AppealsConfig, panelId: string): number {
-  return config.panels.findIndex((panel) => panel.id === panelId);
 }
 
 export function updatePanel(
@@ -83,7 +56,6 @@ export function updatePanel(
   }));
 }
 
-/** Writes an optional string field, dropping the key when it is cleared rather than storing ''. */
 export function setOptional<T extends Record<string, unknown>>(
   object: T,
   key: string,

@@ -5,7 +5,23 @@ import {
   snowflakeSchema,
   TICKET_PRIORITIES,
 } from '@proton/core';
+import { mentionsAny } from '@proton/core/placeholders';
 import { z } from 'zod';
+import { CHANNEL_NAME_MAX } from './channel-name.ts';
+import { NUMBER_PLACEHOLDER, TYPE_PLACEHOLDER, USER_PLACEHOLDER } from './constants.ts';
+import {
+  renderTicketChannelName,
+  renderTicketWelcome,
+  TICKET_NAME_SURFACE,
+} from './placeholders.ts';
+
+export { CHANNEL_NAME_MAX, sanitiseChannelName } from './channel-name.ts';
+export {
+  NUMBER_PLACEHOLDER,
+  PRIORITY_LABELS,
+  TYPE_PLACEHOLDER,
+  USER_PLACEHOLDER,
+} from './constants.ts';
 
 export const MODULE_ID = 'tickets';
 
@@ -17,17 +33,20 @@ export const PANEL_ID_MAX = 32;
 
 export const TYPE_ID_MAX = 32;
 
-export const CHANNEL_NAME_MAX = 100;
-
 export const TEXT_CHANNEL_TYPE = 0;
 
 export const CATEGORY_CHANNEL_TYPE = 4;
 
-export const NUMBER_PLACEHOLDER = '{number}';
-export const USER_PLACEHOLDER = '{user}';
-export const TYPE_PLACEHOLDER = '{type}';
-
 export const DEFAULT_NAME_PATTERN = `ticket-${NUMBER_PLACEHOLDER}`;
+
+const UNIQUE_NAME_KEYS = [
+  'ticket.number',
+  'user.id',
+  'user.mention',
+  'user.username',
+  'user.global_name',
+  'user.display_name',
+];
 
 // Discord takes at most five components in a modal, so a longer form could never be shown and is
 // refused where the admin can still see why.
@@ -52,13 +71,6 @@ export type TranscriptDestination = (typeof TRANSCRIPT_DESTINATIONS)[number];
 export const PANEL_STYLES = ['buttons', 'select'] as const;
 
 export type PanelStyle = (typeof PANEL_STYLES)[number];
-
-export const PRIORITY_LABELS: Record<(typeof TICKET_PRIORITIES)[number], string> = {
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  urgent: 'Urgent',
-};
 
 // Priority is carried by the container accent and the word, never by an emoji: Proton ships no
 // stock unicode emoji of its own. A guild that wants a glyph puts a custom one on the ticket type.
@@ -265,9 +277,15 @@ const settings = {
     .min(1)
     .max(CHANNEL_NAME_MAX)
     .default(DEFAULT_NAME_PATTERN)
-    .refine((value) => value.includes(NUMBER_PLACEHOLDER) || value.includes(USER_PLACEHOLDER), {
-      message: `a ticket name needs ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} in it, or every ticket channel would share one name.`,
-    })
+    .refine(
+      (value) =>
+        value.includes(NUMBER_PLACEHOLDER) ||
+        value.includes(USER_PLACEHOLDER) ||
+        mentionsAny(TICKET_NAME_SURFACE, value, UNIQUE_NAME_KEYS),
+      {
+        message: `a ticket name needs ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} in it, or every ticket channel would share one name.`,
+      },
+    )
     .register(protonFields, {
       label: 'Name pattern',
       description: `How new ticket channels are named, using ${NUMBER_PLACEHOLDER}, ${USER_PLACEHOLDER} and ${TYPE_PLACEHOLDER}. Ticket types can set their own.`,
@@ -473,29 +491,17 @@ export function renderChannelName(
   opener: string,
   typeName = '',
 ): string {
-  return sanitiseChannelName(
-    pattern
-      .split(NUMBER_PLACEHOLDER)
-      .join(String(number))
-      .split(USER_PLACEHOLDER)
-      .join(opener)
-      .split(TYPE_PLACEHOLDER)
-      .join(typeName),
+  return renderTicketChannelName(
+    pattern,
+    { number, typeName, ownerId: '', legacyUserName: opener, server: null },
+    Date.now(),
   );
 }
 
-export function sanitiseChannelName(raw: string): string {
-  const cleaned = raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]+/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, CHANNEL_NAME_MAX);
-
-  // Discord refuses an empty name, and a pattern of nothing but punctuation sanitises to one.
-  return cleaned === '' ? 'ticket' : cleaned;
-}
-
 export function renderOpeningMessage(template: string, userId: string): string {
-  return template.split(USER_PLACEHOLDER).join(`<@${userId}>`).slice(0, 2000);
+  return renderTicketWelcome(
+    template,
+    { ticket: null, typeName: '', ownerId: userId, server: null, bot: null },
+    Date.now(),
+  );
 }

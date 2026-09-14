@@ -13,17 +13,12 @@ import { signOut } from '../../server/session.ts';
 
 export const Route = createFileRoute('/dashboard/$guildId')({
   loader: async ({ context, params }) => {
-    // fetchQuery, not ensureQueryData: ensureQueryData resolves from the cache at any age and
-    // revalidates through prefetchQuery, which swallows the rejection — so a revoked admin would
-    // keep rendering the shell instead of reaching the redirect below.
+    // fetchQuery, not ensureQueryData: a cached session would keep a revoked admin past the redirect.
     try {
       const session = await context.queryClient.fetchQuery(sessionQuery());
       const guild = session.guilds.find((candidate) => candidate.id === params.guildId);
 
-      // Ahead of the modules load rather than in its catch: for a server Proton has left the api
-      // answers with an empty module list instead of an error, so this shell would otherwise
-      // render intact and every switch on it would save into a guild nothing is listening in.
-      // Only a checked absence blocks — an unreachable presence lookup must not close the page.
+      // Before the modules load: for a server Proton has left, the api answers with an empty list, not an error.
       if (session.presenceKnown && guild && !guild.present) {
         throw new Error(
           `Proton is not in ${guild.name}, so there is nothing to configure yet. Invite it to that server and open this page again.`,

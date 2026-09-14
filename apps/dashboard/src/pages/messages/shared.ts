@@ -1,11 +1,34 @@
 import type { ActionRow, ComponentAction, MentionPolicy, MessageButton } from '@proton/core';
 import { DEFAULT_MENTION_POLICY } from '@proton/core';
+import {
+  type ChannelFacts,
+  type PlaceholderSurface,
+  SAMPLE_NOW,
+  type SurfaceDiagnostic,
+  type SurfaceSample,
+  usedKeys,
+  validateConfigTemplates,
+} from '@proton/core/placeholders';
 import type {
   SavedComponent,
   SavedMessage,
   TemplateSchedule,
 } from '@proton/module-messages/config';
+import {
+  MESSAGES_POST_SURFACE,
+  MESSAGES_REPLY_SURFACE,
+  MESSAGES_SCHEDULED_SURFACE,
+  type MessagesPlaceholderFacts,
+  messagesTemplateNotes,
+  messagesTemplates,
+  renderReply,
+} from '@proton/module-messages/placeholders';
 import { useRef } from 'react';
+import {
+  type MentionNames,
+  previewMessage,
+  sampleMentionNames,
+} from '../../lib/placeholder-preview.ts';
 
 export const BUTTON_STYLE_LABELS: Readonly<Record<string, string>> = {
   primary: 'Blurple',
@@ -35,8 +58,7 @@ export const V2_PRESS_UNROUTABLE =
   'The message still posts, but Proton cannot act on a button or dropdown inside a layout. Use a ' +
   'link button, or move the button out of the layout.';
 
-// The URL holds the name the editor was opened under, and renaming changes that name on every
-// keystroke, so a plain lookup would close the editor mid-word.
+// Renaming changes the URL's name on every keystroke; a plain lookup would close the editor mid-word.
 export function useHeldIndex(id: string | undefined, keys: readonly string[]): number {
   const held = useRef<{ id: string; index: number } | null>(null);
   const found = id === undefined ? -1 : keys.indexOf(id);
@@ -120,6 +142,7 @@ export function emptyTemplate(name: string): SavedMessage {
     components: [],
     mentions: DEFAULT_MENTION_POLICY,
     v2: [],
+    placeholders: false,
   };
 }
 
@@ -208,4 +231,230 @@ export function isoWithOffset(date: Date): string {
     `T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}` +
     `${sign}${pad(Math.floor(size / 60))}:${pad(size % 60)}`
   );
+}
+
+type MessagesSurface = PlaceholderSurface<MessagesPlaceholderFacts>;
+
+export function templateSurface(template: SavedMessage): MessagesSurface {
+  return template.schedule === undefined ? MESSAGES_POST_SURFACE : MESSAGES_SCHEDULED_SURFACE;
+}
+
+function sampleOf(surface: MessagesSurface): SurfaceSample<MessagesPlaceholderFacts> {
+  const [sample] = surface.samples;
+  if (sample === undefined) {
+    throw new Error(
+      `The ${surface.label} placeholders have no sample, so the preview cannot be filled in.`,
+    );
+  }
+  return sample;
+}
+
+export interface TemplateChecks {
+  at: (path: string) => readonly SurfaceDiagnostic[];
+  blocksUnder: (path: string) => boolean;
+  elsewhere: SurfaceDiagnostic[];
+}
+
+const NO_DIAGNOSTICS: readonly SurfaceDiagnostic[] = [];
+
+const NO_CHECKS: TemplateChecks = {
+  at: () => NO_DIAGNOSTICS,
+  blocksUnder: () => false,
+  elsewhere: [],
+};
+
+const EDITED_HERE = [
+  'content',
+  'embeds.0.title',
+  'embeds.0.description',
+  'embeds.0.footer.text',
+  'embeds.0.imageUrl',
+  'embeds.0.thumbnailUrl',
+  'embeds.0.fields.*.name',
+  'embeds.0.fields.*.value',
+  'components.*.buttons.*.label',
+  'components.*.buttons.*.url',
+  'components.*.buttons.*.action.content',
+  'components.*.select.placeholder',
+  'components.*.select.options.*.label',
+  'components.*.select.options.*.description',
+  'components.*.select.options.*.action.content',
+].map((pattern) => pattern.split('.'));
+
+function matchesPattern(pattern: readonly string[], segments: readonly string[]): boolean {
+  return (
+    pattern.length === segments.length &&
+    pattern.every((part, at) =>
+      part === '*' ? /^\d+$/.test(segments[at] ?? '') : part === segments[at],
+    )
+  );
+}
+
+function onlyTemplate(config: unknown, index: number): { templates: unknown[] } {
+  if (typeof config !== 'object' || config === null || !('templates' in config)) {
+    return { templates: [] };
+  }
+
+  const { templates } = config;
+  if (!Array.isArray(templates)) return { templates: [] };
+
+  const items: unknown[] = templates;
+  return { templates: items.map((template, at) => (at === index ? template : undefined)) };
+}
+
+function placeName(path: string, segments: readonly string[]): string {
+  const label =
+    MESSAGES_POST_SURFACE.fieldAt(path)?.label ??
+    MESSAGES_REPLY_SURFACE.fieldAt(path)?.label ??
+    'Message';
+
+  if (segments[0] === 'v2') return `Layout ${label.toLowerCase()}`;
+  if (segments[0] === 'embeds') {
+    return `Embed ${Number(segments[1]) + 1} ${label.replace(/^Embed /, '')}`;
+  }
+  return label;
+}
+
+export function templateChecks(
+  template: SavedMessage,
+  index: number,
+  config: unknown,
+  before: unknown,
+): TemplateChecks {
+  if (template.placeholders !== true) return NO_CHECKS;
+
+  const next = onlyTemplate(config, index);
+  const report = validateConfigTemplates(messagesTemplates, next, onlyTemplate(before, index));
+  const byPath = new Map<string, readonly SurfaceDiagnostic[]>(report.byPath);
+
+  for (const { path, diagnostic } of messagesTemplateNotes(next)) {
+    byPath.set(path, [...(byPath.get(path) ?? []), diagnostic]);
+  }
+
+  const base = `templates.${index}.`;
+  const layout = template.v2.length > 0;
+
+  const elsewhere = [...byPath].flatMap(([path, diagnostics]) => {
+    const segments = path.slice(base.length).split('.');
+    if (!layout && EDITED_HERE.some((pattern) => matchesPattern(pattern, segments))) return [];
+
+    const where = placeName(path, segments);
+    return diagnostics.map((diagnostic) => ({
+      ...diagnostic,
+      message: `${where}: ${diagnostic.message}`,
+    }));
+  });
+
+  return {
+    at: (path) => byPath.get(path) ?? NO_DIAGNOSTICS,
+    blocksUnder: (path) =>
+      report.blocking.some((issue) => issue.path === path || issue.path.startsWith(`${path}.`)),
+    elsewhere,
+  };
+}
+
+export interface PreviewNote {
+  label: string | undefined;
+  message: string;
+}
+
+export interface TemplatePreview {
+  message: SavedMessage;
+  caption: string | undefined;
+  channelName: string | undefined;
+  refused: boolean;
+  notes: PreviewNote[];
+  mentionNames: MentionNames | undefined;
+  now: number | undefined;
+}
+
+const PREVIEW_NOTE_CODES: ReadonlySet<string> = new Set(['output_truncated', 'invalid_url']);
+
+export function templatePreview(
+  template: SavedMessage,
+  index: number,
+  channel: ChannelFacts | undefined,
+): TemplatePreview {
+  if (template.placeholders !== true) {
+    return {
+      message: template,
+      caption: undefined,
+      channelName: channel?.name,
+      refused: false,
+      notes: [],
+      mentionNames: undefined,
+      now: undefined,
+    };
+  }
+
+  const surface = templateSurface(template);
+  const sample = sampleOf(surface);
+  const sampleName = sample.facts.destinationChannel?.name;
+  const realName = channel?.name;
+
+  const preview = previewMessage(
+    surface,
+    template,
+    sample,
+    channel === undefined
+      ? undefined
+      : {
+          destinationChannel: {
+            id: channel.id,
+            name: channel.name,
+            type: channel.type,
+            parentId: channel.parentId,
+          },
+        },
+  );
+
+  const notes = new Map<string, PreviewNote>();
+  for (const { code, message, path } of preview.diagnostics) {
+    if (!PREVIEW_NOTE_CODES.has(code)) continue;
+
+    const label = surface.fieldAt(`templates.${index}.${path}`)?.label;
+    notes.set(`${label ?? ''}|${message}`, { label, message });
+  }
+
+  return {
+    message: preview.message,
+    caption:
+      realName === undefined || sampleName === undefined
+        ? preview.caption
+        : preview.caption.replace(`#${sampleName}`, `#${realName}`),
+    channelName: realName ?? sampleName,
+    refused: preview.problem !== undefined,
+    notes: [...notes.values()],
+    mentionNames: preview.mentionNames,
+    now: preview.now,
+  };
+}
+
+export interface ReplyPreview {
+  text: string;
+  caption: string;
+  notes: string[];
+  mentionNames: MentionNames;
+  now: number;
+}
+
+export function replyPreview(text: string): ReplyPreview {
+  const sample = sampleOf(MESSAGES_REPLY_SURFACE);
+  const lookup = MESSAGES_REPLY_SURFACE.build(sample.facts, {
+    now: SAMPLE_NOW,
+    keys: usedKeys(MESSAGES_REPLY_SURFACE, [text]),
+  });
+
+  const notes: string[] = [];
+  const rendered = renderReply(text, lookup, SAMPLE_NOW, (_code, message) => {
+    notes.push(message);
+  });
+
+  return {
+    text: rendered,
+    caption: sample.label,
+    notes,
+    mentionNames: sampleMentionNames(MESSAGES_REPLY_SURFACE, lookup, [text]),
+    now: SAMPLE_NOW,
+  };
 }

@@ -199,6 +199,76 @@ describe('failing closed', () => {
   });
 });
 
+describe('set_member_nickname is ranked like a moderation action', () => {
+  function renamingState(botPermissions: bigint): GuildState {
+    return state({
+      roles: new Map([
+        [GUILD, { id: GUILD, permissions: 0n, position: 0 }],
+        [LOW_ROLE, { id: LOW_ROLE, permissions: 0n, position: 1 }],
+        [BOT_ROLE, { id: BOT_ROLE, permissions: botPermissions, position: 5 }],
+        [HIGH_ROLE, { id: HIGH_ROLE, permissions: 0n, position: 9 }],
+      ]),
+    });
+  }
+
+  async function precheck(
+    targetId: string,
+    targetRoleIds: string[],
+    { botPermissions = Permissions.ManageNicknames, appPermissions = MAY_POST } = {},
+  ) {
+    const result = await resolvePrecheckContext(
+      { store: store(renamingState(botPermissions)), botUserId: BOT },
+      request({ kind: 'set_member_nickname', targetId, payload: { nickname: '[AFK] Tester' } }),
+      { channelId: CHANNEL, appPermissions, targetRoleIds },
+    );
+    if (!('context' in result)) throw new Error(`expected a context, got ${result.failure.code}`);
+
+    return runPrechecks(result.context);
+  }
+
+  test('refuses the server owner', async () => {
+    expect((await precheck(OWNER, [LOW_ROLE]))?.code).toBe('target_is_owner');
+  });
+
+  test('refuses Proton itself, which renames through set_bot_nickname instead', async () => {
+    expect((await precheck(BOT, [BOT_ROLE]))?.code).toBe('target_is_self');
+  });
+
+  test('refuses a member ranked above the bot', async () => {
+    expect((await precheck(TARGET, [HIGH_ROLE]))?.code).toBe('role_hierarchy');
+  });
+
+  test('refuses a member tied with the bot', async () => {
+    expect((await precheck(TARGET, [BOT_ROLE]))?.code).toBe('role_hierarchy');
+  });
+
+  test('renames a member ranked below the bot, although the channel it was typed in grants no rename', async () => {
+    expect(await precheck(TARGET, [LOW_ROLE])).toBeNull();
+  });
+
+  test('names Manage Nicknames as missing in the server, whatever the channel it was typed in grants', async () => {
+    const failure = await precheck(TARGET, [LOW_ROLE], {
+      botPermissions: MAY_POST,
+      appPermissions: Permissions.Administrator,
+    });
+
+    expect(failure?.code).toBe('missing_permission');
+    expect(failure?.humanReason).toContain('Manage Nicknames');
+    expect(failure?.humanReason).toContain('this server');
+    expect(failure?.humanReason).not.toContain('<#');
+  });
+
+  test('refuses to guess a member it was not given', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(renamingState(Permissions.ManageNicknames)), botUserId: BOT },
+      request({ kind: 'set_member_nickname', payload: { nickname: null } }),
+      INVOCATION,
+    );
+
+    expect('failure' in result && result.failure.code).toBe('missing_target');
+  });
+});
+
 function withChannels(): GuildState {
   return state({
     channels: new Map([
@@ -453,6 +523,39 @@ describe('the shape apps/worker gives every slash command: scoped to the invocat
     expect(failure?.humanReason).toContain('Manage Roles');
     expect(failure?.humanReason).toContain('this server');
     expect(failure?.humanReason).not.toContain(CHANNEL);
+  });
+
+  test('a delete_role is judged against the rank of the role it names', async () => {
+    const guild = botHolding(Permissions.ManageRoles);
+    guild.roles.set(LOW_ROLE, { id: LOW_ROLE, permissions: 0n, position: 1 });
+    guild.roles.set(HIGH_ROLE, { id: HIGH_ROLE, permissions: 0n, position: 9 });
+
+    const judge = async (roleId: string) => {
+      const result = await resolvePrecheckContext(
+        { store: store(guild), botUserId: BOT },
+        request({ kind: 'delete_role', payload: { roleId } }),
+        INVOCATION,
+      );
+      if (!('context' in result)) throw new Error('expected a context');
+      return result.context;
+    };
+
+    expect((await judge(LOW_ROLE)).role).toEqual({ id: LOW_ROLE, position: 1 });
+    expect(runPrechecks(await judge(LOW_ROLE))).toBeNull();
+    expect(runPrechecks(await judge(HIGH_ROLE))?.code).toBe('role_hierarchy');
+    expect(runPrechecks(await judge(BOT_ROLE))?.code).toBe('role_hierarchy');
+  });
+
+  test('a delete_role naming a role guild state does not hold is left for Discord to answer', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(Permissions.ManageRoles)), botUserId: BOT },
+      request({ kind: 'delete_role', payload: { roleId: HIGH_ROLE } }),
+      INVOCATION,
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(result.context.role).toBeUndefined();
+    expect(runPrechecks(result.context)).toBeNull();
   });
 
   test('a send still reads its channel out of the payload and keeps the hint’s permissions', async () => {

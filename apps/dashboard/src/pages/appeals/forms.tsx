@@ -105,7 +105,7 @@ export function FormsArea({
         limitLabel={LIMIT_LABELS.appealPanels}
         actions={
           <>
-            {config.panels.length > SEARCH_FROM ? (
+            {config.panels.length > SEARCH_FROM || term !== '' ? (
               <SearchField
                 value={term}
                 onChange={setTerm}
@@ -211,7 +211,6 @@ export function FormsArea({
                     />
                   </>
                 }
-                className={idError !== undefined ? 'appeals-row-bad' : ''}
               />
             );
           })}

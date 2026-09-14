@@ -1,10 +1,8 @@
-import type { ModuleConfigView } from '@proton/core';
-import { ENHANCED_COLOURS_HINT } from '@proton/module-branding/colour';
 import {
   BIO_MAX,
   type BrandingConfig,
   brandingConfigSchema,
-  isBlank,
+  NICKNAME_MAX,
 } from '@proton/module-branding/config';
 import {
   type AssetKind,
@@ -12,20 +10,12 @@ import {
   BANNER_MAX_BYTES,
   kilobytes,
 } from '@proton/module-branding/kinds';
+import { type DisplayNameStyle, sameDisplayNameStyle } from '@proton/module-branding/name-style';
 import { impersonationReason } from '@proton/module-branding/names';
-import {
-  applyTypeface,
-  fitsNickname,
-  isTypeface,
-  NICKNAME_MAX_UNITS,
-  nicknameBudget,
-  TYPEFACE_LABELS,
-  TYPEFACES,
-} from '@proton/module-branding/typeface';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
-import { useRef } from 'react';
-import { ColourPicker } from '../components/discord/inputs.tsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { EditorPreviewLayout } from '../components/discord/message-editor.tsx';
 import { useModuleForm } from '../components/module/form.ts';
 import {
   ModuleBanners,
@@ -35,45 +25,54 @@ import {
 } from '../components/module/page.tsx';
 import type { ModulePageProps } from '../components/module/registry.ts';
 import { useModuleToggle } from '../components/module/toggle.ts';
-import {
-  SegmentedControl,
-  type SegmentedOption,
-  Select,
-  Switch,
-  TextArea,
-  TextInput,
-} from '../components/ui/controls.tsx';
-import { EmptyState, StatusBanner } from '../components/ui/feedback.tsx';
+import { Switch, TextArea, TextInput } from '../components/ui/controls.tsx';
+import { StatusBanner } from '../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../components/ui/layout.tsx';
+import { ConfirmDialog } from '../components/ui/overlay.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
+import { NAME_STYLE_POLL_MS, nameStyleStatusQuery, protonAccountQuery } from '../lib/queries.ts';
 import { queryKeys } from '../lib/query-keys.ts';
 import { AssetField, refuseLocally } from './branding/asset-field.tsx';
-import { BrandingProfile } from './branding/profile.tsx';
+import {
+  accountReadOf,
+  BrandingPreview,
+  previewNotesFor,
+  shownName,
+} from './branding/discord-preview.tsx';
+import { NameStyleCard } from './branding/name-style/card.tsx';
+import { NameStyleDialog } from './branding/name-style/dialog.tsx';
+import { savedStyleOf, withStagedStyle } from './branding/name-style/shape.ts';
+import {
+  discordShowsText,
+  nameStyleStatusCopy,
+  pollTimeLeft,
+  reportsNewOutcome,
+} from './branding/name-style/status.tsx';
 
-type NameEffect = BrandingConfig['nameEffect'];
+const STYLE_PATHS = [
+  'displayNameStyle.font',
+  'displayNameStyle.effect',
+  'displayNameStyle.colours',
+  'displayNameStyle',
+] as const;
 
-const EFFECTS: readonly SegmentedOption<NameEffect>[] = [
-  { value: 'none', label: 'None' },
-  { value: 'solid', label: 'Solid' },
-  { value: 'gradient', label: 'Gradient' },
-  { value: 'holographic', label: 'Holographic' },
-];
-
-const ENHANCED_COLOURS_NOTE =
-  ENHANCED_COLOURS_HINT.charAt(0).toUpperCase() + ENHANCED_COLOURS_HINT.slice(1);
+interface PollWindow {
+  from: number;
+  over: boolean;
+}
 
 function withHash(
-  view: ModuleConfigView,
+  config: BrandingConfig,
   kind: AssetKind,
   hash: string | undefined,
-): ModuleConfigView {
+): BrandingConfig {
   const field = kind === 'avatar' ? 'avatarHash' : 'bannerHash';
-  const config = { ...view.config };
+  const next = { ...config };
 
-  if (hash === undefined) delete config[field];
-  else config[field] = hash;
+  if (hash === undefined) delete next[field];
+  else next[field] = hash;
 
-  return { ...view, config };
+  return next;
 }
 
 function notes(lines: readonly string[]): ReactNode {
@@ -86,17 +85,91 @@ function notes(lines: readonly string[]): ReactNode {
   ));
 }
 
+function useNameStyleStatus(guildId: string, saved: DisplayNameStyle | null, enabled: boolean) {
+  const queryClient = useQueryClient();
+  const [poll, setPoll] = useState<PollWindow | null>(null);
+  const polling = poll !== null && !poll.over;
+
+  const query = useQuery({
+    ...nameStyleStatusQuery(guildId),
+    refetchInterval: (current) =>
+      polling && current.state.data?.state === 'applying' ? NAME_STYLE_POLL_MS : false,
+  });
+
+  const data = query.data;
+  const state = data?.state;
+  const last = useRef({ saved, enabled });
+  const seen = useRef(data);
+
+  useEffect(() => {
+    if (sameDisplayNameStyle(last.current.saved, saved) && last.current.enabled === enabled) {
+      return;
+    }
+
+    last.current = { saved, enabled };
+    setPoll({ from: Date.now(), over: false });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.nameStyleStatus(guildId) });
+  }, [saved, enabled, guildId, queryClient]);
+
+  useEffect(() => {
+    if (state === 'applying' && poll === null) setPoll({ from: Date.now(), over: false });
+  }, [state, poll]);
+
+  useEffect(() => {
+    if (poll === null || poll.over) return;
+
+    const timer = window.setTimeout(
+      () => setPoll({ from: poll.from, over: true }),
+      pollTimeLeft(poll.from, Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [poll]);
+
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = data;
+
+    // The live member read is cached for long, and a fast apply is never seen as applying.
+    if (reportsNewOutcome(before, data, saved)) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.protonAccount(guildId) });
+    }
+  }, [data, saved, guildId, queryClient]);
+
+  return {
+    status: query.data,
+    failed: query.isError,
+    pollingOver: poll?.over ?? false,
+  };
+}
+
 export default function BrandingPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: brandingConfigSchema });
   const toggle = useModuleToggle(guildId, summary);
   const queryClient = useQueryClient();
+  const [clearing, setClearing] = useState<AssetKind | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
+  const closeStyle = useCallback(() => setStyleOpen(false), []);
+  const read = accountReadOf(useQuery(protonAccountQuery(guildId)));
 
   const enabled = summary?.enabled ?? form.view.enabled;
   const config = form.value;
   const configKey = queryKeys.moduleConfig(guildId, meta.id);
 
-  const dirtyNow = useRef(form.dirty);
-  dirtyNow.current = form.dirty;
+  const savedStyle = useMemo(() => savedStyleOf(form.view.config), [form.view.config]);
+  const styleStatus = useNameStyleStatus(guildId, savedStyle, enabled);
+  const statusCopy = nameStyleStatusCopy({
+    status: styleStatus.status,
+    failed: styleStatus.failed,
+    saved: savedStyle,
+    draft: config.displayNameStyle,
+    pollingOver: styleStatus.pollingOver,
+  });
+  const discordShows = discordShowsText(
+    read.status === 'ready' ? read.account.displayNameStyle : undefined,
+  );
+  const styleError = STYLE_PATHS.map((path) => form.errorAt(path)).find(
+    (message) => message !== undefined,
+  );
 
   const asset = useMutation({
     mutationFn: async ({ kind, file }: { kind: AssetKind; file: File | null }) => {
@@ -129,18 +202,8 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
     },
 
     onSuccess: ({ kind, hash }) => {
-      // The upload route wrote this hash server-side already, so an open draft has to take it or
-      // the next save would send the old one back and orphan the bytes that were just stored.
-      if (dirtyNow.current) {
-        form.setValue((current) =>
-          kind === 'avatar' ? { ...current, avatarHash: hash } : { ...current, bannerHash: hash },
-        );
-        return;
-      }
-
-      queryClient.setQueryData<ModuleConfigView>(configKey, (view) =>
-        view === undefined ? undefined : withHash(view, kind, hash),
-      );
+      // The route stored this hash already; a save carrying the old one would orphan the new bytes.
+      form.rebase((current) => withHash(current, kind, hash));
       void queryClient.invalidateQueries({ queryKey: configKey });
     },
   });
@@ -151,22 +214,15 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
     : null;
 
   const nickname = config.nickname ?? '';
-  const styled = applyTypeface(nickname, config.typeface);
   const impersonation = nickname === '' ? null : impersonationReason(nickname);
 
   const nicknameNotes: string[] = [];
-  if (nickname !== '' && !fitsNickname(styled)) {
-    nicknameNotes.push(
-      `This is too long for Discord’s ${NICKNAME_MAX_UNITS}-character limit in the ${TYPEFACE_LABELS[config.typeface]} typeface, which allows ${nicknameBudget(config.typeface)} characters. Shorten it or choose Default.`,
-    );
-  }
   if (impersonation !== null) {
     nicknameNotes.push(
       `Proton will not use this nickname because ${impersonation}. Saving still applies everything else.`,
     );
-  }
-  if (nicknameNotes.length === 0 && nickname !== '') {
-    nicknameNotes.push(`${styled.length} / ${NICKNAME_MAX_UNITS}`);
+  } else if (nickname !== '') {
+    nicknameNotes.push(`${nickname.length} / ${NICKNAME_MAX}`);
   }
 
   const bio = config.bio ?? '';
@@ -177,16 +233,6 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
           `${bio.length} / ${BIO_MAX}`,
           `Discord documents no maximum for a server bio. ${BIO_MAX} characters is what its own app allows.`,
         ];
-
-  const effectNotes: string[] = [];
-  if (config.nameEffect === 'gradient' || config.nameEffect === 'holographic') {
-    effectNotes.push(ENHANCED_COLOURS_NOTE);
-  }
-  if (config.nameEffect === 'holographic') {
-    effectNotes.push(
-      'Discord sets all three holographic colours itself, so there are no colours to choose.',
-    );
-  }
 
   return (
     <>
@@ -204,7 +250,6 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -220,229 +265,194 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
         ) : null}
       </ModuleBanners>
 
-      <div className="editor">
-        <div className="editor-main">
-          <Section
-            label="Identity"
-            intro="Only the nickname needs Change Nickname. The avatar, banner and bio still apply without it."
-          >
-            <Rows>
-              <SettingRow
-                title="Server nickname"
-                description={`Leave empty to use Proton’s own name. Up to ${NICKNAME_MAX_UNITS} characters.`}
-                error={form.errorAt('nickname')}
-                note={notes(nicknameNotes)}
-              >
-                <TextInput
-                  width="lg"
-                  aria-label="Server nickname"
-                  maxLength={NICKNAME_MAX_UNITS}
-                  placeholder="Proton"
-                  invalid={form.errorAt('nickname') !== undefined}
-                  value={nickname}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
-                    // Empty stores undefined, never '': config is the whole desired face, and a
-                    // cleared field has to read as null so the clear is pushed to Discord.
-                    form.setValue((current) => ({
-                      ...current,
-                      nickname: next === '' ? undefined : next,
-                    }));
-                  }}
-                />
-              </SettingRow>
-
-              <SettingRow
-                title="Server bio"
-                description={`Shown as “About me” on Proton’s profile. Up to ${BIO_MAX} characters.`}
-                stacked
-                error={form.errorAt('bio')}
-                note={notes(bioNotes)}
-              >
-                <TextArea
-                  rows={3}
-                  aria-label="Server bio"
-                  maxLength={BIO_MAX}
-                  invalid={form.errorAt('bio') !== undefined}
-                  value={bio}
-                  onChange={(event) => {
-                    const next = event.currentTarget.value;
-                    form.setValue((current) => ({
-                      ...current,
-                      bio: next === '' ? undefined : next,
-                    }));
-                  }}
-                />
-              </SettingRow>
-
-              <SettingRow
-                title="Avatar"
-                description={`PNG, JPEG or GIF, up to ${kilobytes(AVATAR_MAX_BYTES)}.`}
-                error={assetFailure?.kind === 'avatar' ? assetFailure.why : undefined}
-              >
-                <AssetField
-                  kind="avatar"
-                  guildId={guildId}
-                  hash={config.avatarHash}
-                  busy={busyWith === 'avatar'}
-                  onFile={(file) => asset.mutate({ kind: 'avatar', file })}
-                  onClear={() => asset.mutate({ kind: 'avatar', file: null })}
-                />
-              </SettingRow>
-
-              <SettingRow
-                title="Banner"
-                description={`PNG, JPEG or GIF, up to ${kilobytes(BANNER_MAX_BYTES)}.`}
-                error={assetFailure?.kind === 'banner' ? assetFailure.why : undefined}
-                stacked
-              >
-                <AssetField
-                  kind="banner"
-                  guildId={guildId}
-                  hash={config.bannerHash}
-                  busy={busyWith === 'banner'}
-                  onFile={(file) => asset.mutate({ kind: 'banner', file })}
-                  onClear={() => asset.mutate({ kind: 'banner', file: null })}
-                />
-              </SettingRow>
-            </Rows>
-          </Section>
-
-          <Section label="Name style">
-            <Rows>
-              <SettingRow
-                title="Typeface"
-                description="Discord has no font setting for bots, so Proton spells its name in look-alike Unicode letters. Mentions still work, but searching the member list for the plain name will not find it, and screen readers read it letter by letter."
-                error={form.errorAt('typeface')}
-                note={
-                  config.typeface !== 'none' && config.typeface !== 'wide'
-                    ? `This typeface uses two characters per letter, so the nickname can be up to ${nicknameBudget(config.typeface)} characters.`
-                    : undefined
-                }
-              >
-                <Select
-                  width="md"
-                  aria-label="Typeface"
-                  value={config.typeface}
-                  options={TYPEFACES.map((face) => ({
-                    value: face,
-                    // Each option wears its own face, because "script" names nothing an admin can picture.
-                    label: applyTypeface(TYPEFACE_LABELS[face], face),
-                  }))}
-                  onChange={(next) => {
-                    if (!isTypeface(next)) return;
-                    form.setValue((current) => ({ ...current, typeface: next }));
-                  }}
-                />
-              </SettingRow>
-
-              <SettingRow
-                title="Effect"
-                description={
-                  'Colour Proton’s name with a role it creates for itself. Gradient and holographic need Discord’s Enhanced Role Colours feature.'
-                }
-                error={form.errorAt('nameEffect')}
-                note={notes(effectNotes)}
-              >
-                <SegmentedControl
-                  label="Effect"
-                  options={EFFECTS}
-                  value={config.nameEffect}
-                  onChange={(next) =>
-                    form.setValue((current) => ({ ...current, nameEffect: next }))
-                  }
-                />
-              </SettingRow>
-
-              {config.nameEffect === 'solid' || config.nameEffect === 'gradient' ? (
+      <EditorPreviewLayout
+        editor={
+          <>
+            <Section
+              label="Identity"
+              intro="Only the nickname and display name style need Change Nickname. The avatar, banner and bio still apply without it."
+            >
+              <Rows>
                 <SettingRow
-                  title="First colour"
-                  description="The colour of Proton’s name, or where a gradient starts."
-                  error={form.errorAt('primaryColor')}
+                  title="Server nickname"
+                  description={`Leave empty to use Proton’s own name. Up to ${NICKNAME_MAX} characters.`}
+                  error={form.errorAt('nickname')}
+                  note={notes(nicknameNotes)}
                 >
-                  <ColourPicker
-                    label="First colour"
-                    value={config.primaryColor}
+                  <TextInput
+                    width="lg"
+                    aria-label="Server nickname"
+                    maxLength={NICKNAME_MAX}
+                    placeholder="Proton"
+                    invalid={form.errorAt('nickname') !== undefined}
+                    value={nickname}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      // Empty stores undefined, never '': config is the whole desired face, and a
+                      // cleared field has to read as null so the clear is pushed to Discord.
+                      form.setValue((current) => ({
+                        ...current,
+                        nickname: next === '' ? undefined : next,
+                      }));
+                    }}
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="Server bio"
+                  description={`Shown as “About me” on Proton’s profile. Up to ${BIO_MAX} characters.`}
+                  stacked
+                  error={form.errorAt('bio')}
+                  note={notes(bioNotes)}
+                >
+                  <TextArea
+                    rows={3}
+                    aria-label="Server bio"
+                    maxLength={BIO_MAX}
+                    invalid={form.errorAt('bio') !== undefined}
+                    value={bio}
+                    onChange={(event) => {
+                      const next = event.currentTarget.value;
+                      form.setValue((current) => ({
+                        ...current,
+                        bio: next === '' ? undefined : next,
+                      }));
+                    }}
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="Avatar"
+                  description={`PNG, JPEG or GIF, up to ${kilobytes(AVATAR_MAX_BYTES)}.`}
+                  error={assetFailure?.kind === 'avatar' ? assetFailure.why : undefined}
+                  note="Uploading or removing applies straight away."
+                >
+                  <AssetField
+                    kind="avatar"
+                    guildId={guildId}
+                    hash={config.avatarHash}
+                    busy={busyWith === 'avatar'}
+                    onFile={(file) => asset.mutate({ kind: 'avatar', file })}
+                    onClear={() => setClearing('avatar')}
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="Banner"
+                  description={`PNG, JPEG or GIF, up to ${kilobytes(BANNER_MAX_BYTES)}.`}
+                  error={assetFailure?.kind === 'banner' ? assetFailure.why : undefined}
+                  note="Uploading or removing applies straight away."
+                  stacked
+                >
+                  <AssetField
+                    kind="banner"
+                    guildId={guildId}
+                    hash={config.bannerHash}
+                    busy={busyWith === 'banner'}
+                    onFile={(file) => asset.mutate({ kind: 'banner', file })}
+                    onClear={() => setClearing('banner')}
+                  />
+                </SettingRow>
+              </Rows>
+            </Section>
+
+            <Section
+              label="Display name style"
+              intro="A font, effect and colours for Proton’s name in this server."
+            >
+              <Rows>
+                <SettingRow title="Style" stacked error={styleError}>
+                  <NameStyleCard
+                    style={config.displayNameStyle}
+                    name={shownName(config, read)}
+                    status={statusCopy}
+                    shows={discordShows}
+                    onCustomise={() => setStyleOpen(true)}
+                    onRemove={() => form.setValue((current) => withStagedStyle(current, null))}
+                  />
+                </SettingRow>
+              </Rows>
+            </Section>
+
+            <Section label="Switching off">
+              <Rows>
+                <SettingRow
+                  title="Reset when switched off"
+                  description="Remove the server nickname, avatar, banner, bio and display name style."
+                  error={form.errorAt('restoreOnDisable')}
+                  note="Uploaded images and the display name style are kept and applied again when Branding is switched back on."
+                >
+                  <Switch
+                    label="Reset when switched off"
+                    checked={config.restoreOnDisable}
                     onChange={(next) =>
-                      form.setValue((current) => ({ ...current, primaryColor: next }))
+                      form.setValue((current) => ({ ...current, restoreOnDisable: next }))
                     }
                   />
                 </SettingRow>
-              ) : null}
-
-              {config.nameEffect === 'gradient' ? (
-                <SettingRow
-                  title="Second colour"
-                  description="Where the gradient ends."
-                  error={form.errorAt('secondaryColor')}
-                  note="Discord role gradients use exactly two colours."
-                >
-                  <ColourPicker
-                    label="Second colour"
-                    value={config.secondaryColor}
-                    onChange={(next) =>
-                      form.setValue((current) => ({ ...current, secondaryColor: next }))
-                    }
-                  />
-                </SettingRow>
-              ) : null}
-            </Rows>
-          </Section>
-
-          <Section label="Switching off">
-            <Rows>
-              <SettingRow
-                title="Reset when switched off"
-                description="Remove the server nickname, avatar, banner and bio."
-                error={form.errorAt('restoreOnDisable')}
-                note="Uploaded images are kept and applied again when Branding is switched back on."
-              >
-                <Switch
-                  label="Reset when switched off"
-                  checked={config.restoreOnDisable}
-                  onChange={(next) =>
-                    form.setValue((current) => ({ ...current, restoreOnDisable: next }))
-                  }
-                />
-              </SettingRow>
-            </Rows>
-          </Section>
-        </div>
-
-        <div className="editor-preview">
-          <div className="editor-preview-head">
-            <span className="editor-preview-title">Preview</span>
-          </div>
-
-          {isBlank(config) ? (
-            <EmptyState icon="identification-card" title="No branding" inset>
-              Add a nickname, avatar, banner, bio or effect.
-            </EmptyState>
-          ) : (
-            <>
-              <BrandingProfile guildId={guildId} config={config} />
-              {config.bannerHash !== undefined ? (
-                <p className="text-xs text-muted branding-preview-note">
-                  Discord crops banners to its own shape, so this is approximate.
-                </p>
-              ) : null}
-            </>
-          )}
-        </div>
-      </div>
+              </Rows>
+            </Section>
+          </>
+        }
+        preview={
+          <>
+            <BrandingPreview guildId={guildId} config={config} read={read} />
+            <p className="text-xs text-muted branding-preview-note">
+              {notes(previewNotesFor(config, read, enabled))}
+            </p>
+          </>
+        }
+      />
 
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
-        note="Saving also updates Proton’s nickname, avatar, banner, bio and name colour in Discord."
+        failures={form.failures}
+        note="Saving sends Proton’s nickname, bio and display name style to Discord."
         onSave={form.save}
-        onReset={() => {
-          form.reset();
-          // Reset drops the hashes the draft was carrying from an upload, so the server's copy —
-          // which already holds them — has to be read again.
-          void queryClient.invalidateQueries({ queryKey: configKey });
+        onReset={form.reset}
+      />
+
+      <NameStyleDialog
+        open={styleOpen}
+        onClose={closeStyle}
+        guildId={guildId}
+        config={config}
+        read={read}
+        value={config.displayNameStyle}
+        onDone={(next) => {
+          form.setValue((current) => withStagedStyle(current, next));
+          closeStyle();
         }}
       />
+
+      <ConfirmDialog
+        open={clearing === 'avatar'}
+        danger
+        title="Remove avatar?"
+        confirmLabel="Remove"
+        onClose={() => setClearing(null)}
+        onConfirm={() => {
+          setClearing(null);
+          asset.mutate({ kind: 'avatar', file: null });
+        }}
+      >
+        The avatar is removed from Proton’s profile in Discord now.
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={clearing === 'banner'}
+        danger
+        title="Remove banner?"
+        confirmLabel="Remove"
+        onClose={() => setClearing(null)}
+        onConfirm={() => {
+          setClearing(null);
+          asset.mutate({ kind: 'banner', file: null });
+        }}
+      >
+        The banner is removed from Proton’s profile in Discord now.
+      </ConfirmDialog>
     </>
   );
 }

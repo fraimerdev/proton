@@ -44,7 +44,6 @@ export function channelIcon(type: number): IconName {
   return CHANNEL_ICON[type] ?? 'hash';
 }
 
-/** Text-like destinations Proton can post into. The default for anything that sends a message. */
 export const POSTABLE_CHANNEL_TYPES = [
   CHANNEL_TYPE.text,
   CHANNEL_TYPE.announcement,
@@ -53,26 +52,18 @@ export const POSTABLE_CHANNEL_TYPES = [
   CHANNEL_TYPE.announcementThread,
 ] as const;
 
-/**
- * The guild's channels as a lookup, with the one fact every caller kept dropping: whether the list
- * has arrived yet. Without it a miss is indistinguishable from a channel that was deleted, and the
- * row prints a raw snowflake on first paint.
- */
 export function useChannelIndex(guildId: string): {
   byId: ReadonlyMap<string, GuildChannel>;
   pending: boolean;
+  error: Error | null;
 } {
-  const { data, isPending } = useQuery(channelsQuery(guildId));
+  const { data, error, isPending } = useQuery(channelsQuery(guildId));
 
   const byId = useMemo(() => new Map((data ?? []).map((channel) => [channel.id, channel])), [data]);
 
-  return { byId, pending: isPending };
+  return { byId, pending: isPending, error };
 }
 
-/**
- * Resolves the id itself when given a guild, so a row never flashes a raw snowflake while the
- * channel list is still in flight — an id is shown only once Proton knows the channel is gone.
- */
 export function ChannelName({
   channel,
   id,
@@ -115,7 +106,6 @@ interface ChannelPickerProps {
   guildId: string;
   value: string | null | undefined;
   onChange: (channelId: string | null) => void;
-  /** Only these Discord channel types are offered. Defaults to text-like destinations. */
   types?: readonly number[] | undefined;
   placeholder?: string | undefined;
   allowNone?: boolean | undefined;
@@ -124,7 +114,6 @@ interface ChannelPickerProps {
   invalid?: boolean | undefined;
   width?: number | string | undefined;
   label?: string | undefined;
-  /** 'add' draws a small plus button that sits at the end of a chip list. */
   trigger?: 'field' | 'add' | undefined;
 }
 
@@ -224,7 +213,6 @@ export function ChannelPicker({
     );
   }, [channels, types, query]);
 
-  // Grouped under their category, the way Discord's own sidebar reads.
   const groups = useMemo(() => {
     const byParent = new Map<string, { name: string | null; channels: GuildChannel[] }>();
 

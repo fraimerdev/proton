@@ -7,9 +7,9 @@ import {
   type TicketSortField,
 } from '@proton/module-tickets/query';
 import { keepPreviousData, queryOptions } from '@tanstack/react-query';
+import type { ModuleSearch } from '../../components/module/route.tsx';
 import { LIVE, queryKeys, STALE } from '../../lib/query-keys.ts';
 import { searchTickets } from '../../server/modules.ts';
-import type { TicketSearch } from './nav.ts';
 
 export function ticketsQuery(guildId: string, search: TicketQueryInput) {
   return queryOptions({
@@ -43,7 +43,7 @@ export const QUEUE_FILTERS: QueueFilters = {
   pageSize: TICKET_PAGE_SIZE_DEFAULT,
 };
 
-export function queueQuery(guildId: string, search: TicketSearch, filters: QueueFilters) {
+export function queueQuery(guildId: string, search: ModuleSearch, filters: QueueFilters) {
   const term = search.q ?? '';
   const status = statusOf(search.status);
 

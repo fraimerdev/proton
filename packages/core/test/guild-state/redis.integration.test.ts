@@ -153,4 +153,81 @@ describe('RedisGuildStateStore', () => {
     expect(loaded?.botRoleIds).toEqual([ROLE]);
     expect(loaded?.roles.get(ROLE)?.permissions).toBe(Permissions.BanMembers);
   });
+
+  describe('the server profile', () => {
+    const ICON = 'a_0123456789abcdef0123456789abcdef';
+
+    test('round-trips, nulls kept distinct from absent fields', async () => {
+      await store.put({
+        ...state(),
+        iconHash: ICON,
+        bannerHash: null,
+        description: null,
+        boostCount: 0,
+        boostTier: 1,
+        profileAt: 1_800_000_000_000,
+      });
+      const loaded = await store.get(GUILD);
+
+      expect(loaded).toMatchObject({
+        iconHash: ICON,
+        bannerHash: null,
+        description: null,
+        boostCount: 0,
+        boostTier: 1,
+        profileAt: 1_800_000_000_000,
+      });
+    });
+
+    test('a snapshot without it loads with every profile field absent', async () => {
+      await store.put(state());
+      const loaded = await store.get(GUILD);
+
+      expect(loaded !== null && 'iconHash' in loaded).toBe(false);
+      expect(loaded?.profileAt).toBeUndefined();
+    });
+
+    test('a GUILD_CREATE profile persists, and only a newer patch replaces it', async () => {
+      const built = buildGuildState(
+        {
+          id: GUILD,
+          owner_id: OWNER,
+          name: 'Proton Test Guild',
+          icon: ICON,
+          banner: null,
+          description: 'A place for testing',
+          premium_subscription_count: 14,
+          premium_tier: 2,
+          roles: [],
+          channels: [],
+          members: [],
+        },
+        BOT,
+        1_800_000_000_000,
+      );
+      if (!built) throw new Error('expected buildGuildState to yield state');
+      await store.put(built);
+
+      await store.patch(GUILD, {
+        kind: 'guild.profile',
+        at: 1_799_999_999_000,
+        profile: { name: 'Stale', boostCount: 1 },
+      });
+      expect((await store.get(GUILD))?.name).toBe('Proton Test Guild');
+
+      await store.patch(GUILD, {
+        kind: 'guild.profile',
+        at: 1_800_000_001_000,
+        profile: { name: 'Renamed', iconHash: null },
+      });
+      expect(await store.get(GUILD)).toMatchObject({
+        name: 'Renamed',
+        iconHash: null,
+        description: 'A place for testing',
+        boostCount: 14,
+        boostTier: 2,
+        profileAt: 1_800_000_001_000,
+      });
+    });
+  });
 });

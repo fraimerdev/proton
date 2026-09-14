@@ -201,11 +201,6 @@ hr {
   animation: motion-fade-in var(--motion-normal) var(--ease-standard) backwards;
 }
 
-.motion-exit {
-  pointer-events: none;
-  animation: motion-exit var(--motion-fast) var(--ease-exit) forwards;
-}
-
 @media (prefers-reduced-motion: reduce) {
   /* biome-ignore-start lint/complexity/noImportantStyles: overriding every animation is the point */
   *,

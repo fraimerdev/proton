@@ -24,10 +24,6 @@ export function shownOnPanel(panel: TicketPanel, types: readonly TicketType[]): 
     : types.slice(0, BUTTONS_SHOWN_MAX);
 }
 
-/**
- * buildPanelComponents from the module's src/interface.ts, in the shape DiscordPreview renders.
- * The module has no package export for that file yet, so this is a copy and has to move with it.
- */
 export function panelPreview(panel: TicketPanel, types: readonly TicketType[]): V2Component[] {
   const children: ContainerChild[] = [];
 
@@ -59,8 +55,7 @@ export function panelPreview(panel: TicketPanel, types: readonly TicketType[]): 
         select: {
           key: 'os',
           placeholder: panel.selectPlaceholder ?? DEFAULT_SELECT_PLACEHOLDER,
-          // A collapsed select shows its placeholder and nothing else, so the options carry no
-          // preview: the ordered type list beside this panel is where they are read.
+          // Empty on purpose: a collapsed select shows only its placeholder.
           options: [],
         },
       },

@@ -47,7 +47,13 @@ export function ModuleLoading({
         <AreaTabs guildId={guildId} moduleId={meta.id} areas={meta.areas} current={area} />
       ) : null}
 
-      <LoadingArea label={`Loading ${meta.label}`} minHeight={280} fallback={fallback} />
+      <LoadingArea
+        label={`Loading ${meta.label}`}
+        minHeight={280}
+        size="lg"
+        fill
+        fallback={fallback}
+      />
     </>
   );
 }

@@ -7,6 +7,7 @@ import {
   MAX_COMPONENTS_PER_MESSAGE,
   MAX_COMPONENTS_PER_MODAL,
   MESSAGE_FLAG_IS_COMPONENTS_V2,
+  setMemberNicknamePayloadSchema,
   THREAD_TYPE_PRIVATE,
   THREAD_TYPE_PUBLIC,
 } from '../../src/actions/payloads.ts';
@@ -44,6 +45,55 @@ function errorOf(result: PayloadResult): string {
   return result.error;
 }
 
+describe('set_member_nickname', () => {
+  function rename(payload: unknown, overrides: Partial<ActionRequest> = {}): PayloadResult {
+    return toRestCall({ ...request('set_member_nickname', payload), targetId: USER, ...overrides });
+  }
+
+  test('patches the member it targets with the nickname', () => {
+    const call = callOf(rename({ nickname: '[AFK] Tester' }));
+
+    expect(call.method).toBe('PATCH');
+    expect(call.path).toBe(`/guilds/${GUILD}/members/${USER}`);
+    expect(call.body).toEqual({ nick: '[AFK] Tester' });
+  });
+
+  test('sends null to take the nickname off, rather than dropping the field', () => {
+    expect(callOf(rename({ nickname: null })).body).toEqual({ nick: null });
+  });
+
+  test('carries the reason into the audit log', () => {
+    const call = callOf(rename({ nickname: '[AFK] Tester' }, { reason: 'AFK tag' }));
+
+    expect(call.headers?.['x-audit-log-reason']).toBe('AFK%20tag');
+  });
+
+  test('accepts Discord’s full 32 characters and refuses a 33rd', () => {
+    expect(setMemberNicknamePayloadSchema.safeParse({ nickname: 'a'.repeat(32) }).success).toBe(
+      true,
+    );
+    expect(errorOf(rename({ nickname: 'a'.repeat(33) }))).toContain('nickname');
+  });
+
+  test('refuses an empty nickname, because null is how one is removed', () => {
+    expect(errorOf(rename({ nickname: '' }))).toContain('nickname');
+  });
+
+  test('refuses a payload that does not say what to do with the nickname', () => {
+    expect(errorOf(rename({}))).toContain('nickname');
+  });
+
+  test('refuses a request that names no member', () => {
+    expect(errorOf(toRestCall(request('set_member_nickname', { nickname: 'x' })))).toContain(
+      'targetId',
+    );
+  });
+
+  test('refuses @me, which would rename Proton past the Change Nickname precheck', () => {
+    expect(errorOf(rename({ nickname: 'x' }, { targetId: '@me' }))).toContain('targetId');
+  });
+});
+
 describe('delete_channel', () => {
   test('maps to a bare DELETE on the channel', () => {
     const call = callOf(toRestCall(request('delete_channel', { channelId: CHANNEL })));
@@ -67,6 +117,29 @@ describe('delete_channel', () => {
 
   test('refuses a channel id that is not a snowflake', () => {
     expect(errorOf(toRestCall(request('delete_channel', { channelId: 'general' })))).toContain(
+      'snowflake',
+    );
+  });
+});
+
+describe('delete_role', () => {
+  const ROLE = '410000000000000077';
+
+  test('maps to a bare DELETE on the role, carrying the reason into the audit log', () => {
+    const call = callOf(toRestCall(request('delete_role', { roleId: ROLE }, 'retired')));
+
+    expect(call.method).toBe('DELETE');
+    expect(call.path).toBe(`/guilds/${GUILD}/roles/${ROLE}`);
+    expect(call.body).toBeUndefined();
+    expect(call.headers?.['x-audit-log-reason']).toBe('retired');
+  });
+
+  test('needs Manage Roles', () => {
+    expect(requiredPermissionsFor('delete_role')).toBe(Permissions.ManageRoles);
+  });
+
+  test('refuses a role id that is not a snowflake', () => {
+    expect(errorOf(toRestCall(request('delete_role', { roleId: 'Proton' })))).toContain(
       'snowflake',
     );
   });

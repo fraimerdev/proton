@@ -11,6 +11,7 @@ import {
 import type { MessagesDeps } from './deps.ts';
 import { createMessagesAutocompleteListener, createMessagesModalListener } from './interactions.ts';
 import { createMessagesComponentListener } from './interactions-component.ts';
+import { messagesTemplates } from './placeholders.ts';
 import { createMessagesScheduleListener } from './schedule-listener.ts';
 import { POST_JOB, runScheduledPost } from './scheduled-post.ts';
 
@@ -78,7 +79,11 @@ export {
   type BoundFollowUpDeps,
   bindFollowUp,
   describeUnbound,
+  logReadFailure,
   type MessagesDeps,
+  type PlaceholderSources,
+  type ReadFailure,
+  readPlaceholderSources,
 } from './deps.ts';
 export {
   type BuildEmbedOptions,
@@ -124,6 +129,23 @@ export {
   respondTo,
   succeeded,
 } from './perform.ts';
+export {
+  MESSAGES_POST_EVENT,
+  MESSAGES_POST_SURFACE,
+  MESSAGES_REPLY_EVENT,
+  MESSAGES_REPLY_SURFACE,
+  MESSAGES_SCHEDULED_EVENT,
+  MESSAGES_SCHEDULED_SURFACE,
+  type MessagesPerson,
+  type MessagesPlaceholderFacts,
+  messagesTemplateNotes,
+  messagesTemplates,
+  messageTexts,
+  type ReplyReport,
+  renderReply,
+  renderSavedMessage,
+  type TemplateNote,
+} from './placeholders.ts';
 export {
   type CancelIntent,
   type CancelReason,
@@ -177,6 +199,8 @@ export function createMessagesModule(
 
     configLimits: [{ key: 'savedTemplates', path: 'templates' }],
 
+    templates: messagesTemplates,
+
     commands: messagesCommands(deps),
     listeners: [
       createMessagesModalListener(deps),
@@ -188,7 +212,7 @@ export function createMessagesModule(
     schedules: [POST_JOB],
     scheduledHandlers: {
       [POST_JOB]: async (data, ctx) => {
-        await runScheduledPost(data, ctx);
+        await runScheduledPost(data, ctx, new Date(), deps);
       },
     },
 

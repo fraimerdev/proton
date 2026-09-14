@@ -1,4 +1,5 @@
 import { panelFor, ticketsConfigSchema, typeFor, typesOf } from '@proton/module-tickets/config';
+import { ticketsTemplates } from '@proton/module-tickets/placeholders';
 import type { ReactElement } from 'react';
 import { useModuleForm } from '../components/module/form.ts';
 import {
@@ -8,12 +9,12 @@ import {
   moduleState,
 } from '../components/module/page.tsx';
 import type { ModulePageProps } from '../components/module/registry.ts';
-import { ModuleLink } from '../components/module/route.tsx';
+import { ModuleLink, useModuleNavigate, useModuleSearch } from '../components/module/route.tsx';
 import { useModuleToggle } from '../components/module/toggle.ts';
+import { Button } from '../components/ui/controls.tsx';
 import { EmptyState, LoadingBoundary, StatusBanner } from '../components/ui/feedback.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
 import { AreaTabs } from '../components/ui/tabs.tsx';
-import { useTicketNav, useTicketSearch } from './tickets/nav.ts';
 import { PanelEditor } from './tickets/panel-editor.tsx';
 import { PanelsArea } from './tickets/panels.tsx';
 import { QueueArea } from './tickets/queue.tsx';
@@ -50,10 +51,15 @@ export default function TicketsPage({
   summary,
   area,
 }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: ticketsConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: ticketsConfigSchema,
+    templates: ticketsTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
-  const search = useTicketSearch();
-  const go = useTicketNav(guildId, meta.id);
+  const search = useModuleSearch();
+  const go = useModuleNavigate(guildId, meta.id);
 
   const config = form.value;
   const enabled = summary?.enabled ?? form.view.enabled;
@@ -77,6 +83,17 @@ export default function TicketsPage({
       <ModuleHeader
         meta={meta}
         crumb={crumb}
+        backTo={
+          openType !== undefined ? (
+            <ModuleLink guildId={guildId} moduleId={meta.id} search={{ area: 'types' }}>
+              Ticket types
+            </ModuleLink>
+          ) : openPanel !== undefined ? (
+            <ModuleLink guildId={guildId} moduleId={meta.id} search={{ area: 'panels' }}>
+              Panels
+            </ModuleLink>
+          ) : undefined
+        }
         actions={
           <ModuleSwitch
             name={meta.label}
@@ -101,7 +118,6 @@ export default function TicketsPage({
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -160,7 +176,9 @@ export default function TicketsPage({
               title="Ticket type not found"
               inset
               actions={
-                <BackLink onBack={() => go({ id: undefined })} label="Back to ticket types" />
+                <Button tone="primary" onClick={() => go({ id: undefined })}>
+                  Back to ticket types
+                </Button>
               }
             >
               {MAYBE_DELETED}
@@ -171,7 +189,6 @@ export default function TicketsPage({
               guildId={guildId}
               type={openType}
               index={config.types.indexOf(openType)}
-              onBack={() => go({ id: undefined })}
             />
           )
         ) : null}
@@ -186,7 +203,11 @@ export default function TicketsPage({
               icon="megaphone"
               title="Panel not found"
               inset
-              actions={<BackLink onBack={() => go({ id: undefined })} label="Back to panels" />}
+              actions={
+                <Button tone="primary" onClick={() => go({ id: undefined })}>
+                  Back to panels
+                </Button>
+              }
             >
               {MAYBE_DELETED}
             </EmptyState>
@@ -196,7 +217,6 @@ export default function TicketsPage({
               guildId={guildId}
               panel={openPanel}
               index={config.panels.indexOf(openPanel)}
-              onBack={() => go({ id: undefined })}
             />
           )
         ) : null}
@@ -209,18 +229,11 @@ export default function TicketsPage({
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         onSave={form.save}
         onReset={form.reset}
         note={SAVE_NOTE}
       />
     </>
-  );
-}
-
-function BackLink({ onBack, label }: { onBack: () => void; label: string }): ReactElement {
-  return (
-    <button type="button" className="button button-secondary button-sm" onClick={onBack}>
-      {label}
-    </button>
   );
 }

@@ -2,12 +2,21 @@ import type {
   ActionResult,
   EventListener,
   EventType,
+  GuildState,
   ModuleContext,
   ProtonEvent,
 } from '@proton/core';
+import { type ChannelFacts, serverFactsFrom } from '@proton/core/placeholders';
 import { HONEYPOT_ACTOR, type HoneypotChannel, type HoneypotConfig, MODULE_ID } from './config.ts';
-import { describeUnbound, type HoneypotDeps } from './deps.ts';
-import { buildNoticeComponents } from './notice.ts';
+import {
+  describeUnbound,
+  type HoneypotDeps,
+  placeholderClock,
+  readBotFacts,
+  readGuildState,
+} from './deps.ts';
+import { buildNoticeComponents, type NoticeExtra, noticePlaceholderKeys } from './notice.ts';
+import { usesNamespace } from './placeholders.ts';
 import type { NoticeBook } from './store.ts';
 
 export const HONEYPOT_SERVICE_EVENT_TYPES: EventType[] = ['proton.config_changed'];
@@ -81,6 +90,7 @@ export async function reconcileNotices(
   const book = await notices.get(ctx.guildId);
   const next: NoticeBook = {};
   const changes: NoticeChange[] = [];
+  const extraFor = wanted.size === 0 ? null : await noticeExtras(ctx, deps);
 
   for (const [channelId, channel] of wanted) {
     const known = book[channelId];
@@ -90,6 +100,7 @@ export async function reconcileNotices(
       channel,
       known,
       await caughtFor(deps, ctx.guildId, channelId),
+      extraFor?.(channelId) ?? {},
     );
 
     if (change.record) next[channelId] = change.record;
@@ -137,8 +148,9 @@ async function ensure(
   channel: HoneypotChannel,
   known: { messageId: string; postedAt: number } | undefined,
   caught: number,
+  extra: NoticeExtra,
 ): Promise<EnsureResult> {
-  const built = buildNoticeComponents(ctx.config, channel.channelId, caught, ctx.tier);
+  const built = buildNoticeComponents(ctx.config, channel.channelId, caught, ctx.tier, extra);
   if (!built.ok) {
     ctx.logger.error(`honeypot could not build its notice: ${built.humanReason}`, {
       guildId: ctx.guildId,
@@ -231,6 +243,34 @@ async function caughtFor(deps: HoneypotDeps, guildId: string, channelId: string)
   return deps.stats ? deps.stats.total(guildId, channelId) : 0;
 }
 
+function channelFactsOf(state: GuildState | null, channelId: string): ChannelFacts {
+  const known = state?.channels.get(channelId);
+  if (known === undefined) return { id: channelId };
+
+  return { id: channelId, name: known.name, type: known.type, parentId: known.parentId };
+}
+
+async function noticeExtras(
+  ctx: ModuleContext<HoneypotConfig>,
+  deps: HoneypotDeps,
+): Promise<(channelId: string) => NoticeExtra> {
+  const keys = noticePlaceholderKeys(ctx.config, ctx.tier);
+  const wantsServer = usesNamespace(keys, 'server');
+  const state =
+    wantsServer || usesNamespace(keys, 'channel') ? await readGuildState(ctx, deps) : null;
+  const server = wantsServer ? serverFactsFrom(state, ctx.guildId) : null;
+  const bot = usesNamespace(keys, 'bot') ? await readBotFacts(ctx, deps) : null;
+  const now = placeholderClock(deps);
+
+  return (channelId) => ({
+    guildId: ctx.guildId,
+    server,
+    bot,
+    channel: channelFactsOf(state, channelId),
+    now,
+  });
+}
+
 export const NOTICE_REFRESH_MS = 10_000;
 
 // Debounced across every worker process: a raid of fifty bots must not become fifty edits of one
@@ -252,11 +292,13 @@ export async function refreshNoticeCount(
 
   if (!(await stats.claimRefresh(ctx.guildId, channelId, NOTICE_REFRESH_MS))) return 'debounced';
 
+  const extraFor = await noticeExtras(ctx, deps);
   const built = buildNoticeComponents(
     ctx.config,
     channelId,
     await stats.total(ctx.guildId, channelId),
     ctx.tier,
+    extraFor(channelId),
   );
   if (!built.ok) return 'skipped';
 

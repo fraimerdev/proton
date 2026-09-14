@@ -1,5 +1,3 @@
-/* ---------------------------------------------------------------- banners */
-
 .banner {
   display: flex;
   align-items: flex-start;
@@ -102,8 +100,6 @@
   margin-bottom: 20px;
 }
 
-/* ------------------------------------------------------------ empty state */
-
 .empty {
   display: flex;
   flex-direction: column;
@@ -141,8 +137,6 @@
   border-radius: var(--radius-md);
 }
 
-/* ---------------------------------------------------------------- savebar */
-
 .savebar-spacer {
   height: 88px;
 }
@@ -164,14 +158,18 @@
   background: var(--app-topbar);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-popover);
-  --enter-y: 28px;
-  --enter-scale: 0.96;
+  --enter-y: calc(100% + 24px);
+  --enter-scale: 1;
   animation: motion-enter var(--motion-slow) var(--ease-spring-soft) backwards;
+  transition: background-color var(--motion-normal) var(--ease-standard);
+}
+
+.savebar-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .savebar-title {
-  flex: 1 1 auto;
-  min-width: 0;
   color: var(--text-primary);
   font-size: var(--text-row-title);
   font-weight: var(--weight-section);
@@ -179,8 +177,14 @@
   transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
-.savebar.saved .savebar-title {
-  opacity: 0;
+.savebar-note {
+  max-width: 52ch;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    color var(--motion-normal) var(--ease-standard);
 }
 
 .savebar-actions {
@@ -189,6 +193,7 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  transition: opacity var(--motion-fast) var(--ease-standard);
 }
 
 .savebar .savebar-save {
@@ -204,16 +209,58 @@
   background: var(--save-pressed);
 }
 
-.savebar .savebar-save.saved:disabled {
-  opacity: 1;
-  cursor: default;
+/* Laid over the unsaved row rather than swapped in for it, so the toast keeps its width. */
+.savebar-done {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 20px;
+  color: var(--on-save);
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-section);
+  letter-spacing: -0.006em;
+  pointer-events: none;
+  --enter-y: 6px;
+}
+
+/* motion-enter stays first in the list so dropping .saved does not replay the entrance. */
+.savebar.saved {
+  background: var(--save);
+  animation:
+    motion-enter var(--motion-slow) var(--ease-spring-soft) backwards,
+    savebar-saved var(--motion-normal) var(--ease-spring-soft);
+}
+
+.savebar.saved .savebar-title,
+.savebar.saved .savebar-note,
+.savebar.saved .savebar-actions {
+  opacity: 0;
+}
+
+@keyframes savebar-saved {
+  45% {
+    transform: scale(1.04);
+  }
+}
+
+.savebar.alarmed {
+  background: var(--save-refused);
+}
+
+.savebar.alarmed .savebar-title,
+.savebar.alarmed .savebar-note,
+.savebar.alarmed .button-ghost {
+  color: var(--on-save);
 }
 
 .savebar.leaving {
-  --exit-y: 24px;
-  --exit-scale: 0.97;
+  --exit-y: calc(100% + 24px);
+  --exit-scale: 1;
   pointer-events: none;
-  animation: motion-exit var(--motion-fast) var(--ease-exit) forwards;
+  animation: motion-exit var(--motion-slow) var(--ease-exit) forwards;
 }
 
 @media (max-width: 900px) {
@@ -222,8 +269,6 @@
     max-width: calc(100vw - 24px);
   }
 }
-
-/* ----------------------------------------------------------------- dialog */
 
 .popover {
   --enter-y: -8px;
@@ -238,6 +283,85 @@
 .popover.leaving {
   pointer-events: none;
   animation: motion-fade-out var(--motion-fast) var(--ease-standard) forwards;
+}
+
+.placeholder-suggestions {
+  position: fixed;
+  z-index: calc(var(--z-dialog) + 1);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 280px;
+  max-width: min(420px, calc(100vw - 16px));
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-popover);
+  animation: motion-fade-in var(--motion-fast) var(--ease-standard) backwards;
+}
+
+.placeholder-suggestion {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  grid-template-areas:
+    "token sample"
+    "label label";
+  align-items: baseline;
+  column-gap: 12px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  text-align: left;
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.placeholder-suggestion[aria-selected="true"] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.placeholder-suggestion-token,
+.placeholder-suggestion-sample,
+.placeholder-suggestion-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeholder-suggestion-token {
+  grid-area: token;
+  color: var(--text-primary);
+}
+
+.placeholder-suggestion-sample {
+  grid-area: sample;
+  justify-self: end;
+  max-width: 100%;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+.placeholder-suggestion-label {
+  grid-area: label;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+@media (max-width: 559px) {
+  .placeholder-suggestions {
+    min-width: 0;
+  }
+
+  .placeholder-suggestion {
+    min-height: 44px;
+    padding-block: 7px;
+  }
 }
 
 .dialog-scrim {
@@ -263,6 +387,10 @@
 
 .dialog-scrim.leaving::before {
   animation: motion-fade-out var(--motion-fast) var(--ease-exit) forwards;
+}
+
+.dialog-scrim ~ .popover {
+  z-index: calc(var(--z-dialog) + 1);
 }
 
 .dialog {
@@ -353,7 +481,19 @@
   font-size: var(--text-micro);
 }
 
-/* ------------------------------------------------------------------ table */
+.field-warning {
+  color: var(--warning);
+  font-size: var(--text-micro);
+}
+
+.template-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 
 .table-wrap {
   background: var(--surface-1);
@@ -410,7 +550,8 @@
   transition: background-color var(--motion-fast) var(--ease-standard);
 }
 
-.table tbody tr:hover td {
+.table tbody tr:hover td,
+.table tbody tr.clickable:focus-visible td {
   background: var(--surface-hover);
 }
 
@@ -435,13 +576,6 @@
 .table td.primary-cell {
   color: var(--text-primary);
   font-weight: var(--weight-medium);
-}
-
-.table-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
 }
 
 .table-toolbar {
@@ -475,8 +609,6 @@
   visibility: hidden;
 }
 
-/* --------------------------------------------------------- member / user */
-
 .user-cell {
   display: flex;
   align-items: center;
@@ -507,8 +639,6 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
-
-/* ----------------------------------------------------------- editor shell */
 
 .editor {
   display: grid;
@@ -553,8 +683,6 @@
   }
 }
 
-/* ----------------------------------------------------------- async status */
-
 .async-status {
   display: inline-flex;
   align-items: center;
@@ -575,9 +703,6 @@
   color: var(--danger);
 }
 
-/* -------------------------------------------------------------- ladders */
-
-/* A builder rung reads as a sentence: trigger, then consequence. */
 .ladder {
   display: flex;
   flex-direction: column;
@@ -644,7 +769,6 @@
   align-self: flex-start;
 }
 
-/* The AND/OR spine of a requirement tree. */
 .tree-logic {
   display: flex;
   align-items: center;
@@ -663,8 +787,6 @@
   height: 14px;
   background: var(--border-default);
 }
-
-/* ------------------------------------------------------------ mini panels */
 
 .panel {
   background: var(--surface-1);
@@ -736,10 +858,6 @@
   color: var(--text-secondary);
 }
 
-.text-primary {
-  color: var(--text-primary);
-}
-
 .text-danger {
   color: var(--danger);
 }
@@ -759,8 +877,6 @@
 .text-xs {
   font-size: var(--text-micro);
 }
-
-/* --------------------------------------------------------------- loading */
 
 .spinner {
   display: inline-flex;
@@ -786,6 +902,17 @@
   width: 100%;
   min-height: 160px;
   padding: 16px;
+}
+
+.page:has(> .loading-area-fill) {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - var(--topbar-height));
+  padding-bottom: var(--content-padding-top);
+}
+
+.loading-area-fill {
+  flex: 1 0 auto;
 }
 
 @keyframes loading-reveal {

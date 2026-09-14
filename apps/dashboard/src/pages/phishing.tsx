@@ -68,7 +68,6 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -150,7 +149,13 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
 
       <DomainLists value={config} onChange={form.setValue} errorAt={form.errorAt} />
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

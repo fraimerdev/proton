@@ -1,4 +1,12 @@
 import {
+  mentionsAny,
+  parseTemplate,
+  SAMPLE_NOW,
+  type SurfaceDiagnostic,
+  type TemplateReport,
+  validateConfigTemplates,
+} from '@proton/core/placeholders';
+import {
   COUNT_PLACEHOLDER,
   COUNTER_SOURCES,
   type Counter,
@@ -6,8 +14,20 @@ import {
   type CountersConfig,
   counterSchema,
 } from '@proton/module-counters/config';
-import { Fragment, type ReactElement } from 'react';
+import {
+  COUNT_KEYS,
+  COUNTER_SURFACE,
+  countersTemplates,
+  countFor,
+  renderCounterName,
+} from '@proton/module-counters/placeholders';
+import { Fragment, type ReactElement, useId, useMemo } from 'react';
 import type { ModuleForm } from '../../components/module/form.ts';
+import { visibleDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
+import {
+  type PlaceholderAutocomplete,
+  usePlaceholderAutocomplete,
+} from '../../components/placeholders/use-placeholder-autocomplete.ts';
 import { Icon, type IconName } from '../../components/ui/icon.tsx';
 
 export type CountersForm = ModuleForm<CountersConfig>;
@@ -35,19 +55,48 @@ export const CHANNEL_TAKEN =
   'two counters cannot share a channel — they would rename it in turn and each one would spend ' +
   'the other’s rename allowance.';
 
+export const NEW_COUNTER_PATH = 'counters.0.template';
+
+const NO_DIAGNOSTICS: readonly SurfaceDiagnostic[] = [];
+
+function sampleState(): CounterSampleState {
+  const sample = COUNTER_SURFACE.samples[0];
+  if (sample === undefined) {
+    throw new Error(
+      'The counter placeholders have no sample, so no channel name can be previewed.',
+    );
+  }
+  return sample.facts.state;
+}
+
+type CounterSampleState = (typeof COUNTER_SURFACE.samples)[number]['facts']['state'];
+
+const SAMPLE_STATE = sampleState();
+
+function sampleCount(source: CounterSource): string {
+  return (countFor(source, SAMPLE_STATE) ?? 0).toLocaleString('en-GB');
+}
+
+const SAMPLE_NOTE =
+  `Sample server with ${sampleCount('members')} members, ${sampleCount('roles')} roles and ` +
+  `${sampleCount('channels')} channels. Proton fills in your server’s numbers every 10 minutes.`;
+
+const EMPTY_NAME =
+  'Empty with the sample numbers. Proton never renames a channel to an empty name.';
+
 export function setCounters(form: CountersForm, counters: Counter[]): void {
   form.setValue((current) => ({ ...current, counters }));
 }
 
 export function hasCount(template: string): boolean {
-  return template.includes(COUNT_PLACEHOLDER);
+  return template.includes(COUNT_PLACEHOLDER) || mentionsAny(COUNTER_SURFACE, template, COUNT_KEYS);
 }
 
 export function prefillFor(source: CounterSource): string {
   return `${SOURCE_LABEL[source]}: ${COUNT_PLACEHOLDER}`;
 }
 
-/** Derived, never typed: an id the admin edited would orphan the channel Proton filed under it. */
+// Derived, never typed: an edited id would orphan the channel Proton filed under it.
 export function nextCounterId(counters: readonly Counter[], source: CounterSource): string {
   const used = new Set(counters.map((counter) => counter.id));
   if (!used.has(source)) return source;
@@ -58,10 +107,6 @@ export function nextCounterId(counters: readonly Counter[], source: CounterSourc
   return `${source}-${n}`;
 }
 
-/**
- * The counter's own schema answering for its own fields, so the message beside a field is the one
- * the save would return rather than a second copy of it that can drift.
- */
 export function counterIssues(counter: Counter): ReadonlyMap<string, string> {
   const parsed = counterSchema.safeParse(counter);
   if (parsed.success) return new Map();
@@ -108,44 +153,98 @@ export function withChannel(counter: Counter, channelId: string | null): Counter
   return next;
 }
 
-/**
- * The template with {count} left standing as a token. The dashboard cannot read the count the
- * refresh will use — it comes from the gateway's own guild state — so putting a number here would
- * be a guess dressed as a preview.
- */
+export function useCounterTemplates(form: CountersForm): TemplateReport {
+  const { value, view } = form;
+  return useMemo(
+    () => validateConfigTemplates(countersTemplates, value, view.config),
+    [value, view.config],
+  );
+}
+
+export function newCounterReport(counter: Counter): TemplateReport {
+  return validateConfigTemplates(countersTemplates, { counters: [counter] });
+}
+
+export interface TemplateField {
+  autocomplete: PlaceholderAutocomplete;
+  diagnostics: readonly SurfaceDiagnostic[];
+  diagnosticsId: string;
+  describedBy: string | undefined;
+  invalid: boolean;
+  error: string | undefined;
+}
+
+export function useTemplateField({
+  report,
+  path,
+  onChange,
+  error,
+}: {
+  report: TemplateReport;
+  path: string;
+  onChange: (next: string) => void;
+  error: string | undefined;
+}): TemplateField {
+  const diagnosticsId = useId();
+  const diagnostics = report.byPath.get(path) ?? NO_DIAGNOSTICS;
+  const autocomplete = usePlaceholderAutocomplete({ surface: COUNTER_SURFACE, path, onChange });
+  const listed = error !== undefined && diagnostics.some(({ message }) => message === error);
+
+  return {
+    autocomplete,
+    diagnostics,
+    diagnosticsId,
+    describedBy: visibleDiagnostics(diagnostics).shown.length > 0 ? diagnosticsId : undefined,
+    invalid: error !== undefined || report.blocking.some((issue) => issue.path === path),
+    error: listed ? undefined : error,
+  };
+}
+
 export function TemplateName({ template }: { template: string }): ReactElement {
-  const parts = template.split(COUNT_PLACEHOLDER);
+  const { tokens } = parseTemplate(template, COUNTER_SURFACE.registry);
 
   return (
     <>
-      {parts.map((part, at) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: the pieces of a split have no identity
-        <Fragment key={at}>
-          {at > 0 ? <span className="counter-token">{COUNT_PLACEHOLDER}</span> : null}
-          {part}
-        </Fragment>
-      ))}
+      {tokens.map((token) => {
+        const written = template.slice(token.span.start, token.span.end);
+
+        return token.kind === 'placeholder' ? (
+          <span key={token.span.start} className="counter-token">
+            {written}
+          </span>
+        ) : (
+          <Fragment key={token.span.start}>{written}</Fragment>
+        );
+      })}
     </>
   );
 }
 
 export function NamePreview({
   template,
+  source,
   icon,
 }: {
   template: string;
+  source: CounterSource;
   icon: IconName;
 }): ReactElement {
+  const name =
+    template === ''
+      ? ''
+      : renderCounterName(template, { source, state: SAMPLE_STATE }, SAMPLE_NOW).output;
+
   return (
-    <div className="counter-preview">
-      <Icon name={icon} size={14} />
-      {template === '' ? (
-        <span className="text-muted">No name</span>
-      ) : (
-        <span className="counter-preview-name">
-          <TemplateName template={template} />
-        </span>
-      )}
-    </div>
+    <>
+      <div className="counter-preview">
+        <Icon name={icon} size={14} />
+        {name === '' ? (
+          <span className="text-muted">{template === '' ? 'No name' : EMPTY_NAME}</span>
+        ) : (
+          <span className="counter-preview-name">{name}</span>
+        )}
+      </div>
+      <span className="field-hint">{SAMPLE_NOTE}</span>
+    </>
   );
 }

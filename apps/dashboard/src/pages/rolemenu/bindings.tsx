@@ -261,8 +261,7 @@ export function BindingLadder({
   );
 }
 
-// A reaction binding stores the guild emoji's id, or the character itself — that is what a gateway
-// reaction event reports back, and storing a custom emoji's name would silently never match.
+// Stores the emoji id or character, as reaction events report; a custom emoji's name never matches.
 function emojiFor(
   key: string,
   byId: ReadonlyMap<string, { id: string; name: string; animated: boolean }>,

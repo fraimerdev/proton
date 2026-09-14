@@ -13,6 +13,8 @@ import {
 import type { DbHandle, GuildRuleStore } from '@proton/db';
 import { auditTrail, guildModules, guilds } from '@proton/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { assertWriteRefinements } from './refine-write.ts';
+import { assertTemplatesValid } from './templates.ts';
 
 export interface ModuleConfigView {
   moduleId: string;
@@ -356,6 +358,8 @@ export class ModuleConfigService {
 
     const nextConfig = parsed.data as Record<string, unknown>;
 
+    assertWriteRefinements(manifest, nextConfig, before.config);
+
     const exceeded = overLimit(manifest.configLimits ?? [], nextConfig, before.tier);
     if (exceeded) {
       throw new ModuleConfigError(
@@ -363,6 +367,8 @@ export class ModuleConfigService {
         `Those ${manifest.name} settings were not saved: ${exceeded}`,
       );
     }
+
+    assertTemplatesValid(manifest, nextConfig, before.config);
 
     const nextEnabled = input.enabled ?? before.enabled;
 

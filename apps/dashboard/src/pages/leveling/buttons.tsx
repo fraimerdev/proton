@@ -6,8 +6,13 @@ import {
   BUTTONS_PER_ROW_MAX,
 } from '@proton/core';
 import type { ReactElement } from 'react';
+import {
+  blank,
+  MessageField,
+  type PlaceholderSlot,
+} from '../../components/discord/embed-editor.tsx';
 import { EmojiPicker } from '../../components/discord/emoji-picker.tsx';
-import { Button, IconButton, TextInput } from '../../components/ui/controls.tsx';
+import { Button, IconButton } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 
 const BUTTONS_INTRO =
@@ -35,22 +40,24 @@ function newLinkButton(taken: ReadonlySet<string>): MessageButton {
 function LinkButton({
   guildId,
   button,
+  path,
   position,
-  labelError,
-  urlError,
-  styleError,
+  errorAt,
+  placeholders,
   onChange,
   onRemove,
 }: {
   guildId: string;
   button: MessageButton;
+  path: string;
   position: number;
-  labelError: string | undefined;
-  urlError: string | undefined;
-  styleError: string | undefined;
+  errorAt: (path: string) => string | undefined;
+  placeholders: PlaceholderSlot | undefined;
   onChange: (next: MessageButton) => void;
   onRemove: () => void;
 }): ReactElement {
+  const styleError = errorAt(`${path}.style`);
+
   return (
     <div className="stack stack-8">
       <div className="inline inline-8 inline-wrap">
@@ -60,16 +67,16 @@ function LinkButton({
           value={button.emoji ?? null}
           onChange={(emoji) => onChange({ ...button, emoji: emoji ?? undefined })}
         />
-        <TextInput
-          aria-label={`Button ${position} label`}
-          className="control-w-md"
+        <MessageField
+          placeholders={placeholders}
+          path={`${path}.label`}
+          label={`Button ${position} label`}
+          width="md"
           placeholder="Label"
           maxLength={BUTTON_LABEL_MAX}
-          invalid={labelError !== undefined}
           value={button.label ?? ''}
-          onChange={(event) =>
-            onChange({ ...button, label: event.currentTarget.value || undefined })
-          }
+          error={errorAt(`${path}.label`)}
+          onChange={(next) => onChange({ ...button, label: blank(next) })}
         />
         <span className="push-right">
           <IconButton
@@ -82,17 +89,17 @@ function LinkButton({
         </span>
       </div>
 
-      <TextInput
-        aria-label={`Button ${position} link`}
+      <MessageField
+        placeholders={placeholders}
+        path={`${path}.url`}
+        label={`Button ${position} link`}
+        link
         placeholder="https://…"
         maxLength={BUTTON_URL_MAX}
-        invalid={urlError !== undefined}
         value={button.url ?? ''}
-        onChange={(event) => onChange({ ...button, url: event.currentTarget.value || undefined })}
+        error={errorAt(`${path}.url`)}
+        onChange={(next) => onChange({ ...button, url: blank(next) })}
       />
-
-      {labelError !== undefined ? <p className="row-error">{labelError}</p> : null}
-      {urlError !== undefined ? <p className="row-error">{urlError}</p> : null}
 
       {button.style === 'link' ? null : (
         <>
@@ -116,12 +123,14 @@ export function LinkButtonRows({
   onChange,
   errorAt,
   sectionError,
+  placeholders,
 }: {
   guildId: string;
   rows: readonly ActionRow[];
   onChange: (next: ActionRow[]) => void;
   errorAt: (path: string) => string | undefined;
   sectionError: string | undefined;
+  placeholders?: PlaceholderSlot | undefined;
 }): ReactElement {
   const taken = takenKeys(rows);
 
@@ -165,10 +174,10 @@ export function LinkButtonRows({
                     key={button.key}
                     guildId={guildId}
                     button={button}
+                    path={`levelUpMessage.components.${index}.buttons.${at}`}
                     position={at + 1}
-                    labelError={errorAt(`levelUpMessage.components.${index}.buttons.${at}.label`)}
-                    urlError={errorAt(`levelUpMessage.components.${index}.buttons.${at}.url`)}
-                    styleError={errorAt(`levelUpMessage.components.${index}.buttons.${at}.style`)}
+                    errorAt={errorAt}
+                    placeholders={placeholders}
                     onChange={(next) =>
                       replace(index, {
                         kind: 'buttons',

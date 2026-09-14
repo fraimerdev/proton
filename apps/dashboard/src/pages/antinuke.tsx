@@ -89,17 +89,7 @@ const AFTER_STRIP_OUTCOME: Record<AfterStripAction, string> = {
   ban: 'Roles are removed, then the member is banned.',
 };
 
-const MAINTENANCE_COMMANDS: readonly { name: string; description: string }[] = [
-  {
-    name: '/antinuke maintenance',
-    description: 'Start maintenance mode for a set time.',
-  },
-  { name: '/antinuke resume', description: 'End maintenance mode now.' },
-  {
-    name: '/antinuke status',
-    description: 'Show whether protection is on, and the current limits.',
-  },
-];
+
 
 export default function AntinukePage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: antinukeConfigSchema });
@@ -124,7 +114,6 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -139,9 +128,8 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
         ) : null}
 
         {!enabled ? (
-          <StatusBanner tone="neutral">
-            {meta.label} is switched off. Settings are saved, but nothing runs until you switch it
-            on.
+          <StatusBanner tone="warning">
+            {meta.label} is switched off. No protection is in place, and no alerts are sent.
           </StatusBanner>
         ) : null}
 
@@ -150,14 +138,13 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
 
       <Section
         label="Maintenance mode"
-        intro="Maintenance mode pauses Anti-Nuke for a set time during bulk changes. End it early from the banner above."
+        intro="Maintenance mode pauses Anti-Nuke for a set time during bulk changes."
       >
         <Rows>
           <SettingRow
             title="Longest maintenance window"
             description="Maintenance mode leaves the server unprotected for up to this long."
             error={form.errorAt('maintenanceMaxDuration')}
-            note={`Requests longer than ${humaniseDuration(config.maintenanceMaxDuration)} are refused. While protection is paused, nothing stops a compromised account from emptying the server.`}
           >
             <DurationInput
               label="Longest maintenance window"
@@ -169,22 +156,10 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
             />
           </SettingRow>
         </Rows>
-
-        <div className="antinuke-commands">
-          {MAINTENANCE_COMMANDS.map((command) => (
-            <p className="antinuke-command" key={command.name}>
-              <span className="mono">{command.name}</span>
-              <span>{command.description}</span>
-            </p>
-          ))}
-        </div>
-
-        <p className="antinuke-help">All three need Manage Server.</p>
       </Section>
 
       <Section
         label="Thresholds"
-        intro="Proton reads the audit log and acts when one member reaches any of these limits within its window. Actions Proton takes are never counted."
       >
         <div className="matrix">
           <div className="antinuke-threshold antinuke-threshold-head" aria-hidden="true">
@@ -301,7 +276,13 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
         </Rows>
       </Section>
 
-      <SaveBar dirty={form.dirty} saving={form.saving} onSave={form.save} onReset={form.reset} />
+      <SaveBar
+        dirty={form.dirty}
+        saving={form.saving}
+        failures={form.failures}
+        onSave={form.save}
+        onReset={form.reset}
+      />
     </>
   );
 }

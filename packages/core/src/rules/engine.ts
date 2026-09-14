@@ -134,13 +134,14 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
 
     case 'interaction_reply':
     case 'interaction_followup':
+    case 'set_member_nickname':
       return {};
 
     // A restore names the channel or role it is recreating, and an automod rule names itself; no
     // fact can supply either.
     case 'create_channel':
     case 'create_role':
-    case 'edit_role':
+    case 'delete_role':
     case 'automod_rule_create':
     case 'automod_rule_update':
     case 'automod_rule_delete':
@@ -154,8 +155,7 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     // rule could supply. Reachable only because ActionKind is one closed union.
     case 'set_bot_nickname':
     case 'set_bot_profile':
-    case 'add_bot_role':
-    case 'remove_bot_role':
+    case 'set_bot_name_style':
       return {};
   }
 }

@@ -1,4 +1,5 @@
 import { honeypotConfigSchema } from '@proton/module-honeypot/config';
+import { honeypotTemplates } from '@proton/module-honeypot/placeholders';
 import type { ReactElement } from 'react';
 import { useModuleForm } from '../components/module/form.ts';
 import {
@@ -43,7 +44,12 @@ export default function HoneypotPage({
   summary,
   area,
 }: ModulePageProps): ReactElement {
-  const form = useModuleForm({ guildId, moduleId: meta.id, schema: honeypotConfigSchema });
+  const form = useModuleForm({
+    guildId,
+    moduleId: meta.id,
+    schema: honeypotConfigSchema,
+    templates: honeypotTemplates,
+  });
   const toggle = useModuleToggle(guildId, summary);
 
   const enabled = summary?.enabled ?? form.view.enabled;
@@ -73,7 +79,6 @@ export default function HoneypotPage({
       />
 
       <ModuleBanners
-        guildId={guildId}
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
@@ -123,6 +128,7 @@ export default function HoneypotPage({
       <SaveBar
         dirty={form.dirty}
         saving={form.saving}
+        failures={form.failures}
         onSave={form.save}
         onReset={form.reset}
         note={SAVE_NOTE}

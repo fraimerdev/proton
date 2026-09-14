@@ -9,7 +9,7 @@ import { EditorPreviewLayout } from '../../components/discord/message-editor.tsx
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RoleName } from '../../components/discord/role-picker.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
-import { ModuleLink, useModuleNavigate } from '../../components/module/route.tsx';
+import { useModuleNavigate } from '../../components/module/route.tsx';
 import {
   CollectionButtonRow,
   CollectionHeader,
@@ -89,21 +89,24 @@ function ActionSummary({ guildId, row }: { guildId: string; row: ActionRow }): R
 }
 
 export function ComponentsArea(props: AreaProps): ReactElement {
+  const go = useModuleNavigate(props.guildId, props.moduleId);
   const entry = props.index >= 0 ? props.form.value.components[props.index] : undefined;
 
   if (entry) return <ComponentEditor {...props} entry={entry} />;
 
   if (props.search.id !== undefined) {
     return (
-      <EmptyState icon="squares-four" title="Saved row not found" inset>
-        It may have been renamed or deleted.{' '}
-        <ModuleLink
-          guildId={props.guildId}
-          moduleId={props.moduleId}
-          search={{ area: 'components' }}
-        >
-          Back to saved rows
-        </ModuleLink>
+      <EmptyState
+        icon="squares-four"
+        title="Saved row not found"
+        inset
+        actions={
+          <Button tone="primary" onClick={() => go({ area: 'components', id: undefined })}>
+            Back to saved rows
+          </Button>
+        }
+      >
+        It may have been renamed or deleted.
       </EmptyState>
     );
   }
@@ -257,8 +260,7 @@ function ComponentEditor({
     const counts = new Map<string, number>();
     for (const key of all) counts.set(key, (counts.get(key) ?? 0) + 1);
 
-    // No custom_id length check here: the length depends on the template name this row is later
-    // inserted into, which the palette does not know.
+    // No custom_id length check: it depends on the template this row is later inserted into.
     return { counts, taken: new Set(all), subject: 'row', customId: null };
   }, [entry.row]);
 

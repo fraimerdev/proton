@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { brandingConfigSchema, liftStoredConfig } from '../src/config.ts';
+import { type BrandingConfig, brandingConfigSchema, liftStoredConfig } from '../src/config.ts';
 import { acceptImage, dataUri } from '../src/image.ts';
 import { AVATAR_MAX_BYTES, BANNER_MAX_BYTES, isAssetKind, maxBytesFor } from '../src/kinds.ts';
 
@@ -88,10 +88,7 @@ describe('lifting a config stored before uploads existed', () => {
       nickname: 'Dreamliner',
       bio: 'The friendly one.',
       restoreOnDisable: false,
-      typeface: 'none',
-      nameEffect: 'none',
-      primaryColor: 0x0ab9fe,
-      secondaryColor: 0x5944ec,
+      displayNameStyle: null,
     });
   });
 
@@ -103,16 +100,45 @@ describe('lifting a config stored before uploads existed', () => {
       nickname: 'Kestrel',
       avatarHash: 'abc',
       restoreOnDisable: true,
-      typeface: 'none',
-      nameEffect: 'none',
-      primaryColor: 0x0ab9fe,
-      secondaryColor: 0x5944ec,
+      displayNameStyle: null,
     });
   });
 
   test('survives a stored value that is not an object at all', () => {
     expect(liftStoredConfig(null)).toBeNull();
     expect(liftStoredConfig('nonsense')).toBe('nonsense');
+  });
+});
+
+describe('loading a config saved while look-alike letters existed', () => {
+  const STORED: BrandingConfig = {
+    enabled: true,
+    nickname: 'Dreamliner',
+    bio: 'The friendly one.',
+    displayNameStyle: { font: 'mainframe', effect: 'neon', colours: [0xff0000] },
+    restoreOnDisable: false,
+    avatarHash: 'av1',
+    bannerHash: 'bn1',
+  };
+
+  test('drops typeface whatever it held and keeps every other key, lifted or read raw', () => {
+    for (const typeface of ['none', 'bold', 'wide', 'small-caps', '', 42, null, { face: 'bold' }]) {
+      const row = { ...STORED, typeface };
+
+      for (const loaded of [
+        brandingConfigSchema.safeParse(row),
+        brandingConfigSchema.safeParse(liftStoredConfig(row)),
+      ]) {
+        expect({ typeface, success: loaded.success }).toEqual({ typeface, success: true });
+        expect(loaded.data).toEqual(STORED);
+        expect(loaded.data).not.toHaveProperty('typeface');
+        expect(brandingConfigSchema.parse(loaded.data)).toEqual(STORED);
+      }
+    }
+  });
+
+  test('the lift removes the key before Zod sees it', () => {
+    expect(liftStoredConfig({ ...STORED, typeface: 'script' })).toEqual(STORED);
   });
 });
 
@@ -123,6 +149,7 @@ describe('the settings form', () => {
 
     expect(keys).not.toContain('avatarHash');
     expect(keys).not.toContain('bannerHash');
+    expect(keys).not.toContain('typeface');
     expect(keys).toContain('nickname');
     expect(keys).toContain('bio');
   });

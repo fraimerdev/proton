@@ -72,8 +72,7 @@ export function MenuEditor({
     broken: menuHasProblem(problems, index),
   });
 
-  // Emoji keys and routing keys are not interchangeable, so crossing the reaction boundary clears
-  // every key rather than carrying an emoji into a custom_id it can never round-trip through.
+  // Crossing the reaction boundary clears every key: an emoji key cannot round-trip a custom_id.
   const changeKind = (next: RolemenuKind): void => {
     if (next === menu.kind) return;
 

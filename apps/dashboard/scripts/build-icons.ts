@@ -6,8 +6,7 @@ import { MODULE_ICON_NAMES, RECORD_ICON_NAMES } from '../src/lib/modules/catalog
 const ROOT = join(import.meta.dir, '..');
 const SRC = join(ROOT, 'src');
 
-// Resolved rather than joined onto a node_modules path: bun links workspace dependencies as
-// junctions into a content-addressed store, so the package is not under apps/dashboard at all.
+// Resolved, not joined onto node_modules: bun links workspace dependencies from a content store.
 const require = createRequire(import.meta.url);
 const ASSETS = join(dirname(require.resolve('@phosphor-icons/core/package.json')), 'assets');
 
@@ -26,14 +25,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/**
- * Every name an <Icon> can be handed. The JSX literals have to be scraped rather than imported —
- * they are spelled inline at the call site — but a name this misses becomes a type error at the
- * call site rather than a blank square in the browser, because Icon takes IconName, not string.
- */
 export function renderableNames(): string[] {
-  // The closed tables that turn something else's vocabulary into an icon. A table added without
-  // being listed here fails `bun run typecheck`, because its values stop being an IconName.
   const names = new Set<string>([...MODULE_ICON_NAMES, ...RECORD_ICON_NAMES]);
 
   for (const file of sourceFiles(SRC)) {
@@ -52,8 +44,7 @@ export function renderableNames(): string[] {
         continue;
       }
 
-      // A ternary picking an icon by comparing something to a string puts that something's value
-      // in the same expression: name={sort === 'asc' ? 'sort-ascending' : 'sort-descending'}.
+      // Drop the compared value in name={sort === 'asc' ? 'sort-ascending' : 'sort-descending'}.
       const branches = expression
         .replace(/[=!]==?\s*'[a-z0-9-]+'/g, '')
         .replace(/'[a-z0-9-]+'\s*[=!]==?/g, '');
@@ -61,20 +52,16 @@ export function renderableNames(): string[] {
       for (const literal of branches.matchAll(/'([a-z0-9-]+)'/g)) names.add(literal[1] ?? '');
     }
 
-    // The prop forms: <Button icon="caret-left" trailingIcon={'caret-right'} />.
     for (const entry of source.matchAll(
       /\b(?:icon|trailingIcon|glyph)=(?:"([a-z0-9-]+)"|\{'([a-z0-9-]+)'\})/g,
     )) {
       names.add(entry[1] ?? entry[2] ?? '');
     }
 
-    // The object form: `{ icon: 'shield-check' }` in a local table.
     for (const entry of source.matchAll(/\b(?:icon|glyph):\s*'([a-z0-9-]+)'/g)) {
       names.add(entry[1] ?? '');
     }
 
-    // A table declared as IconName: every quoted kebab literal in its initialiser is one.
-    // Scraped rather than imported because these live beside the component that renders them.
     for (const table of source.matchAll(
       /:\s*(?:readonly\s+)?(?:Record<[^>]*?,\s*IconName>|IconName\[\])\s*=\s*([[{][\s\S]*?^\s*[\]}])/gm,
     )) {

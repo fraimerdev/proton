@@ -67,6 +67,12 @@ function digest(value: unknown): string {
 
 export interface NormaliseOptions {
   now?: () => number;
+  sessionId?: string | undefined;
+}
+
+// raw.s restarts each session; dropping the session id lets a later occurrence reuse an old key.
+function occurrence(raw: RawDispatch, options: NormaliseOptions): string {
+  return options.sessionId ? `${options.sessionId}:${raw.s}` : String(raw.s);
 }
 
 export const NORMALISED_EVENT_TYPES: readonly EventType[] = [
@@ -197,7 +203,7 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       const userId = str(nested(d.user, 'id'));
       if (!guildId || !userId) return [];
 
-      const joinedAt = str(d.joined_at) ?? String(now);
+      const joinedAt = str(d.joined_at) ?? 'nojoin';
       return [
         event(
           'member.joined',
@@ -213,7 +219,10 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       const guildId = str(d.guild_id);
       const userId = str(nested(d.user, 'id'));
       if (!guildId || !userId) return [];
-      return [event('member.left', `${guildId}:${userId}:${raw.s}`, guildId, now, d)];
+
+      return [
+        event('member.left', `${guildId}:${userId}:${occurrence(raw, options)}`, guildId, now, d),
+      ];
     }
 
     case 'GUILD_AUDIT_LOG_ENTRY_CREATE':
@@ -380,7 +389,6 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       ];
     }
 
-    // Reactions carry no id. Never fold `raw.s` into the key — it changes on RESUME and breaks I4.
     case 'MESSAGE_REACTION_ADD':
     case 'MESSAGE_REACTION_REMOVE': {
       const channelId = str(d.channel_id);
@@ -394,7 +402,9 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       const type: EventType =
         raw.t === 'MESSAGE_REACTION_ADD' ? 'reaction.added' : 'reaction.removed';
 
-      return [event(type, `${channelId}:${messageId}:${userId}:${emoji}`, str(d.guild_id), now, d)];
+      // Nothing in the payload tells a re-add from the first add, so the dispatch has to.
+      const key = `${channelId}:${messageId}:${userId}:${emoji}:${occurrence(raw, options)}`;
+      return [event(type, key, str(d.guild_id), now, d)];
     }
 
     case 'MESSAGE_POLL_VOTE_ADD':
@@ -408,9 +418,8 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       const type: EventType =
         raw.t === 'MESSAGE_POLL_VOTE_ADD' ? 'poll.voted' : 'poll.vote_removed';
 
-      return [
-        event(type, `${channelId}:${messageId}:${userId}:${answerId}`, str(d.guild_id), now, d),
-      ];
+      const key = `${channelId}:${messageId}:${userId}:${answerId}:${occurrence(raw, options)}`;
+      return [event(type, key, str(d.guild_id), now, d)];
     }
 
     case 'AUTO_MODERATION_ACTION_EXECUTION': {
@@ -419,14 +428,11 @@ export function normalise(raw: RawDispatch, options: NormaliseOptions = {}): Pro
       const userId = str(d.user_id);
       if (!guildId || !ruleId || !userId) return [];
 
-      // There is no execution id, and `message_id` is absent when the message was blocked outright
-      // — so a blocked message is keyed by its content. Posting the identical blocked message twice
-      // therefore collapses to one event, which is right for a log and the same trade the reaction
-      // arm makes.
-      const occurrence = str(d.message_id) ?? digest(d.matched_content ?? d.content);
+      // One dispatch per action, no execution id: a blocked message keys on content, not raw.s.
+      const subject = str(d.message_id) ?? digest(d.matched_content ?? d.content);
 
       return [
-        event('automod.executed', `${guildId}:${ruleId}:${userId}:${occurrence}`, guildId, now, d),
+        event('automod.executed', `${guildId}:${ruleId}:${userId}:${subject}`, guildId, now, d),
       ];
     }
 

@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import type { ModuleForm } from '../../components/module/form.ts';
 import { ModuleLink } from '../../components/module/route.tsx';
-import { Badge, NumberStepper, Switch } from '../../components/ui/controls.tsx';
+import { NumberStepper, Switch } from '../../components/ui/controls.tsx';
 import { EmptyState, Spinner, StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { channelsQuery } from '../../lib/queries.ts';
@@ -55,111 +55,6 @@ function ruleDetail(rule: DesiredRule, config: AutomodConfig): string {
   return 'Discord’s spam filter';
 }
 
-function Plan({
-  form,
-  guildId,
-  enabled,
-}: {
-  form: Form;
-  guildId: string;
-  enabled: boolean;
-}): ReactElement {
-  const config = form.value;
-  const plan = planNativeRules({ ...config, enabled });
-
-  const { data: channels, isPending: channelsPending } = useQuery(channelsQuery(guildId));
-  const alert = channels?.find((channel) => channel.id === config.alertChannelId);
-
-  const alerting =
-    config.alertChannelId === undefined ? null : (
-      <>
-        {' and sends an alert to '}
-        {alert ? (
-          `#${alert.name}`
-        ) : channelsPending ? (
-          <Spinner label="Loading channel" />
-        ) : (
-          'the alert channel'
-        )}
-      </>
-    );
-
-  const patternsOff = severityOf(config, 'patterns') === 'off';
-
-  const exempting = config.exemptRoleIds.length > 0 || config.exemptChannelIds.length > 0;
-  const wordRules = plan.desired.filter(
-    (rule) => rule.name === RULE_NAMES.keywords || rule.name === RULE_NAMES.presets,
-  ).length;
-
-  return (
-    <Section label="Rules Proton creates">
-      {!enabled ? (
-        <StatusBanner tone="neutral">
-          Automod is switched off, so Proton creates no rules.
-        </StatusBanner>
-      ) : plan.desired.length === 0 ? (
-        <EmptyState inset title="No rules">
-          Add blocked words or regex patterns, choose a preset, set a mention limit or switch on the
-          spam filter.
-        </EmptyState>
-      ) : (
-        <Rows>
-          {plan.desired.map((rule) => (
-            <div className="automod-plan-row" key={rule.name}>
-              <span className="automod-plan-name mono">{rule.name}</span>
-              <span className="automod-plan-detail">{ruleDetail(rule, config)}</span>
-            </div>
-          ))}
-        </Rows>
-      )}
-
-      {enabled && plan.desired.length > 0 ? (
-        <div className="automod-note stack stack-8">
-          <p>
-            Each rule blocks the message{alerting}
-            {exempting ? ', and skips exempt roles and channels' : ''}.
-            {config.allowedWords.length > 0 && wordRules > 0
-              ? ` Allowed words apply to ${wordRules === 1 ? 'the word rule' : 'both word rules'}.`
-              : ''}
-          </p>
-          <p>
-            These rules never time out, kick or ban. When one blocks a message, Proton records a
-            warning that counts toward warn escalation in Moderation.
-          </p>
-        </div>
-      ) : null}
-
-      {plan.inHousePatterns.length > 0 ? (
-        <>
-          <p className="automod-note">
-            {patternsOff
-              ? 'Discord AutoMod cannot run these patterns, and Custom patterns is set to Off, so nothing runs them.'
-              : 'Discord AutoMod cannot run these patterns, so Proton runs them itself.'}{' '}
-            <ModuleLink
-              className="automod-link"
-              guildId={guildId}
-              moduleId={'automod'}
-              search={{ area: 'checks' }}
-            >
-              Edit them under Checks
-            </ModuleLink>
-          </p>
-
-          <Rows>
-            {plan.inHousePatterns.map((note, index) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: patterns have no id and two may be equal
-              <div className="automod-plan-row" key={index}>
-                <span className="automod-plan-name mono">{note.pattern}</span>
-                <span className="automod-plan-detail">{note.reason}</span>
-              </div>
-            ))}
-          </Rows>
-        </>
-      ) : null}
-    </Section>
-  );
-}
-
 export function NativeArea({
   form,
   guildId,
@@ -185,23 +80,11 @@ export function NativeArea({
 
   return (
     <>
-      <div className="automod-intro stack stack-10">
-        <p className="automod-note">
-          Discord blocks matching messages before Proton sees them, so the checks and actions on the
-          other tabs do not apply.
-        </p>
-        <span>
-          <Badge tone="neutral" icon="lock">
-            Needs Manage Server
-          </Badge>
-        </span>
-      </div>
-
       <Section label="Words">
         <Rows>
           <SettingRow
             title="Blocked words"
-            description="Discord blocks messages that contain any of these."
+            description="Action taken when a message contains any of these."
             error={form.errorAt('blockedWords')}
             stacked
           >
@@ -221,7 +104,7 @@ export function NativeArea({
 
           <SettingRow
             title="Allowed words"
-            description="Discord never blocks these, even when a blocked word or preset matches."
+            description="Action taken when a message contains any of these."
             error={form.errorAt('allowedWords')}
             stacked
           >
@@ -264,7 +147,6 @@ export function NativeArea({
           <SettingRow
             title="Discord mention limit"
             description="Set to 0 for no limit."
-            note="Separate from the Mass mentions check. Both can be on."
             error={form.errorAt('mentionLimit')}
           >
             <NumberStepper
@@ -292,8 +174,6 @@ export function NativeArea({
           </SettingRow>
         </Rows>
       </Section>
-
-      <Plan form={form} guildId={guildId} enabled={enabled} />
     </>
   );
 }

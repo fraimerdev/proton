@@ -44,7 +44,7 @@ export interface ActivityStore {
   /** The leaderboard's top n user ids, highest first. */
   topRanked(guildId: string, n: number): Promise<string[]>;
 
-  prune(before: Date): Promise<number>;
+  prune(guildId: string, before: Date): Promise<number>;
 }
 
 export function windowStart(window: ActivityWindow, now: Date): Date | null {

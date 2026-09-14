@@ -1,5 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { type ModuleManifest, ModuleRegistry, type ProtonEvent } from '@proton/core';
+import {
+  collectConfigTemplates,
+  definePlaceholderSurface,
+  lookupFrom,
+  type ModuleTemplates,
+  userDefinitions,
+  placeholderValue as v,
+  withAliases,
+} from '@proton/core/placeholders';
 import { createDb, type DbHandle, runMigrations } from '@proton/db';
 import { guildModules, guilds } from '@proton/db/schema';
 import { pingModule } from '@proton/module-ping';
@@ -218,6 +227,139 @@ describe('a save from a dashboard page loaded before the last deploy', () => {
     });
 
     expect(after.config.response).toBe('Kept');
+  });
+});
+
+describe('placeholder templates on save', () => {
+  const REPLY = definePlaceholderSurface<null>({
+    id: 'ping.reply',
+    module: 'ping',
+    label: 'Ping reply',
+    event: 'ping.reply',
+    audience: 'public',
+    fields: [{ path: 'response', kind: 'discord_text', label: 'Reply text', limit: 2000 }],
+    definitions: [
+      ...userDefinitions('user', { member: false }).map((definition) =>
+        definition.key === 'user.mention' ? withAliases(definition, ['user']) : definition,
+      ),
+      {
+        key: 'user.staff_note',
+        label: 'Staff note',
+        group: 'Member',
+        type: 'text',
+        example: v.text('watch them'),
+        sensitivity: 'staff_only',
+      },
+    ],
+    build: () => lookupFrom({}),
+    samples: [],
+  });
+
+  const templates: ModuleTemplates = {
+    surfaces: { [REPLY.id]: REPLY },
+    collect: (config) => collectConfigTemplates(config, REPLY),
+  };
+
+  let modules: ModuleConfigService;
+
+  beforeEach(() => {
+    const templated: typeof pingModule = { ...pingModule, templates };
+    const registry = new ModuleRegistry();
+    registry.register(templated);
+    modules = new ModuleConfigService(handle, registry);
+  });
+
+  async function store(response: string) {
+    await handle.db.insert(guildModules).values({
+      guildId: GUILD,
+      moduleId: 'ping',
+      enabled: true,
+      config: { enabled: true, response, restrictToChannel: null },
+      schemaVersion: 1,
+    });
+  }
+
+  async function auditRows(): Promise<number> {
+    const rows = await handle.client`select count(*)::int as n from audit_trail`;
+    return (rows as unknown as Array<{ n: number }>)[0]?.n ?? -1;
+  }
+
+  test('a changed broken placeholder is refused, naming the field, and nothing is written', async () => {
+    await store('Pong!');
+
+    const error = await modules
+      .update({
+        guildId: GUILD,
+        moduleId: 'ping',
+        config: { enabled: true, response: 'Pong {user.staff_note}', restrictToChannel: null },
+        actorId: ACTOR,
+        source: 'dashboard',
+      })
+      .then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+
+    expect(error).toBeInstanceOf(ModuleConfigError);
+    expect(error instanceof ModuleConfigError ? error.code : null).toBe('invalid_template');
+    expect(error instanceof ModuleConfigError ? error.message : '').toStartWith(
+      'Those Ping settings were not saved: response Reply text: ',
+    );
+
+    expect((await modules.get(GUILD, 'ping')).config.response).toBe('Pong!');
+    expect(await auditRows()).toBe(0);
+  });
+
+  test('a stored reply that no longer validates is still read, and the switch still saves it', async () => {
+    await store('Pong {user:shout}');
+
+    expect((await modules.get(GUILD, 'ping')).config.response).toBe('Pong {user:shout}');
+
+    const { after } = await modules.update({
+      guildId: GUILD,
+      moduleId: 'ping',
+      enabled: false,
+      actorId: ACTOR,
+      source: 'dashboard',
+    });
+
+    expect(after.enabled).toBe(false);
+    expect(after.config.response).toBe('Pong {user:shout}');
+
+    const view = await modules.get(GUILD, 'ping');
+    expect(view.enabled).toBe(false);
+    expect(view.config.response).toBe('Pong {user:shout}');
+    expect(await auditRows()).toBe(1);
+  });
+
+  test('a change that only warns is saved', async () => {
+    const { after } = await modules.update({
+      guildId: GUILD,
+      moduleId: 'ping',
+      enabled: true,
+      config: { enabled: true, response: 'Pong {nobody}', restrictToChannel: null },
+      actorId: ACTOR,
+      source: 'dashboard',
+    });
+
+    expect(after.config.response).toBe('Pong {nobody}');
+    expect((await modules.get(GUILD, 'ping')).config.response).toBe('Pong {nobody}');
+  });
+
+  test('the first save of a server is judged against the defaults', async () => {
+    await expect(
+      modules.update({
+        guildId: GUILD,
+        moduleId: 'ping',
+        enabled: true,
+        config: { enabled: true, response: '{user.staff_note}', restrictToChannel: null },
+        actorId: ACTOR,
+        source: 'dashboard',
+      }),
+    ).rejects.toThrow(/not saved: response Reply text: /);
+
+    const rows = await handle.client`select count(*)::int as n from guild_modules`;
+    expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);
   });
 });
 

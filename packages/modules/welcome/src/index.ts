@@ -6,9 +6,12 @@ import {
   welcomeDefaultConfig,
   welcomeFormSchema,
 } from './config.ts';
-import { createGreetingListener, type WelcomeDeps } from './listeners.ts';
+import { createBoostListener, createGreetingListener, type WelcomeDeps } from './listeners.ts';
+import { welcomeTemplates } from './placeholders.ts';
 
 export {
+  DEFAULT_BOOST_GREETING,
+  DEFAULT_BOOST_MESSAGE,
   DEFAULT_GOODBYE_GREETING,
   DEFAULT_GOODBYE_MESSAGE,
   DEFAULT_WELCOME_GREETING,
@@ -28,33 +31,58 @@ export {
   welcomeFormSchema,
 } from './config.ts';
 export {
+  BOOST_EVENT_TYPES,
+  BOOST_MESSAGE_TYPES,
+  createBoostListener,
   createGreetingListener,
+  type GreetingPayloadFacts,
   type GreetingTarget,
+  type GuildChannelSummary,
+  type GuildSummary,
+  isBoostNotice,
+  readBoosterTarget,
+  readGreetingFacts,
   readGreetingTarget,
   WELCOME_ACTOR,
   WELCOME_EVENT_TYPES,
   WELCOME_MODULE_ID,
   type WelcomeDeps,
 } from './listeners.ts';
+export {
+  type GreetingOccasion,
+  type GreetingPlaceholderFacts,
+  greetingTemplates,
+  renderGreetingMessage,
+  WELCOME_BOOST_SURFACE,
+  WELCOME_JOIN_SURFACE,
+  WELCOME_LEAVE_SURFACE,
+  welcomeTemplates,
+} from './placeholders.ts';
 
 export function createWelcomeModule(
   deps: WelcomeDeps = {},
 ): ModuleManifest<typeof welcomeConfigSchema> {
   return {
     id: 'welcome',
-    name: 'Welcome & goodbye',
+    name: 'Welcome',
     category: 'engagement',
     configSchema: welcomeConfigSchema,
     formSchema: welcomeFormSchema,
     defaultConfig: welcomeDefaultConfig,
     schemaVersion: WELCOME_SCHEMA_VERSION,
 
-    requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+    requiredIntents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildMessages,
+    ],
 
     requiredPermissions: [Permissions.ViewChannel, Permissions.SendMessages],
     actionKinds: ['send'],
 
-    listeners: [createGreetingListener(deps)],
+    listeners: [createGreetingListener(deps), createBoostListener(deps)],
+
+    templates: welcomeTemplates,
 
     dashboard: {
       icon: 'hand-wave',
@@ -62,6 +90,7 @@ export function createWelcomeModule(
         { id: 'general', title: 'General', fields: ['enabled'] },
         { id: 'welcome', title: 'Welcome', fields: ['welcomeChannelId'] },
         { id: 'goodbye', title: 'Goodbye', fields: ['goodbyeChannelId'] },
+        { id: 'boost', title: 'Boosts', fields: ['boostEnabled', 'boostChannelId'] },
         {
           id: 'card',
           title: 'Card',

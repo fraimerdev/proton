@@ -18,8 +18,6 @@ function transitionMs(element: Element | null): number {
   return longest(style.transitionDuration) + longest(style.transitionDelay);
 }
 
-/* ------------------------------------------------------------------ section */
-
 export function Section({
   label,
   note,
@@ -50,7 +48,6 @@ export function Section({
   );
 }
 
-/** One restrained surface holding sibling rows, hairline-separated. Never a card per setting. */
 export function Rows({
   children,
   className,
@@ -61,13 +58,10 @@ export function Rows({
   return <div className={cx('rows', className)}>{children}</div>;
 }
 
-/* -------------------------------------------------------------- setting row */
-
 interface SettingRowProps {
   title: ReactNode;
   description?: ReactNode;
   children?: ReactNode;
-  /** Puts the control on its own line — for a control too wide to sit beside the copy. */
   stacked?: boolean | undefined;
   error?: string | undefined;
   note?: ReactNode;
@@ -106,8 +100,6 @@ export function SettingRow({
   );
 }
 
-/* ----------------------------------------------------------- navigation row */
-
 interface NavigationRowBase {
   icon?: IconName | undefined;
   title: ReactNode;
@@ -115,10 +107,6 @@ interface NavigationRowBase {
   aside?: ReactNode;
 }
 
-/**
- * A whole row that navigates: chevron, no button. It links into the module route rather than
- * taking arbitrary link props, whose `title` collides with the anchor's own title attribute.
- */
 export function NavigationRow({
   icon,
   title,
@@ -145,7 +133,6 @@ export function NavigationRow({
   );
 }
 
-/** A row whose action is explicit: a named button rather than a chevron. */
 export function ActionRow({
   icon,
   title,
@@ -163,8 +150,6 @@ export function ActionRow({
     </div>
   );
 }
-
-/* --------------------------------------------------------- expandable row */
 
 export function RowDetail({
   open,
@@ -239,7 +224,6 @@ interface ExpandableRowProps {
   description?: ReactNode;
   icon?: IconName | undefined;
   control: ReactNode;
-  /** Rendered only while open, so a closed row costs nothing. */
   detail?: (() => ReactNode) | undefined;
   defaultOpen?: boolean | undefined;
   badge?: ReactNode;
@@ -306,12 +290,9 @@ export function DetailField({
   );
 }
 
-/** The sentence a tuned check actually enforces, beside its inputs. */
 export function DetailExplain({ children }: { children: ReactNode }): ReactElement {
   return <p className="row-detail-explain">{children}</p>;
 }
-
-/* ---------------------------------------------------------------- key/value */
 
 export function Pairs({ children }: { children: ReactNode }): ReactElement {
   return <div className="pairs">{children}</div>;

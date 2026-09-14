@@ -57,10 +57,16 @@ function build(
 ) {
   const recorder = new InMemoryRecorder();
   const rest = new FakeRest();
+  const logs: string[] = [];
   const executor = new DefaultActionExecutor({
     dedupe: new RedisDedupeStore(redis),
     rest,
     recorder,
+    logger: {
+      info: (message) => logs.push(message),
+      warn: (message) => logs.push(message),
+      error: (message) => logs.push(message),
+    },
     ...(scheduleReversal ? { scheduleReversal } : {}),
     resolveContext: async (): Promise<PrecheckInput> => ({
       guildId: GUILD,
@@ -74,7 +80,7 @@ function build(
     }),
   });
 
-  return { executor, recorder, rest };
+  return { executor, recorder, rest, logs };
 }
 
 function request(overrides: Partial<ActionRequest> = {}): ActionRequest {
@@ -153,7 +159,7 @@ describe('DefaultActionExecutor', () => {
   });
 
   test('an upstream error surfaces the Discord status and frees the key for retry', async () => {
-    const { executor, rest, recorder } = build();
+    const { executor, rest, recorder, logs } = build();
     rest.response = { status: 403, body: { message: 'Missing Permissions' } };
     const req = request();
 
@@ -161,7 +167,11 @@ describe('DefaultActionExecutor', () => {
 
     expect(failed.status).toBe('failed_api');
     expect(failed.failure?.code).toBe('discord_403');
-    expect(failed.failure?.humanReason).toContain('Missing Permissions');
+    expect(failed.failure?.humanReason).toMatch(/permission/);
+    expect(failed.failure?.humanReason).toMatch(/role/);
+    expect(failed.failure?.humanReason).not.toContain('Missing Permissions');
+    expect(logs.join('\n')).toContain('403');
+    expect(logs.join('\n')).toContain('Missing Permissions');
     expect(recorder.recorded).toHaveLength(0);
 
     rest.response = { status: 200, body: {} };
@@ -169,14 +179,17 @@ describe('DefaultActionExecutor', () => {
   });
 
   test('a transport failure is reported as failed_api, not thrown', async () => {
-    const { executor, rest } = build();
+    const { executor, rest, logs } = build();
     rest.failure = new Error('connection refused');
 
     const result = await executor.execute(request());
 
     expect(result.status).toBe('failed_api');
     expect(result.failure?.code).toBe('transport_failure');
-    expect(result.failure?.humanReason).toContain('connection refused');
+    expect(result.failure?.humanReason).toContain('reach Discord');
+    expect(result.failure?.humanReason).toContain('may not have gone through');
+    expect(result.failure?.humanReason).not.toContain('connection refused');
+    expect(logs.join('\n')).toContain('connection refused');
   });
 
   test('rejects an expiry it cannot honour rather than silently dropping it', async () => {
@@ -201,7 +214,7 @@ describe('DefaultActionExecutor', () => {
   });
 
   test('reports a reversal it could not schedule instead of hiding it', async () => {
-    const { executor, recorder } = build({}, async () => {
+    const { executor, recorder, logs } = build({}, async () => {
       throw new Error('database unavailable');
     });
 
@@ -217,8 +230,9 @@ describe('DefaultActionExecutor', () => {
     expect(result.caseId).toBeDefined();
     expect(recorder.recorded).toHaveLength(1);
     expect(result.failure?.code).toBe('reversal_not_scheduled');
-    expect(result.failure?.humanReason).toContain('will not lift on its own');
-    expect(result.failure?.humanReason).toContain('database unavailable');
+    expect(result.failure?.humanReason).toContain('ban went through');
+    expect(result.failure?.humanReason).toContain('until somebody reverses it');
+    expect(logs.join('\n')).toContain('database unavailable');
   });
 
   test('rejects a malformed payload before touching Discord', async () => {

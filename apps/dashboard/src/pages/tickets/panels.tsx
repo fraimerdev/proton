@@ -2,8 +2,9 @@ import { checkListLimit, LIMIT_LABELS } from '@proton/core';
 import { blankPanel, PANEL_ID_MAX, type TicketPanel, typesOf } from '@proton/module-tickets/config';
 import { useMutation } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChannelName, useChannelIndex } from '../../components/discord/channel-picker.tsx';
+import { useModuleNavigate } from '../../components/module/route.tsx';
 import { CollectionHeader, CollectionStaticRow } from '../../components/ui/collection.tsx';
 import { Badge, Button, Chip, Field, TextInput } from '../../components/ui/controls.tsx';
 import {
@@ -18,7 +19,6 @@ import type { GuildChannel } from '../../lib/discord.ts';
 import { saveFailure } from '../../lib/errors.ts';
 import { ceilingNote, listCeiling } from '../../lib/limits.ts';
 import { postModulePanel } from '../../server/modules.ts';
-import { useTicketNav } from './nav.ts';
 import { noTypesReason } from './panel-preview.ts';
 import {
   duplicateIds,
@@ -67,7 +67,7 @@ export function PanelsArea({
 }): ReactElement {
   const config = form.value;
   const tier = form.view.tier;
-  const go = useTicketNav(guildId, moduleId);
+  const go = useModuleNavigate(guildId, moduleId);
 
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<TicketPanel | null>(null);
@@ -224,6 +224,11 @@ function PanelRow({
   const post = useMutation({
     mutationFn: () => postModulePanel({ data: { guildId, moduleId, panelId: panel.id } }),
   });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the panel id is the trigger, not an input
+  useEffect(() => {
+    post.reset();
+  }, [panel.id]);
 
   const refusal = !enabled
     ? MODULE_OFF

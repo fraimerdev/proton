@@ -1,4 +1,5 @@
 import type { GuildStateStore, PermissionOverwriteSpec } from '@proton/core';
+import type { PlaceholderEnvironment } from '@proton/core/placeholders';
 import type { TempVoiceRepository } from './repository.ts';
 import type { CooldownGate } from './service.ts';
 import { TemporaryVoiceService } from './service.ts';
@@ -13,6 +14,8 @@ export interface TempVcDeps {
   presence?: PresenceStore;
 
   guildState?: GuildStateStore;
+
+  placeholders?: PlaceholderEnvironment;
 
   cooldown?: CooldownGate;
 
@@ -62,6 +65,8 @@ export function bindService(deps: TempVcDeps): ServiceBinding {
     {
       repository,
       botUserId: deps.botUserId,
+      guildState,
+      placeholders: deps.placeholders,
       ...(deps.now ? { now: deps.now } : {}),
 
       // Read from the cached guild state rather than fetched: permission sync runs on every
