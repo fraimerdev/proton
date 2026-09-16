@@ -72,6 +72,11 @@ TLS" (Bun handles TCP fine). Otherwise run them in CI, or in WSL with Bun instal
 - Module config is validated against its Zod schema on every read/write and carries `schema_version`.
 - Dashboard: all permission checks server-side per mutation; browser never talks to Discord;
   every mutation passes through the `auditTrail` middleware.
+- Event rehearsals go through a module's `simulations` adapter, which renders with the module's own
+  placeholder surface and render function. Never simulate by publishing a fake gateway event or by
+  calling a real handler — a rehearsal changes nothing but the one message it was asked to deliver.
+  The worker renders and sends; `apps/api` publishes `proton.simulation_requested` and waits on a
+  Redis mailbox for the answer, because only the worker has GuildState, the executor and the cards.
 - Interactions are deferred within 3 seconds if the handler touches DB or REST.
 - Gateway session state lives in Redis; worker deploys must never trigger a gateway identify.
 

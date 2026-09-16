@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { jsonValueSchema } from '../config/json.ts';
 import { ENTITLEMENT_TIERS } from '../rules/facts.ts';
+import { simulationDescriptorSchema } from '../simulation/types.ts';
 
 export const moduleSectionSchema = z.object({
   id: z.string(),
@@ -60,6 +61,11 @@ export const moduleConfigViewSchema = z.object({
   // returned. On the config view rather than the summary because it is a function of config: the
   // module index is fetched once for the sidebar and would go stale the moment a panel was added.
   postables: z.array(postableSchema).default([]),
+
+  // The events an admin can rehearse here. On the config view for the same reason postables is:
+  // which simulations exist is fixed per module, but the dialog's defaults are read beside the
+  // settings it tests, and one fetch serves both.
+  simulations: z.array(simulationDescriptorSchema).default([]),
 });
 
 export const moduleUpdateResultSchema = z.object({

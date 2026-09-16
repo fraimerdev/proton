@@ -5,6 +5,8 @@ export const queryKeys = {
   guild: (guildId: string) => ['guild', guildId] as const,
   guildOverview: (guildId: string) => ['guild', guildId, 'overview'] as const,
   modules: (guildId: string) => ['guild', guildId, 'modules'] as const,
+  memberSearch: (guildId: string, query: string) =>
+    ['guild', guildId, 'member-search', query] as const,
   moduleConfig: (guildId: string, moduleId: string) =>
     ['guild', guildId, 'module', moduleId] as const,
 

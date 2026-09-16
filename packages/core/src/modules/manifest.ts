@@ -9,6 +9,7 @@ import type { ModuleTemplates } from '../placeholders/config-templates.ts';
 import type { Provider } from '../providers/types.ts';
 import type { EntitlementTier } from '../rules/facts.ts';
 import type { RuleDefinition, ScheduledJob } from '../rules/types.ts';
+import type { SimulationAdapter } from '../simulation/types.ts';
 import type { CommandOptions } from './options.ts';
 
 export type ModuleCategory = 'moderation' | 'security' | 'engagement' | 'utility' | 'logging';
@@ -165,6 +166,13 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   postables?(config: z.infer<C>): Postable[];
 
   templates?: ModuleTemplates;
+
+  /**
+   * The events an admin can rehearse from the dashboard, one adapter per message this module
+   * authors. An adapter renders through the module's own surface and render function — the same
+   * two a real event uses — and performs no part of the event it stands in for.
+   */
+  simulations?: SimulationAdapter<z.infer<C>>[];
 
   jobs?: ScheduledJob[];
   dashboard?: { icon: string; sections: SectionDescriptor[] };

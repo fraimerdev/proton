@@ -49,7 +49,7 @@ export interface GreetingPlaceholderFacts {
   member: MemberFacts | 'unavailable';
   server: ServerFacts | null;
   channel?: ChannelFacts | undefined;
-  destinationChannel: ChannelFacts;
+  destinationChannel: ChannelFacts | null;
   bot: BotFacts | null;
   eventId: string;
   occurredAt: number;

@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
     "./placeholders": "./src/placeholders.ts",
+    "./simulation": "./src/simulation.ts",
     "./table": "./src/table.ts"
   },
   "scripts": {

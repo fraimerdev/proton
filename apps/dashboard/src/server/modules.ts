@@ -20,6 +20,7 @@ import {
   fetchGuildRoles,
   fetchProtonAccount,
   fetchUserGuilds,
+  searchGuildMembers,
 } from '../lib/discord.ts';
 import { getDiscordAccessToken } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
@@ -202,6 +203,16 @@ export const getGuildMembers = createServerFn({ method: 'GET' })
 
     return [...found, ...answered];
   });
+
+export const searchMembers = createServerFn({ method: 'GET' })
+  .middleware([requireGuildAccess])
+  .validator(
+    z.object({
+      guildId: z.string().min(1),
+      query: z.string().trim().min(1).max(64),
+    }),
+  )
+  .handler(({ data }) => searchGuildMembers(env.REST_PROXY_URL, data.guildId, data.query));
 
 export const getAntinukeMaintenance = createServerFn({ method: 'GET' })
   .middleware([requireGuildAccess])

@@ -15,6 +15,7 @@ import {
   createModalListener,
   createServiceListener,
 } from './listeners.ts';
+import { verificationSimulations } from './simulation.ts';
 
 export {
   answerMatches,
@@ -23,6 +24,10 @@ export {
   newChallenge,
 } from './challenge.ts';
 export { quarantineCommand, verificationCommands, verifyCommand } from './commands.ts';
+export {
+  VERIFICATION_PANEL_SIMULATION,
+  verificationSimulations,
+} from './simulation.ts';
 export {
   BUTTON_EMOJI_MAX,
   BUTTON_LABEL_MAX,
@@ -197,6 +202,8 @@ export function createVerificationModule(
     postables: (config) => [
       { id: 'panel', name: 'Verification panel', channelId: config.panelChannelId },
     ],
+
+    simulations: verificationSimulations,
 
     dashboard: {
       icon: 'shield-check',

@@ -563,6 +563,33 @@ form answers only when a key needs them. Idempotency keys are unchanged by any o
    Drizzle, discord.js runtime or module barrel.
 8. Regenerate this page.
 
+### Adding a simulation
+
+A simulation is how an administrator rehearses the event a surface renders for, from the dashboard.
+It is not a second render path: the adapter calls the module's own surface and its own render
+function, so a rehearsal and the real event cannot drift apart.
+
+1. Write `src/simulation.ts` beside `src/placeholders.ts`, under the same import rules, and export
+   it as `"./simulation"` in the module's package.json.
+2. Export one `SimulationAdapter` per authored message. Its `descriptor` names the `surfaceId` it
+   renders through (the registry refuses one the module's `templates` do not declare), the
+   `configPath` it reads, its `output` (`message` or `text`), and its `delivery` (`channel`, `dm`
+   or `none`). `inputs` are the event facts the dialog offers — mark one `fixed` when the page
+   supplies it, such as which panel or saved template is being edited.
+3. `build(config, scene)` is pure. `scene` carries the real server, the example member, the chosen
+   channel, Proton's own profile, the guild's tier and the validated inputs; return the message the
+   module would really send.
+4. Set `simulations` on the manifest. Boot fails on a duplicate id, a foreign module id, an unknown
+   surface, a repeated input, or a channel delivery that produces no message.
+5. In the dashboard, render `<TestMessage …/>` beside the editor — `EditorPreviewLayout`'s
+   `previewActions` slot, or a `Section`'s `actions`. It reads `form.view.simulations`, posts
+   `form.value` as the draft, and holds its own dialog state.
+
+`apps/api` validates the draft exactly as a save would, rate-limits, records the send in the audit
+trail and publishes `proton.simulation_requested`; `apps/worker` renders, hardens the message with
+`asTestDelivery` (mentions off, interactive components disabled behind an inert custom id, a
+subtext line naming it a test) and sends it through the executor with `record: false`.
+
 ### Regenerating the reference
 
 ```bash

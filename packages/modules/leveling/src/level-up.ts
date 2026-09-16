@@ -9,6 +9,7 @@ import {
   type ChannelFacts,
   collectMessageSites,
   type MemberFacts,
+  type MessageRender,
   type PathDiagnostic,
   PROTON_SUPPORT_URL,
   renderMessageTemplate,
@@ -40,17 +41,25 @@ export type LevelUpRender =
 
 export type LevelingRenderDeps = Pick<LevelingDeps, 'xp' | 'guildState' | 'placeholders' | 'now'>;
 
+// Split from renderLevelUpMessage so a rehearsal can stop one step short of the Discord body and
+// keep the message itself, which is what the dashboard previews and what the test send disarms.
+export function renderLevelUpTemplate(
+  message: LevelUpMessage,
+  facts: LevelUpPlaceholderFacts,
+  now: number,
+): MessageRender<LevelUpMessage> {
+  return renderMessageTemplate(message, LEVEL_UP_SURFACE, LEVEL_UP_SURFACE.build(facts, { now }), {
+    now,
+    basePath: LEVEL_UP_BASE_PATH,
+  });
+}
+
 export function renderLevelUpMessage(
   message: LevelUpMessage,
   facts: LevelUpPlaceholderFacts,
   now: number,
 ): LevelUpRender {
-  const rendered = renderMessageTemplate(
-    message,
-    LEVEL_UP_SURFACE,
-    LEVEL_UP_SURFACE.build(facts, { now }),
-    { now, basePath: LEVEL_UP_BASE_PATH },
-  );
+  const rendered = renderLevelUpTemplate(message, facts, now);
 
   if (!rendered.ok) {
     return { ok: false, humanReason: rendered.humanReason, diagnostics: rendered.diagnostics };

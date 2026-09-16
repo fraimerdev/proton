@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./simulation": "./src/simulation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

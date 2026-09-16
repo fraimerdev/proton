@@ -34,6 +34,7 @@ import { CHANNEL_TYPE, ChannelPicker } from '../../components/discord/channel-pi
 import { DurationInput } from '../../components/discord/inputs.tsx';
 import { RolePicker } from '../../components/discord/role-picker.tsx';
 import { ModuleLink } from '../../components/module/route.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
 import {
   TemplateDiagnostics,
@@ -195,7 +196,21 @@ export function HubDetail({
         </Rows>
       </Section>
 
-      <Section label="New channels">
+      <Section
+        label="New channels"
+        actions={
+          <TestMessage
+            guildId={guildId}
+            moduleId="tempvc"
+            simulations={form.view.simulations}
+            simulationId="tempvc.channel_name"
+            draft={config as unknown as Record<string, unknown>}
+            dirty={form.dirty}
+            fixed={{ hubIndex: index }}
+            label="Test name"
+          />
+        }
+      >
         <Rows>
           <SettingRow
             title="Name template"

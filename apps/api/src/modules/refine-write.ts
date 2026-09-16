@@ -5,6 +5,7 @@ export function assertWriteRefinements(
   manifest: Pick<ModuleManifest, 'name' | 'refineWrite'>,
   next: Record<string, unknown>,
   before: Record<string, unknown>,
+  refusal = 'were not saved',
 ): void {
   if (!manifest.refineWrite) return;
 
@@ -13,7 +14,7 @@ export function assertWriteRefinements(
 
   throw new ModuleConfigError(
     'invalid_config',
-    `Those ${manifest.name} settings were not saved: ${issues
+    `Those ${manifest.name} settings ${refusal}: ${issues
       .map((issue) => `${issue.path} ${issue.message}`)
       .join('; ')}`,
   );

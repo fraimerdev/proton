@@ -12,6 +12,7 @@ import { CHANNEL_TYPE, ChannelPicker } from '../../components/discord/channel-pi
 import { configErrors, EmbedEditor } from '../../components/discord/embed-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { LimitCounter } from '../../components/ui/collection.tsx';
 import { Button, cx, Switch, TextArea, TextInput } from '../../components/ui/controls.tsx';
 import {
@@ -165,7 +166,20 @@ export function PanelArea({ guildId, moduleId, form }: AreaProps): ReactElement 
   return (
     <div className="editor">
       <div className="editor-main">
-        <Section label="Location">
+        <Section
+          label="Location"
+          actions={
+            <TestMessage
+              guildId={guildId}
+              moduleId="verification"
+              simulations={form.view.simulations}
+              simulationId="verification.panel"
+              draft={config as unknown as Record<string, unknown>}
+              dirty={form.dirty}
+              configuredChannelId={config.panelChannelId ?? null}
+            />
+          }
+        >
           <Rows>
             <SettingRow
               title={PANEL_CHANNEL_LABEL}

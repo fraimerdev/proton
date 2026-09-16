@@ -12,6 +12,7 @@ import {
 import type { TempVcDeps } from './deps.ts';
 import { createTempVcInteractionListener } from './interactions.ts';
 import { tempvcTemplates } from './placeholders.ts';
+import { tempvcSimulations } from './simulation.ts';
 import { createTempVcListener } from './voice.ts';
 
 export {
@@ -160,6 +161,7 @@ export {
   type ServiceDeps,
   TemporaryVoiceService,
 } from './service.ts';
+export { TEMPVC_NAME_SIMULATION, tempvcSimulations } from './simulation.ts';
 export type { PresenceStore } from './store.ts';
 export {
   ACCESS_KINDS,
@@ -227,6 +229,7 @@ export function createTempVcModule(
     configLimits: [{ key: 'tempVcHubs', path: 'hubs' }],
 
     templates: tempvcTemplates,
+    simulations: tempvcSimulations,
 
     commands: tempVcCommands(deps),
     listeners: [createTempVcListener(deps), createTempVcInteractionListener(deps)],

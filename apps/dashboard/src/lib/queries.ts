@@ -12,6 +12,7 @@ import {
   getViewer,
   listGuilds,
   listModules,
+  searchMembers,
 } from '../server/modules.ts';
 import {
   endXpEvent,
@@ -132,6 +133,15 @@ export function nameStyleStatusQuery(guildId: string) {
 export const MEMBER_LOOKUP_MAX = 100;
 
 // Sorted ids under queryKeys.guild: pages share entries, and leaving the server clears them.
+export function memberSearchQuery(guildId: string, query: string) {
+  return queryOptions({
+    queryKey: queryKeys.memberSearch(guildId, query),
+    queryFn: () => searchMembers({ data: { guildId, query } }),
+    enabled: query.trim().length > 0,
+    staleTime: STALE.browse,
+  });
+}
+
 export function membersQuery(guildId: string, userIds: readonly string[]) {
   const ids = [...new Set(userIds)].sort().slice(0, MEMBER_LOOKUP_MAX);
 

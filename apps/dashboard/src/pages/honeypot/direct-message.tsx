@@ -3,6 +3,7 @@ import { HONEYPOT_DM_SURFACE } from '@proton/module-honeypot/placeholders';
 import type { ReactElement } from 'react';
 import { EditorPreviewLayout } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { Switch, TextInput } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
@@ -49,6 +50,17 @@ export function DirectMessageArea({
   return (
     <EditorPreviewLayout
       previewTitle="What the member receives"
+      previewActions={
+        <TestMessage
+          guildId={guildId}
+          moduleId="honeypot"
+          simulations={form.view.simulations}
+          simulationId="honeypot.dm"
+          draft={config as unknown as Record<string, unknown>}
+          dirty={form.dirty}
+          configuredChannelId={null}
+        />
+      }
       editor={
         <>
           {config.sendDirectMessage ? null : <StatusBanner tone="neutral">{NOT_SENT}</StatusBanner>}

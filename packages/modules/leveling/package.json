@@ -9,6 +9,7 @@
     "./config": "./src/config.ts",
     "./curve": "./src/curve.ts",
     "./placeholders": "./src/placeholders.ts",
+    "./simulation": "./src/simulation.ts",
     "./activity-store": "./src/activity-store.ts",
     "./activity-table": "./src/activity-table.ts",
     "./xp-event-store": "./src/xp-event-store.ts",

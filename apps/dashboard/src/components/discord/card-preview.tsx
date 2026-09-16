@@ -15,18 +15,26 @@ export interface CardPreviewOptions {
   showPercent?: boolean | undefined;
   showTotalXp?: boolean | undefined;
   showMemberCount?: boolean | undefined;
+
+  // Set by a simulation, which knows the real member and the real counts; left out by the settings
+  // preview, where the route's own sample is what an admin wants to see.
+  displayName?: string | undefined;
+  guildName?: string | undefined;
+  avatar?: string | undefined;
+  memberCount?: number | undefined;
+  level?: number | undefined;
+  rank?: number | undefined;
+  totalXp?: number | undefined;
+  xpIntoLevel?: number | undefined;
+  xpForNextLevel?: number | undefined;
 }
 
 function toQuery(options: CardPreviewOptions): string {
   const params = new URLSearchParams({ kind: options.kind });
 
-  if (options.preset) params.set('preset', options.preset);
-  if (options.accent !== undefined) params.set('accent', String(options.accent));
-  if (options.background) params.set('background', options.background);
-
-  for (const key of ['showRank', 'showPercent', 'showTotalXp', 'showMemberCount'] as const) {
-    const value = options[key];
-    if (value !== undefined) params.set(key, String(value));
+  for (const [key, value] of Object.entries(options)) {
+    if (key === 'kind' || value === undefined) continue;
+    params.set(key, String(value));
   }
 
   return params.toString();

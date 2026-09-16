@@ -32,6 +32,7 @@ import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RolePicker } from '../../components/discord/role-picker.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
 import { useModuleNavigate } from '../../components/module/route.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import {
   CollectionButtonRow,
@@ -769,6 +770,32 @@ function TemplateEditor({
     <>
       <EditorPreviewLayout
         editor={editor}
+        previewActions={
+          <span className="inline inline-8">
+            <TestMessage
+              guildId={guildId}
+              moduleId="messages"
+              simulations={form.view.simulations}
+              simulationId="messages.post"
+              draft={form.value as unknown as Record<string, unknown>}
+              dirty={form.dirty}
+              fixed={{ templateIndex: index }}
+              label="Test post"
+            />
+            {template.schedule === undefined ? null : (
+              <TestMessage
+                guildId={guildId}
+                moduleId="messages"
+                simulations={form.view.simulations}
+                simulationId="messages.scheduled"
+                draft={form.value as unknown as Record<string, unknown>}
+                dirty={form.dirty}
+                fixed={{ templateIndex: index }}
+                label="Test schedule"
+              />
+            )}
+          </span>
+        }
         preview={
           <>
             <DiscordPreview

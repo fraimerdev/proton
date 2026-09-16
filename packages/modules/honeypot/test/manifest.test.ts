@@ -123,6 +123,7 @@ describe('the manifest', () => {
         'delete_message',
         'send',
         'edit_message',
+        'create_dm',
         'edit_channel',
         'interaction_reply',
       ]),

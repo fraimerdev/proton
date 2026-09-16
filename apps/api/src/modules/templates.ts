@@ -6,6 +6,7 @@ export function assertTemplatesValid(
   manifest: Pick<ModuleManifest, 'name' | 'templates'>,
   next: unknown,
   before: unknown,
+  refusal = 'were not saved',
 ): void {
   if (!manifest.templates) return;
 
@@ -14,6 +15,6 @@ export function assertTemplatesValid(
 
   throw new ModuleConfigError(
     'invalid_template',
-    `Those ${manifest.name} settings were not saved: ${formatTemplateIssues(report)}`,
+    `Those ${manifest.name} settings ${refusal}: ${formatTemplateIssues(report)}`,
   );
 }

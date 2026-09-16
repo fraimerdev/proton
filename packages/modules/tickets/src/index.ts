@@ -21,6 +21,7 @@ import { bindStore, clockOf, PROTON_ACTOR, type TicketsDeps } from './deps.ts';
 import { createTicketInteractionListener } from './interactions.ts';
 import { archiveTicket, closeTicket, deleteTicket } from './lifecycle.ts';
 import { ticketsTemplates } from './placeholders.ts';
+import { ticketsSimulations } from './simulation.ts';
 import { createTicketPanelListener } from './post.ts';
 import { createTicketChannelListener, createTicketPatrolListener, patrol } from './reconcile.ts';
 import {
@@ -473,6 +474,15 @@ function sweepHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig> {
   };
 }
 
+export {
+  TICKETS_BLACKLIST_SIMULATION,
+  TICKETS_CLOSE_SIMULATION,
+  TICKETS_NAME_SIMULATION,
+  TICKETS_RESPONSE_SIMULATION,
+  TICKETS_WELCOME_SIMULATION,
+  ticketsSimulations,
+} from './simulation.ts';
+
 export function createTicketsModule(
   deps: TicketsDeps = {},
 ): ModuleManifest<typeof ticketsConfigSchema> {
@@ -526,6 +536,7 @@ export function createTicketsModule(
     ],
 
     templates: ticketsTemplates,
+    simulations: ticketsSimulations,
 
     commands: ticketsCommands(deps),
     listeners: [

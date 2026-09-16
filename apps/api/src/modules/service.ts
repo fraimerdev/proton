@@ -1,3 +1,4 @@
+import type { ModuleManifest, SimulationDescriptor } from '@proton/core';
 import {
   type ConfigLimit,
   checkListLimit,
@@ -31,6 +32,8 @@ export interface ModuleConfigView {
 
   // What this module puts in a channel and can put there again, for the dashboard's post button.
   postables: Postable[];
+
+  simulations: SimulationDescriptor[];
 }
 
 export interface RequestPanelInput {
@@ -114,6 +117,51 @@ function postablesOf(
   }
 }
 
+/**
+ * Every check a save makes, short of the write itself. Shared with the simulation service, which
+ * has to judge an unsaved draft by exactly the rules the save would apply — a test that rendered a
+ * draft the save would refuse is a test of something that can never happen.
+ */
+export function checkedConfig(
+  manifest: Pick<
+    ModuleManifest,
+    'name' | 'configSchema' | 'configLimits' | 'refineWrite' | 'templates' | 'liftStoredConfig'
+  >,
+  raw: unknown,
+  before: { config: Record<string, unknown>; tier: EntitlementTier },
+  refusal: string,
+): Record<string, unknown> {
+  const parsed = manifest.configSchema.safeParse(lift(manifest, raw, before.config));
+  if (!parsed.success) {
+    throw new ModuleConfigError(
+      'invalid_config',
+      `Those ${manifest.name} settings ${refusal}: ${parsed.error.issues
+        .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
+        .join('; ')}`,
+    );
+  }
+
+  const config = parsed.data as Record<string, unknown>;
+
+  assertWriteRefinements(manifest, config, before.config, refusal);
+
+  const exceeded = overLimit(manifest.configLimits ?? [], config, before.tier);
+  if (exceeded) {
+    throw new ModuleConfigError(
+      'over_limit',
+      `Those ${manifest.name} settings ${refusal}: ${exceeded}`,
+    );
+  }
+
+  assertTemplatesValid(manifest, config, before.config, refusal);
+
+  return config;
+}
+
+function simulationsOf(manifest: Pick<ModuleManifest, 'simulations'>): SimulationDescriptor[] {
+  return (manifest.simulations ?? []).map(({ descriptor }) => descriptor);
+}
+
 export class ModuleConfigError extends Error {
   readonly code: string;
   constructor(code: string, message: string) {
@@ -194,6 +242,7 @@ export class ModuleConfigService {
         migrated: false,
         tier,
         postables: postablesOf(manifest, manifest.defaultConfig),
+        simulations: simulationsOf(manifest),
       };
     }
 
@@ -217,6 +266,7 @@ export class ModuleConfigService {
       migrated,
       tier,
       postables: postablesOf(manifest, parsed.data),
+      simulations: simulationsOf(manifest),
     };
   }
 
@@ -346,29 +396,7 @@ export class ModuleConfigService {
         ? (input.config ?? before.config)
         : { ...(input.config ?? before.config), enabled: input.enabled };
 
-    const parsed = manifest.configSchema.safeParse(lift(manifest, nextConfigRaw, before.config));
-    if (!parsed.success) {
-      throw new ModuleConfigError(
-        'invalid_config',
-        `Those ${manifest.name} settings were not saved: ${parsed.error.issues
-          .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
-          .join('; ')}`,
-      );
-    }
-
-    const nextConfig = parsed.data as Record<string, unknown>;
-
-    assertWriteRefinements(manifest, nextConfig, before.config);
-
-    const exceeded = overLimit(manifest.configLimits ?? [], nextConfig, before.tier);
-    if (exceeded) {
-      throw new ModuleConfigError(
-        'over_limit',
-        `Those ${manifest.name} settings were not saved: ${exceeded}`,
-      );
-    }
-
-    assertTemplatesValid(manifest, nextConfig, before.config);
+    const nextConfig = checkedConfig(manifest, nextConfigRaw, before, 'were not saved');
 
     const nextEnabled = input.enabled ?? before.enabled;
 
@@ -380,6 +408,7 @@ export class ModuleConfigService {
       migrated: false,
       tier: before.tier,
       postables: postablesOf(manifest, nextConfig),
+      simulations: simulationsOf(manifest),
     };
 
     // Hoisted out of the transaction so the published event can carry the same id as the durable

@@ -10,6 +10,7 @@
     "./layout": "./src/layout.ts",
     "./notice": "./src/notice.ts",
     "./placeholders": "./src/placeholders.ts",
+    "./simulation": "./src/simulation.ts",
     "./render": "./src/render.ts"
   },
   "scripts": {

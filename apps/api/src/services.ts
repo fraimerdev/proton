@@ -24,10 +24,21 @@ export {
   type LiftInput,
 } from './moderation/blocked-members.ts';
 export {
+  checkedConfig,
   ModuleConfigError,
   ModuleConfigService,
   type ModuleConfigView,
   type UpdateModuleConfigInput,
 } from './modules/service.ts';
+export {
+  type RunSimulationInput,
+  SIMULATION_PREVIEW_LIMIT,
+  SIMULATION_PREVIEW_WINDOW_MS,
+  SIMULATION_SEND_LIMIT,
+  SIMULATION_SEND_WINDOW_MS,
+  SimulationError,
+  SimulationService,
+  type SimulationServiceOptions,
+} from './simulations/service.ts';
 export { TagSearchService } from './tags/service.ts';
 export { TicketSearchService } from './tickets/service.ts';

@@ -156,16 +156,19 @@ export function noticePlaceholderKeys(
   return layoutPlaceholderKeys(HONEYPOT_NOTICE_SURFACE, noticeLayout(config, tier));
 }
 
-export function buildNoticeComponents(
+export type NoticeMessage =
+  | { ok: true; message: ProtonMessage }
+  | { ok: false; humanReason: string };
+
+// Split from buildNoticeComponents so a rehearsal can keep the message rather than the Discord
+// components it turns into: the dashboard previews the message, and a test send disarms it first.
+export function buildNoticeMessage(
   config: HoneypotConfig,
   channelId: string,
   caught: number,
   tier: EntitlementTier | undefined,
   extra: NoticeExtra = {},
-): NoticeResult {
-  const customId = encodeCustomId(MODULE_ID, STATS_ACTION, channelId);
-  if (!customId.ok) return { ok: false, humanReason: customId.humanReason };
-
+): NoticeMessage {
   const now = extra.now ?? Date.now();
   const facts = noticePlaceholderFacts(config, channelId, caught, extra);
 
@@ -194,12 +197,23 @@ export function buildNoticeComponents(
       })
     : rendered.message.v2;
 
-  const message = toDiscordMessage(
-    { ...rendered.message, v2 },
-    {
-      customIdFor: () => customId.customId,
-    },
-  );
+  return { ok: true, message: { ...rendered.message, v2 } };
+}
+
+export function buildNoticeComponents(
+  config: HoneypotConfig,
+  channelId: string,
+  caught: number,
+  tier: EntitlementTier | undefined,
+  extra: NoticeExtra = {},
+): NoticeResult {
+  const customId = encodeCustomId(MODULE_ID, STATS_ACTION, channelId);
+  if (!customId.ok) return { ok: false, humanReason: customId.humanReason };
+
+  const built = buildNoticeMessage(config, channelId, caught, tier, extra);
+  if (!built.ok) return built;
+
+  const message = toDiscordMessage(built.message, { customIdFor: () => customId.customId });
 
   return {
     ok: true,

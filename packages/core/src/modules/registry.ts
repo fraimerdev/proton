@@ -6,6 +6,7 @@ import { combinePermissions, missing, Permissions, permissionLabels } from '../p
 import type { AvailableProvider } from '../providers/registry.ts';
 import { ProviderRegistry } from '../providers/registry.ts';
 import type { ModuleAvailability } from '../providers/types.ts';
+import type { SimulationAdapter } from '../simulation/types.ts';
 import type { ModuleManifest } from './manifest.ts';
 
 export type DisabledCode =
@@ -145,6 +146,56 @@ export interface ModuleRegistryOptions {
   providers?: ProviderRegistry;
 }
 
+function assertSimulationsValid(manifest: ModuleManifest): void {
+  const simulations = manifest.simulations ?? [];
+  if (simulations.length === 0) return;
+
+  const seen = new Set<string>();
+  const surfaces = manifest.templates?.surfaces ?? {};
+
+  for (const { descriptor } of simulations) {
+    const where = `simulation '${descriptor.id}'`;
+
+    if (seen.has(descriptor.id)) {
+      throw new ModuleRegistrationError(manifest.id, `${where} is declared twice`);
+    }
+    seen.add(descriptor.id);
+
+    if (descriptor.moduleId !== manifest.id) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `${where} says it belongs to '${descriptor.moduleId}'`,
+      );
+    }
+
+    // The point of the whole feature is that a rehearsal renders through the surface a real event
+    // renders through. A simulation naming a surface this module does not register would be
+    // rehearsing something else.
+    if (descriptor.surfaceId !== undefined && !Object.hasOwn(surfaces, descriptor.surfaceId)) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `${where} renders '${descriptor.surfaceId}', which this module's templates do not declare`,
+      );
+    }
+
+    if (descriptor.delivery === 'channel' && descriptor.output !== 'message') {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `${where} delivers to a channel but does not produce a message`,
+      );
+    }
+
+    const keys = descriptor.inputs.map(({ key }) => key);
+    const repeated = keys.filter((key, index) => keys.indexOf(key) !== index);
+    if (repeated.length > 0) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `${where} declares the input ${[...new Set(repeated)].join(', ')} more than once`,
+      );
+    }
+  }
+}
+
 export class ModuleRegistry {
   readonly #modules = new Map<string, ModuleManifest>();
   readonly #descriptors = new Map<string, FieldDescriptor[]>();
@@ -235,6 +286,8 @@ export class ModuleRegistry {
       }
     }
 
+    assertSimulationsValid(manifest);
+
     // Before the module is stored: a duplicate or mis-namespaced provider must fail the same boot
     // that a bad defaultConfig fails, not the first time a host opens the requirement picker.
     this.#providers.register(manifest);
@@ -294,6 +347,14 @@ export class ModuleRegistry {
 
   mayExecute(moduleId: string, kind: ActionKind): boolean {
     return (this.#modules.get(moduleId)?.actionKinds ?? []).includes(kind);
+  }
+
+  simulations(moduleId: string): SimulationAdapter[] {
+    return (this.#modules.get(moduleId)?.simulations ?? []) as SimulationAdapter[];
+  }
+
+  simulation(moduleId: string, simulationId: string): SimulationAdapter | undefined {
+    return this.simulations(moduleId).find(({ descriptor }) => descriptor.id === simulationId);
   }
 
   requiredIntents(): number {

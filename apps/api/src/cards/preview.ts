@@ -9,6 +9,11 @@ import {
 } from '@proton/cards';
 import { z } from 'zod';
 
+const counted = z
+  .string()
+  .regex(/^\d{1,12}$/)
+  .transform(Number);
+
 const booleanish = z
   .enum(['true', 'false'])
   .transform((value) => value === 'true')
@@ -44,6 +49,16 @@ export const cardPreviewQuerySchema = z.object({
   showPercent: booleanish,
   showTotalXp: booleanish,
   showMemberCount: booleanish,
+
+  // Supplied by a simulation, which knows the server's real numbers; absent everywhere else, where
+  // the sample's are what a settings preview wants. Both paths render through this one descriptor,
+  // so a test message and its preview are the same bytes.
+  memberCount: counted.optional(),
+  level: counted.optional(),
+  rank: counted.optional(),
+  totalXp: counted.optional(),
+  xpIntoLevel: counted.optional(),
+  xpForNextLevel: counted.optional(),
 });
 
 export type CardPreviewQuery = z.infer<typeof cardPreviewQuerySchema>;
@@ -61,11 +76,11 @@ export function previewDescriptor(query: CardPreviewQuery): CardDescriptorInput 
     return {
       kind: 'rank',
       ...shared,
-      level: SAMPLE.level,
-      rank: SAMPLE.rank,
-      totalXp: SAMPLE.totalXp,
-      xpIntoLevel: SAMPLE.xpIntoLevel,
-      xpForNextLevel: SAMPLE.xpForNextLevel,
+      level: query.level ?? SAMPLE.level,
+      rank: query.rank ?? SAMPLE.rank,
+      totalXp: query.totalXp ?? SAMPLE.totalXp,
+      xpIntoLevel: query.xpIntoLevel ?? SAMPLE.xpIntoLevel,
+      xpForNextLevel: query.xpForNextLevel ?? SAMPLE.xpForNextLevel,
       ...(query.showRank === undefined ? {} : { showRank: query.showRank }),
       ...(query.showPercent === undefined ? {} : { showPercent: query.showPercent }),
       ...(query.showTotalXp === undefined ? {} : { showTotalXp: query.showTotalXp }),
@@ -76,7 +91,7 @@ export function previewDescriptor(query: CardPreviewQuery): CardDescriptorInput 
     kind: query.kind,
     ...shared,
     guildName: query.guildName ?? SAMPLE.guildName,
-    memberCount: SAMPLE.memberCount,
+    memberCount: query.memberCount ?? SAMPLE.memberCount,
     ...(query.showMemberCount === undefined ? {} : { showMemberCount: query.showMemberCount }),
   };
 }

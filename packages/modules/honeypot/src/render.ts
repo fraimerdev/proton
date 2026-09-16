@@ -1,6 +1,7 @@
 import {
   type EntitlementTier,
   MESSAGE_FLAG_IS_COMPONENTS_V2,
+  type ProtonMessage,
   toDiscordMessage,
   type V2Component,
 } from '@proton/core';
@@ -85,12 +86,19 @@ export function dmPlaceholderKeys(
  * rather than stored in the layout: their addresses differ per recipient, and a stored non-link
  * button would have to carry a ComponentAction Proton has no handler for.
  */
-export function renderDirectMessage(
+export type DirectMessage =
+  | { ok: true; message: ProtonMessage }
+  | { ok: false; humanReason: string };
+
+// Split from renderDirectMessage so a rehearsal can keep the message rather than the Discord
+// components it turns into. The appended advice and link buttons are part of the real message, so
+// they are added here rather than after.
+export function buildDirectMessage(
   config: HoneypotConfig,
   tier: EntitlementTier | undefined,
   facts: DmFacts,
   now: number = Date.now(),
-): RenderedMessage {
+): DirectMessage {
   const placeholders = dmPlaceholderFacts(config, facts);
 
   const rendered = renderMessageTemplate(
@@ -119,10 +127,19 @@ export function renderDirectMessage(
   const row = linkRow(buttons);
   if (row) extra.push(row);
 
-  const message = toDiscordMessage(
-    { ...rendered.message, v2: appendTo(rendered.message.v2, extra) },
-    { customIdFor: (key) => key },
-  );
+  return { ok: true, message: { ...rendered.message, v2: appendTo(rendered.message.v2, extra) } };
+}
+
+export function renderDirectMessage(
+  config: HoneypotConfig,
+  tier: EntitlementTier | undefined,
+  facts: DmFacts,
+  now: number = Date.now(),
+): RenderedMessage {
+  const built = buildDirectMessage(config, tier, facts, now);
+  if (!built.ok) return built;
+
+  const message = toDiscordMessage(built.message, { customIdFor: (key) => key });
 
   return {
     ok: true,

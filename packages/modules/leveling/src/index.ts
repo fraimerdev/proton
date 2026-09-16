@@ -10,8 +10,12 @@ import {
 import type { LevelingDeps } from './deps.ts';
 import { createMessageXpListener } from './message-xp.ts';
 import { levelingTemplates } from './placeholders.ts';
+
+export { LEVELING_LEVEL_UP_SIMULATION, levelingSimulations } from './simulation.ts';
+
 import { createLevelingProviders } from './providers.ts';
 import { createPruneHandler, createPruneListener, PRUNE_JOB_ID } from './prune.ts';
+import { levelingSimulations } from './simulation.ts';
 import { createVoiceXpListener } from './voice-xp.ts';
 
 export {
@@ -117,6 +121,7 @@ export {
   type LevelUpRender,
   type LevelUpSource,
   renderLevelUpMessage,
+  renderLevelUpTemplate,
 } from './level-up.ts';
 export {
   type AuthorFacts,
@@ -246,6 +251,7 @@ export function createLevelingModule(
     emits: ['xp.level_gained'],
 
     templates: levelingTemplates,
+    simulations: levelingSimulations,
 
     dashboard: {
       icon: 'trending-up',
