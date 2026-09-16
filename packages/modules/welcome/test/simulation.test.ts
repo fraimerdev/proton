@@ -63,9 +63,9 @@ describe('the manifest', () => {
   });
 
   test('sends each greeting where its own setting says', () => {
-    expect(WELCOME_JOIN_SIMULATION.destination?.(config)).toBe('100000000000000040');
-    expect(WELCOME_LEAVE_SIMULATION.destination?.(config)).toBe('100000000000000041');
-    expect(WELCOME_BOOST_SIMULATION.destination?.(config)).toBeNull();
+    expect(WELCOME_JOIN_SIMULATION.destination?.(config, {})).toBe('100000000000000040');
+    expect(WELCOME_LEAVE_SIMULATION.destination?.(config, {})).toBe('100000000000000041');
+    expect(WELCOME_BOOST_SIMULATION.destination?.(config, {})).toBeNull();
   });
 });
 
