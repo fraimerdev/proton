@@ -62,7 +62,7 @@
   max-width: 340px;
   padding: 0;
   overflow: hidden;
-  background: var(--dc-bg-tertiary);
+  background: var(--dc-surface);
 }
 
 .branding-popout-banner {
@@ -84,7 +84,7 @@
   width: 92px;
   height: 92px;
   margin-top: -46px;
-  border: 6px solid var(--dc-bg-tertiary);
+  border: 6px solid var(--dc-surface);
   border-radius: var(--radius-pill);
   background: var(--dc-bg-secondary);
   object-fit: cover;
@@ -92,7 +92,7 @@
 
 .branding-popout-name {
   margin: 8px 0 0;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
   font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
@@ -114,7 +114,7 @@
 
 .branding-popout-heading {
   margin: 0 0 6px;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -132,7 +132,7 @@
 
 .dc.branding-members {
   padding: 8px;
-  background: var(--dc-bg-secondary);
+  background: var(--dc-bg);
 }
 
 .branding-member {
@@ -169,10 +169,6 @@
   white-space: nowrap;
 }
 
-.branding-member .dc-bot-tag {
-  flex: none;
-}
-
 .name-style-card {
   display: flex;
   align-items: center;
@@ -194,7 +190,7 @@
 
 .name-style-card-plain {
   min-width: 0;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -402,20 +398,16 @@
 }
 
 .name-style-previews[data-background="light"] .dc {
-  --dc-bg: #ffffff;
-  --dc-bg-secondary: #f2f3f5;
-  --dc-bg-tertiary: #e3e5e8;
-  --dc-border: #e1e2e4;
-  --dc-text: #313338;
-  --dc-text-muted: #5c5e66;
-  --dc-mention: rgba(88, 101, 242, 0.15);
-  --dc-mention-text: #505cdc;
-}
-
-.name-style-previews[data-background="light"] .dc-author,
-.name-style-previews[data-background="light"] .branding-popout-name,
-.name-style-previews[data-background="light"] .branding-popout-heading {
-  color: #060607;
+  --dc-bg: #fbfbfb;
+  --dc-bg-secondary: #f3f3f4;
+  --dc-bg-tertiary: #f3f3f4;
+  --dc-surface: #ffffff;
+  --dc-border: rgba(151, 151, 158, 0.278);
+  --dc-text: #2e2e34;
+  --dc-text-strong: #28282d;
+  --dc-text-muted: #6c6d76;
+  --dc-mention: rgba(88, 100, 242, 0.239);
+  --dc-mention-text: #2e3c88;
 }
 
 .name-style-preview-controls {

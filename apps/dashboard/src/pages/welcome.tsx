@@ -25,7 +25,7 @@ const GREETING_AREAS: Readonly<Record<string, GreetingKind>> = {
 };
 
 const switchedOff = (name: string): string =>
-  `${name} is switched off. Settings are saved, but nothing runs until you switch it on.`;
+  `${name} is not enabled. You can turn it on using the switch at the top of the page.`;
 
 export default function WelcomePage({
   guildId,

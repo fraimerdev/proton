@@ -35,6 +35,7 @@ const TIDY_MAX_MS = parseDuration(TIDY_MAX);
 const RETENTION_DAYS = Math.round(AFK_RETENTION_MS / 86_400_000);
 
 const SAMPLE_NAME = 'Riley';
+const SAMPLE_PINGER = 'Sam';
 const SAMPLE_REASON = 'grabbing lunch';
 const SAMPLE_PINGS = 2;
 
@@ -61,7 +62,11 @@ function Exchange({ config }: { config: AfkConfig }): ReactElement {
         <figcaption className="afk-scene-cue">
           Someone pings <strong>{tagged}</strong>, and Proton replies.
         </figcaption>
-        <DiscordPreview message={{ content: notice }} timestamp="Today at 12:40" />
+        <DiscordPreview
+          message={{ content: notice }}
+          replyTo={{ user: SAMPLE_PINGER, text: `@${tagged} are you around?` }}
+          timestamp="Today at 12:40"
+        />
       </figure>
 
       <figure className="afk-scene">
@@ -71,7 +76,11 @@ function Exchange({ config }: { config: AfkConfig }): ReactElement {
             ? 'Proton takes [AFK] off their nickname and replies.'
             : 'Proton replies.'}
         </figcaption>
-        <DiscordPreview message={{ content: welcome }} timestamp="Today at 13:15" />
+        <DiscordPreview
+          message={{ content: welcome }}
+          replyTo={{ user: SAMPLE_NAME, text: 'back, what did I miss?' }}
+          timestamp="Today at 13:15"
+        />
       </figure>
 
       <p className="afk-exchange-foot">

@@ -8,32 +8,6 @@
   background: var(--app-canvas);
 }
 
-.site-header {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-topbar);
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  height: 56px;
-  padding: 0 24px;
-  background: color-mix(in srgb, var(--app-topbar) 88%, transparent);
-  backdrop-filter: blur(8px);
-}
-
-/* The server picker's header shares the dashboard shell's column instead of the window's edges. */
-.site-header.site-header-contained {
-  display: block;
-  padding: 0;
-}
-
-.site-header-inner {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  height: 100%;
-}
-
 html:has(.site-bar) {
   scroll-padding-top: 64px;
 }
@@ -614,11 +588,6 @@ html:has(.site-bar) {
 }
 
 @media (max-width: 640px) {
-  .site-header {
-    padding: 0 16px;
-    gap: 10px;
-  }
-
   .site-section {
     padding: 0 16px;
   }

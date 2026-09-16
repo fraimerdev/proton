@@ -224,13 +224,7 @@ function ServerPicker({
   );
 }
 
-export function UserMenu({
-  viewer,
-  onSignOut,
-}: {
-  viewer: Viewer;
-  onSignOut: () => void;
-}): ReactElement {
+function UserMenu({ viewer, onSignOut }: { viewer: Viewer; onSignOut: () => void }): ReactElement {
   const anchor = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -379,7 +373,9 @@ export function Topbar({
           Proton
         </Link>
 
-        <ServerPicker guilds={guilds} current={current} presenceKnown={presenceKnown} />
+        {guildId !== undefined ? (
+          <ServerPicker guilds={guilds} current={current} presenceKnown={presenceKnown} />
+        ) : null}
 
         <span className="topbar-spacer" />
 

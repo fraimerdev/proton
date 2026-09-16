@@ -190,7 +190,6 @@ export function GreetingMessageEditor({
           <Rows>
             <SettingRow
               title="Text"
-              description="Supports Discord markdown. Type { to add a placeholder."
               stacked
             >
               <MessageField

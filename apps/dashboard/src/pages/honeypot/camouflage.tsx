@@ -4,12 +4,6 @@ import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { armedChannelIds, type HoneypotForm } from './shape.ts';
 
-const RENAME_NOTE =
-  'The daily rename needs the Manage Channels permission, which Honeypot does not require, so the ' +
-  'banner at the top of this page will not tell you when it is missing. It also needs Proton to ' +
-  'already know the channel’s current name: "Proton does not know what this channel is ' +
-  'currently called."';
-
 const NOTHING_ARMED =
   'Camouflage stops while no bait channel is armed. Arm one and save to start it again.';
 
@@ -37,7 +31,6 @@ export function CamouflageArea({ form }: { form: HoneypotForm }): ReactElement {
         <SettingRow
           title="Rename channels daily"
           description="Change the ending of each bait channel’s name every day, such as -notes or -archive."
-          note={config.renameChannelDaily ? RENAME_NOTE : undefined}
         >
           <Switch
             label="Rename channels daily"

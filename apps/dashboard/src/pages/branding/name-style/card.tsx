@@ -3,6 +3,7 @@ import {
   NAME_STYLE_EFFECT_LABELS,
 } from '@proton/module-branding/name-style';
 import type { ReactElement } from 'react';
+import { AppTag } from '../../../components/discord/identity.tsx';
 import { Button } from '../../../components/ui/controls.tsx';
 import { Spinner } from '../../../components/ui/feedback.tsx';
 import { faceFor, faceSummary } from './faces.ts';
@@ -52,7 +53,7 @@ export function NameStyleCard({
             missing={missing}
           />
         )}
-        <span className="dc-bot-tag">App</span>
+        <AppTag />
         {style !== null && faces.status === 'loading' ? (
           <Spinner size="sm" status label="Loading the font" />
         ) : null}

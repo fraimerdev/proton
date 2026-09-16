@@ -10,6 +10,7 @@ import type {
 } from '@proton/core';
 import type { ReactElement, ReactNode } from 'react';
 import { Icon } from '../ui/icon.tsx';
+import { AppTag, CommandLine, PROTON_AVATAR, ReplyLine } from './identity.tsx';
 import {
   DiscordMarkdown,
   InlineDiscordMarkdown,
@@ -265,12 +266,14 @@ function V2View({
 export function DiscordPreview({
   message,
   botName = 'Proton',
-  avatarUrl,
+  avatarUrl = PROTON_AVATAR,
   channelName,
   timestamp = 'Today at 00:00',
   empty = 'This message is empty.',
   mentionNames,
   now,
+  command,
+  replyTo,
 }: {
   message: Partial<ProtonMessage> | undefined;
   botName?: string | undefined;
@@ -280,6 +283,8 @@ export function DiscordPreview({
   empty?: ReactNode;
   mentionNames?: MentionNames | undefined;
   now?: number | undefined;
+  command?: { user: string; name: string } | undefined;
+  replyTo?: { user: string; text: string } | undefined;
 }): ReactElement {
   const content = message?.content ?? '';
   const embeds = message?.embeds ?? [];
@@ -299,6 +304,9 @@ export function DiscordPreview({
         </div>
       ) : null}
 
+      {!nothing && command ? <CommandLine user={command.user} command={command.name} /> : null}
+      {!nothing && replyTo ? <ReplyLine user={replyTo.user} text={replyTo.text} /> : null}
+
       {nothing ? (
         <p className="dc-empty">{empty}</p>
       ) : (
@@ -312,7 +320,7 @@ export function DiscordPreview({
           <div className="dc-body">
             <div className="dc-head">
               <span className="dc-author">{botName}</span>
-              <span className="dc-bot-tag">App</span>
+              <AppTag />
               <span className="dc-timestamp">{timestamp}</span>
             </div>
 

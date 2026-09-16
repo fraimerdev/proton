@@ -21,8 +21,7 @@ import { RewardsArea } from './leveling/rewards.tsx';
 import { EarningArea } from './leveling/xp.tsx';
 
 const switchedOff = (name: string): string =>
-  `${name} is switched off. Settings are saved, but nothing runs until you switch it on. No XP ` +
-  'is counted and no role rewards are given.';
+  `${name} is not enabled. You can turn it on using the switch at the top of the page.`;
 
 export default function LevelingPage({
   guildId,

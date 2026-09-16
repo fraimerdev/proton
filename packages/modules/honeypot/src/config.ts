@@ -84,7 +84,7 @@ export const DEFAULT_NOTICE_MESSAGE: HoneypotLayout =
 export const DEFAULT_DM_MESSAGE: HoneypotLayout = honeypotLayoutSchema.parse(DEFAULT_DM_LAYOUT);
 
 const ACTION_LABELS: Record<HoneypotAction, string> = {
-  softban: 'Softban — remove and delete messages',
+  softban: 'Softban',
   ban: 'Ban',
   kick: 'Kick',
   timeout: 'Timeout',

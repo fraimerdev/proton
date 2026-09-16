@@ -86,7 +86,8 @@ describe('the Branding page’s Discord preview', () => {
     expect(markup).toContain(
       '<p class="branding-popout-name"><span class="branding-name">Sparky</span></p>',
     );
-    expect(occurrences(markup, '<span class="dc-bot-tag">App</span>')).toBe(3);
+    expect(occurrences(markup, 'class="dc-bot-tag"')).toBe(3);
+    expect(occurrences(markup, 'aria-label="Verified"')).toBe(3);
     expect(markup).toContain('>Sample message<');
     expect(markup).toContain('>Member list<');
   });
@@ -173,7 +174,7 @@ describe('the Branding page’s Discord preview', () => {
 
   test('the profile’s username line is Proton’s own username, with its tag when it has one', () => {
     const line = (username: string) =>
-      `<p class="branding-popout-username"><span>${username}</span><span class="dc-bot-tag">App</span></p>`;
+      `<p class="branding-popout-username"><span>${username}</span><span class="dc-bot-tag">`;
 
     expect(render({}, READY)).toContain(line('proton#4821'));
     expect(render({}, readyWith({ discriminator: null }))).toContain(line('proton'));

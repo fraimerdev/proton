@@ -1,3 +1,4 @@
+import { SAMPLE_MEMBER } from '@proton/core/placeholders';
 import { normaliseTagName } from '@proton/module-tags/config';
 import { TAG_PAGE_SIZE_DEFAULT, type TagSummary } from '@proton/module-tags/query';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +21,8 @@ const SEARCH_TOO_LONG = `Search is capped at ${TAG_SEARCH_MAX} characters.`;
 const AUTHORED_IN_DISCORD = 'Use /tags in Discord to create, edit and delete tags.';
 
 const NO_MATCH_BODY = 'Search looks at tag names only.';
+
+const SAMPLE_INVOKER = SAMPLE_MEMBER.user.globalName ?? 'Riley';
 
 const unsubscribed = (): (() => void) => () => undefined;
 
@@ -307,7 +310,10 @@ function TagDialog({
       <div className="stack stack-16">
         <p className="mono text-sm tags-command">{tagCommand(tag.name)}</p>
 
-        <DiscordPreview message={{ content: tag.content }} />
+        <DiscordPreview
+          message={{ content: tag.content }}
+          command={{ user: SAMPLE_INVOKER, name: 'tag' }}
+        />
 
         <Pairs>
           <Pair label="Created by">

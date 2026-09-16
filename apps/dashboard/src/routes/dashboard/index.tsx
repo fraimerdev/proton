@@ -2,7 +2,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
-import { ProtonMark, UserMenu } from '../../components/shell/topbar.tsx';
+import { Topbar } from '../../components/shell/topbar.tsx';
 import { cx, SearchField } from '../../components/ui/controls.tsx';
 import { EmptyState, StatusBanner } from '../../components/ui/feedback.tsx';
 import { isAccessError } from '../../lib/errors.ts';
@@ -98,21 +98,15 @@ function ServerPicker(): ReactElement {
 
   return (
     <div className="site">
-      <header className="site-header site-header-contained">
-        <div className="shell-container site-header-inner">
-          <Link to="/" className="topbar-brand">
-            <ProtonMark />
-            Proton
-          </Link>
-          <span className="topbar-spacer" />
-          <UserMenu
-            viewer={{ id: user.id, name: user.name, image: user.image }}
-            onSignOut={() => {
-              void signOut().then(() => router.navigate({ to: '/', reloadDocument: true }));
-            }}
-          />
-        </div>
-      </header>
+      <Topbar
+        guilds={guilds}
+        guildId={undefined}
+        presenceKnown={presenceKnown}
+        viewer={{ id: user.id, name: user.name, image: user.image }}
+        onSignOut={() => {
+          void signOut().then(() => router.navigate({ to: '/', reloadDocument: true }));
+        }}
+      />
 
       <main className="site-main">
         <div className="server-picker">

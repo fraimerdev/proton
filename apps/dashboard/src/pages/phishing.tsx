@@ -32,8 +32,6 @@ const ALERT_CHANNEL_TYPES = [
 
 const ACTION_OPTIONS = PHISHING_ACTIONS.map((value) => ({ value, label: ACTION_LABELS[value] }));
 
-const SWITCHED_OFF = 'Settings are saved, but nothing runs until you switch it on.';
-
 const RESPONSE_INTRO =
   'Proton never deletes the message itself. A ban also deletes the member’s messages from the ' +
   'last 24 hours.';
@@ -82,7 +80,7 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
         ) : null}
 
         {!enabled ? (
-          <StatusBanner tone="neutral">{`${meta.label} is switched off. ${SWITCHED_OFF}`}</StatusBanner>
+          <StatusBanner tone="neutral">{`${meta.label} is disabled. ${SWITCHED_OFF}`}</StatusBanner>
         ) : null}
       </ModuleBanners>
 
@@ -90,7 +88,7 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
         <Rows>
           <SettingRow
             title="Action"
-            description="What Proton does to the member who posted the link."
+            description="What action to take against the member who posted the link."
             error={form.errorAt('action')}
           >
             <Select

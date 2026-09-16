@@ -3,6 +3,7 @@ import type { NameStyleFont } from '@proton/module-branding/name-style';
 import { impersonationReason } from '@proton/module-branding/names';
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { AppTag } from '../../components/discord/identity.tsx';
 import { DiscordMarkdown } from '../../components/discord/markdown.tsx';
 import { cx } from '../../components/ui/controls.tsx';
 import { Spinner, type SpinnerSize } from '../../components/ui/feedback.tsx';
@@ -289,7 +290,7 @@ export function BrandingProfile({
         </p>
         <p className="branding-popout-username">
           <span>{usernameOf(read)}</span>
-          <span className="dc-bot-tag">App</span>
+          <AppTag />
         </p>
 
         {bio.trim() !== '' ? (
@@ -323,7 +324,7 @@ function BrandingMessage({
             <BrandingName className="dc-author" font={config.displayNameStyle?.font}>
               {shownName(config, read)}
             </BrandingName>
-            <span className="dc-bot-tag">App</span>
+            <AppTag />
             <span className="dc-timestamp">Today at 12:00</span>
           </div>
           <div className="dc-content">
@@ -356,7 +357,7 @@ function BrandingMember({
         <BrandingName className="branding-member-name" font={config.displayNameStyle?.font}>
           {shownName(config, read)}
         </BrandingName>
-        <span className="dc-bot-tag">App</span>
+        <AppTag />
       </div>
     </div>
   );

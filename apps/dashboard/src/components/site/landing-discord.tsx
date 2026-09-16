@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
+import { AppTag, CommandLine, PROTON_AVATAR } from '../discord/identity.tsx';
 import { cx } from '../ui/controls.tsx';
 import { Icon } from '../ui/icon.tsx';
 
@@ -109,19 +110,16 @@ export function ChatMessage({
   return (
     <div className={cx('landing-msg', proton && 'landing-msg-proton')}>
       {command ? (
-        <div className="landing-msg-command">
-          <Avatar name={command.user} tone={command.tone} size="mini" />
-          <span className="landing-msg-command-user">{command.user}</span>
-          used
-          <span className="landing-msg-command-name">/{command.name}</span>
-        </div>
+        <CommandLine
+          user={command.user}
+          command={command.name}
+          avatar={<Avatar name={command.user} tone={command.tone} size="mini" />}
+        />
       ) : null}
 
       <div className="dc-message">
         {proton ? (
-          <span className="dc-avatar landing-avatar landing-avatar-proton" aria-hidden>
-            <img src="/brand/proton-mark-128.png" alt="" width={26} height={26} />
-          </span>
+          <img className="dc-avatar" src={PROTON_AVATAR} alt="" width={40} height={40} />
         ) : (
           <Avatar name={author} tone={tone} />
         )}
@@ -129,7 +127,7 @@ export function ChatMessage({
         <div className="dc-body">
           <div className="dc-head">
             <span className="dc-author">{proton ? 'Proton' : author}</span>
-            {proton ? <span className="dc-bot-tag">App</span> : null}
+            {proton ? <AppTag /> : null}
             <span className="dc-timestamp">{time}</span>
           </div>
           {children}

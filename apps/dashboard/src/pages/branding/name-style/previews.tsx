@@ -2,6 +2,7 @@ import type { BrandingConfig } from '@proton/module-branding/config';
 import type { DisplayNameStyle } from '@proton/module-branding/name-style';
 import type { ReactElement } from 'react';
 import { useState } from 'react';
+import { AppTag } from '../../../components/discord/identity.tsx';
 import { SegmentedControl, type SegmentedOption } from '../../../components/ui/controls.tsx';
 import { Spinner } from '../../../components/ui/feedback.tsx';
 import {
@@ -160,7 +161,7 @@ export function NameStylePreviews({
                   <BrandingName className="dc-author" font={style?.font}>
                     <GlyphRuns text={name} missing={missing} />
                   </BrandingName>
-                  <span className="dc-bot-tag">App</span>
+                  <AppTag />
                   <span className="dc-timestamp">Today at 12:00</span>
                 </div>
                 <div className="dc-content">

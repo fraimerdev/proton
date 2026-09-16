@@ -16,7 +16,7 @@ import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import type { HoneypotForm } from './shape.ts';
 
 const ACTION_LABELS: Record<HoneypotAction, string> = {
-  softban: 'Softban — remove and delete messages',
+  softban: 'Softban',
   ban: 'Ban',
   kick: 'Kick',
   timeout: 'Timeout',
@@ -52,7 +52,7 @@ const WAIT_NOTE =
   'first, the action is cancelled.';
 
 const OVER_28_DAYS =
-  'Discord caps timeouts at 28 days, so Proton applies anything longer as 28 days.';
+  'A timeout cannot be longer than 28 days.';
 
 const REASON_NOTE = 'This is also the reason recorded against a blocked member.';
 
@@ -135,18 +135,6 @@ export function ConsequencesArea({ form }: { form: HoneypotForm }): ReactElement
 
   return (
     <>
-      <Section label="Order of events">
-        <ol className="ladder honeypot-sequence">
-          {steps.map((step, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a step's position in the sequence is its identity
-            <li className="rung" key={index}>
-              <span className="rung-index">{index + 1}</span>
-              <span className="rung-body">{step}</span>
-            </li>
-          ))}
-        </ol>
-      </Section>
-
       <Section label="Enforcement">
         <Rows>
           <SettingRow
@@ -163,7 +151,7 @@ export function ConsequencesArea({ form }: { form: HoneypotForm }): ReactElement
           >
             <Select
               aria-label="Action"
-              width="lg"
+              width="md"
               value={config.action}
               options={HONEYPOT_ACTIONS.map((action) => ({
                 value: action,

@@ -39,7 +39,6 @@ const LIST_EMPTY: Record<ListKey, string> = {
 const NOT_A_DOMAIN = 'Not a domain Proton can read. Use a hostname such as example.com.';
 const TOO_LONG = `Too long. A domain can be at most ${DOMAIN_MAX_LENGTH} characters.`;
 const ALREADY_HERE = 'Already in this list.';
-const AT_CEILING = `You can add up to ${LIST_MAX} domains. Remove one to add another.`;
 
 interface Draft {
   // -1 is the pending new row above the list; anything else is the entry at that index.
@@ -283,26 +282,6 @@ export function DomainLists({
         >
           Add domain
         </Button>
-      </div>
-
-      <div className="phishing-help">
-        {caption !== undefined ? <p>{caption}</p> : null}
-        <p>
-          Both lists include subdomains: <span className="mono">example.com</span> also covers{' '}
-          <span className="mono">login.example.com</span>. Proton checks Allowed domains first, then
-          Extra blocked domains, then the community blocklist.
-        </p>
-        <p>
-          Proton refreshes the community blocklist every hour. Use{' '}
-          <span className="mono">/phishing</span> in Discord to see how many domains it holds and
-          whether a feed is failing.
-        </p>
-        {atCeiling ? <p className="text-warning">{AT_CEILING}</p> : null}
-        {errorAt(active) !== undefined ? (
-          <p className="text-danger" role="alert">
-            {errorAt(active)}
-          </p>
-        ) : null}
       </div>
 
       <Rows>

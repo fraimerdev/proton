@@ -200,7 +200,7 @@
   height: 48px;
   border-radius: 50%;
   background: var(--dc-bg);
-  color: #dbdee1;
+  color: var(--dc-text);
   font-size: 15px;
   font-weight: 600;
 }
@@ -218,18 +218,18 @@
   width: 4px;
   height: 40px;
   border-radius: 0 4px 4px 0;
-  background: #f2f3f5;
+  background: var(--dc-text-strong);
 }
 
 .landing-rail-divider {
   width: 32px;
-  height: 2px;
+  height: 1px;
   border-radius: 1px;
-  background: #35363c;
+  background: var(--dc-border);
 }
 
 .landing-rail-add {
-  color: #23a55a;
+  color: #3d9e60;
 }
 
 .landing-channel-list {
@@ -246,13 +246,10 @@
   flex: none;
   height: 48px;
   padding: 0 16px;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
   font-size: 15px;
   font-weight: 600;
-  box-shadow:
-    0 1px 0 rgba(4, 4, 5, 0.2),
-    0 1.5px 0 rgba(6, 6, 7, 0.05),
-    0 2px 0 rgba(4, 4, 5, 0.05);
+  box-shadow: 0 1px 0 var(--dc-border);
 }
 
 .landing-channels {
@@ -287,12 +284,12 @@
 }
 
 .landing-channel.active {
-  background: rgba(78, 80, 88, 0.6);
-  color: #ffffff;
+  background: rgba(149, 149, 162, 0.161);
+  color: var(--dc-text-strong);
 }
 
 .landing-channel-hash {
-  color: #80848e;
+  color: #81828a;
 }
 
 .landing-user {
@@ -302,13 +299,13 @@
   flex: none;
   height: 52px;
   padding: 0 8px;
-  background: #232428;
+  background: #202024;
 }
 
 .landing-user-name {
   display: flex;
   flex-direction: column;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.2;
@@ -333,18 +330,15 @@
   flex: none;
   height: 48px;
   padding: 0 16px;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
   font-size: 16px;
   font-weight: 600;
-  box-shadow:
-    0 1px 0 rgba(4, 4, 5, 0.2),
-    0 1.5px 0 rgba(6, 6, 7, 0.05),
-    0 2px 0 rgba(4, 4, 5, 0.05);
+  box-shadow: 0 1px 0 var(--dc-border);
 }
 
 .landing-chat-hash {
   flex: none;
-  color: #80848e;
+  color: #81828a;
 }
 
 .landing-chat-topic {
@@ -363,7 +357,7 @@
   align-items: center;
   gap: 16px;
   margin-left: auto;
-  color: #b5bac1;
+  color: var(--dc-text-subtle);
 }
 
 .landing-messages {
@@ -405,24 +399,6 @@
   display: none;
 }
 
-.landing-msg-command {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0 0 4px 54px;
-  color: var(--dc-text-muted);
-  font-size: 13px;
-}
-
-.landing-msg-command-user {
-  color: #f2f3f5;
-  font-weight: 500;
-}
-
-.landing-msg-command-name {
-  color: var(--dc-link);
-}
-
 .landing-subtext {
   display: block;
   margin-top: 2px;
@@ -437,7 +413,7 @@
 .landing-window .dc-heading-1,
 .landing-window .dc-heading-2 {
   display: block;
-  color: #f2f3f5;
+  color: var(--dc-text-strong);
 }
 
 .landing-window .dc-heading-1 {
@@ -451,10 +427,6 @@
   font-size: 16px;
   font-weight: 600;
   text-transform: uppercase;
-}
-
-.landing-avatar-proton {
-  background: #16181d;
 }
 
 .landing-avatar-small {
@@ -502,8 +474,8 @@
   margin: 0 16px 20px;
   padding: 0 16px;
   border-radius: 8px;
-  background: #383a40;
-  color: #b5bac1;
+  background: #222327;
+  color: var(--dc-text-subtle);
 }
 
 .landing-composer-add {
@@ -511,13 +483,13 @@
   height: 24px;
   padding: 3px;
   border-radius: 50%;
-  background: #b5bac1;
-  color: #383a40;
+  background: var(--dc-text-subtle);
+  color: #222327;
 }
 
 .landing-composer-placeholder {
   flex: 1 1 auto;
-  color: #6d6f78;
+  color: var(--dc-text-muted);
   font-size: 15px;
 }
 
@@ -1050,8 +1022,12 @@
   }
 
   .landing-window .landing-msg-body,
-  .landing-window .landing-msg-command {
+  .landing-window .dc-reference {
     margin-left: 50px;
+  }
+
+  .landing-window .dc-reference::before {
+    width: 27px;
   }
 
   .landing-window .landing-messages {
