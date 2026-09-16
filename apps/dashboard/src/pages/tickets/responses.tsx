@@ -4,6 +4,8 @@ import { TICKET_RESPONSE_SURFACE } from '@proton/module-tickets/placeholders';
 import type { ReactElement } from 'react';
 import { useMemo, useState } from 'react';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
+import { useGuildId } from '../../components/module/route.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import type { DynamicPlaceholder } from '../../components/placeholders/autocomplete.ts';
 import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
 import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
@@ -58,6 +60,7 @@ const ID_NOTE = 'Staff can also type the ID in /ticket response. Changing it is 
 
 export function ResponsesArea({ form }: { form: TicketsForm }): ReactElement {
   const config = form.value;
+  const guildId = useGuildId();
   const [term, setTerm] = useState('');
   const report = useTicketTemplates(form);
   const answers = useMemo(() => answerPlaceholders(config.types), [config.types]);
@@ -129,6 +132,15 @@ export function ResponsesArea({ form }: { form: TicketsForm }): ReactElement {
                 defaultOpen={response.label === '' && response.content === ''}
                 control={
                   <>
+                    <TestMessage
+                      guildId={guildId}
+                      moduleId="tickets"
+                      simulations={form.view.simulations}
+                      simulationId="tickets.response"
+                      draft={config as unknown as Record<string, unknown>}
+                      dirty={form.dirty}
+                      fixed={{ responseIndex: index }}
+                    />
                     <IconButton
                       icon="clipboard-text"
                       tone="ghost"

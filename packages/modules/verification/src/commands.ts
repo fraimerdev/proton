@@ -1,4 +1,4 @@
-import { type CommandDefinition, Permissions } from '@proton/core';
+import { type CommandDefinition, errorStatus, Permissions } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import type { VerificationConfig } from './config.ts';
@@ -71,7 +71,9 @@ export function quarantineCommand(deps: VerificationDeps): Command {
       if (sub !== 'add' && sub !== 'remove') {
         await reply(
           ctx,
-          'Use /quarantine add to quarantine somebody, or /quarantine remove to release them.',
+          errorStatus(
+            'Use /quarantine add to quarantine somebody, or /quarantine remove to release them.',
+          ),
         );
         return;
       }
@@ -80,7 +82,11 @@ export function quarantineCommand(deps: VerificationDeps): Command {
       if (!targetId) {
         await reply(
           ctx,
-          sub === 'add' ? 'I need a member to quarantine.' : 'I need a member to release.',
+          errorStatus(
+            sub === 'add'
+              ? 'Choose the member to quarantine.'
+              : 'Choose the member to release from quarantine.',
+          ),
         );
         return;
       }

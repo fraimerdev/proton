@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { STATUS_ERROR_COLOUR, STATUS_SUCCESS_COLOUR } from '@proton/core';
 import { moderationModule } from '../src/index.ts';
 import type { StandingWarning } from '../src/store.ts';
 import {
@@ -141,6 +142,7 @@ describe('/warn remove', () => {
     expect(h.cases()[0]?.targetId).toBe(MEMBER);
     expect(h.cases()[0]?.payload).toMatchObject({ userId: MEMBER, caseId: CASE_ID });
     expect(h.replyContent()).toContain(CASE_ID);
+    expect(h.replyMessage()?.embeds?.[0]?.color).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('publishes nothing — a withdrawal must not feed the escalation ladder', async () => {
@@ -237,6 +239,10 @@ describe('/warn remove', () => {
     expect(h.replyContent()).toContain('still standing');
     expect(h.replyContent()).not.toContain('Withdrew');
     expect(h.logs.some((entry) => entry.level === 'error')).toBe(true);
+
+    // Red although the unwarn case was recorded: the withdrawal the moderator asked for is the
+    // follow-up that failed, so nothing they wanted actually happened.
+    expect(h.replyMessage()?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('withdrawing does not check hierarchy — a promoted member can still be cleared', async () => {

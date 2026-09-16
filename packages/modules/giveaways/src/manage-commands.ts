@@ -2,7 +2,9 @@ import {
   type CommandContext,
   describeMultipliers,
   describeRequirements,
+  errorStatus,
   newId,
+  successStatus,
 } from '@proton/core';
 import { canManage, refuseManage } from './authorize.ts';
 import {
@@ -69,7 +71,7 @@ async function target(
 ): Promise<{ giveaway: Giveaway } | { refusal: string }> {
   const giveaway = await store.resolve(ctx.guildId, ctx.options.getString('giveaway') ?? '');
 
-  if (!giveaway) return { refusal: 'There is no giveaway here with that id or code.' };
+  if (!giveaway) return { refusal: 'There is no giveaway in this server with that id or code.' };
   if (!canManage(ctx.config, actorOf(ctx), giveaway)) return { refusal: refuseManage(giveaway) };
 
   return { giveaway };
@@ -78,7 +80,7 @@ async function target(
 function describeManage(outcome: ManageOutcome | ShiftOutcome, verb: string): string {
   switch (outcome.outcome) {
     case 'missing':
-      return 'There is no giveaway here with that id or code.';
+      return 'There is no giveaway in this server with that id or code.';
 
     case 'wrong-state':
       return (
@@ -104,13 +106,13 @@ export async function pauseCommand(
 ): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return;
   }
 
@@ -123,9 +125,11 @@ export async function pauseCommand(
   await reply(
     ctx,
     outcome.outcome === 'ok'
-      ? `**${outcome.giveaway.title}** is paused. Nobody can enter until you resume it, and the ` +
-          'time it has left is held where it is.'
-      : describeManage(outcome, 'paused'),
+      ? successStatus(
+          `**${outcome.giveaway.title}** has been paused. Nobody can enter until you resume it, ` +
+            'and the time it has left is held where it is.',
+        )
+      : errorStatus(describeManage(outcome, 'paused')),
   );
 }
 
@@ -136,13 +140,13 @@ export async function resumeCommand(
 ): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return;
   }
 
@@ -154,9 +158,11 @@ export async function resumeCommand(
   await reply(
     ctx,
     outcome.outcome === 'ok'
-      ? `**${outcome.giveaway.title}** is running again — drawn ` +
-          `<t:${seconds(outcome.giveaway.endsAt)}:R>.`
-      : describeManage(outcome, 'resumed'),
+      ? successStatus(
+          `**${outcome.giveaway.title}** is running again — drawn ` +
+            `<t:${seconds(outcome.giveaway.endsAt)}:R>.`,
+        )
+      : errorStatus(describeManage(outcome, 'resumed')),
   );
 }
 
@@ -168,19 +174,19 @@ export async function shiftCommand(
 ): Promise<void> {
   const duration = parseGiveawayDuration(ctx.options.getString('duration') ?? '');
   if (!duration.ok) {
-    await reply(ctx, duration.humanReason);
+    await reply(ctx, errorStatus(duration.humanReason));
     return;
   }
 
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return;
   }
 
@@ -193,8 +199,10 @@ export async function shiftCommand(
   await reply(
     ctx,
     outcome.outcome === 'ok'
-      ? `**${outcome.giveaway.title}** now ends <t:${seconds(outcome.giveaway.endsAt)}:R>.`
-      : describeManage(outcome, direction === 1 ? 'extended' : 'shortened'),
+      ? successStatus(
+          `**${outcome.giveaway.title}** now ends <t:${seconds(outcome.giveaway.endsAt)}:R>.`,
+        )
+      : errorStatus(describeManage(outcome, direction === 1 ? 'extended' : 'shortened')),
   );
 }
 
@@ -205,7 +213,7 @@ export async function editCommand(
 ): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
@@ -226,13 +234,13 @@ export async function editCommand(
   };
 
   if (Object.keys(patch).length === 0) {
-    await reply(ctx, 'Name at least one thing to change.');
+    await reply(ctx, errorStatus('Name at least one thing to change.'));
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return;
   }
 
@@ -245,8 +253,10 @@ export async function editCommand(
   await reply(
     ctx,
     outcome.outcome === 'ok'
-      ? `**${outcome.giveaway.title}** updated, and the giveaway message with it.`
-      : describeManage(outcome, 'edited'),
+      ? successStatus(
+          `**${outcome.giveaway.title}** has been updated, and the giveaway message with it.`,
+        )
+      : errorStatus(describeManage(outcome, 'edited')),
   );
 }
 
@@ -257,7 +267,7 @@ export async function infoCommand(
 ): Promise<void> {
   const giveaway = await store.resolve(ctx.guildId, ctx.options.getString('giveaway') ?? '');
   if (!giveaway) {
-    await reply(ctx, 'There is no giveaway here with that id or code.');
+    await reply(ctx, errorStatus('There is no giveaway in this server with that id or code.'));
     return;
   }
 
@@ -324,7 +334,7 @@ export async function infoCommand(
 export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: string): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
@@ -361,7 +371,7 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
 
   const userId = ctx.options.getUserId('member');
   if (userId === null) {
-    await reply(ctx, 'Say which member.');
+    await reply(ctx, errorStatus('Say which member to grant extra entries to, or take them from.'));
     return;
   }
 
@@ -381,15 +391,18 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
     await reply(
       ctx,
       taken === 0
-        ? `<@${userId}> has no extra entries in **${giveaway.title}**.`
-        : `Took back **${taken}** extra ${taken === 1 ? 'entry' : 'entries'} from <@${userId}>.`,
+        ? errorStatus(`<@${userId}> has no extra entries in **${giveaway.title}** to take back.`)
+        : successStatus(
+            `Took back **${taken}** extra ${taken === 1 ? 'entry' : 'entries'} from ` +
+              `<@${userId}> in **${giveaway.title}**.`,
+          ),
     );
     return;
   }
 
   const amount = ctx.options.getInteger('entries');
   if (amount === null || amount < BONUS_MIN || amount > BONUS_MAX) {
-    await reply(ctx, `Grant between ${BONUS_MIN} and ${BONUS_MAX} extra entries.`);
+    await reply(ctx, errorStatus(`Grant between ${BONUS_MIN} and ${BONUS_MAX} extra entries.`));
     return;
   }
 
@@ -416,17 +429,19 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
 
   await reply(
     ctx,
-    `<@${userId}> now has **+${grant.amount}** extra ${grant.amount === 1 ? 'entry' : 'entries'} ` +
-      `in **${giveaway.title}**` +
-      `${grant.reason === null ? '' : ` — ${grant.reason}`}.` +
-      `${entered ? '' : ' They are not in the draw yet; it will count when they enter.'}`,
+    successStatus(
+      `<@${userId}> now has **+${grant.amount}** extra ` +
+        `${grant.amount === 1 ? 'entry' : 'entries'} in **${giveaway.title}**` +
+        `${grant.reason === null ? '' : ` — ${grant.reason}`}.` +
+        `${entered ? '' : ' They are not in the draw yet; it will count when they enter.'}`,
+    ),
   );
 }
 
 export async function entrantsCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
@@ -460,7 +475,7 @@ export async function entrantsCommand(ctx: Ctx, store: GiveawayStore): Promise<v
 export async function exportCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 
@@ -468,7 +483,10 @@ export async function exportCommand(ctx: Ctx, store: GiveawayStore): Promise<voi
   const exported = await exportEntrants(store, giveaway.id);
 
   if (exported.rows === 0) {
-    await reply(ctx, `Nobody has entered **${giveaway.title}**, so there is nothing to export.`);
+    await reply(
+      ctx,
+      errorStatus(`Nobody has entered **${giveaway.title}**, so there is nothing to export.`),
+    );
     return;
   }
 
@@ -476,10 +494,12 @@ export async function exportCommand(ctx: Ctx, store: GiveawayStore): Promise<voi
 
   await replyWithFile(
     ctx,
-    `**${giveaway.title}** — ${plural(exported.rows, 'entrant')} exported.` +
-      (exported.truncated
-        ? ` Capped at ${EXPORT_ROW_MAX} rows, so this is not the whole list.`
-        : ''),
+    successStatus(
+      `**${giveaway.title}** — ${plural(exported.rows, 'entrant')} exported.` +
+        (exported.truncated
+          ? ` Capped at ${EXPORT_ROW_MAX} rows, so this is not the whole list.`
+          : ''),
+    ),
     {
       filename: `giveaway-${code}-entrants.csv`,
       contentType: 'text/csv',
@@ -513,7 +533,7 @@ const HISTORY_WORDS: Record<string, string> = {
 export async function historyCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, found.refusal);
+    await reply(ctx, errorStatus(found.refusal));
     return;
   }
 

@@ -3,6 +3,8 @@ import {
   type CommandDefinition,
   checkLimit,
   type EntitlementTier,
+  errorStatus,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -35,7 +37,7 @@ async function ready(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, NOT_WIRED, { ephemeral: true });
+    await reply(ctx, errorStatus(NOT_WIRED), { ephemeral: true });
     return null;
   }
 
@@ -44,13 +46,13 @@ async function ready(
 
 async function named(ctx: CommandContext<TagsConfig>, raw: string | null): Promise<string | null> {
   if (raw === null) {
-    await reply(ctx, 'That command needs a tag name.', { ephemeral: true });
+    await reply(ctx, errorStatus('That command needs a tag name.'), { ephemeral: true });
     return null;
   }
 
   const parsed = normaliseTagName(raw);
   if (!parsed.ok) {
-    await reply(ctx, parsed.humanReason, { ephemeral: true });
+    await reply(ctx, errorStatus(parsed.humanReason), { ephemeral: true });
     return null;
   }
 
@@ -87,7 +89,9 @@ export function tagCommand(deps: TagsDeps): Command {
       if (!tag) {
         await reply(
           ctx,
-          `There is no tag called **${name}** in this server. \`/tags list\` shows what there is.`,
+          errorStatus(
+            `There is no tag called **${name}** in this server. \`/tags list\` shows what there is.`,
+          ),
           { ephemeral: true },
         );
         return;
@@ -194,14 +198,16 @@ async function create(ctx: CommandContext<TagsConfig>, store: TagStore): Promise
 
   const content = ctx.options.getString('content');
   if (content === null || content.trim().length === 0) {
-    await reply(ctx, 'A tag needs some text to post.', { ephemeral: true });
+    await reply(ctx, errorStatus('A tag needs some text to post.'), { ephemeral: true });
     return;
   }
 
   const tier: EntitlementTier = ctx.tier ?? 'free';
   const limit = checkLimit(tier, 'tags', await store.count(ctx.guildId));
   if (!limit.ok) {
-    await reply(ctx, `I did not save **${name}**: ${limit.humanReason}`, { ephemeral: true });
+    await reply(ctx, errorStatus(`I did not save **${name}**: ${limit.humanReason}`), {
+      ephemeral: true,
+    });
     return;
   }
 
@@ -215,13 +221,15 @@ async function create(ctx: CommandContext<TagsConfig>, store: TagStore): Promise
   if (outcome === 'exists') {
     await reply(
       ctx,
-      `**${name}** already exists in this server. Use \`/tags edit\` to change what it says.`,
+      errorStatus(
+        `**${name}** already exists in this server. Use \`/tags edit\` to change what it says.`,
+      ),
       { ephemeral: true },
     );
     return;
   }
 
-  await reply(ctx, `Saved **${name}**. Anyone can post it with \`/tag ${name}\`.`, {
+  await reply(ctx, successStatus(`Saved **${name}**. Anyone can post it with \`/tag ${name}\`.`), {
     ephemeral: true,
   });
 }
@@ -232,7 +240,7 @@ async function edit(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
 
   const content = ctx.options.getString('content');
   if (content === null || content.trim().length === 0) {
-    await reply(ctx, 'A tag needs some text to post.', { ephemeral: true });
+    await reply(ctx, errorStatus('A tag needs some text to post.'), { ephemeral: true });
     return;
   }
 
@@ -241,8 +249,8 @@ async function edit(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
   await reply(
     ctx,
     changed
-      ? `Updated **${name}**.`
-      : `There is no tag called **${name}** in this server, so nothing was changed.`,
+      ? successStatus(`Updated **${name}**.`)
+      : errorStatus(`There is no tag called **${name}** in this server, so nothing was changed.`),
     { ephemeral: true },
   );
 }
@@ -256,8 +264,8 @@ async function remove(ctx: CommandContext<TagsConfig>, store: TagStore): Promise
   await reply(
     ctx,
     removed
-      ? `Deleted **${name}**.`
-      : `There is no tag called **${name}** in this server, so nothing was deleted.`,
+      ? successStatus(`Deleted **${name}**.`)
+      : errorStatus(`There is no tag called **${name}** in this server, so nothing was deleted.`),
     { ephemeral: true },
   );
 }
@@ -313,7 +321,9 @@ async function info(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
 
   const tag = await store.get(ctx.guildId, name);
   if (!tag) {
-    await reply(ctx, `There is no tag called **${name}** in this server.`, { ephemeral: true });
+    await reply(ctx, errorStatus(`There is no tag called **${name}** in this server.`), {
+      ephemeral: true,
+    });
     return;
   }
 
@@ -354,7 +364,7 @@ export function tagsCommand(deps: TagsDeps): Command {
         case 'info':
           return info(ctx, store);
         default:
-          await reply(ctx, 'That subcommand is not one I know.', { ephemeral: true });
+          await reply(ctx, errorStatus('That subcommand is not one I know.'), { ephemeral: true });
       }
     },
   };

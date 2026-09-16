@@ -9,7 +9,7 @@ import type {
   ProtonEvent,
   RestResponse,
 } from '@proton/core';
-import { NEVER_RECORDED_KINDS } from '@proton/core';
+import { NEVER_RECORDED_KINDS, STATUS_SUCCESS_COLOUR, STATUS_SUCCESS_EMOJI } from '@proton/core';
 import type { BrandingConfig } from '../src/config.ts';
 import { type DisplayNameStyle, wireStyleFingerprint } from '../src/name-style.ts';
 import { applyNameStyle, UNVERIFIED_RETRY_MS, verifyNameStyle } from '../src/name-style-apply.ts';
@@ -177,7 +177,7 @@ describe('saving a display name style', () => {
     expect(h.bodies()).toEqual([PROFILE_BODY, { nick: 'Dreamliner' }]);
   });
 
-  test('is sent when Branding is switched on, and when a save names no keys', async () => {
+  test('is sent when Branding is enabled, and when a save names no keys', async () => {
     for (const event of [
       configChanged({ enabledBefore: false, enabledAfter: true, changedKeys: ['enabled'] }),
       configChanged({ changedKeys: [] }),
@@ -755,7 +755,8 @@ describe('/branding', () => {
       `${base}:report`,
     ]);
     expect(h.bodies()).toEqual([PROFILE_BODY, { nick: 'Dreamliner' }, wireBody(GRADIENT_WIRE)]);
-    expect(h.report()).toStartWith('Re-applied.');
+    expect(h.report()).toStartWith(`${STATUS_SUCCESS_EMOJI} Re-applied.`);
+    expect(h.reportEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
     expect(h.report()).toContain('Display name style: Modern · Gradient');
   });
 

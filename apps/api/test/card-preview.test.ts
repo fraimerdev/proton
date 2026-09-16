@@ -95,7 +95,7 @@ describe('previewDescriptor', () => {
     );
   });
 
-  test('passes the element toggles through, so the preview shows what was switched off', () => {
+  test('passes the element toggles through, so the preview shows what was disabled', () => {
     const descriptor = previewDescriptor(
       parse({ kind: 'rank', showRank: 'false', showPercent: 'true' }),
     );

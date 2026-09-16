@@ -43,7 +43,7 @@ const GROUPS: readonly {
       {
         question: 'How do warnings turn into a timeout or a ban?',
         answer:
-          'Moderation has a warn escalation ladder. You set the rungs — three warnings becomes a one hour timeout, five becomes a day, and so on — and Proton counts within the window you choose. The ladder only acts while Moderation is switched on.',
+          'Moderation has a warn escalation ladder. You set the rungs — three warnings becomes a one hour timeout, five becomes a day, and so on — and Proton counts within the window you choose. The ladder only acts while Moderation is enabled.',
       },
       {
         question: 'Can members appeal?',

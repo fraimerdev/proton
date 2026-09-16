@@ -47,7 +47,7 @@ const SCREENING_INTRO =
   'join.';
 
 function configuredButOff(count: number): string {
-  return `${count} ${count === 1 ? 'role is' : 'roles are'} set to be given on join, but Join Roles is switched off, so none are given.`;
+  return `${count} ${count === 1 ? 'role is' : 'roles are'} set to be given on join, but Join Roles is disabled, so none are given.`;
 }
 
 function useRoleIndex(guildId: string): RoleIndex {
@@ -389,7 +389,7 @@ export default function JoinRolesPage({
           <StatusBanner tone={granted > 0 ? 'warning' : 'neutral'}>
             {granted > 0
               ? configuredButOff(granted)
-              : `${meta.label} is switched off. ${SWITCHED_OFF}`}
+              : `${meta.label} is disabled. ${SWITCHED_OFF}`}
           </StatusBanner>
         ) : null}
       </>

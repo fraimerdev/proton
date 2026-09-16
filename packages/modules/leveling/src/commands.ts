@@ -1,4 +1,10 @@
-import { type CommandContext, type CommandDefinition, Permissions } from '@proton/core';
+import {
+  type CommandContext,
+  type CommandDefinition,
+  errorStatus,
+  Permissions,
+  successStatus,
+} from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import type { LevelingConfig } from './config.ts';
@@ -23,8 +29,10 @@ async function ready(
   if (!ctx.config.enabled) {
     await reply(
       ctx,
-      'Leveling is switched off in this server, so there is no XP to report. An admin can ' +
-        'turn it on from the Proton dashboard.',
+      errorStatus(
+        'Leveling is disabled in this server, so there is no XP to report. An admin can ' +
+          'turn it on from the Proton dashboard.',
+      ),
       { ephemeral: true },
     );
     return null;
@@ -38,8 +46,10 @@ async function ready(
     });
     await reply(
       ctx,
-      "I can't reach this server's XP records right now. Nothing was changed. This is a fault " +
-        'on my side, not a setting in this server.',
+      errorStatus(
+        "I can't reach this server's XP records right now. Nothing was changed. This is a fault " +
+          'on my side, not a setting in this server.',
+      ),
       { ephemeral: true },
     );
     return null;
@@ -102,11 +112,13 @@ export function rankCommand(deps: LevelingDeps): Command {
       // the one thing Discord refuses, so the no-card paths have to say why there is no card.
       await reply(
         ctx,
-        ctx.config.rankCard
-          ? 'Proton could not draw the rank card just now. The XP behind it is intact — try again ' +
-              'in a moment.'
-          : 'Rank cards are switched off in this server. An admin can turn them on from the ' +
-              'Proton dashboard.',
+        errorStatus(
+          ctx.config.rankCard
+            ? 'Proton could not draw the rank card just now. The XP behind it is intact — please ' +
+                'try again in a moment.'
+            : 'Rank cards are disabled in this server. An admin can turn them on from the ' +
+                'Proton dashboard.',
+        ),
       );
     },
   };
@@ -145,7 +157,7 @@ export function leaderboardCommand(deps: LevelingDeps): Command {
           ctx,
           page === 1
             ? 'Nobody has earned any XP in this server yet.'
-            : `There is no page ${page} — the leaderboard is shorter than that.`,
+            : errorStatus(`There is no page ${page} — the leaderboard is shorter than that.`),
         );
         return;
       }
@@ -226,8 +238,10 @@ export function xpCommand(deps: LevelingDeps): Command {
         if (!ctx.config.enabled) {
           await reply(
             ctx,
-            'Leveling is switched off in this server, so an XP event would do nothing. An admin ' +
-              'can turn it on from the Proton dashboard.',
+            errorStatus(
+              'Leveling is disabled in this server, so an XP event would do nothing. An admin ' +
+                'can turn it on from the Proton dashboard.',
+            ),
             { ephemeral: true },
           );
           return;
@@ -242,7 +256,7 @@ export function xpCommand(deps: LevelingDeps): Command {
 
       const adjustment = readAdjustment(ctx.options.getSubcommand());
       if (adjustment === null) {
-        await reply(ctx, 'Use /xp give, /xp take or /xp set.', { ephemeral: true });
+        await reply(ctx, errorStatus('Use /xp give, /xp take or /xp set.'), { ephemeral: true });
         return;
       }
 
@@ -250,7 +264,7 @@ export function xpCommand(deps: LevelingDeps): Command {
       const amount = ctx.options.getInteger('amount');
 
       if (!userId || amount === null) {
-        await reply(ctx, 'I need a member and an amount.', { ephemeral: true });
+        await reply(ctx, errorStatus('I need a member and an amount.'), { ephemeral: true });
         return;
       }
 
@@ -273,8 +287,10 @@ export function xpCommand(deps: LevelingDeps): Command {
 
       await reply(
         ctx,
-        `<@${userId}> is now on ${count(result.xp)} XP — level ${result.level}` +
-          `${result.level === result.previousLevel ? '' : `, up from ${result.previousLevel}`}.`,
+        successStatus(
+          `<@${userId}> is now on ${count(result.xp)} XP — level ${result.level}` +
+            `${result.level === result.previousLevel ? '' : `, up from ${result.previousLevel}`}.`,
+        ),
       );
 
       await applyLevelUp(

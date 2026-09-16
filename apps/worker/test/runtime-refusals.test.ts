@@ -10,7 +10,7 @@ import type {
   ProtonEvent,
   Subscription,
 } from '@proton/core';
-import { ModuleRegistry } from '@proton/core';
+import { ModuleRegistry, STATUS_ERROR_COLOUR, STATUS_ERROR_EMOJI } from '@proton/core';
 import { dispatch } from '@proton/fixtures';
 import { normalise } from '@proton/gateway/normaliser';
 import { GatewayIntentBits } from 'discord-api-types/v10';
@@ -55,7 +55,7 @@ const configSchema = z.object({
   response: z.string().default('Pong!'),
 });
 
-function manifest(settingsPage: boolean): ModuleManifest {
+function manifest(settingsPage: boolean, handler?: () => Promise<void>): ModuleManifest {
   return {
     id: 'ping',
     name: 'Ping',
@@ -73,6 +73,11 @@ function manifest(settingsPage: boolean): ModuleManifest {
         description: 'ping',
         data: { name: 'ping', description: 'ping' },
         handler: async (ctx: CommandContext) => {
+          if (handler) {
+            await handler();
+            return;
+          }
+
           await ctx.executor.execute({
             guildId: ctx.guildId,
             moduleId: 'ping',
@@ -100,12 +105,12 @@ function commandEvent(): ProtonEvent {
 
 function runtimeWith(
   snapshot: { enabled: boolean; config: unknown } | Error,
-  { settingsPage = true }: { settingsPage?: boolean } = {},
+  { settingsPage = true, handler }: { settingsPage?: boolean; handler?: () => Promise<void> } = {},
 ) {
   const executor = new RecordingExecutor();
   const { logger, lines } = collectingLogger();
   const registry = new ModuleRegistry();
-  registry.register(manifest(settingsPage));
+  registry.register(manifest(settingsPage, handler));
 
   const runtime = new ModuleRuntime({
     bus,
@@ -133,7 +138,21 @@ function payloadOf(executor: RecordingExecutor): Record<string, unknown> {
 function replyContent(executor: RecordingExecutor): string {
   const request = executor.requests[0];
   if (!request) throw new Error('nothing was replied');
-  return String((request.payload as { content?: unknown }).content ?? '');
+  const payload = request.payload as {
+    content?: unknown;
+    embeds?: { description?: unknown }[];
+  };
+
+  return String(payload.content || payload.embeds?.[0]?.description || '');
+}
+
+function replyEmbed(executor: RecordingExecutor): { description?: string; color?: number } {
+  const embeds = payloadOf(executor).embeds as
+    | { description?: string; color?: number }[]
+    | undefined;
+  const embed = embeds?.[0];
+  if (!embed) throw new Error('the reply carried no embed');
+  return embed;
 }
 
 describe('a command that cannot run still answers', () => {
@@ -145,20 +164,23 @@ describe('a command that cannot run still answers', () => {
     expect(replyContent(executor)).toBe('handled');
   });
 
-  test('a module switched off at the row level names the module and links its page', async () => {
+  test('a module disabled at the row level names the module and links its page', async () => {
     const { runtime, executor } = runtimeWith({ enabled: false, config: { enabled: true } });
 
     await runtime.handle(commandEvent());
 
+    expect(replyEmbed(executor).color).toBe(STATUS_ERROR_COLOUR);
+    expect(replyEmbed(executor).description).toStartWith(STATUS_ERROR_EMOJI);
+
     const content = replyContent(executor);
     expect(content).toContain('Ping');
-    expect(content).toContain('switched off');
+    expect(content).toContain('disabled');
     expect(content).toContain(`<${DASHBOARD}/dashboard/${GUILD}/ping>`);
     expect(content).toContain('top of that page');
     expect(content).not.toContain('Module enabled');
   });
 
-  test('a module with no settings page is switched on from its overview card', async () => {
+  test('a module with no settings page is enabled from its overview card', async () => {
     const { runtime, executor } = runtimeWith(
       { enabled: false, config: { enabled: true } },
       { settingsPage: false },
@@ -171,13 +193,13 @@ describe('a command that cannot run still answers', () => {
     expect(content).toContain('**Ping** card');
   });
 
-  test('a module switched off in its own config is refused the same way', async () => {
+  test('a module disabled in its own config is refused the same way', async () => {
     const { runtime, executor } = runtimeWith({ enabled: true, config: { enabled: false } });
 
     await runtime.handle(commandEvent());
 
     const content = replyContent(executor);
-    expect(content).toContain('switched off');
+    expect(content).toContain('disabled');
     expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
   });
 
@@ -260,6 +282,26 @@ describe('a command that cannot run still answers', () => {
     await runtime.handle(event);
 
     expect(replyContent(executor)).toContain('/ghost');
+  });
+
+  test('a handler that throws still tells the invoker, and still propagates', async () => {
+    const { runtime, executor, lines } = runtimeWith(
+      { enabled: true, config: { enabled: true } },
+      {
+        handler: async () => {
+          throw new Error('the store was unreachable at 10.0.0.4:5432');
+        },
+      },
+    );
+
+    await expect(runtime.handle(commandEvent())).rejects.toThrow('the store was unreachable');
+
+    const embed = replyEmbed(executor);
+    expect(embed.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embed.description).toStartWith(STATUS_ERROR_EMOJI);
+    expect(embed.description).toContain('/ping');
+    expect(embed.description).not.toContain('10.0.0.4');
+    expect(lines.some((line) => line.includes('10.0.0.4:5432'))).toBe(true);
   });
 
   test('a transient config failure propagates instead of being answered', async () => {

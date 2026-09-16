@@ -3,6 +3,7 @@ import { HONEYPOT_NOTICE_SURFACE } from '@proton/module-honeypot/placeholders';
 import type { ReactElement } from 'react';
 import { EditorPreviewLayout } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { Switch } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
@@ -18,7 +19,7 @@ import {
 const SAVE_RECONCILES = 'Saving deletes the warning message from paused and removed bait channels.';
 
 const OVERRIDDEN =
-  '“Hide channel purpose” is switched on, so this text replaces your paragraph when the warning ' +
+  '“Hide channel purpose” is enabled, so this text replaces your paragraph when the warning ' +
   'message is posted.';
 
 const PLACEHOLDERS =
@@ -34,7 +35,7 @@ const REFUSED =
   'text that could come out empty.';
 
 const NOT_POSTED =
-  'The warning message is switched off. This layout is kept, and saving deletes any warning ' +
+  'The warning message is disabled. This layout is kept, and saving deletes any warning ' +
   'messages already posted in bait channels.';
 
 const FREE_TIER =
@@ -61,6 +62,17 @@ export function NoticeArea({
   return (
     <EditorPreviewLayout
       previewTitle="What the channel shows"
+      previewActions={
+        <TestMessage
+          guildId={guildId}
+          moduleId="honeypot"
+          simulations={form.view.simulations}
+          simulationId="honeypot.notice"
+          draft={config as unknown as Record<string, unknown>}
+          dirty={form.dirty}
+          configuredChannelId={config.channels[0]?.channelId ?? null}
+        />
+      }
       editor={
         <>
           {config.postNotice ? null : <StatusBanner tone="neutral">{NOT_POSTED}</StatusBanner>}

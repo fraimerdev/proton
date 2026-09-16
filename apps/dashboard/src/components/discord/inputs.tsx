@@ -71,7 +71,7 @@ export function DurationInput({
         label={`${label} amount`}
         disabled={disabled}
         invalid={invalid}
-        width={84}
+        width={100}
         onChange={(next) => {
           setAmount(next);
           emit(next, unit);

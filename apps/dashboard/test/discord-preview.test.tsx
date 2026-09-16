@@ -39,6 +39,48 @@ describe('the Discord message preview', () => {
     );
   });
 
+  test('the footer is drawn under the image, where Discord puts it', () => {
+    const markup = render({
+      message: {
+        embeds: [
+          {
+            description: 'It looks like fraimer didn’t find a home with us!',
+            imageUrl: 'https://cdn.example/bye.gif',
+            footer: { text: 'pls dont leave k, thx' },
+          },
+        ],
+      },
+    });
+
+    const image = markup.indexOf('dc-embed-image');
+    const footer = markup.indexOf('dc-embed-footer');
+
+    expect(image).toBeGreaterThan(-1);
+    expect(footer).toBeGreaterThan(image);
+  });
+
+  test('the footer sits outside the text column, so the image can come between them', () => {
+    const markup = render({
+      message: {
+        embeds: [{ description: 'body', footer: { text: 'under' } }],
+      },
+    });
+
+    expect(markup).toContain('</div><div class="dc-embed-footer">');
+  });
+
+  test('a footer and a timestamp share one line, separated by a dot', () => {
+    const markup = render({
+      message: {
+        embeds: [{ description: 'body', footer: { text: 'under' }, timestamp: 'now' }],
+      },
+    });
+
+    expect(markup).toContain('under');
+    expect(markup).toContain('Today at 00:00');
+    expect(markup).toContain('•');
+  });
+
   test('an empty message draws no reference line', () => {
     const markup = render({ message: {}, command: { user: 'solus', name: 'ping' } });
 

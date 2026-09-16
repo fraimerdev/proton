@@ -397,7 +397,7 @@ How older names differ from the current ones:
 | `{{` and `}}` now write a single literal brace. Before, `{{user}}` wrote `{<@123…>}`. | Every page that fills in placeholders |
 | `{name:modifier}` is read as a placeholder. Before, it was posted as written. | Every page that fills in placeholders |
 | Braces now mean placeholders in texts that were posted as written before. An unknown `{name}` is still posted as written. | Ticket closing, blacklist and quick response texts; appeal decision messages; giveaway winner messages |
-| Templates are unchanged until **Fill in placeholders** is switched on. | Messages |
+| Templates are unchanged until **Fill in placeholders** is enabled. | Messages |
 | Button keys, styles, emoji, colours and other settings that are not text are never filled in. | Welcomer, Leveling, Honeypot |
 | `{user}` in a button label, embed footer or author, or dropdown text shows the member's name instead of `<@123…>`, and `{now}` there shows a written-out date. | Welcomer, Leveling |
 | Older names in links: `{server}` and `{username}` are made link-safe; `{user}`, `{consequence}`, `{purge}` and `{action}` are left empty and refused when a changed link is saved. Number names such as `{level}` and `{memberCount}` are unchanged. | Link fields on Welcomer, Leveling and Honeypot |
@@ -562,6 +562,33 @@ form answers only when a key needs them. Idempotency keys are unchanged by any o
 7. Bundle the new subpath for the browser and check it pulls in no ioredis, @napi-rs/canvas,
    Drizzle, discord.js runtime or module barrel.
 8. Regenerate this page.
+
+### Adding a simulation
+
+A simulation is how an administrator rehearses the event a surface renders for, from the dashboard.
+It is not a second render path: the adapter calls the module's own surface and its own render
+function, so a rehearsal and the real event cannot drift apart.
+
+1. Write `src/simulation.ts` beside `src/placeholders.ts`, under the same import rules, and export
+   it as `"./simulation"` in the module's package.json.
+2. Export one `SimulationAdapter` per authored message. Its `descriptor` names the `surfaceId` it
+   renders through (the registry refuses one the module's `templates` do not declare), the
+   `configPath` it reads, its `output` (`message` or `text`), and its `delivery` (`channel`, `dm`
+   or `none`). `inputs` are the event facts the dialog offers — mark one `fixed` when the page
+   supplies it, such as which panel or saved template is being edited.
+3. `build(config, scene)` is pure. `scene` carries the real server, the example member, the chosen
+   channel, Proton's own profile, the guild's tier and the validated inputs; return the message the
+   module would really send.
+4. Set `simulations` on the manifest. Boot fails on a duplicate id, a foreign module id, an unknown
+   surface, a repeated input, or a channel delivery that produces no message.
+5. In the dashboard, render `<TestMessage …/>` beside the editor — `EditorPreviewLayout`'s
+   `previewActions` slot, or a `Section`'s `actions`. It reads `form.view.simulations`, posts
+   `form.value` as the draft, and holds its own dialog state.
+
+`apps/api` validates the draft exactly as a save would, rate-limits, records the send in the audit
+trail and publishes `proton.simulation_requested`; `apps/worker` renders, hardens the message with
+`asTestDelivery` (mentions off, interactive components disabled behind an inert custom id, a
+subtext line naming it a test) and sends it through the executor with `record: false`.
 
 ### Regenerating the reference
 
@@ -798,7 +825,7 @@ _Generated from the placeholder registries by `bun packages/core/scripts/placeho
 | `v2.*.children.*.row.buttons.*.label` | Button label | plain text | 80 |
 | `v2.*.children.*.row.buttons.*.url` | Button link | link | 512 |
 
-Reply actions, filled in only on Messages templates with placeholders switched on:
+Reply actions, filled in only on Messages templates with placeholders enabled:
 
 | Path in the message | Label | Kind | Limit |
 | --- | --- | --- | --- |

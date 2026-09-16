@@ -1,6 +1,7 @@
 import {
   type EventListener,
   type EventType,
+  errorStatus,
   type InteractionBase,
   interactionRef,
   type ModuleContext,
@@ -10,6 +11,8 @@ import {
   readComponentInteraction,
   readModalInteraction,
   replyEphemeral,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import {
   MODULE_ID,
@@ -89,6 +92,8 @@ interface Held {
   hub: TempVcHub;
 }
 
+type Say = (message: string | StatusBody) => Promise<void>;
+
 /**
  * Everything a press is allowed to do, re-derived from the config and the database. A panel message
  * outlives the settings that produced it and can be pressed by anybody who can see the channel, so
@@ -166,8 +171,8 @@ export async function handleComponent(
     idempotencyKey: `${MODULE_ID}:${event.id}`,
   };
 
-  const say = async (content: string): Promise<void> => {
-    await ctx.executor.execute(replyEphemeral(to, { content }));
+  const say: Say = async (message) => {
+    await ctx.executor.execute(replyEphemeral(to, message));
   };
 
   if (press.action === PANEL_ACTION) {
@@ -188,7 +193,9 @@ export async function handleComponent(
     if ('refused' in held) return refuse(say, held.refused);
 
     const ok = await held.service.applyAccess(ctx, held.row, mode as PrivacyMode);
-    await say(ok ? `Your channel is now **${mode}**.` : couldNot('change who may join'));
+    await say(
+      ok ? successStatus(`Your channel is now **${mode}**.`) : couldNot('change who may join'),
+    );
 
     return { action: 'done', what: `privacy:${mode}` };
   }
@@ -203,9 +210,11 @@ export async function handleComponent(
     const ok = await held.service.setRegion(ctx, held.row, region === 'auto' ? null : region);
     await say(
       ok
-        ? region === 'auto'
-          ? 'Voice region back to automatic.'
-          : `Voice region pinned to **${region}**.`
+        ? successStatus(
+            region === 'auto'
+              ? 'The voice region of your channel is back to automatic.'
+              : `The voice region of your channel is pinned to **${region}**.`,
+          )
         : couldNot('set that region'),
     );
 
@@ -233,7 +242,7 @@ async function panelPress(
   deps: TempVcDeps,
   facts: InteractionBase,
   to: Parameters<typeof replyEphemeral>[0],
-  say: (content: string) => Promise<void>,
+  say: Say,
   control: OwnerControl,
   tempChannelId: string | undefined,
 ): Promise<Outcome> {
@@ -292,22 +301,30 @@ async function panelPress(
   if (control === 'claim') {
     if (held.row.ownerId !== null) {
       await say(
-        held.row.ownerId === facts.userId
-          ? 'You already own this channel.'
-          : `<@${held.row.ownerId}> still owns this channel.`,
+        errorStatus(
+          held.row.ownerId === facts.userId
+            ? 'You already own this channel.'
+            : `<@${held.row.ownerId}> still owns this channel.`,
+        ),
       );
       return { action: 'refused', reason: 'still owned' };
     }
 
     const won = await held.service.claim(ctx, held.row, facts.userId, held.hub.privacy);
-    await say(won ? 'You own this channel now.' : 'Somebody claimed it a moment before you did.');
+    await say(
+      won
+        ? successStatus('You own this channel now.')
+        : errorStatus('Somebody claimed it a moment before you did.'),
+    );
 
     return { action: 'done', what: 'claim' };
   }
 
   if (control === 'delete') {
     const ok = await held.service.destroy(ctx, held.row, 'deleted by its owner');
-    await say(ok ? 'Channel deleted.' : couldNot('delete your channel'));
+    await say(
+      ok ? successStatus('Your channel has been deleted.') : couldNot('delete your channel'),
+    );
 
     return { action: 'done', what: 'delete' };
   }
@@ -321,10 +338,10 @@ async function applyToMember(
   control: OwnerControl,
   target: string,
   actorId: string,
-  say: (content: string) => Promise<void>,
+  say: Say,
 ): Promise<Outcome> {
   if (target === actorId) {
-    await say('Pick somebody other than yourself.');
+    await say(errorStatus('Pick somebody other than yourself.'));
     return { action: 'refused', reason: 'self' };
   }
 
@@ -332,8 +349,8 @@ async function applyToMember(
     const ok = await held.service.disconnect(ctx, held.row, target);
     await say(
       ok
-        ? `Disconnected <@${target}>.`
-        : `I could not disconnect <@${target}> — they may have already left.`,
+        ? successStatus(`<@${target}> has been disconnected from your channel.`)
+        : errorStatus(`I could not disconnect <@${target}> — they may have already left.`),
     );
 
     return { action: 'done', what: 'kick' };
@@ -341,7 +358,11 @@ async function applyToMember(
 
   if (control === 'transfer') {
     const ok = await held.service.transfer(ctx, held.row, target, held.hub.privacy);
-    await say(ok ? `<@${target}> owns this channel now.` : couldNot('hand over your channel'));
+    await say(
+      ok
+        ? successStatus(`<@${target}> owns this channel now.`)
+        : couldNot('hand over your channel'),
+    );
 
     return { action: 'done', what: 'transfer' };
   }
@@ -351,11 +372,13 @@ async function applyToMember(
 
   await say(
     ok
-      ? control === 'block'
-        ? `<@${target}> is blocked from this channel.`
-        : control === 'invite'
-          ? `<@${target}> can now join <#${held.row.channelId}>.`
-          : `<@${target}> can now join even when the channel is locked.`
+      ? successStatus(
+          control === 'block'
+            ? `<@${target}> is blocked from this channel.`
+            : control === 'invite'
+              ? `<@${target}> can now join <#${held.row.channelId}>.`
+              : `<@${target}> can now join even when the channel is locked.`,
+        )
       : couldNot('change who may join'),
   );
 
@@ -385,8 +408,8 @@ export async function handleModal(
     idempotencyKey: `${MODULE_ID}:${event.id}`,
   };
 
-  const say = async (content: string): Promise<void> => {
-    await ctx.executor.execute(replyEphemeral(to, { content }));
+  const say: Say = async (message) => {
+    await ctx.executor.execute(replyEphemeral(to, message));
   };
 
   const control: OwnerControl = what === 'limit' ? 'limit' : 'rename';
@@ -398,16 +421,18 @@ export async function handleModal(
     const limit = Number.parseInt(raw, 10);
 
     if (!Number.isInteger(limit) || limit < 0 || limit > 99) {
-      await say(`“${raw}” is not a number between 0 and 99. 0 means no limit.`);
+      await say(errorStatus(`“${raw}” is not a number between 0 and 99. 0 means no limit.`));
       return { action: 'refused', reason: 'bad limit' };
     }
 
     const ok = await held.service.setLimit(ctx, held.row, limit);
     await say(
       ok
-        ? limit === 0
-          ? 'Removed the member limit.'
-          : `Your channel now holds ${limit} member${limit === 1 ? '' : 's'}.`
+        ? successStatus(
+            limit === 0
+              ? 'The member limit on your channel has been removed.'
+              : `Your channel now holds ${limit} member${limit === 1 ? '' : 's'}.`,
+          )
         : couldNot('change the limit'),
     );
 
@@ -416,12 +441,16 @@ export async function handleModal(
 
   const name = (facts.fields[RENAME_FIELD] ?? '').trim();
   if (name.length === 0) {
-    await say('A channel needs a name — that one was empty.');
+    await say(errorStatus('A channel needs a name — that one was empty.'));
     return { action: 'refused', reason: 'empty name' };
   }
 
   const ok = await held.service.rename(ctx, held.row, name);
-  await say(ok ? `Renamed your channel to **${name}**.` : couldNot('rename your channel'));
+  await say(
+    ok
+      ? successStatus(`Your channel has been renamed to **${name}**.`)
+      : couldNot('rename your channel'),
+  );
 
   return { action: 'done', what: 'rename' };
 }
@@ -445,13 +474,13 @@ function regionSelect(tempChannelId: string): Record<string, unknown>[] {
   ];
 }
 
-async function refuse(say: (content: string) => Promise<void>, reason: string): Promise<Outcome> {
-  await say(reason);
+async function refuse(say: Say, reason: string): Promise<Outcome> {
+  await say(errorStatus(reason));
   return { action: 'refused', reason };
 }
 
-function couldNot(what: string): string {
-  return `I could not ${what}. I may be missing a permission on this channel.`;
+function couldNot(what: string): StatusBody {
+  return errorStatus(`I could not ${what}. I may be missing a permission on this channel.`);
 }
 
 export function createTempVcInteractionListener(deps: TempVcDeps): EventListener<TempVcConfig> {

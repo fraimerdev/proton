@@ -1,9 +1,11 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   type InteractionRef,
   Permissions,
   type RespondTo,
+  successStatus,
   toDiscordMessage,
 } from '@proton/core';
 import { type MessageRender, usedKeys } from '@proton/core/placeholders';
@@ -186,13 +188,13 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
 
   const name = ctx.options.getString('name');
   if (name === null || name.trim().length === 0) {
-    await replyEphemeral(ctx, to, 'That command needs the name of a saved message.');
+    await replyEphemeral(ctx, to, errorStatus('Name the saved message you want me to post.'));
     return;
   }
 
   const saved = findTemplate(ctx.config.templates, name);
   if (!saved) {
-    await replyEphemeral(ctx, to, describeUnknown(ctx.config.templates, name.trim()));
+    await replyEphemeral(ctx, to, errorStatus(describeUnknown(ctx.config.templates, name.trim())));
     return;
   }
 
@@ -204,7 +206,7 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
       describeUnbound(`the saved message '${saved.name}' was not posted`, bound.unbound),
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    await replyEphemeral(ctx, to, NOT_WIRED);
+    await replyEphemeral(ctx, to, errorStatus(NOT_WIRED));
     return;
   }
 
@@ -225,8 +227,10 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
       ctx,
       to,
       bound.deps.applicationId,
-      `I could not post **${saved.name}** in <#${channelId}>, because ${rendered.humanReason} ` +
-        'Nothing was posted. An admin can fix it in the Proton dashboard under Messages → Templates.',
+      errorStatus(
+        `I could not post **${saved.name}** in <#${channelId}>, because ${rendered.humanReason} ` +
+          'Nothing was posted. An admin can fix it in the Proton dashboard under Messages → Templates.',
+      ),
     );
     return;
   }
@@ -243,15 +247,22 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
     to,
     bound.deps.applicationId,
     succeeded(result)
-      ? `Posted **${saved.name}** in <#${channelId}>.`
-      : `I could not post **${saved.name}** in <#${channelId}>. ${
-          result.failure?.humanReason ?? 'Discord refused it and gave no reason.'
-        }${channelId === ctx.channelId ? '' : CROSS_CHANNEL_GATE}`,
+      ? successStatus(`Posted **${saved.name}** in <#${channelId}>.`)
+      : errorStatus(
+          `I could not post **${saved.name}** in <#${channelId}>. ${
+            result.failure?.humanReason ?? 'Discord refused it and gave no reason.'
+          }${channelId === ctx.channelId ? '' : CROSS_CHANNEL_GATE}`,
+        ),
   );
 }
 
 async function list(ctx: CommandContext<MessagesConfig>): Promise<void> {
-  await replyEphemeral(ctx, replyTo(ctx), describeList(ctx.config.templates));
+  // A listing, not a status, so it stays plain text — but the names in it are admin-authored free
+  // text, and one saved as @everyone would ping the server on its way back out.
+  await replyEphemeral(ctx, replyTo(ctx), {
+    content: describeList(ctx.config.templates),
+    allowedMentions: { parse: [] },
+  });
 }
 
 async function send(ctx: CommandContext<MessagesConfig>): Promise<void> {
@@ -266,8 +277,10 @@ async function send(ctx: CommandContext<MessagesConfig>): Promise<void> {
     await replyEphemeral(
       ctx,
       to,
-      'I could not open the message composer, so nothing was posted. This is a fault on my ' +
-        'side, not a setting in this server.',
+      errorStatus(
+        'I could not open the message composer, so nothing was posted. This is a fault on my ' +
+          'side, not a setting in this server.',
+      ),
     );
     return;
   }
@@ -291,7 +304,11 @@ export function messageCommand(deps: MessagesDeps): Command {
         case 'send':
           return send(ctx);
         default:
-          await replyEphemeral(ctx, replyTo(ctx), 'That subcommand is not one I know.');
+          await replyEphemeral(
+            ctx,
+            replyTo(ctx),
+            errorStatus('That is not a `/message` subcommand I know.'),
+          );
       }
     },
   };

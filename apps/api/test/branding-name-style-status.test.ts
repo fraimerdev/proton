@@ -72,6 +72,7 @@ function appWith(
         migrated: false,
         tier: 'free',
         postables: [],
+        simulations: [],
       };
     },
   };

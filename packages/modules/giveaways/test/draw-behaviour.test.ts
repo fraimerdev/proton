@@ -382,7 +382,7 @@ describe('batch evaluation', () => {
 });
 
 describe('degraded providers', () => {
-  test('a requirement whose module is switched off completes the draw and is recorded', async () => {
+  test('a requirement whose module is disabled completes the draw and is recorded', async () => {
     const { store } = await seeded({
       entrants: 10,
       requirements: [{ providerId: 'leveling.level', config: { min: 5 }, position: 0 }],

@@ -13,6 +13,7 @@ import { createHoneypotStatsListener } from './interactions.ts';
 import { createHoneypotListener } from './listener.ts';
 import { createHoneypotPendingListener } from './pending.ts';
 import { honeypotTemplates } from './placeholders.ts';
+import { honeypotSimulations } from './simulation.ts';
 import { PUNISH_JOB } from './punish.ts';
 import { createPunishHandler } from './punish-handler.ts';
 import { createHoneypotNoticeListener } from './service.ts';
@@ -218,6 +219,12 @@ export {
   TOMBSTONE_TTL_MS,
 } from './store.ts';
 
+export {
+  HONEYPOT_DM_SIMULATION,
+  HONEYPOT_NOTICE_SIMULATION,
+  honeypotSimulations,
+} from './simulation.ts';
+
 export function createHoneypotModule(
   deps: HoneypotDeps = {},
 ): ModuleManifest<typeof honeypotConfigSchema> {
@@ -233,6 +240,7 @@ export function createHoneypotModule(
     liftStoredConfig,
 
     templates: honeypotTemplates,
+    simulations: honeypotSimulations,
 
     // MessageContent is declared because "Quote the message" puts what was posted in the incident
     // log. Nothing branches on the body — the trap is still that a message exists at all — but
@@ -258,6 +266,10 @@ export function createHoneypotModule(
       'send',
       'edit_message',
       'interaction_reply',
+
+      // The punishment direct message opens its channel first. Missing here, the executor refused
+      // every one of them with UndeclaredActionError, so nobody caught by a trap was ever told why.
+      'create_dm',
 
       // The daily rename. Not in requiredPermissions: invitePermissions() unions actionKinds, so
       // Manage Channels reaches the bot invite, while requiring it would report the whole module

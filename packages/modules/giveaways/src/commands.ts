@@ -3,7 +3,9 @@ import {
   type CommandDefinition,
   checkLimit,
   type EntitlementTier,
+  errorStatus,
   newId,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -530,7 +532,7 @@ async function refuseUnbound(ctx: Ctx, what: string, unbound: readonly string[])
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
   });
-  await reply(ctx, NOT_WIRED);
+  await reply(ctx, errorStatus(NOT_WIRED));
 }
 
 /**
@@ -542,20 +544,20 @@ async function drop(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promis
   const raw = ctx.options.getString('expires');
   const expiry = parseGiveawayDuration(raw ?? '24h');
   if (!expiry.ok) {
-    await reply(ctx, expiry.humanReason);
+    await reply(ctx, errorStatus(expiry.humanReason));
     return;
   }
 
   const title = (ctx.options.getString('prize') ?? '').trim();
   if (title.length === 0) {
-    await reply(ctx, 'A drop needs something to drop. Say what the prize is.');
+    await reply(ctx, errorStatus('A drop needs something to drop. Say what the prize is.'));
     return;
   }
 
   const running = await store.countRunning(ctx.guildId);
   const limit = checkLimit(tierOf(ctx), 'activeGiveaways', running);
   if (!limit.ok) {
-    await reply(ctx, limit.humanReason);
+    await reply(ctx, errorStatus(limit.humanReason));
     return;
   }
 
@@ -585,7 +587,7 @@ async function drop(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promis
   });
 
   if (!rendered.ok) {
-    await reply(ctx, `I could not build the drop message: ${rendered.humanReason}`);
+    await reply(ctx, errorStatus(`I could not build the drop message: ${rendered.humanReason}`));
     return;
   }
 
@@ -599,9 +601,11 @@ async function drop(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promis
   if (!succeeded(posted)) {
     await reply(
       ctx,
-      `The drop was created but I could not post it: ${
-        posted.failure?.humanReason ?? 'Discord refused the message.'
-      }`,
+      errorStatus(
+        `**${title}** was created but I could not post it in <#${ctx.channelId}>: ${
+          posted.failure?.humanReason ?? 'Discord refused the message.'
+        }`,
+      ),
     );
     return;
   }
@@ -620,26 +624,35 @@ async function drop(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promis
     },
   );
 
-  await reply(ctx, `**${title}** is up for grabs. First eligible member to press it takes it.`);
+  await reply(
+    ctx,
+    successStatus(
+      `**${title}** is up for grabs in <#${ctx.channelId}>. The first eligible member to press ` +
+        'it takes it.',
+    ),
+  );
 }
 
 async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promise<void> {
   const duration = parseGiveawayDuration(ctx.options.getString('duration') ?? '');
   if (!duration.ok) {
-    await reply(ctx, duration.humanReason);
+    await reply(ctx, errorStatus(duration.humanReason));
     return;
   }
 
   const title = (ctx.options.getString('prize') ?? '').trim();
   if (title.length === 0) {
-    await reply(ctx, 'A giveaway needs something to give away. Say what the prize is.');
+    await reply(
+      ctx,
+      errorStatus('A giveaway needs something to give away. Say what the prize is.'),
+    );
     return;
   }
 
   const running = await store.countRunning(ctx.guildId);
   const limit = checkLimit(tierOf(ctx), 'activeGiveaways', running);
   if (!limit.ok) {
-    await reply(ctx, limit.humanReason);
+    await reply(ctx, errorStatus(limit.humanReason));
     return;
   }
 
@@ -672,7 +685,10 @@ async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promi
   });
 
   if (!rendered.ok) {
-    await reply(ctx, `I could not build the giveaway message: ${rendered.humanReason}`);
+    await reply(
+      ctx,
+      errorStatus(`I could not build the giveaway message: ${rendered.humanReason}`),
+    );
     return;
   }
 
@@ -686,9 +702,11 @@ async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promi
   if (!succeeded(posted)) {
     await reply(
       ctx,
-      `The giveaway was created but I could not post it: ${
-        posted.failure?.humanReason ?? 'Discord refused the message.'
-      }`,
+      errorStatus(
+        `**${title}** was created but I could not post it in <#${ctx.channelId}>: ${
+          posted.failure?.humanReason ?? 'Discord refused the message.'
+        }`,
+      ),
     );
     return;
   }
@@ -709,9 +727,12 @@ async function start(ctx: Ctx, deps: GiveawaysDeps, store: GiveawayStore): Promi
 
   await reply(
     ctx,
-    `**${title}** is live — ${plural(winnerCount, 'winner')}, drawn <t:${Math.floor(
-      endsAt.getTime() / 1000,
-    )}:R>.`,
+    successStatus(
+      `**${title}** is live in <#${ctx.channelId}> — ${plural(
+        winnerCount,
+        'winner',
+      )}, drawn <t:${Math.floor(endsAt.getTime() / 1000)}:R>.`,
+    ),
   );
 }
 
@@ -725,7 +746,7 @@ async function create(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
   const running = await bound.bound.store.countRunning(ctx.guildId);
   const limit = checkLimit(tierOf(ctx), 'activeGiveaways', running);
   if (!limit.ok) {
-    await reply(ctx, limit.humanReason);
+    await reply(ctx, errorStatus(limit.humanReason));
     return;
   }
 
@@ -750,7 +771,7 @@ async function create(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
   const screen = stepScreen(draft, bound.bound.providers, available);
 
   if (!screen.ok) {
-    await reply(ctx, `I could not open the builder: ${screen.humanReason}`);
+    await reply(ctx, errorStatus(`I could not open the builder: ${screen.humanReason}`));
     return;
   }
 
@@ -781,7 +802,9 @@ async function template(
     const deleted = await store.deleteTemplate(ctx.guildId, name);
     await reply(
       ctx,
-      deleted ? `Deleted the **${name}** template.` : `There is no template called **${name}**.`,
+      deleted
+        ? successStatus(`The **${name}** template has been deleted successfully!`)
+        : errorStatus(`There is no template called **${name}** in this server.`),
     );
     return;
   }
@@ -789,7 +812,7 @@ async function template(
   if (action === 'save') {
     const giveaway = await store.get(ctx.guildId, ctx.options.getString('giveaway') ?? '');
     if (!giveaway) {
-      await reply(ctx, 'There is no giveaway here with that id.');
+      await reply(ctx, errorStatus('There is no giveaway in this server with that id.'));
       return;
     }
 
@@ -826,7 +849,10 @@ async function template(
 
     await reply(
       ctx,
-      `Saved **${name}**. Start the next one from it with \`/giveaway template load name:${name}\`.`,
+      successStatus(
+        `Saved **${name}** as a template. Start the next one from it with ` +
+          `\`/giveaway template load name:${name}\`.`,
+      ),
     );
     return;
   }
@@ -841,7 +867,7 @@ async function template(
 
   const saved = await store.template(ctx.guildId, name);
   if (!saved) {
-    await reply(ctx, `There is no template called **${name}**.`);
+    await reply(ctx, errorStatus(`There is no template called **${name}** in this server.`));
     return;
   }
 
@@ -849,8 +875,10 @@ async function template(
   if (!parsed.success) {
     await reply(
       ctx,
-      `The **${name}** template was saved in a shape I can no longer read, so it was not loaded. ` +
-        'Save it again from a current giveaway.',
+      errorStatus(
+        `The **${name}** template was saved in a shape I can no longer read, so it was not ` +
+          'loaded. Save it again from a current giveaway.',
+      ),
     );
     return;
   }
@@ -879,7 +907,7 @@ async function template(
   const screen = stepScreen(draft, bound.bound.providers, available);
 
   if (!screen.ok) {
-    await reply(ctx, `I could not open the builder: ${screen.humanReason}`);
+    await reply(ctx, errorStatus(`I could not open the builder: ${screen.humanReason}`));
     return;
   }
 
@@ -907,18 +935,23 @@ async function end(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
 
   switch (drawn.outcome) {
     case 'missing':
-      await reply(ctx, 'There is no giveaway here with that id.');
+      await reply(ctx, errorStatus('There is no giveaway in this server with that id.'));
       return;
 
     case 'already-drawing':
       await reply(
         ctx,
-        'That giveaway is being drawn right now. Give it a moment — it will only be drawn once.',
+        errorStatus(
+          'That giveaway is being drawn right now. Give it a moment — it will only be drawn once.',
+        ),
       );
       return;
 
     case 'already-ended':
-      await reply(ctx, 'That giveaway has already been drawn. Use `/giveaway reroll` instead.');
+      await reply(
+        ctx,
+        errorStatus('That giveaway has already been drawn. Use `/giveaway reroll` instead.'),
+      );
       return;
 
     case 'drawn': {
@@ -931,12 +964,15 @@ async function end(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
 
       await reply(
         ctx,
-        drawn.summary.winnerIds.length === 0
-          ? 'Drawn — but nobody qualified, so there is no winner.'
-          : `Drawn. ${plural(drawn.summary.winnerIds.length, 'winner')} from ${plural(
-              drawn.summary.entrantCount,
-              'entrant',
-            )}.`,
+        successStatus(
+          drawn.summary.winnerIds.length === 0
+            ? `**${drawn.giveaway.title}** has been drawn — but nobody qualified, so there is no ` +
+                'winner.'
+            : `**${drawn.giveaway.title}** has been drawn — ${plural(
+                drawn.summary.winnerIds.length,
+                'winner',
+              )} from ${plural(drawn.summary.entrantCount, 'entrant')}.`,
+        ),
       );
       return;
     }
@@ -957,12 +993,12 @@ async function cancel(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
   );
 
   if (outcome.outcome === 'missing') {
-    await reply(ctx, 'There is no giveaway here with that id.');
+    await reply(ctx, errorStatus('There is no giveaway in this server with that id.'));
     return;
   }
 
   if (outcome.outcome === 'already-ended') {
-    await reply(ctx, 'That giveaway is not running, so there was nothing to cancel.');
+    await reply(ctx, errorStatus('That giveaway is not running, so there was nothing to cancel.'));
     return;
   }
 
@@ -971,7 +1007,10 @@ async function cancel(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
     entrantCount: await bound.bound.store.entrantCount(outcome.giveaway.id),
   });
 
-  await reply(ctx, `**${outcome.giveaway.title}** was cancelled. Nobody was drawn.`);
+  await reply(
+    ctx,
+    successStatus(`**${outcome.giveaway.title}** has been cancelled. Nobody was drawn.`),
+  );
 }
 
 async function reroll(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
@@ -997,17 +1036,22 @@ async function reroll(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
 
   switch (outcome.outcome) {
     case 'missing':
-      await reply(ctx, 'There is no giveaway here with that id.');
+      await reply(ctx, errorStatus('There is no giveaway in this server with that id.'));
       return;
 
     case 'still-running':
-      await reply(ctx, 'That giveaway has not been drawn yet. Use `/giveaway end` first.');
+      await reply(
+        ctx,
+        errorStatus('That giveaway has not been drawn yet. Use `/giveaway end` first.'),
+      );
       return;
 
     case 'nobody-left':
       await reply(
         ctx,
-        'There was nobody left to draw — everybody who qualified has already won this one.',
+        errorStatus(
+          'There was nobody left to draw — everybody who qualified has already won this one.',
+        ),
       );
       return;
 
@@ -1018,7 +1062,15 @@ async function reroll(ctx: Ctx, deps: GiveawaysDeps): Promise<void> {
         reroll: true,
         replacedIds: outcome.replaced,
       });
-      await reply(ctx, `Rerolled. ${plural(outcome.summary.winnerIds.length, 'new winner')}.`);
+      await reply(
+        ctx,
+        successStatus(
+          `**${outcome.giveaway.title}** has been rerolled — ${plural(
+            outcome.summary.winnerIds.length,
+            'new winner',
+          )}.`,
+        ),
+      );
       return;
   }
 }
@@ -1049,7 +1101,7 @@ async function entries(ctx: Ctx, store: GiveawayStore): Promise<void> {
 
   const giveaway = await store.get(ctx.guildId, giveawayId);
   if (!giveaway) {
-    await reply(ctx, 'There is no giveaway here with that id.');
+    await reply(ctx, errorStatus('There is no giveaway in this server with that id.'));
     return;
   }
 
@@ -1117,7 +1169,7 @@ async function blacklist(ctx: Ctx, store: GiveawayStore, action: string): Promis
 
   const userId = ctx.options.getUserId('member');
   if (!userId) {
-    await reply(ctx, 'Say which member.');
+    await reply(ctx, errorStatus('Say which member to block or unblock.'));
     return;
   }
 
@@ -1132,8 +1184,8 @@ async function blacklist(ctx: Ctx, store: GiveawayStore, action: string): Promis
     await reply(
       ctx,
       added
-        ? `<@${userId}> can no longer enter giveaways here.`
-        : `<@${userId}> was already blocked.`,
+        ? successStatus(`<@${userId}> can no longer enter giveaways in this server.`)
+        : errorStatus(`<@${userId}> is already blocked from giveaways in this server.`),
     );
     return;
   }
@@ -1141,7 +1193,9 @@ async function blacklist(ctx: Ctx, store: GiveawayStore, action: string): Promis
   const removed = await store.removeBlacklist(ctx.guildId, 'user', userId);
   await reply(
     ctx,
-    removed ? `<@${userId}> can enter giveaways again.` : `<@${userId}> was not blocked.`,
+    removed
+      ? successStatus(`<@${userId}> can enter giveaways in this server again.`)
+      : errorStatus(`<@${userId}> was not blocked from giveaways in this server.`),
   );
 }
 
@@ -1231,7 +1285,7 @@ export function giveawayCommands(deps: GiveawaysDeps): CommandDefinition<Giveawa
             await entries(ctx, store);
             return;
           default:
-            await reply(ctx, 'That giveaway subcommand does not exist.');
+            await reply(ctx, errorStatus('That is not a `/giveaway` subcommand I know.'));
         }
       },
     },

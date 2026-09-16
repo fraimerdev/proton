@@ -23,8 +23,13 @@ import {
   resolvePrecheckContext,
   type ScheduleOptions,
   type ScheduleOutcome,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_EMOJI,
 } from '@proton/core';
 import { dispatch } from '@proton/fixtures';
+
+const STATUS_EMOJI_PREFIX = new RegExp(`^(?:${STATUS_SUCCESS_EMOJI}|${STATUS_ERROR_EMOJI}) `);
+
 import { type AfkConfig, afkDefaultConfig, RECAP_MAX } from '../src/config.ts';
 import type { AfkDeps } from '../src/deps.ts';
 import { createAfkModule } from '../src/index.ts';
@@ -356,6 +361,7 @@ export interface CapturedLog {
 
 export interface SendBody {
   content?: string;
+  embeds?: Array<{ description?: string; color?: number }>;
   flags?: number;
   allowed_mentions?: { parse?: string[] };
   message_reference?: { message_id?: string; fail_if_not_exists?: boolean };
@@ -363,7 +369,7 @@ export interface SendBody {
 
 export interface CallbackBody {
   type?: number;
-  data?: { content?: string };
+  data?: { content?: string; embeds?: Array<{ description?: string; color?: number }> };
 }
 
 export interface Sent {
@@ -403,6 +409,7 @@ export interface Harness {
   job(jobId: string, data: unknown, overrides?: Partial<ContextOverrides>): Promise<void>;
 
   followUps(): SendBody[];
+  lastFollowUpEmbed(): { description?: string; color?: number } | null;
   lastFollowUp(): string | null;
   sends(): Sent[];
   nicknames(): Array<{ userId: string; nick: string | null }>;
@@ -553,7 +560,15 @@ export function harness(options: HarnessOptions = {}): Harness {
     },
 
     followUps,
-    lastFollowUp: () => followUps().at(-1)?.content ?? null,
+    // The status emoji is asserted on its own, by the tests that care which colour a path takes;
+    // carrying it through here would put it in front of every exact-match assertion in the suite.
+    lastFollowUp: () => {
+      const body = followUps().at(-1);
+      const text = body?.content || body?.embeds?.[0]?.description || null;
+      return text === null ? null : text.replace(STATUS_EMOJI_PREFIX, '');
+    },
+
+    lastFollowUpEmbed: () => followUps().at(-1)?.embeds?.[0] ?? null,
 
     sends: () =>
       rest.calls.flatMap((call) => {

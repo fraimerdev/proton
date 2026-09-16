@@ -69,7 +69,7 @@ export default function VerificationPage({
         ) : null}
 
         {!enabled ? (
-          <StatusBanner tone="neutral">{`${meta.label} is switched off. ${SWITCHED_OFF}`}</StatusBanner>
+          <StatusBanner tone="neutral">{`${meta.label} is disabled. ${SWITCHED_OFF}`}</StatusBanner>
         ) : null}
 
         {incomplete ? <StatusBanner tone="warning">{GATE_INCOMPLETE}</StatusBanner> : null}

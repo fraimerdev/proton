@@ -42,7 +42,9 @@ export const slowmodeCommand: Command = {
     const seconds = span.ms / 1000;
     if (seconds > MAX_SLOWMODE_SECONDS) {
       return perform(ctx, {
-        refusal: `You cannot set the slowmode to more than ${formatDuration(MAX_SLOWMODE_SECONDS * 1000)}`,
+        refusal:
+          `Discord caps slowmode at ${formatDuration(MAX_SLOWMODE_SECONDS * 1000)}, so I cannot ` +
+          `set this channel's wait to ${formatDuration(span.ms)}.`,
       });
     }
 

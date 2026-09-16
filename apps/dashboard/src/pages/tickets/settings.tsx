@@ -9,6 +9,7 @@ import { ChannelPicker } from '../../components/discord/channel-picker.tsx';
 import { DurationInput } from '../../components/discord/inputs.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import { RoleMultiPicker } from '../../components/discord/role-picker.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
 import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import { NumberStepper, TextArea, TextInput } from '../../components/ui/controls.tsx';
@@ -111,7 +112,31 @@ export function SettingsArea({
         </Rows>
       </Section>
 
-      <Section label="Ticket channels">
+      <Section
+        label="Ticket channels"
+        actions={
+          <>
+            <TestMessage
+              guildId={guildId}
+              moduleId="tickets"
+              simulations={form.view.simulations}
+              simulationId="tickets.channel_name"
+              draft={config as unknown as Record<string, unknown>}
+              dirty={form.dirty}
+              label="Test name"
+            />
+            <TestMessage
+              guildId={guildId}
+              moduleId="tickets"
+              simulations={form.view.simulations}
+              simulationId="tickets.close"
+              draft={config as unknown as Record<string, unknown>}
+              dirty={form.dirty}
+              label="Test closing message"
+            />
+          </>
+        }
+      >
         <Rows>
           <SettingRow
             title="Name pattern"

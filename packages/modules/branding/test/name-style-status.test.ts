@@ -63,7 +63,7 @@ describe('the status of a display name style', () => {
     }
   });
 
-  test('is off while Branding is switched off', () => {
+  test('is off while Branding is disabled', () => {
     expect(headline(status(GRADIENT, state(), false))).toEqual(['off', null]);
     expect(headline(status(null, null, false))).toEqual(['off', null]);
   });

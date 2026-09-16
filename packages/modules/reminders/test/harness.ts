@@ -207,6 +207,7 @@ export interface CallBody {
   type?: number;
   data?: {
     content?: string;
+    embeds?: Array<{ description?: string; color?: number }>;
     choices?: Array<{ name: string; value: string | number }>;
     allowed_mentions?: { parse?: string[]; users?: string[] };
     flags?: number;
@@ -225,6 +226,7 @@ export interface Harness {
   calls(): RestRequestOptions[];
   bodies(): CallBody[];
   replyContent(): string | null;
+  replyEmbed(): { description?: string; color?: number } | null;
   sent(): CallBody[];
   choices(): Array<{ name: string; value: string | number }>;
 
@@ -295,8 +297,16 @@ export function harness(options: HarnessOptions = {}): Harness {
     calls: () => rest.calls,
     bodies,
 
-    replyContent: () =>
-      bodies().find((body) => body.data?.content !== undefined)?.data?.content ?? null,
+    replyContent: () => {
+      const data = bodies().find(
+        (body) => body.data?.content !== undefined || body.data?.embeds !== undefined,
+      )?.data;
+
+      return data?.content || data?.embeds?.[0]?.description || null;
+    },
+
+    replyEmbed: () =>
+      bodies().findLast((body) => body.data?.embeds !== undefined)?.data?.embeds?.[0] ?? null,
 
     sent: () => bodies().filter((body) => body.content !== undefined),
 

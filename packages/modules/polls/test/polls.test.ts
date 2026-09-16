@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { limitFor, Permissions, POLL_MAX_ANSWERS } from '@proton/core';
+import {
+  limitFor,
+  Permissions,
+  POLL_MAX_ANSWERS,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { ANNOUNCE_JOB, announceKey } from '../src/announce.ts';
 import { POLL_DEFAULT_DURATION_HOURS } from '../src/config.ts';
 import {
@@ -92,6 +100,8 @@ describe('/poll create', () => {
       announceChannelId: null,
     });
     expect(h.lastAnswer()).toContain('700000000000000009');
+    expect(h.lastAnswerEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.lastAnswerEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('uses the server’s default duration when none is given', async () => {
@@ -202,6 +212,8 @@ describe('/poll create', () => {
 
     expect(h.polls.rows.size).toBe(0);
     expect(h.lastAnswer()).toContain('I could not post that poll');
+    expect(h.lastAnswerEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.lastAnswerEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('says so rather than pretending when Discord returns no message id', async () => {
@@ -233,6 +245,8 @@ describe('/poll create', () => {
     expect(answer).toContain(String(cap));
     expect(answer).toContain('plus');
     expect(answer).toContain('/poll end');
+    expect(h.lastAnswerEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.lastAnswerEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('a closed poll stops counting against the limit', async () => {
@@ -302,6 +316,7 @@ describe('/poll create', () => {
     expect(h.sent()).toHaveLength(1);
     expect(h.polls.rows.size).toBe(1);
     expect(h.lastAnswer()).toContain('already posted');
+    expect(h.lastAnswerEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('names the missing wiring when the module was built without its ports', async () => {
@@ -358,6 +373,8 @@ describe('/poll end', () => {
 
     expect(h.calls().some((call) => call.path.endsWith('/expire'))).toBe(false);
     expect(h.lastAnswer()).toContain('Developer Mode');
+    expect(h.lastAnswerEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.lastAnswerEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('says a poll already closed instead of expiring it twice', async () => {
@@ -464,6 +481,7 @@ describe('/poll list', () => {
     expect(h.calls()).toHaveLength(1);
     expect(h.lastAnswer()).toContain(POLL_MESSAGE);
     expect(h.lastAnswer()).not.toContain('700000000000000002');
+    expect(h.lastAnswerEmbed()).toBeNull();
   });
 
   test('says the server has none rather than answering with an empty list', async () => {

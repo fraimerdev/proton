@@ -107,7 +107,7 @@ describe('who is not counted', () => {
     expect(windowOf(h).hits[0]?.actorId).toBe(OWNER);
   });
 
-  test('does nothing at all when the module is switched off in this guild', async () => {
+  test('does nothing at all when the module is disabled in this guild', async () => {
     const h = harness();
 
     const outcome = await h.handle(auditEvent('channel.deleted'), { enabled: false });

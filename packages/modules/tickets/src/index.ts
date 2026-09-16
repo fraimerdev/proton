@@ -35,6 +35,7 @@ import {
   ticketJobDataSchema,
   warnAt,
 } from './schedule.ts';
+import { ticketsSimulations } from './simulation.ts';
 import type { Ticket, TicketStore } from './store.ts';
 
 export {
@@ -473,6 +474,15 @@ function sweepHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig> {
   };
 }
 
+export {
+  TICKETS_BLACKLIST_SIMULATION,
+  TICKETS_CLOSE_SIMULATION,
+  TICKETS_NAME_SIMULATION,
+  TICKETS_RESPONSE_SIMULATION,
+  TICKETS_WELCOME_SIMULATION,
+  ticketsSimulations,
+} from './simulation.ts';
+
 export function createTicketsModule(
   deps: TicketsDeps = {},
 ): ModuleManifest<typeof ticketsConfigSchema> {
@@ -526,6 +536,7 @@ export function createTicketsModule(
     ],
 
     templates: ticketsTemplates,
+    simulations: ticketsSimulations,
 
     commands: ticketsCommands(deps),
     listeners: [

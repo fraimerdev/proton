@@ -3,12 +3,14 @@ import {
   type ComponentInteraction,
   type EventListener,
   type EventType,
+  errorStatus,
   findComponentAction,
   interactionRef,
   type ModuleContext,
   type ProtonEvent,
   readComponentInteraction,
   rowKeys,
+  successStatus,
 } from '@proton/core';
 import { usedKeys } from '@proton/core/placeholders';
 import { ComponentType } from 'discord-api-types/v10';
@@ -161,10 +163,12 @@ export async function handleComponentPress(
     await replyEphemeral(
       ctx,
       to,
-      `This ${what} does nothing right now: the Messages module is switched off in this server. ` +
-        `An admin can turn it back on from ${WHERE}.`,
+      errorStatus(
+        `This ${what} does nothing right now: the Messages module is disabled in this server. ` +
+          `An admin can turn it back on from ${WHERE}.`,
+      ),
     );
-    return { action: 'refused', reason: 'embeds is switched off in this server' };
+    return { action: 'refused', reason: 'embeds is disabled in this server' };
   }
 
   const saved = findTemplate(ctx.config.templates, ref.messageName);
@@ -172,9 +176,11 @@ export async function handleComponentPress(
     await replyEphemeral(
       ctx,
       to,
-      `This ${what} belongs to a saved message called '${ref.messageName}', which no longer ` +
-        `exists in this server, so I can't tell what it should do. An admin can re-create it and ` +
-        `re-post the message from ${WHERE}.`,
+      errorStatus(
+        `This ${what} belongs to a saved message called '${ref.messageName}', which no longer ` +
+          `exists in this server, so I can't tell what it should do. An admin can re-create it and ` +
+          `re-post the message from ${WHERE}.`,
+      ),
     );
     return { action: 'refused', reason: `no saved message '${ref.messageName}'` };
   }
@@ -183,14 +189,16 @@ export async function handleComponentPress(
     await replyEphemeral(
       ctx,
       to,
-      `The saved message '${saved.name}' no longer has a ${what} keyed '${ref.key}', so this ` +
-        `message is out of date. An admin can re-post it from ${WHERE}.`,
+      errorStatus(
+        `The saved message '${saved.name}' no longer has a ${what} keyed '${ref.key}', so this ` +
+          `message is out of date. An admin can re-post it from ${WHERE}.`,
+      ),
     );
     return { action: 'refused', reason: `no component '${ref.key}' on '${saved.name}'` };
   }
 
   if (isSelect && facts.values.length === 0) {
-    await replyEphemeral(ctx, to, 'You did not choose anything, so nothing changed.');
+    await replyEphemeral(ctx, to, errorStatus('You did not choose anything, so nothing changed.'));
     return { action: 'ignored', reason: 'no option was chosen' };
   }
 
@@ -207,11 +215,13 @@ export async function handleComponentPress(
     await replyEphemeral(
       ctx,
       to,
-      isSelect
-        ? `The dropdown '${ref.key}' on '${saved.name}' has nothing set up for ` +
-            `${listKeys(withoutAction)}, so nothing changed. An admin can fix it in ${WHERE}.`
-        : `The button '${ref.key}' on '${saved.name}' carries no action, so nothing happened. An ` +
-            `admin can give it one in ${WHERE}.`,
+      errorStatus(
+        isSelect
+          ? `The dropdown '${ref.key}' on '${saved.name}' has nothing set up for ` +
+              `${listKeys(withoutAction)}, so nothing changed. An admin can fix it in ${WHERE}.`
+          : `The button '${ref.key}' on '${saved.name}' carries no action, so nothing happened. An ` +
+              `admin can give it one in ${WHERE}.`,
+      ),
     );
     return { action: 'refused', reason: `no action for ${listKeys(withoutAction)}` };
   }
@@ -222,7 +232,7 @@ export async function handleComponentPress(
       describeUnbound(`a press on '${saved.name}' was not carried out`, bound.unbound),
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    await replyEphemeral(ctx, to, NOT_WIRED);
+    await replyEphemeral(ctx, to, errorStatus(NOT_WIRED));
     return { action: 'refused', reason: 'the follow-up port is unbound' };
   }
 
@@ -275,11 +285,15 @@ export async function handleComponentPress(
   }
 
   if (notes.length > 0) {
+    const fellShort =
+      report.failures.length > 0 || unknownHeldRoles.length > 0 || withoutAction.length > 0;
+    const text = notes.join(' ');
+
     await followUp(
       ctx,
       respondTo(ctx, to.interaction, facts.userId, `${event.id}:roles`),
       bound.deps.applicationId,
-      { content: notes.join(' '), ephemeral: true },
+      { ...(fellShort ? errorStatus(text) : successStatus(text)), ephemeral: true },
     );
   }
 

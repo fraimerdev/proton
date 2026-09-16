@@ -75,7 +75,7 @@ describe('what the retirement migration writes', () => {
     expect(parsed.schedule?.pingRoleId).toBeUndefined();
   });
 
-  test('a switched-off announcement stays switched off', () => {
+  test('a switched-off announcement stays disabled', () => {
     const parsed = savedMessageSchema.parse(asMigrated({ ...ONE_OFF, enabled: false }));
 
     expect(parsed.schedule?.enabled).toBe(false);

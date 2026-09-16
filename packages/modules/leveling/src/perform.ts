@@ -1,4 +1,9 @@
-import type { Attachment, CommandContext } from '@proton/core';
+import {
+  type Attachment,
+  type CommandContext,
+  MESSAGE_CONTENT_MAX,
+  type StatusBody,
+} from '@proton/core';
 import type { LevelingConfig } from './config.ts';
 
 export const MODULE_ID = 'leveling';
@@ -7,9 +12,18 @@ export const LEVELING_ACTOR = 'proton:leveling';
 
 export async function reply(
   ctx: CommandContext<LevelingConfig>,
-  content: string,
+  message: string | StatusBody,
   options: { ephemeral?: boolean; files?: Attachment[] } = {},
 ): Promise<void> {
+  const body =
+    typeof message === 'string'
+      ? // Omitted rather than sent empty: /rank answers with the card alone, and Discord reads a
+        // present-but-empty content as a caption to render rather than as no caption at all.
+        message
+        ? { content: message.slice(0, MESSAGE_CONTENT_MAX) }
+        : {}
+      : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -22,10 +36,7 @@ export async function reply(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-
-      // Omitted rather than sent empty: /rank answers with the card alone, and Discord reads a
-      // present-but-empty content as a caption to render rather than as no caption at all.
-      ...(content ? { content: content.slice(0, 2000) } : {}),
+      ...body,
       ephemeral: options.ephemeral ?? false,
       ...(options.files?.length ? { files: options.files } : {}),
     },

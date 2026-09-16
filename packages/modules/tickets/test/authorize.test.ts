@@ -547,7 +547,7 @@ describe('a deleted ticket refuses everything', () => {
   });
 });
 
-describe('claiming can be switched off for a ticket type', () => {
+describe('claiming can be disabled for a ticket type', () => {
   test('claim is refused with claiming_off and points at the setting that did it', () => {
     const refusal = refusalOf(decide('claim', ADMIN, { claimMode: 'off' }));
 
@@ -581,7 +581,7 @@ describe('claiming can be switched off for a ticket type', () => {
   });
 });
 
-describe('reopening can be switched off for a ticket type', () => {
+describe('reopening can be disabled for a ticket type', () => {
   test('reopen is refused with reopen_off and says what to do instead', () => {
     const refusal = refusalOf(decide('reopen', ADMIN, { reopenEnabled: false }));
 

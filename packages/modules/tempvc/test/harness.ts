@@ -1,10 +1,18 @@
-import type { ActionRequest, ActionResult, ModuleContext } from '@proton/core';
+import type {
+  ActionRequest,
+  ActionResult,
+  CommandContext,
+  ModuleContext,
+  RawOption,
+} from '@proton/core';
+import { createCommandOptions, OptionType } from '@proton/core';
 import {
   type TempVcConfig,
   type TempVcHub,
   tempVcConfigSchema,
   tempVcHubSchema,
 } from '../src/config.ts';
+import type { TempVcDeps } from '../src/deps.ts';
 import { TemporaryVoiceService } from '../src/service.ts';
 import type { TempVoiceChannelRow } from '../src/table.ts';
 import { MemoryTempVoiceRepository } from './memory-repository.ts';
@@ -149,3 +157,81 @@ export function member(userId = ADA, channelId: string | null = HUB) {
 
 export const callsOf = (fake: Fake, kind: string): Call[] =>
   fake.calls.filter((call) => call.kind === kind);
+
+interface AnswerPayload {
+  content?: string;
+  embeds?: Array<{ description?: string; color?: number }>;
+}
+
+/** Only the replies that carry something to read — a defer carries neither content nor embeds. */
+function answers(fake: Fake): AnswerPayload[] {
+  return callsOf(fake, 'interaction_reply')
+    .map((call) => call.payload as AnswerPayload)
+    .filter((payload) => payload.content !== undefined || payload.embeds !== undefined);
+}
+
+export function replyText(fake: Fake): string | null {
+  const payload = answers(fake).at(-1);
+  return payload?.content || payload?.embeds?.[0]?.description || null;
+}
+
+export function replyColour(fake: Fake): number | null {
+  return answers(fake).at(-1)?.embeds?.[0]?.color ?? null;
+}
+
+export function replyCount(fake: Fake): number {
+  return answers(fake).length;
+}
+
+export function memoryPresence(): NonNullable<TempVcDeps['presence']> {
+  return {
+    locate: async () => null,
+    place: async () => undefined,
+    enter: async () => 1,
+    leave: async () => 0,
+    occupants: async () => [],
+    reset: async () => undefined,
+  };
+}
+
+export function depsOf(fake: Fake): TempVcDeps {
+  return { repository: fake.repository, presence: memoryPresence(), botUserId: BOT };
+}
+
+export interface CommandCall {
+  sub: string;
+  userId?: string;
+  channelId?: string;
+  options?: RawOption[];
+}
+
+export const stringOption = (name: string, value: string): RawOption => ({
+  name,
+  type: OptionType.String,
+  value,
+});
+
+export const integerOption = (name: string, value: number): RawOption => ({
+  name,
+  type: OptionType.Integer,
+  value,
+});
+
+export const userOption = (name: string, value: string): RawOption => ({
+  name,
+  type: OptionType.User,
+  value,
+});
+
+export function commandContext(fake: Fake, call: CommandCall): CommandContext<TempVcConfig> {
+  return {
+    ...fake.ctx,
+    channelId: call.channelId ?? CREATED,
+    userId: call.userId ?? ADA,
+    options: createCommandOptions([
+      { name: call.sub, type: OptionType.Subcommand, options: call.options ?? [] },
+    ]),
+    interaction: { id: '111111111111111111', token: 'tok' },
+    idempotencyKey: `tempvc:${call.sub}`,
+  } as CommandContext<TempVcConfig>;
+}

@@ -321,7 +321,7 @@ async function teardown(ctx: Ctx, store: AfkStore, auditId: string): Promise<voi
     await retireExpiry(
       ctx,
       status,
-      `AFK ended ${status.userId}'s status as the module was switched off`,
+      `AFK ended ${status.userId}'s status as the module was disabled`,
     );
   }
 }
@@ -336,7 +336,7 @@ async function untagAll(ctx: Ctx, store: AfkStore, auditId: string): Promise<voi
       kind: 'set_member_nickname',
       targetId: status.userId,
       actorId: MODULE_ID,
-      reason: 'AFK tag switched off',
+      reason: 'AFK tag disabled',
       payload: { nickname: status.previousNick },
       dryRun: false,
       record: false,
@@ -368,14 +368,14 @@ export async function handleConfigChanged(
   if (!enabledAfter || !ctx.config.enabled) {
     if (!enabledBefore && !changedKeys.includes('enabled')) return;
 
-    const store = storeOf(ctx, deps, 'ending AFK statuses when the module is switched off');
+    const store = storeOf(ctx, deps, 'ending AFK statuses when the module is disabled');
     if (store) await teardown(ctx, store, auditId);
     return;
   }
 
   if (ctx.config.nicknameTag || !changedKeys.includes('nicknameTag')) return;
 
-  const store = storeOf(ctx, deps, 'removing [AFK] tags when the tag is switched off');
+  const store = storeOf(ctx, deps, 'removing [AFK] tags when the tag is disabled');
   if (store) await untagAll(ctx, store, auditId);
 }
 

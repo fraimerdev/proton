@@ -74,7 +74,7 @@ export class MessageCacheConsumer {
     if (config?.cacheMessageContent === true) return;
 
     const removed = await this.#deps.cache.purge(payload.guildId);
-    this.#deps.logger.info('purged the message cache after it was switched off', {
+    this.#deps.logger.info('purged the message cache after it was disabled', {
       guildId: payload.guildId,
       removed,
     });

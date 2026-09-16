@@ -9,10 +9,12 @@ import {
   updateMessage as buildUpdateMessage,
   type CommandContext,
   type InteractionRef,
+  isStatusBody,
   MESSAGE_CONTENT_MAX,
   type Modal,
   type ModuleContext,
   type RespondTo,
+  type StatusBody,
 } from '@proton/core';
 import { clipGraphemes } from '@proton/core/placeholders';
 import { type GiveawaysConfig, MODULE_ID } from './config.ts';
@@ -65,9 +67,13 @@ export interface ReplyOptions {
   suffix?: string;
 }
 
+function bodyOf(message: string | StatusBody): { content: string } | StatusBody {
+  return typeof message === 'string' ? { content: message.slice(0, MESSAGE_CONTENT_MAX) } : message;
+}
+
 export async function reply(
   ctx: CommandContext<GiveawaysConfig>,
-  content: string,
+  message: string | StatusBody,
   options: ReplyOptions = {},
 ): Promise<ActionResult> {
   return run(
@@ -83,7 +89,7 @@ export async function reply(
       payload: {
         interactionId: ctx.interaction.id,
         interactionToken: ctx.interaction.token,
-        content: content.slice(0, MESSAGE_CONTENT_MAX),
+        ...bodyOf(message),
         ephemeral: options.ephemeral ?? true,
         allowedMentions: options.allowedMentions ?? MENTIONS_OFF,
       },
@@ -96,7 +102,7 @@ export async function reply(
 // to the person who asked and nowhere else.
 export async function replyWithFile(
   ctx: CommandContext<GiveawaysConfig>,
-  content: string,
+  message: string | StatusBody,
   file: { filename: string; contentType: string; data: Uint8Array },
 ): Promise<ActionResult> {
   return run(
@@ -112,7 +118,7 @@ export async function replyWithFile(
       payload: {
         interactionId: ctx.interaction.id,
         interactionToken: ctx.interaction.token,
-        content: content.slice(0, MESSAGE_CONTENT_MAX),
+        ...bodyOf(message),
         files: [file],
         ephemeral: true,
         allowedMentions: MENTIONS_OFF,
@@ -183,12 +189,12 @@ export async function refuseNow(
   interaction: InteractionRef,
   actorId: string,
   root: string,
-  content: string,
+  message: string | StatusBody,
 ): Promise<ActionResult> {
   return run(
     ctx,
     buildReplyEphemeral(respondTo(ctx, interaction, actorId, root), {
-      content: content.slice(0, MESSAGE_CONTENT_MAX),
+      ...bodyOf(message),
       allowedMentions: MENTIONS_OFF,
     }),
     'answer the button press',
@@ -234,6 +240,7 @@ export async function updateInPlace(
 
 export type FollowUpBody =
   | string
+  | StatusBody
   | { components: MessageComponent[]; flags?: number; content?: string };
 
 export async function tellEntrant(
@@ -243,9 +250,10 @@ export async function tellEntrant(
   root: string,
   body: FollowUpBody,
 ): Promise<ActionResult> {
+  // A Components V2 followup refuses embeds, so the components branch never gains a status embed.
   const message =
-    typeof body === 'string'
-      ? { content: body.slice(0, MESSAGE_CONTENT_MAX) }
+    typeof body === 'string' || isStatusBody(body)
+      ? bodyOf(body)
       : {
           ...(body.content !== undefined
             ? { content: body.content.slice(0, MESSAGE_CONTENT_MAX) }

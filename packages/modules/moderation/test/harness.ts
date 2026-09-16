@@ -208,6 +208,11 @@ export interface PublishedEvent {
   payload: unknown;
 }
 
+export interface AnswerMessage {
+  content?: string;
+  embeds?: Array<{ description?: string; color?: number }>;
+}
+
 export interface Harness {
   rest: FakeRest;
   recorder: MemoryRecorder;
@@ -227,6 +232,7 @@ export interface Harness {
   cases(): CaseInput[];
 
   replyContent(): string | null;
+  replyMessage(): AnswerMessage | null;
   run(command: string, options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
 }
 
@@ -286,18 +292,24 @@ export function harness(): Harness {
 
   const discordCalls = () => rest.calls.filter((call) => !isAnswer(call.path));
 
-  // The first answer that carries text, not the first answer: a deferred command acknowledges
-  // with an empty callback and says what happened in the followup after it.
-  const replyContent = (): string | null => {
+  const replyMessage = (): AnswerMessage | null => {
     for (const call of rest.calls) {
       if (!isAnswer(call.path)) continue;
 
-      const body = call.body as { content?: string; data?: { content?: string } } | undefined;
-      const content = body?.data?.content ?? body?.content;
-      if (typeof content === 'string') return content;
+      // A callback nests its message under `data`; a webhook followup carries it at the top level.
+      const body = call.body as (AnswerMessage & { data?: AnswerMessage }) | undefined;
+      const message = body?.data ?? body;
+      if (message?.content || message?.embeds?.[0]) return message;
     }
 
     return null;
+  };
+
+  // The first answer that carries text, not the first answer: a deferred command acknowledges
+  // with an empty callback and says what happened in the followup after it.
+  const replyContent = (): string | null => {
+    const message = replyMessage();
+    return message?.content || message?.embeds?.[0]?.description || null;
   };
 
   const bindings = (overrides: Partial<RunOverrides>) => ({
@@ -357,6 +369,7 @@ export function harness(): Harness {
     published,
     discordCalls,
     replyContent,
+    replyMessage,
     cases: () => recorder.recorded.filter((c) => c.kind !== 'interaction_reply'),
 
     async run(command, options, overrides = {}) {

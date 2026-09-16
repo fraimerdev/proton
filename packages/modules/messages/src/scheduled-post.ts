@@ -161,12 +161,12 @@ export async function runScheduledPost(
   }
 
   if (!ctx.config.enabled || !booked.enabled) {
-    ctx.logger.info(`“${template.name}” was due but is switched off, so nothing was posted.`, {
+    ctx.logger.info(`“${template.name}” was due but is disabled, so nothing was posted.`, {
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
       template: template.name,
     });
-    return { action: 'skipped', reason: 'that template is switched off' };
+    return { action: 'skipped', reason: 'that template is disabled' };
   }
 
   let message: SavedMessage = template;

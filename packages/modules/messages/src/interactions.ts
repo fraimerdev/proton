@@ -1,6 +1,7 @@
 import {
   type EventListener,
   type EventType,
+  errorStatus,
   interactionRef,
   MAX_AUTOCOMPLETE_CHOICES,
   type ModuleContext,
@@ -9,6 +10,7 @@ import {
   readAutocompleteInteraction,
   readModalInteraction,
   respondAutocomplete,
+  successStatus,
 } from '@proton/core';
 import { readComposedEmbed, SEND_ACTION } from './compose.ts';
 import { type MessagesConfig, MODULE_ID, suggestTemplateNames } from './config.ts';
@@ -26,12 +28,12 @@ import {
 export const MESSAGES_MODAL_EVENT_TYPES: EventType[] = ['interaction.modal'];
 export const MESSAGES_AUTOCOMPLETE_EVENT_TYPES: EventType[] = ['interaction.autocomplete'];
 
-const AUTOCOMPLETED_COMMAND = 'embed';
+const AUTOCOMPLETED_COMMAND = 'message';
 const AUTOCOMPLETED_SUBCOMMAND = 'post';
 const FOCUSED_OPTION = 'name';
 
 const SWITCHED_OFF =
-  'The Messages module is switched off in this server, so nothing was posted. An admin can turn ' +
+  'The Messages module is disabled in this server, so nothing was posted. An admin can turn ' +
   'it back on from the Proton dashboard.';
 
 const NOT_WIRED =
@@ -62,8 +64,8 @@ export async function handleModalSubmit(
   const to = respondTo(ctx, interactionRef(facts), facts.userId, event.id);
 
   if (!ctx.config.enabled) {
-    await replyEphemeral(ctx, to, SWITCHED_OFF);
-    return { action: 'refused', reason: 'embeds is switched off in this server' };
+    await replyEphemeral(ctx, to, errorStatus(SWITCHED_OFF));
+    return { action: 'refused', reason: 'embeds is disabled in this server' };
   }
 
   const channelId = facts.channelId;
@@ -71,21 +73,23 @@ export async function handleModalSubmit(
     await replyEphemeral(
       ctx,
       to,
-      'Discord did not tell me which channel you composed that in, so I have nowhere to post ' +
-        'it. Run `/message send` again from the channel you want it in.',
+      errorStatus(
+        'Discord did not tell me which channel you composed that in, so I have nowhere to post ' +
+          'it. Run `/message send` again from the channel you want it in.',
+      ),
     );
     return { action: 'refused', reason: 'the modal submission carried no channel' };
   }
 
   const composed = readComposedEmbed(facts.fields);
   if (!composed.ok) {
-    await replyEphemeral(ctx, to, `${composed.humanReason} Nothing was posted.`);
+    await replyEphemeral(ctx, to, errorStatus(`${composed.humanReason} Nothing was posted.`));
     return { action: 'refused', reason: composed.humanReason };
   }
 
   const built = buildEmbed(composed.content);
   if (!built.ok) {
-    await replyEphemeral(ctx, to, `${built.humanReason} Nothing was posted.`);
+    await replyEphemeral(ctx, to, errorStatus(`${built.humanReason} Nothing was posted.`));
     return { action: 'refused', reason: built.humanReason };
   }
 
@@ -95,7 +99,7 @@ export async function handleModalSubmit(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await replyEphemeral(ctx, to, NOT_WIRED);
+    await replyEphemeral(ctx, to, errorStatus(NOT_WIRED));
     return { action: 'refused', reason: 'the follow-up port is unbound' };
   }
 
@@ -114,12 +118,17 @@ export async function handleModalSubmit(
       ctx,
       to,
       bound.deps.applicationId,
-      `I could not post your embed in <#${channelId}>. ${humanReason}`,
+      errorStatus(`I could not post your embed in <#${channelId}>. ${humanReason}`),
     );
     return { action: 'refused', reason: humanReason };
   }
 
-  await followUp(ctx, to, bound.deps.applicationId, `Posted your embed in <#${channelId}>.`);
+  await followUp(
+    ctx,
+    to,
+    bound.deps.applicationId,
+    successStatus(`Posted your embed in <#${channelId}>.`),
+  );
   return { action: 'posted', channelId };
 }
 
@@ -147,7 +156,7 @@ export async function handleAutocomplete(
   }
 
   if (!ctx.config.enabled) {
-    return { action: 'ignored', reason: 'embeds is switched off in this server' };
+    return { action: 'ignored', reason: 'embeds is disabled in this server' };
   }
 
   const names = suggestTemplateNames(

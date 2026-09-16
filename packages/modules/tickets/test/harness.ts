@@ -886,6 +886,7 @@ export interface Harness {
   followUpContent(): string | null;
   told(): string[];
   lastTold(): string | null;
+  lastStatus(): { description: string; color: number } | null;
 
   components(): Record<string, unknown>[];
   buttonIds(): string[];
@@ -1013,9 +1014,19 @@ export function harness(options: HarnessOptions = {}): Harness {
       : body;
   };
 
+  // Falls through to the embed: a status reply's sentence is its description, not its content.
+  const textOf = (call: RestRequestOptions): string | null => {
+    const data = dataOf(call) as {
+      content?: string;
+      embeds?: Array<{ description?: string }>;
+    };
+
+    return data.content || data.embeds?.[0]?.description || null;
+  };
+
   const contentsOf = (calls: readonly RestRequestOptions[]): string[] =>
     calls
-      .map((call) => dataOf(call).content)
+      .map(textOf)
       .filter((content): content is string => typeof content === 'string' && content.length > 0);
 
   const callbacks = (): RestRequestOptions[] =>
@@ -1028,6 +1039,16 @@ export function harness(options: HarnessOptions = {}): Harness {
     rest.calls.filter(
       (call) => call.path.startsWith('/interactions/') || call.path.startsWith('/webhooks/'),
     );
+
+  const statuses = (): Array<{ description: string; color: number }> =>
+    facing()
+      .flatMap(
+        (call) => (dataOf(call).embeds ?? []) as Array<{ description?: string; color?: number }>,
+      )
+      .filter(
+        (embed): embed is { description: string; color: number } =>
+          typeof embed.description === 'string' && typeof embed.color === 'number',
+      );
 
   const components = (): Record<string, unknown>[] => {
     const last = rest.calls
@@ -1140,6 +1161,7 @@ export function harness(options: HarnessOptions = {}): Harness {
 
     told: () => contentsOf(facing()),
     lastTold: () => contentsOf(facing()).at(-1) ?? null,
+    lastStatus: () => statuses().at(-1) ?? null,
 
     components,
 

@@ -1,4 +1,10 @@
-import type { ActionResult, CommandContext, ModuleContext } from '@proton/core';
+import {
+  type ActionResult,
+  type CommandContext,
+  MESSAGE_CONTENT_MAX,
+  type ModuleContext,
+  type StatusBody,
+} from '@proton/core';
 import { type CountersConfig, MODULE_ID } from './config.ts';
 import type { CounterEdit } from './render.ts';
 
@@ -20,9 +26,12 @@ export const NO_STORE =
 
 export async function reply(
   ctx: CommandContext<CountersConfig>,
-  content: string,
+  message: string | StatusBody,
   suffix = 'reply',
 ): Promise<void> {
+  const body =
+    typeof message === 'string' ? { content: message.slice(0, MESSAGE_CONTENT_MAX) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -35,7 +44,7 @@ export async function reply(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: content.slice(0, 2000),
+      ...body,
       ephemeral: true,
       allowedMentions: { parse: [] },
     },

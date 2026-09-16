@@ -2,7 +2,10 @@ import {
   type CommandContext,
   type CommandDefinition,
   deferEphemeral,
+  errorStatus,
   interactionRef,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -62,18 +65,18 @@ async function held(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return null;
   }
 
   if (!ctx.config.ownerCommands) {
-    await reply(ctx, OFF);
+    await reply(ctx, errorStatus(OFF));
     return null;
   }
 
   const row = await bound.repository.byChannel(ctx.guildId, ctx.channelId);
   if (row === null) {
-    await reply(ctx, NOT_IN_ONE);
+    await reply(ctx, errorStatus(NOT_IN_ONE));
     return null;
   }
 
@@ -81,19 +84,24 @@ async function held(
   if (!hub) {
     await reply(
       ctx,
-      'The creator channel this was made from has been removed from the settings, so I no ' +
-        'longer know what I’m allowed to do here.',
+      errorStatus(
+        'The creator channel this was made from has been removed from the settings, so I no ' +
+          'longer know what I’m allowed to do here.',
+      ),
     );
     return null;
   }
 
   if (control !== null && !hub.allow[control]) {
-    await reply(ctx, `This server has switched **${control}** off for these channels.`);
+    await reply(
+      ctx,
+      errorStatus(`This server has switched **${control}** off for these channels.`),
+    );
     return null;
   }
 
   if (requireOwner && row.ownerId !== ctx.userId) {
-    await reply(ctx, NOT_YOURS);
+    await reply(ctx, errorStatus(NOT_YOURS));
     return null;
   }
 
@@ -222,13 +230,15 @@ export function voiceCommand(deps: TempVcDeps): Command {
 
           const name = (ctx.options.getString('name') ?? '').trim();
           if (name.length === 0) {
-            return reply(ctx, 'A channel needs a name — that one was empty.');
+            return reply(ctx, errorStatus('A channel needs a name — that one was empty.'));
           }
 
           const ok = await context.service.rename(ctx, context.row, name);
           return reply(
             ctx,
-            ok ? `Renamed your channel to **${name}**.` : refused('rename your channel'),
+            ok
+              ? successStatus(`Your channel has been renamed to **${name}**.`)
+              : refused('rename your channel'),
           );
         }
 
@@ -242,9 +252,11 @@ export function voiceCommand(deps: TempVcDeps): Command {
           return reply(
             ctx,
             ok
-              ? limit === 0
-                ? 'Removed the member limit.'
-                : `Your channel now holds ${limit} member${limit === 1 ? '' : 's'}.`
+              ? successStatus(
+                  limit === 0
+                    ? 'The member limit on your channel has been removed.'
+                    : `Your channel now holds ${limit} member${limit === 1 ? '' : 's'}.`,
+                )
               : refused('set that member limit'),
           );
         }
@@ -258,7 +270,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
 
           return reply(
             ctx,
-            ok ? `Your channel is now **${mode}**.` : refused('change who may join'),
+            ok ? successStatus(`Your channel is now **${mode}**.`) : refused('change who may join'),
           );
         }
 
@@ -271,10 +283,10 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const target = ctx.options.getUserId('member');
-          if (!target) return reply(ctx, 'Name somebody to change.');
+          if (!target) return reply(ctx, errorStatus('Name a member to change.'));
 
           if (target === ctx.userId) {
-            return reply(ctx, 'You already have access to your own channel.');
+            return reply(ctx, errorStatus('You already have access to your own channel.'));
           }
 
           const kind = sub === 'trust' ? 'trust' : sub === 'block' ? 'block' : null;
@@ -286,7 +298,7 @@ export function voiceCommand(deps: TempVcDeps): Command {
             context.hub.privacy,
           );
 
-          return reply(ctx, ok ? said(sub, target) : refused(`${sub} that member`));
+          return reply(ctx, ok ? successStatus(said(sub, target)) : refused(`${sub} that member`));
         }
 
         case 'kick': {
@@ -294,16 +306,16 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const target = ctx.options.getUserId('member');
-          if (!target) return reply(ctx, 'Name somebody to remove.');
+          if (!target) return reply(ctx, errorStatus('Name a member to disconnect.'));
           if (target === ctx.userId)
-            return reply(ctx, 'Use `/voice delete` to close your channel.');
+            return reply(ctx, errorStatus('Use `/voice delete` to close your channel.'));
 
           const ok = await context.service.disconnect(ctx, context.row, target);
           return reply(
             ctx,
             ok
-              ? `Disconnected <@${target}>.`
-              : `I could not disconnect <@${target}> — they may have already left.`,
+              ? successStatus(`<@${target}> has been disconnected from your channel.`)
+              : errorStatus(`I could not disconnect <@${target}> — they may have already left.`),
           );
         }
 
@@ -312,15 +324,25 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const target = ctx.options.getUserId('member');
-          if (!target) return reply(ctx, 'Name somebody to invite.');
+          if (!target) return reply(ctx, errorStatus('Name a member to invite.'));
 
           // Trusted first, so the invite is not a link to a door they cannot open.
-          await context.service.setAccess(ctx, context.row, target, 'trust', context.hub.privacy);
+          const ok = await context.service.setAccess(
+            ctx,
+            context.row,
+            target,
+            'trust',
+            context.hub.privacy,
+          );
 
           return reply(
             ctx,
-            `<@${target}> can now join <#${context.row.channelId}>. Send them the channel — ` +
-              'I don’t message members who haven’t asked to hear from me.',
+            ok
+              ? successStatus(
+                  `<@${target}> can now join <#${context.row.channelId}>. Send them the channel — ` +
+                    'I don’t message members who haven’t asked to hear from me.',
+                )
+              : refused('invite that member'),
           );
         }
 
@@ -329,13 +351,16 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const target = ctx.options.getUserId('member');
-          if (!target) return reply(ctx, 'Name who should take over.');
-          if (target === ctx.userId) return reply(ctx, 'You already own this channel.');
+          if (!target) return reply(ctx, errorStatus('Name who should take over.'));
+          if (target === ctx.userId)
+            return reply(ctx, errorStatus('You already own this channel.'));
 
           const ok = await context.service.transfer(ctx, context.row, target, context.hub.privacy);
           return reply(
             ctx,
-            ok ? `<@${target}> owns this channel now.` : refused('hand over your channel'),
+            ok
+              ? successStatus(`<@${target}> owns this channel now.`)
+              : refused('hand over your channel'),
           );
         }
 
@@ -349,10 +374,14 @@ export function voiceCommand(deps: TempVcDeps): Command {
           return reply(
             ctx,
             ok
-              ? region
-                ? `Voice region pinned to **${region}**.`
-                : 'Voice region back to automatic.'
-              : `I could not set that region. Discord only accepts the ids it publishes.`,
+              ? successStatus(
+                  region
+                    ? `The voice region of your channel is pinned to **${region}**.`
+                    : 'The voice region of your channel is back to automatic.',
+                )
+              : errorStatus(
+                  'I could not set that region. Discord only accepts the ids it publishes.',
+                ),
           );
         }
 
@@ -361,11 +390,14 @@ export function voiceCommand(deps: TempVcDeps): Command {
           if (!context) return;
 
           const ok = await context.service.destroy(ctx, context.row, 'deleted by its owner');
-          return reply(ctx, ok ? 'Channel deleted.' : refused('delete your channel'));
+          return reply(
+            ctx,
+            ok ? successStatus('Your channel has been deleted.') : refused('delete your channel'),
+          );
         }
 
         default:
-          return reply(ctx, 'That subcommand is not one I know.');
+          return reply(ctx, errorStatus('That subcommand is not one I know.'));
       }
     },
   };
@@ -378,9 +410,11 @@ async function claim(ctx: CommandContext<TempVcConfig>, deps: TempVcDeps): Promi
   if (context.row.ownerId !== null) {
     return reply(
       ctx,
-      context.row.ownerId === ctx.userId
-        ? 'You already own this channel.'
-        : `<@${context.row.ownerId}> still owns this channel.`,
+      errorStatus(
+        context.row.ownerId === ctx.userId
+          ? 'You already own this channel.'
+          : `<@${context.row.ownerId}> still owns this channel.`,
+      ),
     );
   }
 
@@ -388,7 +422,9 @@ async function claim(ctx: CommandContext<TempVcConfig>, deps: TempVcDeps): Promi
 
   return reply(
     ctx,
-    won ? 'You own this channel now.' : 'Somebody else claimed it a moment before you did.',
+    won
+      ? successStatus('You own this channel now.')
+      : errorStatus('Somebody else claimed it a moment before you did.'),
   );
 }
 
@@ -400,8 +436,10 @@ function said(sub: string, target: string): string {
   return `<@${target}> is no longer blocked.`;
 }
 
-function refused(what: string): string {
-  return `I could not ${what}. I may be missing a permission in this channel — ask an admin to check.`;
+function refused(what: string): StatusBody {
+  return errorStatus(
+    `I could not ${what}. I may be missing a permission in this channel — ask an admin to check.`,
+  );
 }
 
 export function tempVcCommands(deps: TempVcDeps): Command[] {

@@ -1,10 +1,13 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   type InteractionRef,
   newId,
   Permissions,
   type RespondTo,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType, InteractionType } from 'discord-api-types/v10';
@@ -76,7 +79,7 @@ async function ready(ctx: Ctx, deps: SuggestionsDeps, what: string): Promise<Bou
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await answer(ctx, to, NOT_WIRED);
+    await answer(ctx, to, errorStatus(NOT_WIRED));
     return null;
   }
 
@@ -107,20 +110,20 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
 
       const channelId = ctx.config.channelId;
       if (channelId === undefined) {
-        await answer(ctx, bound.to, NO_CHANNEL);
+        await answer(ctx, bound.to, errorStatus(NO_CHANNEL));
         return;
       }
 
       const parsed = normaliseSuggestion(ctx.options.getString('text') ?? '');
       if (!parsed.ok) {
-        await answer(ctx, bound.to, parsed.humanReason);
+        await answer(ctx, bound.to, errorStatus(parsed.humanReason));
         return;
       }
 
       await acknowledge(ctx, bound.to);
 
-      const say = (content: string): Promise<unknown> =>
-        tell(ctx, bound.to, bound.applicationId, content);
+      const say = (body: StatusBody): Promise<unknown> =>
+        tell(ctx, bound.to, bound.applicationId, body);
 
       const suggestion = await bound.store.create({
         id: newId(),
@@ -133,7 +136,12 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
       const row = buildVoteRow(suggestion.id, suggestion.status);
       if (!row.ok) {
         await bound.store.remove(ctx.guildId, suggestion.id);
-        await say(`I could not build the vote buttons, so nothing was posted: ${row.humanReason}`);
+        await say(
+          errorStatus(
+            `I could not build the vote buttons, so nothing was posted in <#${channelId}>: ` +
+              `${row.humanReason}`,
+          ),
+        );
         return;
       }
 
@@ -150,8 +158,10 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
       if (!succeeded(posted)) {
         await bound.store.remove(ctx.guildId, suggestion.id);
         await say(
-          `I could not post your suggestion in <#${channelId}>, so nothing was saved: ` +
-            `${whyItFailed(posted)}`,
+          errorStatus(
+            `I could not post your suggestion in <#${channelId}>, so nothing was saved: ` +
+              `${whyItFailed(posted)}`,
+          ),
         );
         return;
       }
@@ -171,8 +181,10 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
       const thread = await discussIn(ctx, bound, suggestion.id, channelId, threadName(suggestion));
 
       await say(
-        `Posted as **suggestion #${suggestion.number}** in <#${channelId}>. Members vote with ` +
-          `the buttons under it.${thread}`,
+        successStatus(
+          `Posted as **suggestion #${suggestion.number}** in <#${channelId}>. Members vote with ` +
+            `the buttons under it.${thread}`,
+        ),
       );
     },
   };
@@ -255,7 +267,7 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
 
       const subcommand = ctx.options.getSubcommand() ?? '';
       if (!isDecision(subcommand)) {
-        await answer(ctx, bound.to, 'That subcommand is not one I know.');
+        await answer(ctx, bound.to, errorStatus('That subcommand is not one I know.'));
         return;
       }
 
@@ -264,22 +276,26 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
         await answer(
           ctx,
           bound.to,
-          'That command needs a suggestion number — the one in the title of the post, like ' +
-            '`Suggestion #12`.',
+          errorStatus(
+            'That command needs a suggestion number — the one in the title of the post, like ' +
+              '`Suggestion #12`.',
+          ),
         );
         return;
       }
 
       await acknowledge(ctx, bound.to);
 
-      const say = (content: string): Promise<unknown> =>
-        tell(ctx, bound.to, bound.applicationId, content);
+      const say = (body: StatusBody): Promise<unknown> =>
+        tell(ctx, bound.to, bound.applicationId, body);
 
       const suggestion = await bound.store.byNumber(ctx.guildId, number);
       if (!suggestion) {
         await say(
-          `There is no **suggestion #${number}** in this server, so there was nothing to ` +
-            `${subcommand}. The number is the one in the title of the post you mean.`,
+          errorStatus(
+            `There is no **suggestion #${number}** in this server, so there was nothing to ` +
+              `${subcommand}. The number is the one in the title of the post you mean.`,
+          ),
         );
         return;
       }
@@ -287,8 +303,10 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
       const outcome = decide(suggestion.status, subcommand);
       if (outcome.outcome === 'unchanged') {
         await say(
-          `**Suggestion #${number}** is already **${STATUS_LABELS[outcome.status]}**, so nothing ` +
-            'changed. Pick a different decision if you have changed your mind.',
+          errorStatus(
+            `**Suggestion #${number}** is already **${STATUS_LABELS[outcome.status]}**, so ` +
+              'nothing changed. Pick a different decision if you have changed your mind.',
+          ),
         );
         return;
       }
@@ -304,8 +322,10 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
 
       if (!decided) {
         await say(
-          `**Suggestion #${number}** disappeared while I was deciding it, so nothing was ` +
-            'recorded. Try again.',
+          errorStatus(
+            `**Suggestion #${number}** was deleted while I was deciding it, so nothing was ` +
+              'recorded.',
+          ),
         );
         return;
       }
@@ -317,7 +337,10 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
       const post = await refresh(ctx, bound, decided);
 
       await say(
-        `**Suggestion #${number}** is now **${STATUS_LABELS[decided.status]}**.${previously}${post}`,
+        successStatus(
+          `**Suggestion #${number}** is now **${STATUS_LABELS[decided.status]}**.` +
+            `${previously}${post}`,
+        ),
       );
     },
   };

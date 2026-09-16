@@ -259,6 +259,47 @@ export async function fetchGuildMembers(
   return found;
 }
 
+export const MEMBER_SEARCH_MAX = 25;
+
+/**
+ * Discord matches the query against usernames and nicknames. Refusals come back as an empty list
+ * rather than a throw: a picker that cannot search is still usable, because the admin running the
+ * test is already its default.
+ */
+export async function searchGuildMembers(
+  restProxyUrl: string,
+  guildId: string,
+  query: string,
+  limit = MEMBER_SEARCH_MAX,
+): Promise<GuildMember[]> {
+  const base = restProxyUrl.replace(/\/$/, '');
+  const params = new URLSearchParams({ query, limit: String(Math.min(limit, MEMBER_SEARCH_MAX)) });
+
+  const response = await fetch(`${base}/api/guilds/${guildId}/members/search?${params}`).catch(
+    () => null,
+  );
+
+  if (!response?.ok) return [];
+
+  const raw = (await response.json().catch(() => null)) as RawMember[] | null;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.flatMap((member) => {
+    const user = member.user;
+    if (!user) return [];
+
+    return [
+      {
+        id: user.id,
+        displayName: member.nick || user.global_name || user.username || user.id,
+        username: user.username ?? user.id,
+        avatarUrl: avatarUrl(guildId, user, member.avatar ?? null),
+        bot: user.bot === true,
+      },
+    ];
+  });
+}
+
 const protonMemberSchema = z.object({
   nick: z.string().nullish(),
   user: z.object({

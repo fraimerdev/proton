@@ -3,6 +3,8 @@ import {
   type CommandDefinition,
   checkLimit,
   type EntitlementTier,
+  errorStatus,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -23,7 +25,7 @@ type Command = CommandDefinition<RemindersConfig>;
 type Ctx = CommandContext<RemindersConfig>;
 
 const DISABLED =
-  'Reminders are switched off in this server, so I would never post one. An admin can turn ' +
+  'Reminders are disabled in this server, so I would never post one. An admin can turn ' +
   'the Reminders module on from the Proton dashboard.';
 
 const NOT_WIRED =
@@ -38,7 +40,7 @@ const DURATION_HINT = 'I need to know how far ahead, for example `30m`, `12h` or
 
 async function ready(ctx: Ctx, deps: RemindersDeps, what: string): Promise<ReminderStore | null> {
   if (!ctx.config.enabled) {
-    await reply(ctx, DISABLED);
+    await reply(ctx, errorStatus(DISABLED));
     return null;
   }
 
@@ -48,7 +50,7 @@ async function ready(ctx: Ctx, deps: RemindersDeps, what: string): Promise<Remin
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return null;
   }
 
@@ -104,19 +106,22 @@ export function remindCommand(deps: RemindersDeps): Command {
 
       const raw = ctx.options.getString('duration');
       if (raw === null || raw.trim().length === 0) {
-        await reply(ctx, DURATION_HINT);
+        await reply(ctx, errorStatus(DURATION_HINT));
         return;
       }
 
       const delay = resolveDelay(raw, ctx.config);
       if (!delay.ok) {
-        await reply(ctx, delay.humanReason);
+        await reply(ctx, errorStatus(delay.humanReason));
         return;
       }
 
       const text = ctx.options.getString('text')?.trim() ?? '';
       if (text.length === 0) {
-        await reply(ctx, 'A reminder needs something to say — tell me what to remind you about.');
+        await reply(
+          ctx,
+          errorStatus('A reminder needs something to say — tell me what to remind you about.'),
+        );
         return;
       }
 
@@ -127,7 +132,7 @@ export function remindCommand(deps: RemindersDeps): Command {
             'worker must be started with a scheduled-action store.',
           { guildId: ctx.guildId, moduleId: MODULE_ID },
         );
-        await reply(ctx, NO_SCHEDULER);
+        await reply(ctx, errorStatus(NO_SCHEDULER));
         return;
       }
 
@@ -141,8 +146,10 @@ export function remindCommand(deps: RemindersDeps): Command {
       if (!limit.ok) {
         await reply(
           ctx,
-          `I did not set that reminder: ${limit.humanReason} ` +
-            '`/reminders list` shows the ones you already have and `/reminders cancel` clears one.',
+          errorStatus(
+            `I did not set that reminder: ${limit.humanReason} ` +
+              '`/reminders list` shows the ones you already have and `/reminders cancel` clears one.',
+          ),
         );
         return;
       }
@@ -172,15 +179,19 @@ export function remindCommand(deps: RemindersDeps): Command {
 
         await reply(
           ctx,
-          'I couldn’t save that reminder, so I threw it away rather than leave you one that ' +
-            'never fires. Try again in a moment.',
+          errorStatus(
+            'I couldn’t save that reminder, so I threw it away rather than leave you one that ' +
+              'never fires. Please try again in a moment.',
+          ),
         );
         return;
       }
 
       await reply(
         ctx,
-        `I'll remind you <t:${unixSeconds(reminder.remindAt)}:R>, here in this channel.`,
+        successStatus(
+          `I'll remind you <t:${unixSeconds(reminder.remindAt)}:R>, here in this channel.`,
+        ),
       );
     },
   };
@@ -226,7 +237,9 @@ async function cancel(ctx: Ctx, store: ReminderStore): Promise<void> {
   if (id.length === 0) {
     await reply(
       ctx,
-      'Tell me which reminder to cancel — start typing and pick one of yours from the list.',
+      errorStatus(
+        'Tell me which reminder to cancel — start typing and pick one of yours from the list.',
+      ),
     );
     return;
   }
@@ -235,8 +248,10 @@ async function cancel(ctx: Ctx, store: ReminderStore): Promise<void> {
   if (!reminder) {
     await reply(
       ctx,
-      'I have no reminder by that name in this server — it may already have been posted or ' +
-        'cancelled. `/reminders list` shows what you have waiting.',
+      errorStatus(
+        'I have no reminder by that name in this server — it may already have been posted or ' +
+          'cancelled. `/reminders list` shows what you have waiting.',
+      ),
     );
     return;
   }
@@ -244,22 +259,27 @@ async function cancel(ctx: Ctx, store: ReminderStore): Promise<void> {
   if (reminder.userId !== ctx.userId) {
     await reply(
       ctx,
-      `That reminder was set by <@${reminder.userId}>, so only they can cancel it. ` +
-        '`/reminders list` shows yours.',
+      errorStatus(
+        `That reminder was set by <@${reminder.userId}>, so only they can cancel it. ` +
+          '`/reminders list` shows yours.',
+      ),
       { allowedMentions: MENTIONS_OFF },
     );
     return;
   }
 
   if (reminder.deliveredAt !== null) {
-    await reply(ctx, 'That reminder has already been posted, so there is nothing left to cancel.');
+    await reply(
+      ctx,
+      errorStatus('That reminder has already been posted, so there is nothing left to cancel.'),
+    );
     return;
   }
 
   await store.remove(ctx.guildId, reminder.id, ctx.userId);
   await retire(ctx, reminder.id);
 
-  await reply(ctx, 'Cancelled — I will not post that one.');
+  await reply(ctx, successStatus('Cancelled — I will not post that one.'));
 }
 
 function remindersBuilder(): SlashCommandBuilder {
@@ -306,7 +326,7 @@ export function remindersCommand(deps: RemindersDeps): Command {
         case 'cancel':
           return cancel(ctx, store);
         default:
-          await reply(ctx, 'That subcommand is not one I know.');
+          await reply(ctx, errorStatus('That subcommand is not one I know.'));
       }
     },
   };

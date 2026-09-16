@@ -21,7 +21,7 @@ export const NAME_STYLE_STATUS_TEXT = {
   refused: 'Discord didn’t accept this style',
   permission: 'Proton needs Change Nickname in this server',
   unconfirmed: 'Couldn’t confirm with Discord',
-  off: 'Applies when Branding is switched on',
+  off: 'Applies when Branding is enabled',
 } as const;
 
 export type NameStyleStatusTone = 'neutral' | 'success' | 'warning' | 'danger';

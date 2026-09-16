@@ -131,7 +131,7 @@ async function maybeGrant(
     if (roleIds.length > 0) {
       ctx.logger.info(
         `${roleIds.length} role(s) are configured to be granted on join, but "Grant roles on ` +
-          'join" is switched off for this server, so nothing was granted.',
+          'join" is disabled for this server, so nothing was granted.',
         { guildId: ctx.guildId, moduleId: JOINROLES_MODULE_ID, userId: member.userId },
       );
     }

@@ -85,7 +85,7 @@ describe('0017_messages_module', () => {
     expect(row?.schema_version).toBe(4);
   });
 
-  test('a module that was switched off stays off', async () => {
+  test('a module that was disabled stays off', async () => {
     await seed('embeds', { enabled: false, saved: [] }, false);
     await applyRename();
 

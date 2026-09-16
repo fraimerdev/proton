@@ -30,7 +30,7 @@ exactly which permission or intent is missing and where.
 stack of separate bots a server usually runs for moderation, security and engagement, configured
 from one dashboard. Supporting truths from the product, not the lead: it names the missing
 permission or intent instead of failing silently; every action it takes becomes a numbered case;
-nothing is switched on until an admin switches it on.
+nothing is enabled until an admin switches it on.
 
 ## Operating Context
 
@@ -88,5 +88,5 @@ nothing is switched on until an admin switches it on.
 1. Show the work instead of claiming it: Proton doing its job in Discord is the proof.
 2. One place for the whole job: modules share one dashboard, one case log and one voice.
 3. Say exactly what is wrong: a refusal names the missing permission or intent and where.
-4. Off until switched on: nothing acts, logs or stores until an admin chooses it.
+4. Off until enabled: nothing acts, logs or stores until an admin chooses it.
 5. Honest by default: no invented numbers, customers or capabilities.

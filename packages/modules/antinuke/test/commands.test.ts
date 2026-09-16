@@ -1,4 +1,10 @@
 import { describe, expect, test } from 'bun:test';
+import {
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { ADMIN, ALERT_CHANNEL, GUILD, harness, NOW, stringOption, subcommand } from './harness.ts';
 
 const WINDOW = {
@@ -29,6 +35,8 @@ describe('/antinuke maintenance', () => {
     });
     expect(h.replyContent()).toContain('Maintenance mode is on until');
     expect(h.replyContent()).toContain('/antinuke resume');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('audits the fact that the breaker is now off, and who switched it off', async () => {
@@ -38,7 +46,7 @@ describe('/antinuke maintenance', () => {
       alertChannelId: ALERT_CHANNEL,
     });
 
-    expect(h.logged('warn', 'was switched ON by')).toBe(true);
+    expect(h.logged('warn', 'was enabled by')).toBe(true);
     const alert = h.alertContent() ?? '';
     expect(alert).toContain(ADMIN);
     expect(alert).toContain('re-arms by itself');
@@ -54,6 +62,8 @@ describe('/antinuke maintenance', () => {
     expect(await h.maintenance.get(GUILD)).toBeNull();
     expect(h.replyContent()).toContain('caps maintenance mode at 1h');
     expect(h.replyContent()).toContain('asked for 6h');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('refuses a duration it cannot read, in the same words the dashboard uses', async () => {
@@ -73,7 +83,8 @@ describe('/antinuke maintenance', () => {
     });
 
     expect(await h.maintenance.get(GUILD)).toBeNull();
-    expect(h.replyContent()).toContain('switched off in this server');
+    expect(h.replyContent()).toContain('disabled in this server');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('says so when no maintenance store is bound, instead of appearing to work', async () => {
@@ -94,6 +105,8 @@ describe('/antinuke resume', () => {
 
     expect(await h.maintenance.get(GUILD)).toBeNull();
     expect(h.replyContent()).toContain('armed again');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
     expect(h.logged('warn', 'ended early by')).toBe(true);
   });
 
@@ -103,6 +116,8 @@ describe('/antinuke resume', () => {
     await h.runCommand(subcommand('resume'));
 
     expect(h.replyContent()).toContain('already armed');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 });
 
@@ -119,6 +134,8 @@ describe('/antinuke status', () => {
     expect(reply).toContain('Nothing irreversible');
 
     expect(reply).toContain('No alert channel is set');
+
+    expect(h.replyEmbed()).toBeNull();
   });
 
   test('reports a live maintenance window, with its expiry and who opened it', async () => {

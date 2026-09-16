@@ -123,6 +123,11 @@ export interface DiscordRow {
   components?: DiscordButton[];
 }
 
+export interface DiscordEmbedBody {
+  description?: string;
+  [key: string]: unknown;
+}
+
 export interface CallBody {
   type?: number;
   data?: {
@@ -131,10 +136,11 @@ export interface CallBody {
     title?: string;
     components?: Array<Record<string, unknown>>;
     choices?: Array<{ name: string; value: string | number }>;
+    embeds?: DiscordEmbedBody[];
     flags?: number;
   };
   content?: string;
-  embeds?: Array<Record<string, unknown>>;
+  embeds?: DiscordEmbedBody[];
   components?: DiscordRow[];
   allowed_mentions?: { parse?: string[]; roles?: string[]; users?: string[] };
 }
@@ -149,6 +155,8 @@ export interface Harness {
   sends(): RestRequestOptions[];
   postedMessage(): CallBody | null;
   postedEmbed(): Record<string, unknown> | null;
+  statusEmbeds(): DiscordEmbedBody[];
+  lastStatus(): DiscordEmbedBody | null;
   postedRows(): DiscordRow[];
   postedButtons(row?: number): DiscordButton[];
   callbackType(): number | null;
@@ -209,11 +217,26 @@ export function harness(seed: MessagesDeps = { applicationId: APPLICATION }): Ha
 
   const postedRows = (): DiscordRow[] => postedMessage()?.components ?? [];
 
+  const statusEmbeds = (): DiscordEmbedBody[] =>
+    rest.calls
+      .filter((call) => !call.path.startsWith('/channels/'))
+      .flatMap((call) => {
+        const body = call.body as CallBody;
+        return body.data?.embeds ?? body.embeds ?? [];
+      });
+
   const said = (): string[] => {
     const lines: string[] = [];
     for (const body of bodies()) {
-      const content = body.data?.content ?? body.content;
-      if (typeof content === 'string') lines.push(content);
+      const data = body.data;
+      // Embed first, content second: a status reply sets content to '', and reading content first
+      // would hide a stale sentence left above the embed instead of failing the assertion on it.
+      const text =
+        data?.embeds?.[0]?.description ??
+        body.embeds?.[0]?.description ??
+        data?.content ??
+        body.content;
+      if (typeof text === 'string') lines.push(text);
     }
     return lines;
   };
@@ -248,6 +271,8 @@ export function harness(seed: MessagesDeps = { applicationId: APPLICATION }): Ha
 
     postedMessage,
     postedEmbed: () => postedMessage()?.embeds?.[0] ?? null,
+    statusEmbeds,
+    lastStatus: () => statusEmbeds().at(-1) ?? null,
     postedRows,
     postedButtons: (row = 0) => postedRows()[row]?.components ?? [],
 
@@ -360,7 +385,7 @@ export function autocompleteEvent(
       channel_id: CHANNEL,
       member: { user: { id: MEMBER }, roles: [] },
       data: {
-        name: options.commandName ?? 'embed',
+        name: options.commandName ?? 'message',
         options: [
           {
             name: options.subcommand ?? 'post',

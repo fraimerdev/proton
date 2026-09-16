@@ -61,7 +61,7 @@ export function ProtectionState({
   });
 
   if (isPending) {
-    // Switched off, the answer is almost always nothing, so a reserved slot would collapse on every load.
+    // disabled, the answer is almost always nothing, so a reserved slot would collapse on every load.
     return enabled ? (
       <LoadingArea label="Loading protection status" minHeight={70} size="sm" />
     ) : null;

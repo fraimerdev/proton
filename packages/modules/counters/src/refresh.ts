@@ -205,7 +205,7 @@ export function createRefreshHandler(deps: CountersDeps): ScheduledHandler<Count
   return async (_data, ctx) => {
     if (!ctx.config.enabled || ctx.config.counters.length === 0) {
       ctx.logger.info(
-        'the counter refresh stopped in this server: counter channels are switched off or none ' +
+        'the counter refresh stopped in this server: counter channels are disabled or none ' +
           'are configured. Saving the module’s settings starts it again.',
         { guildId: ctx.guildId, moduleId: MODULE_ID },
       );

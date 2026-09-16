@@ -76,7 +76,7 @@ export function renderModuleToggled(input: RenderInput): RenderResult | null {
   return {
     embed: logEmbed({
       subject: payload.moduleName ?? payload.moduleId,
-      action: payload.enabledAfter ? 'switched on' : 'switched off',
+      action: payload.enabledAfter ? 'enabled' : 'disabled',
       colour: payload.enabledAfter ? ServerLogColors.Add : ServerLogColors.Remove,
       lines: [
         { label: 'Module', value: payload.moduleId },

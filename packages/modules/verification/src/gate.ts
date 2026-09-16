@@ -1,4 +1,11 @@
-import type { CommandContext, ModuleContext, ProtonEvent } from '@proton/core';
+import {
+  type CommandContext,
+  errorStatus,
+  type ModuleContext,
+  type ProtonEvent,
+  type StatusBody,
+  successStatus,
+} from '@proton/core';
 import type { VerificationConfig } from './config.ts';
 import { bindGateDeps, describeUnbound, type VerificationDeps } from './deps.ts';
 import { MODULE_ID, reply, runSteps, VERIFICATION_ACTOR } from './perform.ts';
@@ -77,7 +84,7 @@ export async function handleJoin(
   if (!ctx.config.applyUnverifiedOnJoin) {
     const reason =
       `${join.userId} joined without the unverified role and this server has "Apply the ` +
-      'unverified role on join" switched off, so they are NOT gated. The invite they used ' +
+      'unverified role on join" disabled, so they are NOT gated. The invite they used ' +
       'does not grant the role — add it under Server Settings → Invites, or turn the setting ' +
       'back on.';
     ctx.logger.warn(reason, { guildId: ctx.guildId, moduleId: MODULE_ID, userId: join.userId });
@@ -165,8 +172,10 @@ export async function runVerify(
   if (!ctx.config.enabled) {
     await reply(
       ctx,
-      'Verification is switched off in this server, so there is nothing to pass. An admin can ' +
-        'turn it on from the Proton dashboard.',
+      errorStatus(
+        'Verification is disabled in this server, so there is nothing to pass. An admin can ' +
+          'turn it on from the Proton dashboard.',
+      ),
     );
     return;
   }
@@ -177,8 +186,10 @@ export async function runVerify(
     ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
     await reply(
       ctx,
-      'I can’t verify you right now. Nothing was changed. This is a fault on my side, not ' +
-        'anything you did.',
+      errorStatus(
+        'I can’t verify you right now. Nothing was changed. This is a fault on my side, not ' +
+          'anything you did.',
+      ),
     );
     return;
   }
@@ -192,13 +203,13 @@ export async function runVerify(
       moduleId: MODULE_ID,
       userId: ctx.userId,
     });
-    await reply(ctx, plan.refusal);
+    await reply(ctx, errorStatus(plan.refusal));
     return;
   }
 
   await reply(
     ctx,
-    (await runVerification(ctx, plan, ctx.userId, ctx.idempotencyKey, rawDeps)).message,
+    verifyStatus(await runVerification(ctx, plan, ctx.userId, ctx.idempotencyKey, rawDeps)),
   );
 }
 
@@ -206,6 +217,10 @@ export interface VerifyResult {
   verified: boolean;
   message: string;
   blocked?: boolean;
+}
+
+export function verifyStatus(result: VerifyResult): StatusBody {
+  return result.verified ? successStatus(result.message) : errorStatus(result.message);
 }
 
 const BLOCKED_MESSAGE =

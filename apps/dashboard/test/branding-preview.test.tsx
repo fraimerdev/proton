@@ -249,7 +249,7 @@ describe('the notes under the preview', () => {
   test('they say when Branding is off and when a refused nickname leaves Discord’s one in place', () => {
     const blank = config({});
     const off =
-      'Branding is switched off, so none of this reaches Discord until it is switched on.';
+      'Branding is disabled, so none of this reaches Discord until it is enabled.';
     const kept = 'Proton will not send this nickname, so Discord keeps the one it has now.';
 
     expect(previewNotesFor(blank, READY, false)).toContain(off);

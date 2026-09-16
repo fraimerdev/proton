@@ -12,6 +12,7 @@ import type { MessagesDeps } from './deps.ts';
 import { createMessagesAutocompleteListener, createMessagesModalListener } from './interactions.ts';
 import { createMessagesComponentListener } from './interactions-component.ts';
 import { messagesTemplates } from './placeholders.ts';
+import { messagesSimulations } from './simulation.ts';
 import { createMessagesScheduleListener } from './schedule-listener.ts';
 import { POST_JOB, runScheduledPost } from './scheduled-post.ts';
 
@@ -173,6 +174,12 @@ export {
   SCHEDULED_ACTOR,
 } from './scheduled-post.ts';
 
+export {
+  MESSAGES_POST_SIMULATION,
+  MESSAGES_SCHEDULED_SIMULATION,
+  messagesSimulations,
+} from './simulation.ts';
+
 export function createMessagesModule(
   deps: MessagesDeps = {},
 ): ModuleManifest<typeof messagesConfigSchema> {
@@ -200,6 +207,7 @@ export function createMessagesModule(
     configLimits: [{ key: 'savedTemplates', path: 'templates' }],
 
     templates: messagesTemplates,
+    simulations: messagesSimulations,
 
     commands: messagesCommands(deps),
     listeners: [

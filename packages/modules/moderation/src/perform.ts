@@ -3,8 +3,11 @@ import {
   type ActionRequest,
   type ActionResult,
   type CommandContext,
+  errorStatus,
   isScopedActionExecutor,
   parseDuration,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import type { ModerationConfig } from './config.ts';
 
@@ -87,13 +90,13 @@ export async function perform(
   plan: PlanResult,
 ): Promise<void> {
   if (isRefusal(plan)) {
-    await reply(ctx, plan.refusal);
+    await reply(ctx, errorStatus(plan.refusal));
     return;
   }
 
   const missingReason = reasonRefusal(ctx, plan.reason);
   if (missingReason) {
-    await reply(ctx, missingReason.refusal);
+    await reply(ctx, errorStatus(missingReason.refusal));
     return;
   }
 
@@ -151,35 +154,48 @@ function stamped(text: string, result: ActionResult): string {
   return result.caseId ? `${text}\n-# Case \`${result.caseId}\`` : text;
 }
 
-function describe(plan: ActionPlan, result: ActionResult, followUpFailed = false): string {
+function describe(plan: ActionPlan, result: ActionResult, followUpFailed = false): StatusBody {
   switch (result.status) {
     case 'executed': {
+      // Red although the action itself landed: successWithoutFollowUp is only set where the
+      // follow-up *is* the command, so the thing the invoker asked for did not happen.
       if (followUpFailed && plan.successWithoutFollowUp) {
-        return stamped(plan.successWithoutFollowUp, result);
+        return errorStatus(stamped(plan.successWithoutFollowUp, result));
       }
 
-      if (!result.failure) return stamped(plan.success, result);
+      if (!result.failure) return successStatus(stamped(plan.success, result));
 
       const landed = plan.successWithoutReversal ?? plan.success;
-      return stamped(`${landed}\n\n${result.failure.humanReason}`, result);
+      return successStatus(stamped(`${landed}\n\n${result.failure.humanReason}`, result));
     }
 
+    // Red because nobody was actually banned: a rehearsal records a case and calls no one. Kept
+    // for exhaustiveness only — perform() hard-codes dryRun:false, so nothing reaches this today.
     case 'dry_run':
-      return stamped(
-        `${plan.success}\n\nDiscord was not called — the case was recorded as a rehearsal.`,
-        result,
+      return errorStatus(
+        stamped(
+          `${plan.success}\n\nDiscord was not called — the case was recorded as a rehearsal.`,
+          result,
+        ),
       );
 
     case 'skipped_duplicate':
-      return 'I had already handled this command, so I did nothing a second time.';
+      return errorStatus('I had already handled this command, so I did nothing a second time.');
 
     case 'failed_precheck':
     case 'failed_api':
-      return result.failure?.humanReason ?? "That didn't go through, and I wasn't told why.";
+      return errorStatus(
+        result.failure?.humanReason ?? "That didn't go through, and I wasn't told why.",
+      );
   }
 }
 
-export async function reply(ctx: CommandContext<ModerationConfig>, content: string): Promise<void> {
+export async function reply(
+  ctx: CommandContext<ModerationConfig>,
+  message: string | StatusBody,
+): Promise<void> {
+  const body = typeof message === 'string' ? { content: message.slice(0, 2000) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -191,7 +207,7 @@ export async function reply(ctx: CommandContext<ModerationConfig>, content: stri
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
 
-      content: content.slice(0, 2000),
+      ...body,
       ephemeral: !ctx.config.publicReplies,
 
       // Rendered, but notifying nobody. These replies name the member acted on and the role

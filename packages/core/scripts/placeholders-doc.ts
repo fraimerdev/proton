@@ -451,7 +451,7 @@ function messageFieldsSection(): string {
   return [
     table(['Path in the message', 'Label', 'Kind', 'Limit'], rows(MESSAGE_TEMPLATE_FIELDS)),
     '',
-    'Reply actions, filled in only on Messages templates with placeholders switched on:',
+    'Reply actions, filled in only on Messages templates with placeholders enabled:',
     '',
     table(['Path in the message', 'Label', 'Kind', 'Limit'], rows(REPLY_ACTION_FIELDS)),
   ].join('\n');

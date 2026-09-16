@@ -1,4 +1,5 @@
 import {
+  errorStatus,
   type EventListener,
   type EventType,
   interactionRef,
@@ -72,7 +73,13 @@ export async function handleStatsPress(
     });
 
     await ctx.executor.execute(
-      replyEphemeral(to, 'I cannot read this trap’s numbers right now. Try again in a moment.'),
+      replyEphemeral(
+        to,
+        errorStatus(
+          `I cannot read the numbers for <#${channelId}> — Proton was started without its ` +
+            'honeypot statistics store.',
+        ),
+      ),
     );
     return { action: 'refused', reason: 'the stats port is unbound' };
   }

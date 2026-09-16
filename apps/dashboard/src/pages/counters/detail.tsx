@@ -12,6 +12,7 @@ import {
   ChannelPicker,
   channelIcon,
 } from '../../components/discord/channel-picker.tsx';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { PlaceholderSuggestions } from '../../components/placeholders/placeholder-suggestions.tsx';
 import { TemplateDiagnostics } from '../../components/placeholders/template-diagnostics.tsx';
 import { Button, SegmentedControl, TextInput } from '../../components/ui/controls.tsx';
@@ -102,7 +103,21 @@ export function CounterDetail({
 
   return (
     <>
-      <Section label="Count">
+      <Section
+        label="Count"
+        actions={
+          <TestMessage
+            guildId={guildId}
+            moduleId="counters"
+            simulations={form.view.simulations}
+            simulationId="counters.channel_name"
+            draft={form.value as unknown as Record<string, unknown>}
+            dirty={form.dirty}
+            fixed={{ counterIndex: index }}
+            label="Test name"
+          />
+        }
+      >
         <Rows>
           <SettingRow
             title="What to count"

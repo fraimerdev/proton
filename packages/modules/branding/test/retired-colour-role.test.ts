@@ -321,7 +321,15 @@ describe('no colour anywhere', () => {
       const h = harness();
       await run(h);
 
-      const bodies = h.calls().map((call) => JSON.stringify(call.body ?? {}));
+      // Proton's replies are excluded, not the calls that carry branding: a status embed has a
+      // colour of its own, and it is the red or the green, never a colour this module ever stored.
+      const bodies = h
+        .calls()
+        .filter(
+          (call) => !call.path.startsWith('/webhooks/') && !call.path.startsWith('/interactions/'),
+        )
+        .map((call) => JSON.stringify(call.body ?? {}));
+
       expect(h.calls().length).toBeGreaterThan(0);
       expect(roleCalls(h)).toEqual([]);
       expect(bodies.filter((body) => COLOUR_FIELD.test(body))).toEqual([]);

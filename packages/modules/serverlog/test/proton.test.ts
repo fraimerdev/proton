@@ -82,7 +82,7 @@ describe('config changes', () => {
       context(executor),
     );
 
-    expect(executor.titles()).toEqual(['Join roles switched on']);
+    expect(executor.titles()).toEqual(['Join roles enabled']);
   });
 
   test('a save that toggled and changed settings logs both', async () => {
@@ -95,7 +95,7 @@ describe('config changes', () => {
 
     expect(executor.titles().sort()).toEqual([
       'Join roles settings changed',
-      'Join roles switched on',
+      'Join roles enabled',
     ]);
   });
 });
@@ -212,7 +212,7 @@ describe('Proton’s own audit entries are not logged twice', () => {
   });
 });
 
-describe('the Proton category can be switched off', () => {
+describe('the Proton category can be disabled', () => {
   test('nothing is logged when the category is off', async () => {
     const executor = new RecordingExecutor();
 

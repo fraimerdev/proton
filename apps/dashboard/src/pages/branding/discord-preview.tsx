@@ -75,7 +75,7 @@ export function previewNotesFor(
 
   if (!enabled) {
     notes.push(
-      'Branding is switched off, so none of this reaches Discord until it is switched on.',
+      'Branding is disabled, so none of this reaches Discord until it is enabled.',
     );
   }
   if (isRefused(config)) {

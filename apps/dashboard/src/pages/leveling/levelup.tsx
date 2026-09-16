@@ -18,6 +18,7 @@ import {
 } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { Button, Switch } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { previewMessage } from '../../lib/placeholder-preview.ts';
@@ -250,6 +251,17 @@ export function LevelUpArea({
     <EditorPreviewLayout
       editor={editor}
       previewTitle="Discord preview"
+      previewActions={
+        <TestMessage
+          guildId={guildId}
+          moduleId="leveling"
+          simulations={form.view.simulations}
+          simulationId="leveling.level_up"
+          draft={config as unknown as Record<string, unknown>}
+          dirty={form.dirty}
+          configuredChannelId={config.levelUpChannelId ?? null}
+        />
+      }
       preview={
         <>
           <DiscordPreview

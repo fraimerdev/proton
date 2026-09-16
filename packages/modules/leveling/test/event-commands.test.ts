@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { type ActionRequest, Permissions, type RawOption } from '@proton/core';
+import {
+  type ActionRequest,
+  Permissions,
+  type RawOption,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { xpCommand } from '../src/commands.ts';
 import { XP_EVENT_MAX_PENDING, XP_EVENT_RETENTION_MS } from '../src/config.ts';
 import type { LevelingDeps } from '../src/deps.ts';
@@ -32,8 +40,19 @@ function answerOf(sent: ActionRequest[]): ActionRequest | undefined {
 }
 
 function contentOf(sent: ActionRequest[]): string {
-  const payload = answerOf(sent)?.payload as { content?: string } | undefined;
-  return payload?.content ?? '';
+  const payload = answerOf(sent)?.payload as
+    | { content?: string; embeds?: { description?: string }[] }
+    | undefined;
+
+  return payload?.content || payload?.embeds?.[0]?.description || '';
+}
+
+function embedOf(sent: ActionRequest[]): { description?: string; color?: number } | undefined {
+  const payload = answerOf(sent)?.payload as
+    | { embeds?: { description?: string; color?: number }[] }
+    | undefined;
+
+  return payload?.embeds?.[0];
 }
 
 describe('/xp event start', () => {
@@ -54,6 +73,8 @@ describe('/xp event start', () => {
     expect(answer).toMatchObject({ ephemeral: true, allowedMentions: { parse: [] } });
     expect(contentOf(sent)).toContain('XP event started');
     expect(contentOf(sent)).toContain('2×');
+    expect(embedOf(sent)?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(embedOf(sent)?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('stores the event with an id taken from the interaction', async () => {
@@ -181,6 +202,8 @@ describe('/xp event end', () => {
     await xpCommand(depsWith(store)).handler(ctx);
 
     expect(contentOf(sent)).toContain('nothing to end');
+    expect(embedOf(sent)?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embedOf(sent)?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 });
 
@@ -227,7 +250,7 @@ describe('/xp event gating', () => {
     expect(group?.options?.map((option) => option.name)).toEqual(['start', 'end', 'list']);
   });
 
-  test('a server with Leveling switched off is refused before anything is stored', async () => {
+  test('a server with Leveling disabled is refused before anything is stored', async () => {
     const store = new FakeXpEventStore();
     const { ctx, sent } = commandContext(startOptions(2, '2h'), { enabled: false });
 
@@ -236,9 +259,10 @@ describe('/xp event gating', () => {
     expect(store.calls).toEqual([]);
     expect(sent).toHaveLength(1);
     expect(sent[0]?.payload).toMatchObject({ ephemeral: true });
-    expect((sent[0]?.payload as { content?: string } | undefined)?.content).toContain(
-      'switched off',
-    );
+    expect(
+      (sent[0]?.payload as { embeds?: { description?: string }[] } | undefined)?.embeds?.[0]
+        ?.description,
+    ).toContain('disabled');
   });
 
   test('a process built without the event store refuses and names the missing port', async () => {

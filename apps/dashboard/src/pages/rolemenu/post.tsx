@@ -8,7 +8,7 @@ import { saveFailure } from '../../lib/errors.ts';
 import { postModulePanel } from '../../server/modules.ts';
 
 const MODULE_OFF =
-  'Role menus is switched off in this server, so posting this would put a message nobody can use ' +
+  'Role menus is disabled in this server, so posting this would put a message nobody can use ' +
   'in a channel. Switch it on first.';
 
 const UNSAVED = 'Save your changes first. Posting uses the last saved version.';

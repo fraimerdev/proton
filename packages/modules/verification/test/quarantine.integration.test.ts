@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { STATUS_ERROR_COLOUR, STATUS_SUCCESS_COLOUR } from '@proton/core';
 import {
   BARE,
   EVERYONE_ROLE,
@@ -129,6 +130,24 @@ describe('/quarantine add and /quarantine remove', () => {
     expect(h.replyContent()).toContain('/quarantine remove');
   });
 
+  test('answers a quarantine that worked in green and one that was refused in red', async () => {
+    const h = harness();
+
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
+
+    expect(h.lastStatus()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.lastStatus()?.description).toContain(`<@${MEMBER}> has been quarantined`);
+
+    await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
+      config: QUARANTINED,
+    });
+
+    expect(h.lastStatus()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.lastStatus()?.description).toContain('already quarantined');
+  });
+
   test('refuses to release somebody with no record rather than guessing', async () => {
     const h = harness();
 
@@ -187,13 +206,13 @@ describe('/quarantine add and /quarantine remove', () => {
     expect(h.replyContent()).toContain('No quarantine role is set');
   });
 
-  test('answers even when the module is switched off', async () => {
+  test('answers even when the module is disabled', async () => {
     const h = harness();
 
     await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
       config: { enabled: false },
     });
 
-    expect(h.replyContent()).toContain('switched off');
+    expect(h.replyContent()).toContain('disabled');
   });
 });

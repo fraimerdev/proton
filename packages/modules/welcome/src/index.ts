@@ -8,6 +8,7 @@ import {
 } from './config.ts';
 import { createBoostListener, createGreetingListener, type WelcomeDeps } from './listeners.ts';
 import { welcomeTemplates } from './placeholders.ts';
+import { welcomeSimulations } from './simulation.ts';
 
 export {
   DEFAULT_BOOST_GREETING,
@@ -49,6 +50,12 @@ export {
   type WelcomeDeps,
 } from './listeners.ts';
 export {
+  WELCOME_BOOST_SIMULATION,
+  WELCOME_JOIN_SIMULATION,
+  WELCOME_LEAVE_SIMULATION,
+  welcomeSimulations,
+} from './simulation.ts';
+export {
   type GreetingOccasion,
   type GreetingPlaceholderFacts,
   greetingTemplates,
@@ -83,6 +90,7 @@ export function createWelcomeModule(
     listeners: [createGreetingListener(deps), createBoostListener(deps)],
 
     templates: welcomeTemplates,
+    simulations: welcomeSimulations,
 
     dashboard: {
       icon: 'hand-wave',

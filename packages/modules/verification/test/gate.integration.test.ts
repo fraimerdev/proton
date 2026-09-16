@@ -185,11 +185,11 @@ describe('/verify', () => {
     expect(h.replyContent()).toContain("hasn't finished setting up verification");
   });
 
-  test('answers even when verification is switched off', async () => {
+  test('answers even when verification is disabled', async () => {
     const h = harness();
 
     await h.run('verify', [], { config: { enabled: false } });
 
-    expect(h.replyContent()).toContain('switched off');
+    expect(h.replyContent()).toContain('disabled');
   });
 });

@@ -12,6 +12,7 @@ import type { ConfigErrors } from '../../components/discord/embed-editor.tsx';
 import { EditorPreviewLayout } from '../../components/discord/message-editor.tsx';
 import { DiscordPreview } from '../../components/discord/message-preview.tsx';
 import type { ModuleForm } from '../../components/module/form.ts';
+import { TestMessage } from '../../components/module/test-message.tsx';
 import { Switch } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 import { previewMessage } from '../../lib/placeholder-preview.ts';
@@ -35,6 +36,12 @@ interface KindCopy {
   toggle: { title: string; description: string } | null;
   card: { kind: CardGreeting; attachment: string } | null;
 }
+
+const SIMULATIONS: Record<GreetingKind, string> = {
+  welcome: 'welcome.join',
+  goodbye: 'welcome.leave',
+  boost: 'welcome.boost',
+};
 
 const COPY: Record<GreetingKind, KindCopy> = {
   welcome: {
@@ -63,8 +70,7 @@ const COPY: Record<GreetingKind, KindCopy> = {
     channelKey: 'boostChannelId',
     messageKey: 'boostMessage',
     channelTitle: 'Boost channel',
-    channelDescription:
-      'Message sent when a member boosts.',
+    channelDescription: 'Message sent when a member boosts.',
     unset: null,
     noChannel: 'Same channel as Discord’s boost notice',
     intro: null,
@@ -77,6 +83,8 @@ const COPY: Record<GreetingKind, KindCopy> = {
 };
 
 const REFUSED = 'Proton would post nothing for this sample.';
+
+const EMPTY = 'This message is empty, so a real event posts nothing. There is nothing to test yet.';
 
 const POSITIONS: ReadonlyMap<string, string> = new Map([
   ['embeds', 'embed'],
@@ -172,6 +180,18 @@ export function GreetingArea({
 
   return (
     <EditorPreviewLayout
+      previewActions={
+        <TestMessage
+          guildId={guildId}
+          moduleId="welcome"
+          simulations={form.view.simulations}
+          simulationId={SIMULATIONS[kind]}
+          draft={config as unknown as Record<string, unknown>}
+          dirty={form.dirty}
+          configuredChannelId={channelId ?? null}
+          refusal={silent && !cardAttached ? EMPTY : undefined}
+        />
+      }
       editor={
         <>
           <Section label="Posting" intro={copy.intro ?? undefined}>

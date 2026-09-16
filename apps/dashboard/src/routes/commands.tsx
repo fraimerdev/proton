@@ -42,7 +42,7 @@ function Commands(): ReactElement {
         <h1 className="site-heading">Commands</h1>
         <p className="site-lede">
           Every slash command Proton registers, generated from the modules themselves. A command
-          only appears in your server once its module is switched on.
+          only appears in your server once its module is enabled.
         </p>
 
         <div style={{ margin: '24px 0 20px', maxWidth: 360 }}>

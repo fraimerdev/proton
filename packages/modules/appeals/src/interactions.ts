@@ -1,12 +1,14 @@
 import {
   type EventListener,
   type EventType,
+  errorStatus,
   interactionRef,
   type ModuleContext,
   type ProtonEvent,
   parseCustomId,
   readComponentInteraction,
   replyEphemeral,
+  successStatus,
 } from '@proton/core';
 import { mayReview, readPermissions, readRoleIds } from './authorize.ts';
 import { type AppealsConfig, MODULE_ID, panelFor } from './config.ts';
@@ -14,8 +16,22 @@ import { applyDecision, stampCard } from './decision.ts';
 import { type AppealsDeps, bindAppealsDeps, describeUnbound } from './deps.ts';
 import { tellAppellant } from './notify.ts';
 import { APPROVE_ACTION, DENY_ACTION } from './review.ts';
+import type { AppealRecord } from './store.ts';
 
 export const APPEALS_INTERACTION_EVENT_TYPES: EventType[] = ['interaction.component'];
+
+const VERDICT = { approved: 'accepted', denied: 'turned down' } as const;
+
+function alreadyDecided(fresh: AppealRecord | null): string {
+  if (!fresh || fresh.status === 'open' || !fresh.decidedBy) {
+    return 'That appeal is no longer waiting on a decision, so nothing has changed.';
+  }
+
+  return (
+    `Somebody else got there first — appeal #${fresh.number} was ${VERDICT[fresh.status]} by ` +
+    `<@${fresh.decidedBy}>.`
+  );
+}
 
 export type ReviewOutcome =
   | { action: 'ignored'; reason: string }
@@ -58,7 +74,10 @@ export async function handleReviewPress(
     });
 
     await ctx.executor.execute(
-      replyEphemeral(to, 'I cannot record a decision right now. Nothing has changed.'),
+      replyEphemeral(
+        to,
+        errorStatus('I cannot record appeal decisions right now, so nothing has changed.'),
+      ),
     );
     return { action: 'refused', reason: 'the appeal store is unbound' };
   }
@@ -68,7 +87,7 @@ export async function handleReviewPress(
   const held = await store.find(ctx.guildId, appealId);
   if (!held) {
     await ctx.executor.execute(
-      replyEphemeral(to, 'That appeal is no longer here. Nothing has changed.'),
+      replyEphemeral(to, errorStatus('That appeal is no longer here, so nothing has changed.')),
     );
     return { action: 'ignored', reason: 'no such appeal' };
   }
@@ -78,8 +97,10 @@ export async function handleReviewPress(
     await ctx.executor.execute(
       replyEphemeral(
         to,
-        'The appeal form this belonged to has been removed, so Proton does not know what ' +
-          'accepting it should do. Re-create the form, or handle this one by hand.',
+        errorStatus(
+          'The appeal form this belonged to has been removed, so Proton does not know what ' +
+            'accepting it should do. Re-create the form, or handle this one by hand.',
+        ),
       ),
     );
     return { action: 'refused', reason: 'the panel is gone' };
@@ -87,7 +108,7 @@ export async function handleReviewPress(
 
   const allowed = mayReview(ctx.config, panel, readPermissions(event), readRoleIds(event));
   if (!allowed.ok) {
-    await ctx.executor.execute(replyEphemeral(to, allowed.humanReason));
+    await ctx.executor.execute(replyEphemeral(to, errorStatus(allowed.humanReason)));
     return { action: 'refused', reason: allowed.humanReason };
   }
 
@@ -111,19 +132,18 @@ export async function handleReviewPress(
       await finish(ctx, rawDeps, fresh, panel);
 
       await ctx.executor.execute(
-        replyEphemeral(to, `Appeal #${fresh.number} was already ${decision}. I finished the rest.`),
+        replyEphemeral(
+          to,
+          successStatus(
+            `Appeal #${fresh.number} was already ${VERDICT[decision]}. I have finished carrying ` +
+              `it out, and <@${fresh.userId}> has been told.`,
+          ),
+        ),
       );
       return { action: 'decided', decision, appealId };
     }
 
-    await ctx.executor.execute(
-      replyEphemeral(
-        to,
-        fresh
-          ? `Somebody else got there first — appeal #${fresh.number} was ${fresh.status} by <@${fresh.decidedBy}>.`
-          : 'That appeal is no longer here.',
-      ),
-    );
+    await ctx.executor.execute(replyEphemeral(to, errorStatus(alreadyDecided(fresh))));
     return { action: 'ignored', reason: 'already decided' };
   }
 
@@ -132,9 +152,9 @@ export async function handleReviewPress(
   await ctx.executor.execute(
     replyEphemeral(
       to,
-      decision === 'approved'
-        ? `Appeal #${decided.number} accepted. <@${decided.userId}> has been told.`
-        : `Appeal #${decided.number} turned down. <@${decided.userId}> has been told.`,
+      successStatus(
+        `Appeal #${decided.number} ${VERDICT[decision]}. <@${decided.userId}> has been told.`,
+      ),
     ),
   );
 

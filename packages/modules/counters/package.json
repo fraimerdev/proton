@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
-    "./placeholders": "./src/placeholders.ts"
+    "./placeholders": "./src/placeholders.ts",
+    "./simulation": "./src/simulation.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

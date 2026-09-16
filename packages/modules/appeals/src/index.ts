@@ -10,6 +10,7 @@ import type { AppealsDeps } from './deps.ts';
 import { createAppealsInteractionListener } from './interactions.ts';
 import { createAppealsListener } from './listeners.ts';
 import { appealsTemplates } from './placeholders.ts';
+import { appealsSimulations } from './simulation.ts';
 
 export {
   mayReview,
@@ -68,6 +69,7 @@ export {
   type NotifyOutcome,
   tellAppellant,
 } from './notify.ts';
+export { APPEALS_DECISION_SIMULATION, appealsSimulations } from './simulation.ts';
 export {
   APPEAL_DECISION_EVENT,
   APPEAL_DECISION_SURFACE,
@@ -145,6 +147,7 @@ export function createAppealsModule(
     configLimits: [{ key: 'appealPanels', path: 'panels' }],
 
     templates: appealsTemplates,
+    simulations: appealsSimulations,
 
     listeners: [createAppealsListener(deps), createAppealsInteractionListener(deps)],
 

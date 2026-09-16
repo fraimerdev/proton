@@ -1,4 +1,4 @@
--- false, not moderation's default: a guild with no moderation row reads as switched off today.
+-- false, not moderation's default: a guild with no moderation row reads as disabled today.
 INSERT INTO "guild_modules" ("guild_id", "module_id", "enabled", "config", "schema_version")
 SELECT c."guild_id", 'moderation', false, '{"enabled": false}'::jsonb, 2
   FROM "guild_modules" c

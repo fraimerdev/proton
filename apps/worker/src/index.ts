@@ -11,6 +11,7 @@ import {
   RedisGuildStateStore,
   RedisMessageContentCache,
   RedisRateWindow,
+  RedisSimulationResults,
   RedisStreamsEventBus,
   RedisUserProfileCache,
   type ResolveContextHints,
@@ -112,6 +113,7 @@ import { RuleCronScheduler, RuleDispatchRuntime, RulePresetSeeder } from './rule
 import { ModuleRuntime } from './runtime.ts';
 import { startScheduledActionJobs } from './scheduled-jobs.ts';
 import { type ServerlogFlushJobs, startServerlogFlush } from './serverlog-flush.ts';
+import { SimulationConsumer } from './simulation-consumer.ts';
 import { createStarboardSource } from './starboard-source.ts';
 
 const env = loadEnv();
@@ -432,7 +434,7 @@ const registry = createModuleRegistry(
       placeholders,
       availability: {
         // The same cached config path every module surface already reads, so the picker never
-        // offers a requirement whose owning module is switched off in this guild.
+        // offers a requirement whose owning module is disabled in this guild.
         async isEnabled(guildId, moduleId) {
           try {
             return (await config.get(guildId, moduleId)).enabled;
@@ -560,6 +562,21 @@ const stateConsumer = new GuildStateConsumer({
 
 const layoutConsumer = new GuildLayoutConsumer({ bus, store: layoutStore, logger: console });
 
+// The mailbox lives on the bus connection, because the api blocks on the same key in the same
+// database.
+const simulationConsumer = new SimulationConsumer({
+  bus,
+  results: new RedisSimulationResults(busRedis),
+  registry,
+  executor,
+  guildState,
+  rest,
+  placeholders,
+  apiUrl: env.API_URL,
+  apiSecret: env.API_SHARED_SECRET,
+  logger: console,
+});
+
 const messageCacheConsumer = new MessageCacheConsumer({
   bus,
   cache: messageCache,
@@ -578,6 +595,7 @@ assertHandlersCoverJobs(registry, moduleJobHandlers, console);
 const subscriptions = [
   stateConsumer.start(),
   layoutConsumer.start(),
+  simulationConsumer.start(),
   messageCacheConsumer.start(),
   runtime.start(),
   ...listeners.start(),

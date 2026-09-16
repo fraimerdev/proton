@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { NEVER_RECORDED_KINDS, Permissions } from '@proton/core';
+import {
+  NEVER_RECORDED_KINDS,
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { brandingConfigSchema, liftStoredConfig } from '../src/config.ts';
 import { imageMime } from '../src/image.ts';
 import { brandingModule } from '../src/index.ts';
@@ -126,7 +133,7 @@ describe('when an image cannot be read', () => {
 });
 
 describe('taking the branding back off', () => {
-  test('clears all four fields when the module is switched off', async () => {
+  test('clears all four fields when the module is disabled', async () => {
     const h = harness();
 
     await h.listen(configChanged({ enabledBefore: true, enabledAfter: false }), {
@@ -378,6 +385,62 @@ describe('the manifest', () => {
     expect(brandingModule.refineWrite?.(short, before)).toEqual([
       { path: 'displayNameStyle.colours', message: 'Gradient takes two colours, not 1.' },
     ]);
+  });
+});
+
+describe('/branding answers with a status embed', () => {
+  test('green once everything went through', async () => {
+    const h = harness();
+
+    await h.command(FULL);
+
+    expect(h.report()).toStartWith(`${STATUS_SUCCESS_EMOJI} Re-applied.`);
+    expect(h.reportEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+  });
+
+  test('red, naming the leg, when a leg was refused', async () => {
+    const h = harness({ botPermissions: WITHOUT_NICKNAME });
+
+    await h.command(FULL);
+
+    expect(h.report()).toStartWith(STATUS_ERROR_EMOJI);
+    expect(h.reportEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.report()).toContain('Nickname:');
+    expect(h.report()).toContain('Change Nickname');
+  });
+
+  test('red, and sends nothing, while the module is disabled', async () => {
+    const h = harness();
+
+    await h.command({ ...FULL, enabled: false });
+
+    expect(h.reply()).toBe(
+      `${STATUS_ERROR_EMOJI} Branding is disabled in this server, so Proton is using its own name.`,
+    );
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.patches()).toHaveLength(0);
+    expect(h.report()).toBeUndefined();
+  });
+
+  test('red, and sends nothing, while nothing is set yet', async () => {
+    const h = harness();
+
+    await h.command();
+
+    expect(h.reply()).toStartWith(`${STATUS_ERROR_EMOJI} Branding is on but nothing is set yet.`);
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.patches()).toHaveLength(0);
+  });
+
+  test('red, and sends nothing, when the application id is not bound', async () => {
+    const h = harness({ unbind: ['applicationId'] });
+
+    await h.command(FULL);
+
+    expect(h.reply()).toStartWith(STATUS_ERROR_EMOJI);
+    expect(h.reply()).toContain('its application id is not bound');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.patches()).toHaveLength(0);
   });
 });
 

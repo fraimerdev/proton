@@ -1,6 +1,7 @@
 import {
   type Attachment,
   deferEphemeral,
+  errorStatus,
   type FollowUpTo,
   followUp,
   interactionRef,
@@ -26,7 +27,7 @@ import {
   type VerificationDeps,
 } from './deps.ts';
 import { planFailure } from './failure.ts';
-import { planVerification, runVerification } from './gate.ts';
+import { planVerification, runVerification, verifyStatus } from './gate.ts';
 import {
   ANSWER_ACTION,
   buildCaptchaMessage,
@@ -41,7 +42,7 @@ import { followUpTo, MODULE_ID, respondTo, run, succeeded, VERIFICATION_ACTOR } 
 import type { CaptchaChallenge } from './store.ts';
 
 const SWITCHED_OFF =
-  'Verification is switched off in this server, so there is nothing to pass. An admin can turn ' +
+  'Verification is disabled in this server, so there is nothing to pass. An admin can turn ' +
   'it on from the Proton dashboard.';
 
 const NOT_WIRED =
@@ -83,7 +84,11 @@ export async function handleComponent(
   const to = respondTo(ctx, interactionRef(facts), facts.userId, event.id);
 
   if (!ctx.config.enabled) {
-    await run(ctx, replyEphemeral(to, SWITCHED_OFF), 'answer a press while switched off');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(SWITCHED_OFF)),
+      'answer a press while disabled',
+    );
     return { action: 'refused', reason: 'verification is off in this server' };
   }
 
@@ -114,7 +119,10 @@ async function startVerification(
   if (verifiedRoleId && roleIds?.includes(verifiedRoleId)) {
     await run(
       ctx,
-      replyEphemeral(to, "You're already verified — you have full access to this server."),
+      replyEphemeral(
+        to,
+        errorStatus("You're already verified — you have full access to this server."),
+      ),
       'tell a verified member they are verified',
     );
     return { action: 'refused', reason: 'the member already holds the member role' };
@@ -147,12 +155,16 @@ async function pressButton(
 
   const plan = planVerification(ctx.config, await bound.deps.guildState.get(ctx.guildId));
   if ('refusal' in plan) {
-    await run(ctx, followUp(followTo, plan.refusal), 'explain why the gate could not be passed');
+    await run(
+      ctx,
+      followUp(followTo, errorStatus(plan.refusal)),
+      'explain why the gate could not be passed',
+    );
     return { action: 'refused', reason: plan.refusal };
   }
 
   const result = await runVerification(ctx, plan, userId, eventId, deps);
-  await run(ctx, followUp(followTo, result.message), 'tell the member how verification went');
+  await run(ctx, followUp(followTo, verifyStatus(result)), 'tell the member how verification went');
 
   return result.verified ? { action: 'verified' } : { action: 'refused', reason: result.message };
 }
@@ -174,7 +186,11 @@ async function pressCaptcha(
   // than an honest refusal.
   const plan = planVerification(ctx.config, await bound.deps.guildState.get(ctx.guildId));
   if ('refusal' in plan) {
-    await run(ctx, followUp(followTo, plan.refusal), 'explain why the gate could not be passed');
+    await run(
+      ctx,
+      followUp(followTo, errorStatus(plan.refusal)),
+      'explain why the gate could not be passed',
+    );
     return { action: 'refused', reason: plan.refusal };
   }
 
@@ -186,8 +202,10 @@ async function pressCaptcha(
       ctx,
       followUp(
         followTo,
-        'I could not draw your captcha, so nothing has changed. Try again in a moment — if it ' +
-          'keeps happening, tell a moderator.',
+        errorStatus(
+          'I could not draw your captcha, so nothing has changed. Please try again in a moment — ' +
+            'if it keeps happening, tell a moderator.',
+        ),
       ),
       'apologise for a failed captcha render',
     );
@@ -219,7 +237,11 @@ async function pressWebsite(
 
   const plan = planVerification(ctx.config, await bound.deps.guildState.get(ctx.guildId));
   if ('refusal' in plan) {
-    await run(ctx, followUp(followTo, plan.refusal), 'explain why the gate could not be passed');
+    await run(
+      ctx,
+      followUp(followTo, errorStatus(plan.refusal)),
+      'explain why the gate could not be passed',
+    );
     return { action: 'refused', reason: plan.refusal };
   }
 
@@ -251,13 +273,21 @@ async function openAnswerModal(
 
   const challenge = await bound.deps.captcha.get(ctx.guildId, userId);
   if (!challenge || challenge.challengeId !== challengeId) {
-    await run(ctx, replyEphemeral(to, EXPIRED), 'tell the member their captcha expired');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(EXPIRED)),
+      'tell the member their captcha expired',
+    );
     return { action: 'refused', reason: 'the challenge is gone or has been replaced' };
   }
 
   const modal = buildCaptchaModal(challenge.challengeId, challenge.answer.length);
   if (!modal) {
-    await run(ctx, replyEphemeral(to, NOT_WIRED), 'apologise for an unbuildable captcha modal');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(NOT_WIRED)),
+      'apologise for an unbuildable captcha modal',
+    );
     return { action: 'refused', reason: 'the captcha modal custom_id did not fit' };
   }
 
@@ -278,7 +308,11 @@ async function reissueChallenge(
 
   const current = await bound.deps.captcha.get(ctx.guildId, userId);
   if (!current || current.challengeId !== challengeId) {
-    await run(ctx, replyEphemeral(to, EXPIRED), 'tell the member their captcha expired');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(EXPIRED)),
+      'tell the member their captcha expired',
+    );
     return { action: 'refused', reason: 'the challenge is gone or has been replaced' };
   }
 
@@ -292,7 +326,11 @@ async function reissueChallenge(
 
   const issued = await issue(ctx, bound.deps, replacement);
   if (!issued) {
-    await run(ctx, replyEphemeral(to, EXPIRED), 'apologise for a failed captcha render');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(EXPIRED)),
+      'apologise for a failed captcha render',
+    );
     return { action: 'refused', reason: 'the replacement captcha could not be issued' };
   }
 
@@ -322,7 +360,11 @@ export async function handleModal(
   const to = respondTo(ctx, interactionRef(facts), facts.userId, event.id);
 
   if (!ctx.config.enabled) {
-    await run(ctx, replyEphemeral(to, SWITCHED_OFF), 'answer a modal while switched off');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(SWITCHED_OFF)),
+      'answer a modal while disabled',
+    );
     return { action: 'refused', reason: 'verification is off in this server' };
   }
 
@@ -331,7 +373,11 @@ export async function handleModal(
 
   const challenge = await bound.deps.captcha.get(ctx.guildId, facts.userId);
   if (!challenge || challenge.challengeId !== parsed.args[0]) {
-    await run(ctx, replyEphemeral(to, EXPIRED), 'tell the member their captcha expired');
+    await run(
+      ctx,
+      replyEphemeral(to, errorStatus(EXPIRED)),
+      'tell the member their captcha expired',
+    );
     return { action: 'refused', reason: 'the challenge is gone or has been replaced' };
   }
 
@@ -345,12 +391,16 @@ export async function handleModal(
 
   const plan = planVerification(ctx.config, await bound.deps.guildState.get(ctx.guildId));
   if ('refusal' in plan) {
-    await run(ctx, followUp(followTo, plan.refusal), 'explain why the gate could not be passed');
+    await run(
+      ctx,
+      followUp(followTo, errorStatus(plan.refusal)),
+      'explain why the gate could not be passed',
+    );
     return { action: 'refused', reason: plan.refusal };
   }
 
   const result = await runVerification(ctx, plan, facts.userId, event.id, deps);
-  await run(ctx, followUp(followTo, result.message), 'tell the member how verification went');
+  await run(ctx, followUp(followTo, verifyStatus(result)), 'tell the member how verification went');
 
   return result.verified ? { action: 'verified' } : { action: 'refused', reason: result.message };
 }
@@ -370,8 +420,8 @@ async function rejectAnswer(
 
     const built = buildCaptchaMessage(challenge.challengeId, attemptsLeft - 1);
     const retry = built.ok
-      ? { content: `${WRONG} ${built.content}`, components: built.components }
-      : { content: `${WRONG} Press Verify again to start over.` };
+      ? { ...errorStatus(`${WRONG} ${built.content}`), components: built.components }
+      : errorStatus(`${WRONG} Press Verify again to start over.`);
 
     await run(ctx, replyEphemeral(to, retry), 'offer another captcha attempt');
     return { action: 'failed', attemptsUsed };
@@ -389,7 +439,7 @@ async function rejectAnswer(
 
     await run(
       ctx,
-      replyEphemeral(to, `${spent} Press Verify to start over with a new one.`),
+      replyEphemeral(to, errorStatus(`${spent} Press Verify to start over with a new one.`)),
       'tell the member they are out of attempts',
     );
     return { action: 'failed', attemptsUsed };
@@ -398,7 +448,11 @@ async function rejectAnswer(
   const { plan } = failure;
 
   // Told before the action lands: a kick or a ban closes the only channel this reply could use.
-  await run(ctx, replyEphemeral(to, `${spent} ${plan.told}`), 'tell the member what happens next');
+  await run(
+    ctx,
+    replyEphemeral(to, errorStatus(`${spent} ${plan.told}`)),
+    'tell the member what happens next',
+  );
 
   const result = await run(
     ctx,
@@ -533,6 +587,6 @@ async function notWired(
     moduleId: MODULE_ID,
   });
 
-  await run(ctx, replyEphemeral(to, NOT_WIRED), 'apologise for an unwired deployment');
+  await run(ctx, replyEphemeral(to, errorStatus(NOT_WIRED)), 'apologise for an unwired deployment');
   return { action: 'refused', reason: `unbound: ${unbound.join(', ')}` };
 }

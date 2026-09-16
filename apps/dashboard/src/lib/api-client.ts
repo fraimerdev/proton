@@ -25,6 +25,9 @@ import {
   moduleUpdateResultSchema,
   type PanelRequestResult,
   panelRequestResultSchema,
+  type SimulationOutcome,
+  type SimulationRun,
+  simulationOutcomeSchema,
   verificationRequestResultSchema,
 } from '@proton/core';
 import {
@@ -197,6 +200,18 @@ export class ApiClient {
     return this.#parsed(
       `/guilds/${guildId}/blocked-members/${userId}/lift`,
       liftBlockResultSchema,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  }
+
+  runSimulation(
+    guildId: string,
+    moduleId: string,
+    body: SimulationRun & AuditStamp,
+  ): Promise<SimulationOutcome> {
+    return this.#parsed(
+      `/guilds/${guildId}/modules/${moduleId}/simulations`,
+      simulationOutcomeSchema,
       { method: 'POST', body: JSON.stringify(body) },
     );
   }

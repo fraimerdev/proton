@@ -1,10 +1,13 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   type GuildState,
   INTERACTION_CALLBACK_DEFERRED_MESSAGE,
   newId,
   Permissions,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -149,8 +152,10 @@ export function roleCommand(deps: ModerationDeps): Command {
 
       return reply(
         ctx,
-        'Use /role add or /role remove for one member, or /role all, /role bots, /role humans ' +
-          'or /role in to give a role to many at once.',
+        errorStatus(
+          'Use /role add or /role remove for one member, or /role all, /role bots, /role humans ' +
+            'or /role in to give a role to many at once.',
+        ),
       );
     },
   };
@@ -199,14 +204,25 @@ async function defer(ctx: CommandContext<ModerationConfig>): Promise<boolean> {
     },
   });
 
+  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
+    ctx.logger.warn(
+      `/role could not be acknowledged, so it ran nothing and said nothing: ${
+        result.failure?.humanReason ?? 'unknown reason'
+      }`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
+    );
+  }
+
   return result.status === 'executed' || result.status === 'skipped_duplicate';
 }
 
 async function answer(
   ctx: CommandContext<ModerationConfig>,
   applicationId: string,
-  content: string,
+  message: string | StatusBody,
 ): Promise<void> {
+  const body = typeof message === 'string' ? { content: message.slice(0, 2000) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -218,7 +234,7 @@ async function answer(
       applicationId,
       interactionToken: ctx.interaction.token,
       ephemeral: !ctx.config.publicReplies,
-      content: content.slice(0, 2000),
+      ...body,
       allowedMentions: { parse: [] },
     },
   });
@@ -237,19 +253,21 @@ async function one(
   sub: 'add' | 'remove',
 ): Promise<void> {
   const userId = ctx.options.getUserId('user');
-  if (!userId) return reply(ctx, 'I need a member to change the roles of.');
+  if (!userId) return reply(ctx, errorStatus('I need a member to change the roles of.'));
 
   const roleId = ctx.options.getRoleId('role');
-  if (!roleId) return reply(ctx, 'I need a role to hand out.');
+  if (!roleId) return reply(ctx, errorStatus('I need a role to hand out.'));
 
   const state = await guardedState(ctx, deps, roleId);
-  if (isRefusal(state)) return reply(ctx, state.refusal);
+  if (isRefusal(state)) return reply(ctx, errorStatus(state.refusal));
 
   if (!deps.fetchMemberRoles) {
     return reply(
       ctx,
-      'I cannot read that member’s roles, so I cannot check that you outrank them. Nothing was ' +
-        'changed. This is a Proton problem, not a setting in this server.',
+      errorStatus(
+        `I cannot read <@${userId}>’s roles, so I cannot check that you outrank them. Nothing ` +
+          'was changed. This is a Proton problem, not a setting in this server.',
+      ),
     );
   }
 
@@ -257,8 +275,10 @@ async function one(
   if (!targetRoleIds) {
     return reply(
       ctx,
-      "I couldn't look up that member's roles, so I can't confirm you outrank them. This " +
-        'usually means they just left the server.',
+      errorStatus(
+        `I couldn't look up <@${userId}>'s roles, so I can't confirm you outrank them. This ` +
+          'usually means they just left the server.',
+      ),
     );
   }
 
@@ -270,7 +290,7 @@ async function one(
     targetRoleIds,
   });
 
-  if (outranked) return reply(ctx, outranked.refusal);
+  if (outranked) return reply(ctx, errorStatus(outranked.refusal));
 
   const reason = ctx.options.getString('reason');
 
@@ -298,9 +318,11 @@ async function mass(
   if (!store || !deps.members || !applicationId || !ctx.schedule) {
     return reply(
       ctx,
-      'I cannot run a mass role change in this deployment — the member lister, the run store or ' +
-        'the scheduler is not wired into me. Nothing was changed. Use /role add for one member ' +
-        'at a time.',
+      errorStatus(
+        'I cannot run a mass role change in this deployment — the member lister, the run store ' +
+          'or the scheduler is not wired into me. Nothing was changed. Use /role add for one ' +
+          'member at a time.',
+      ),
     );
   }
 
@@ -310,14 +332,14 @@ async function mass(
   if (!(await defer(ctx))) return;
 
   const roleId = ctx.options.getRoleId('role');
-  if (!roleId) return answer(ctx, applicationId, 'I need a role to hand out.');
+  if (!roleId) return answer(ctx, applicationId, errorStatus('I need a role to hand out.'));
 
   const targetRoleId = mode === 'in' ? ctx.options.getRoleId('target_role') : null;
   if (mode === 'in' && !targetRoleId) {
     return answer(
       ctx,
       applicationId,
-      'I need the role a member must already hold to receive the new one.',
+      errorStatus('I need the role a member must already hold to receive the new one.'),
     );
   }
 
@@ -325,8 +347,10 @@ async function mass(
     return answer(
       ctx,
       applicationId,
-      'Those are the same role, so everybody who would receive it already has it. Nothing was ' +
-        'changed.',
+      errorStatus(
+        `<@&${roleId}> is the same role on both sides, so everybody who would receive it ` +
+          'already has it. Nothing was changed.',
+      ),
     );
   }
 
@@ -336,25 +360,27 @@ async function mass(
     return answer(
       ctx,
       applicationId,
-      'Every member already has @everyone — use `/role all` for that.',
+      errorStatus('Every member already has @everyone — use `/role all` for that.'),
     );
   }
 
   const reason = ctx.options.getString('reason');
 
   const missingReason = reasonRefusal(ctx, reason);
-  if (missingReason) return answer(ctx, applicationId, missingReason.refusal);
+  if (missingReason) return answer(ctx, applicationId, errorStatus(missingReason.refusal));
 
   const state = await guardedState(ctx, deps, roleId);
-  if (isRefusal(state)) return answer(ctx, applicationId, state.refusal);
+  if (isRefusal(state)) return answer(ctx, applicationId, errorStatus(state.refusal));
 
   const running = await store.get(ctx.guildId);
   if (running) {
     return answer(
       ctx,
       applicationId,
-      `I'm already giving <@&${running.roleId}> out in this server, ${running.applied} members ` +
-        'in. Wait for it to finish, or run `/role cancel` to stop it.',
+      errorStatus(
+        `I'm already giving <@&${running.roleId}> out in this server, ${running.applied} members ` +
+          'in. Wait for it to finish, or run `/role cancel` to stop it.',
+      ),
     );
   }
 
@@ -404,8 +430,11 @@ async function mass(
     return answer(
       ctx,
       applicationId,
-      `${posted.failure?.humanReason ?? "I couldn't post the progress message."}\n\nA mass role ` +
-        'change reports as it goes, so I have not started one. Nothing was changed.',
+      errorStatus(
+        `${posted.failure?.humanReason ?? `I couldn't post the progress message into <#${ctx.channelId}>.`}` +
+          '\n\nA mass role change reports as it goes, so I have not started one. Nothing was ' +
+          'changed.',
+      ),
     );
   }
 
@@ -428,28 +457,40 @@ async function mass(
     return answer(
       ctx,
       applicationId,
-      "I couldn't book the run, so I have not started one and nothing was changed. Try again " +
-        'shortly.',
+      errorStatus(
+        `I couldn't book the run that hands out <@&${roleId}>, so I have not started one and ` +
+          'nothing was changed. Please try again later.',
+      ),
     );
   }
 
   return answer(
     ctx,
     applicationId,
-    `Started. I'm working through the member list now and reporting into <#${ctx.channelId}> ` +
-      'as I go. `/role cancel` stops it.',
+    successStatus(
+      `Started giving <@&${roleId}> out. I'm working through the member list now and reporting ` +
+        `into <#${ctx.channelId}> as I go. \`/role cancel\` stops it.`,
+    ),
   );
 }
 
 async function cancel(ctx: CommandContext<ModerationConfig>, deps: ModerationDeps): Promise<void> {
   const store = deps.roleRuns;
-  if (!store) return reply(ctx, 'There is no mass role run to cancel in this deployment.');
+  if (!store) {
+    return reply(ctx, errorStatus('There is no mass role run to cancel in this deployment.'));
+  }
 
   const running = await store.get(ctx.guildId);
-  if (!running) return reply(ctx, 'No mass role run is going in this server.');
+  if (!running) return reply(ctx, errorStatus('No mass role run is going in this server.'));
 
   if (running.cancelled) {
-    return reply(ctx, 'That run is already stopping — it finishes the chunk it is on and stops.');
+    return reply(
+      ctx,
+      errorStatus(
+        `The run handing out <@&${running.roleId}> is already stopping — it finishes the chunk ` +
+          'it is on and stops.',
+      ),
+    );
   }
 
   await store.put({ ...running, cancelled: true });
@@ -461,7 +502,10 @@ async function cancel(ctx: CommandContext<ModerationConfig>, deps: ModerationDep
 
   return reply(
     ctx,
-    `Stopping. <@&${running.roleId}> stays with the ${running.applied} members who already have ` +
-      'it — cancelling does not take it back off them.',
+    successStatus(
+      `Stopping the run that hands out <@&${running.roleId}>. It stays with the ` +
+        `${running.applied} members who already have it — cancelling does not take it back off ` +
+        'them.',
+    ),
   );
 }

@@ -1,9 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import { CORE_PROVIDER_IDS, ProviderRegistry, protonFields, zodToDescriptors } from '@proton/core';
+import {
+  CORE_PROVIDER_IDS,
+  ProviderRegistry,
+  protonFields,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+  zodToDescriptors,
+} from '@proton/core';
 import { validateTemplate } from '@proton/core/placeholders';
 import { ComponentType, TextInputStyle } from 'discord-api-types/v10';
 import { z } from 'zod';
 import {
+  type BuilderReply,
   builderRouteOf,
   handleBuilderComponent,
   handleBuilderModal,
@@ -36,6 +46,16 @@ const CHANNEL = '500000000000000000';
 const HOST = '400000000000000001';
 const ROLE = '600000000000000000';
 const NOW = 1_776_000_000_000;
+
+function statusText(reply: BuilderReply): string {
+  if (reply.kind !== 'message') throw new Error(`expected a status message, got ${reply.kind}`);
+  return reply.body.embeds[0]?.description ?? '';
+}
+
+function statusColour(reply: BuilderReply): number | undefined {
+  if (reply.kind !== 'message') throw new Error(`expected a status message, got ${reply.kind}`);
+  return reply.body.embeds[0]?.color;
+}
 
 function registry(): ProviderRegistry {
   const providers = new ProviderRegistry();
@@ -420,8 +440,8 @@ describe('builder interactions', () => {
       values: {},
     });
 
-    expect(reply.kind).toBe('message');
-    if (reply.kind === 'message') expect(reply.content).toContain('30m');
+    expect(statusText(reply)).toContain('30m');
+    expect(statusColour(reply)).toBe(STATUS_ERROR_COLOUR);
     expect((await drafts.get(draftKey(GUILD, HOST)))?.title).toBe('');
   });
 
@@ -464,7 +484,7 @@ describe('builder interactions', () => {
     expect((await drafts.get(draftKey(GUILD, HOST)))?.requirements).toEqual([]);
   });
 
-  test('cancel deletes the draft', async () => {
+  test('cancel deletes the draft and answers green', async () => {
     const { deps, drafts } = await seeded();
 
     const reply = await handleBuilderComponent(deps, {
@@ -476,7 +496,9 @@ describe('builder interactions', () => {
       values: [],
     });
 
-    expect(reply.kind).toBe('message');
+    expect(statusText(reply)).toStartWith(STATUS_SUCCESS_EMOJI);
+    expect(statusText(reply)).toContain('Nothing was posted');
+    expect(statusColour(reply)).toBe(STATUS_SUCCESS_COLOUR);
     expect(await drafts.get(draftKey(GUILD, HOST))).toBeNull();
   });
 
@@ -498,8 +520,8 @@ describe('builder interactions', () => {
       values: [],
     });
 
-    expect(reply.kind).toBe('message');
-    if (reply.kind === 'message') expect(reply.content).toContain('/giveaway create');
+    expect(statusText(reply)).toContain('/giveaway create');
+    expect(statusColour(reply)).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('a provider that vanished between opening and submitting is explained', async () => {
@@ -514,8 +536,8 @@ describe('builder interactions', () => {
       values: {},
     });
 
-    expect(reply.kind).toBe('message');
-    if (reply.kind === 'message') expect(reply.content).toContain('switched off');
+    expect(statusText(reply)).toContain('disabled');
+    expect(statusColour(reply)).toBe(STATUS_ERROR_COLOUR);
   });
 });
 
@@ -539,12 +561,11 @@ describe('the winner message step', () => {
       values: {},
     });
 
-    expect(reply.kind).toBe('message');
-    if (reply.kind === 'message') {
-      expect(reply.content).toStartWith('The winner message was not saved: ');
-      expect(reply.content).toContain('{giveaway.prize:upper(3)}');
-      expect(reply.content).toContain(':upper');
-    }
+    expect(statusText(reply)).toStartWith(
+      `${STATUS_ERROR_EMOJI} The winner message was not saved: `,
+    );
+    expect(statusText(reply)).toContain('{giveaway.prize:upper(3)}');
+    expect(statusText(reply)).toContain(':upper');
 
     const draft = await drafts.get(draftKey(GUILD, HOST));
     expect(draft?.winMessage).toBeNull();

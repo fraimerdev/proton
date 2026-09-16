@@ -43,7 +43,7 @@ const EVENTS_FULL =
   'have. End or cancel one to start another.';
 
 const SWITCHED_OFF =
-  'Leveling is switched off, so an XP event changes nothing until it is switched on.';
+  'Leveling is disabled, so an XP event changes nothing until it is enabled.';
 
 const MULTIPLIER_RANGE = `Enter a multiplier from ${XP_EVENT_MULTIPLIER_MIN} to ${XP_EVENT_MULTIPLIER_MAX}, in steps of 0.1.`;
 

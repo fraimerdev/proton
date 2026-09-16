@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import { encodeCustomId, newId, Permissions } from '@proton/core';
+import {
+  encodeCustomId,
+  newId,
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { ticketTypeSchema } from '../src/config.ts';
 import { handleChannelDeleted } from '../src/reconcile.ts';
 import {
@@ -134,7 +142,7 @@ describe('opening a ticket from a panel', () => {
     const h = harness({ config: { enabled: false } });
     await h.press(pressEvent(OPEN));
 
-    expect(h.told().join(' ')).toContain('switched off');
+    expect(h.told().join(' ')).toContain('disabled');
   });
 });
 
@@ -626,6 +634,63 @@ describe('when Discord says no', () => {
     expect(
       h.logs.some((entry) => entry.level === 'error' && entry.message.includes('transcript')),
     ).toBe(true);
+  });
+});
+
+describe('what Proton says back', () => {
+  test('a close that happened is green, and the sentence moves into the embed', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('close'), { ...MOD, channelId: ticket.channelId });
+
+    expect(h.lastStatus()).toEqual({
+      description: `${STATUS_SUCCESS_EMOJI} Closed ticket #${ticket.number}.`,
+      color: STATUS_SUCCESS_COLOUR,
+    });
+  });
+
+  test('a delete a support member may not do is red, and still says why', async () => {
+    const h = harness();
+    await openOne(h);
+    const ticket = h.ticket();
+
+    await h.run(subcommand('delete'), { ...STAFF, channelId: ticket.channelId });
+
+    const status = h.lastStatus();
+    expect(status?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(status?.description).toStartWith(STATUS_ERROR_EMOJI);
+    expect(status?.description).toContain('cannot do that');
+  });
+
+  test('a press that opened a ticket answers green on the followup too', async () => {
+    const h = harness();
+    await h.press(pressEvent(OPEN));
+
+    const status = h.lastStatus();
+    expect(status?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(status?.description).toContain(`Opened ticket #${h.ticket().number}`);
+  });
+
+  test('a press that could not open one answers red', async () => {
+    const h = harness({ config: { panels: [] } });
+    await h.press(pressEvent(OPEN));
+
+    const status = h.lastStatus();
+    expect(status?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(status?.description).toContain('no longer exists');
+  });
+
+  test('the ticket list stays plain text, because a queue is not a status', async () => {
+    const h = harness({ config: { creationCooldown: '0s' } });
+    await h.press(pressEvent(OPEN, { userId: MEMBER }));
+
+    const before = h.lastStatus();
+    await h.run(subcommand('list'), { ...STAFF, channelId: PANEL_CHANNEL });
+
+    expect(h.lastStatus()).toEqual(before);
+    expect(h.replyContent()).toContain('1 open ticket');
   });
 });
 

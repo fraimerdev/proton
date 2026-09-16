@@ -43,7 +43,7 @@ export const CATEGORY_CONTENTS: Record<LogCategory, string> = {
   events: 'Scheduled events and stages',
   automod: 'Discord AutoMod rules and the messages they act on',
   proton:
-    'Module settings, modules switched on or off, Proton’s moderation actions, security triggers, giveaways and tickets',
+    'Module settings, modules enabled or off, Proton’s moderation actions, security triggers, giveaways and tickets',
 };
 
 export const LOG_SPECS: readonly LogEventSpec[] = LOG_EVENT_KEYS.flatMap((key) => {

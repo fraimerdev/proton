@@ -11,6 +11,7 @@ import type { CountersDeps } from './deps.ts';
 import { createCountersListener } from './listener.ts';
 import { countersTemplates } from './placeholders.ts';
 import { createRefreshHandler, REFRESH_JOB } from './refresh.ts';
+import { countersSimulations } from './simulation.ts';
 
 export { countersCommand, countersCommands } from './commands.ts';
 export {
@@ -79,9 +80,11 @@ export {
   NO_COUNTERS,
   plan,
   type RefreshOutcome,
+  refreshSucceeded,
   renderName,
   renderReport,
 } from './render.ts';
+export { COUNTERS_NAME_SIMULATION, countersSimulations } from './simulation.ts';
 export {
   type CounterChannelStore,
   DrizzleCounterChannelStore,
@@ -118,6 +121,7 @@ export function createCountersModule(
     scheduledHandlers: { [REFRESH_JOB]: createRefreshHandler(deps) },
 
     templates: countersTemplates,
+    simulations: countersSimulations,
 
     dashboard: {
       icon: 'hash',

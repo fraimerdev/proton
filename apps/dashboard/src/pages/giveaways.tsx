@@ -50,7 +50,7 @@ const ACCESS_INTRO = 'These roles apply to every giveaway, including ones alread
 
 const LOG_CHANNEL_NOTE =
   'Proton pings the host here when a winner could not be given the reward role, or when a draw ' +
-  'skipped a requirement because its module is switched off. With no channel set, the host is not ' +
+  'skipped a requirement because its module is disabled. With no channel set, the host is not ' +
   'warned.';
 
 const CLAIM_REASON =

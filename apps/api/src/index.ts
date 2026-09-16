@@ -1,4 +1,9 @@
-import { ALL_PERMISSIONS, RedisStreamsEventBus } from '@proton/core';
+import {
+  ALL_PERMISSIONS,
+  RedisRateWindow,
+  RedisSimulationResults,
+  RedisStreamsEventBus,
+} from '@proton/core';
 import { createRedisClient } from '@proton/core/redis';
 import { createDb, DrizzleBrandingNameStyleStore, DrizzleGuildRuleStore } from '@proton/db';
 import { RedisMaintenanceStore } from '@proton/module-antinuke';
@@ -22,6 +27,7 @@ import { LeaderboardService } from './leveling/service.ts';
 import { auditTrailWriter, XpEventService } from './leveling/xp-events.ts';
 import { BlockedMemberService } from './moderation/blocked-members.ts';
 import { ModuleConfigService } from './modules/service.ts';
+import { SimulationService } from './simulations/service.ts';
 import { TagSearchService } from './tags/service.ts';
 import { TicketSearchService } from './tickets/service.ts';
 import { VerificationService } from './verification/service.ts';
@@ -61,6 +67,22 @@ const modules = new ModuleConfigService(handle, registry, {
     ),
 });
 
+// The mailbox and the rate window share the bus connection and its database, because the worker
+// answers on the same one. RedisSimulationResults duplicates it for the blocking read.
+const simulations = new SimulationService({
+  modules,
+  registry,
+  db: handle,
+  ...(busRedis
+    ? {
+        results: new RedisSimulationResults(busRedis),
+        rateWindow: new RedisRateWindow(busRedis),
+      }
+    : {}),
+  ...(bus ? { bus } : {}),
+  logger: console,
+});
+
 // The same Redis the bus uses: the maintenance key is small, read once per anti-nuke page load,
 // and a second connection for one key is not worth the file descriptor.
 const maintenance = busRedis ? new RedisMaintenanceStore(busRedis) : undefined;
@@ -68,6 +90,7 @@ const maintenance = busRedis ? new RedisMaintenanceStore(busRedis) : undefined;
 const app = createApiApp({
   guilds: new GuildService(handle, new BotGuildDirectory(env.REST_PROXY_URL)),
   modules,
+  simulations,
   branding: new BrandingAssetService(new DrizzleBrandingAssetStore(handle), modules),
   brandingNameStyles: new DrizzleBrandingNameStyleStore(handle),
   verification: new VerificationService({ ...(bus ? { bus } : {}) }),

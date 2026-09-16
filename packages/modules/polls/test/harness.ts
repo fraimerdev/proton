@@ -199,7 +199,13 @@ export interface CallBody {
   };
   allowed_mentions?: { parse?: string[] };
   flags?: number;
-  data?: { content?: string; flags?: number; allowed_mentions?: { parse?: string[] } };
+  embeds?: Array<{ description?: string; color?: number }>;
+  data?: {
+    content?: string;
+    flags?: number;
+    allowed_mentions?: { parse?: string[] };
+    embeds?: Array<{ description?: string; color?: number }>;
+  };
 }
 
 export interface Harness {
@@ -217,6 +223,7 @@ export interface Harness {
   sent(): Array<{ path: string; body: CallBody }>;
   answers(): string[];
   lastAnswer(): string | null;
+  lastAnswerEmbed(): { description?: string; color?: number } | null;
 
   run(subcommand: string, options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
   announce(data: unknown, overrides?: Partial<RunOverrides>): Promise<void>;
@@ -290,12 +297,19 @@ export function harness(seed: PollsDeps = {}): Harness {
   const answersOf = (): string[] =>
     rest.calls
       .filter((call) => call.path.startsWith('/webhooks/'))
-      .map((call) => (call.body as CallBody).content ?? '');
+      .map((call) => {
+        const body = call.body as CallBody;
+        return body.content || body.embeds?.[0]?.description || '';
+      })
+      .filter((text) => text.length > 0);
 
   const repliesOf = (): string[] =>
     rest.calls
       .filter((call) => call.path.startsWith('/interactions/'))
-      .map((call) => (call.body as CallBody).data?.content ?? '')
+      .map((call) => {
+        const data = (call.body as CallBody).data;
+        return data?.content || data?.embeds?.[0]?.description || '';
+      })
       .filter((content) => content.length > 0);
 
   return {
@@ -317,6 +331,14 @@ export function harness(seed: PollsDeps = {}): Harness {
 
     answers: () => [...answersOf(), ...repliesOf()],
     lastAnswer: () => [...answersOf(), ...repliesOf()].at(-1) ?? null,
+
+    lastAnswerEmbed: () => {
+      const call = rest.calls.findLast(
+        (c) => c.path.startsWith('/webhooks/') || c.path.startsWith('/interactions/'),
+      );
+      const body = call?.body as CallBody | undefined;
+      return body?.embeds?.[0] ?? body?.data?.embeds?.[0] ?? null;
+    },
 
     async run(subcommand, options, overrides = {}) {
       const definition = pollsCommands(depsOf(overrides)).find((c) => c.name === 'poll');

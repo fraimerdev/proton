@@ -128,7 +128,7 @@ export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
     const disabled = disabledReason(snapshot, manifest.configSchema);
     if (disabled) {
       deps.logger.warn(
-        `${manifest.name} is switched off in this server, so its scheduled '${job.jobId}' job ` +
+        `${manifest.name} is disabled in this server, so its scheduled '${job.jobId}' job ` +
           'did not run and has been dropped. Re-enable the module and schedule it again.',
         { guildId: job.guildId, moduleId: manifest.id, jobId: job.jobId, disabled },
       );

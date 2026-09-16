@@ -6,6 +6,7 @@ import type {
   InteractionRef,
   ModuleContext,
   RespondTo,
+  StatusBody,
 } from '@proton/core';
 import type { VerificationConfig } from './config.ts';
 import type { RoleStep } from './roles.ts';
@@ -110,8 +111,10 @@ export async function run(
 
 export async function reply(
   ctx: CommandContext<VerificationConfig>,
-  content: string,
+  message: string | StatusBody,
 ): Promise<void> {
+  const body = typeof message === 'string' ? { content: message.slice(0, MESSAGE_MAX) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -123,7 +126,7 @@ export async function reply(
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
 
-      content: content.slice(0, MESSAGE_MAX),
+      ...body,
       ephemeral: true,
     },
   });

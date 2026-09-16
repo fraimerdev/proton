@@ -425,7 +425,7 @@ export async function publishResult(
       `<@${giveaway.hostId}> — **${giveaway.title}** was drawn without ` +
         `${summary.degraded.length === 1 ? 'one of its requirements' : 'some of its requirements'}: ` +
         `${summary.degraded.join(', ')}. The module that owns ` +
-        `${summary.degraded.length === 1 ? 'it' : 'them'} is switched off or not running, so ` +
+        `${summary.degraded.length === 1 ? 'it' : 'them'} is disabled or not running, so ` +
         `${summary.degraded.length === 1 ? 'it was' : 'they were'} skipped rather than failing ` +
         'the draw. Rerun it with `/giveaway reroll` if that changes who should have won.',
       `giveaways:${root}:degraded`,

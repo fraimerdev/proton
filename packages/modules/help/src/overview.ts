@@ -37,7 +37,7 @@ const NO_LINK =
 
 const COMMANDS =
   'Type `/` in the message box to see what Proton offers you here. A command you cannot see is ' +
-  'either switched off in this server or restricted to another role.';
+  'either disabled in this server or restricted to another role.';
 
 function text(content: string): Record<string, unknown> {
   return { type: ComponentType.TextDisplay, content };

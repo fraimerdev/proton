@@ -144,7 +144,7 @@ describe('0032_escalation_into_moderation', () => {
     expect((await moduleRow('moderation'))?.schema_version).toBe(2);
   });
 
-  test('a guild with no moderation row gets one, switched off, carrying only the ladder', async () => {
+  test('a guild with no moderation row gets one, disabled, carrying only the ladder', async () => {
     await seedModule('cases', CASES);
 
     await move();
@@ -189,7 +189,7 @@ describe('0032_escalation_into_moderation', () => {
     expect(config.escalationLadder).toEqual(LADDER);
   });
 
-  test('a module that was switched off stays off', async () => {
+  test('a module that was disabled stays off', async () => {
     await seedModule('cases', CASES, false);
     await seedModule('moderation', { enabled: false }, false);
 
@@ -222,7 +222,7 @@ describe('0032_escalation_into_moderation', () => {
     }
   });
 
-  test('a rung the guild switched off stays off', async () => {
+  test('a rung the guild disabled stays off', async () => {
     await seedModule('cases', CASES);
     await seedRule('cases', 'escalate-at-4', { enabled: false });
 

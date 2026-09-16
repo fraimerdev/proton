@@ -41,7 +41,7 @@ export class AppealsService {
     this.#options = options;
   }
 
-  // A module a server has never switched on is not an error the appellant caused, so it answers a
+  // A module a server has never enabled is not an error the appellant caused, so it answers a
   // closed view rather than a 500.
   async #config(guildId: string): Promise<AppealsConfig | null> {
     try {

@@ -185,6 +185,7 @@ export interface CallBody {
   type?: number;
   data?: {
     content?: string;
+    embeds?: Array<{ description?: string; color?: number }>;
     choices?: Array<{ name: string; value: string | number }>;
     allowed_mentions?: { parse?: string[] };
     flags?: number;
@@ -200,6 +201,7 @@ export interface Harness {
   calls(): RestRequestOptions[];
   bodies(): CallBody[];
   replyContent(): string | null;
+  replyEmbed(): { description?: string; color?: number } | null;
   choices(): Array<{ name: string; value: string | number }>;
 
   run(command: string, options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
@@ -250,8 +252,16 @@ export function harness(seed: TagsDeps = {}): Harness {
     calls: () => rest.calls,
     bodies,
 
-    replyContent: () =>
-      bodies().find((body) => body.data?.content !== undefined)?.data?.content ?? null,
+    replyContent: () => {
+      const data = bodies().find(
+        (body) => body.data?.content !== undefined || body.data?.embeds !== undefined,
+      )?.data;
+
+      return data?.content || data?.embeds?.[0]?.description || null;
+    },
+
+    replyEmbed: () =>
+      bodies().find((body) => body.data?.embeds !== undefined)?.data?.embeds?.[0] ?? null,
 
     choices: () => bodies().find((body) => body.data?.choices !== undefined)?.data?.choices ?? [],
 

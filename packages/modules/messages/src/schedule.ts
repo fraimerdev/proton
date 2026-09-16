@@ -96,7 +96,7 @@ export function reconcile(config: MessagesConfig, now: Date): ReconcilePlan {
         name,
         key,
         reason: 'module-off',
-        humanReason: 'the Messages module is switched off in this server.',
+        humanReason: 'the Messages module is disabled in this server.',
       });
       continue;
     }
@@ -106,7 +106,7 @@ export function reconcile(config: MessagesConfig, now: Date): ReconcilePlan {
         name,
         key,
         reason: 'switched-off',
-        humanReason: 'this template’s schedule is switched off.',
+        humanReason: 'this template’s schedule is disabled.',
       });
       continue;
     }

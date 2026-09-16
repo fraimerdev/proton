@@ -1,9 +1,16 @@
 import { describe, expect, test } from 'bun:test';
-import { encodeCustomId, type ProtonEvent } from '@proton/core';
+import {
+  encodeCustomId,
+  type ProtonEvent,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { MODULE_ID } from '../src/config.ts';
 import { handleComponent, handleModal } from '../src/interactions.ts';
 import { MODAL_ACTION, PANEL_ACTION, USER_SELECT_ACTION } from '../src/interface.ts';
-import { ADA, BEN, callsOf, GUILD, harness, member } from './harness.ts';
+import { ADA, BEN, callsOf, GUILD, harness, member, replyColour, replyText } from './harness.ts';
 
 const COMPONENT = 3;
 const MODAL_SUBMIT = 5;
@@ -93,6 +100,8 @@ describe('a button press is authorised from the database, never from the button'
     );
 
     expect(outcome).toMatchObject({ action: 'done', what: 'delete' });
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Your channel has been deleted.`);
+    expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   /** The panel sits in a channel anybody in it can see, so a stranger can press every button. */
@@ -107,10 +116,25 @@ describe('a button press is authorised from the database, never from the button'
 
     expect(outcome.action).toBe('refused');
     expect(callsOf(fake, 'delete_channel')).toHaveLength(0);
+    expect(replyText(fake)).toBe(
+      `${STATUS_ERROR_EMOJI} Only the owner of this channel can use that.`,
+    );
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('a control Discord refuses is answered in red rather than as a success', async () => {
+    const { fake, row, deps } = await withChannel();
+    fake.refuse('delete_channel', 'missing_permission', 'Manage Channels is missing');
+
+    await handleComponent(press(customId(PANEL_ACTION, 'delete', row.id)), fake.ctx, deps);
+
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
+    expect(replyText(fake)).toContain('I could not delete your channel');
+    expect(replyText(fake)).not.toContain('Manage Channels is missing');
   });
 
   /** A panel message outlives the settings that made it. */
-  test('a control the admin has since switched off is refused', async () => {
+  test('a control the admin has since disabled is refused', async () => {
     const { fake, row, deps } = await withChannel();
     fake.ctx.config.hubs[0] = { ...fake.hub, allow: { ...fake.hub.allow, delete: false } };
 
@@ -171,6 +195,8 @@ describe('claim is the one control a non-owner may press', () => {
 
     expect(outcome).toMatchObject({ action: 'done', what: 'claim' });
     expect(fake.row(row.id).ownerId).toBe(BEN);
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} You own this channel now.`);
+    expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('a channel that still has an owner cannot be claimed', async () => {
@@ -184,6 +210,8 @@ describe('claim is the one control a non-owner may press', () => {
 
     expect(outcome.action).toBe('refused');
     expect(fake.row(row.id).ownerId).toBe(ADA);
+    expect(replyText(fake)).toBe(`${STATUS_ERROR_EMOJI} <@${ADA}> still owns this channel.`);
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
   });
 });
 
@@ -200,6 +228,8 @@ describe('the member picker', () => {
     expect(outcome).toMatchObject({ action: 'done', what: 'block' });
     expect(await fake.repository.access(row.id)).toEqual([{ userId: BEN, kind: 'block' }]);
     expect(callsOf(fake, 'edit_channel')).toHaveLength(1);
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} <@${BEN}> is blocked from this channel.`);
+    expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('picking yourself is refused rather than acted on', async () => {
@@ -212,6 +242,17 @@ describe('the member picker', () => {
     );
 
     expect(outcome.action).toBe('refused');
+    expect(replyText(fake)).toBe(`${STATUS_ERROR_EMOJI} Pick somebody other than yourself.`);
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('the picker prompt stays plain text rather than becoming a status embed', async () => {
+    const { fake, row, deps } = await withChannel();
+
+    await handleComponent(press(customId(PANEL_ACTION, 'kick', row.id)), fake.ctx, deps);
+
+    expect(replyText(fake)).toBe('Who would you like to kick?');
+    expect(replyColour(fake)).toBeNull();
   });
 
   test('transfer through the panel moves ownership', async () => {
@@ -239,6 +280,10 @@ describe('modals', () => {
 
     expect(outcome).toMatchObject({ action: 'done', what: 'rename' });
     expect(callsOf(fake, 'edit_channel')[0]?.payload.name).toBe('Study room');
+    expect(replyText(fake)).toBe(
+      `${STATUS_SUCCESS_EMOJI} Your channel has been renamed to **Study room**.`,
+    );
+    expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('an empty name is refused rather than sent to Discord', async () => {
@@ -252,6 +297,10 @@ describe('modals', () => {
 
     expect(outcome.action).toBe('refused');
     expect(callsOf(fake, 'edit_channel')).toHaveLength(0);
+    expect(replyText(fake)).toBe(
+      `${STATUS_ERROR_EMOJI} A channel needs a name — that one was empty.`,
+    );
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('a limit outside what Discord accepts is refused with the number named', async () => {
@@ -265,6 +314,8 @@ describe('modals', () => {
 
     expect(outcome.action).toBe('refused');
     expect(callsOf(fake, 'edit_channel')).toHaveLength(0);
+    expect(replyText(fake)).toContain('900');
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('a valid limit is applied', async () => {
@@ -277,6 +328,8 @@ describe('modals', () => {
     );
 
     expect(callsOf(fake, 'edit_channel')[0]?.payload.userLimit).toBe(4);
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Your channel now holds 4 members.`);
+    expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('a modal submitted by somebody who is not the owner changes nothing', async () => {

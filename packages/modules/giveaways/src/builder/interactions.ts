@@ -1,4 +1,5 @@
 import {
+  errorStatus,
   interactionRef,
   type ProtonEvent,
   readComponentInteraction,
@@ -55,7 +56,7 @@ async function deliver(ctx: Ctx, target: Target, reply: BuilderReply): Promise<B
       return 'handled';
 
     case 'message':
-      await refuseNow(ctx, target.ref, target.userId, target.root, reply.content);
+      await refuseNow(ctx, target.ref, target.userId, target.root, reply.body);
       return 'handled';
 
     // The preview is the real Components V2 message, so it cannot be a callback — it is deferred
@@ -113,7 +114,7 @@ export async function handleBuilderPress(
         ref,
         interaction.userId,
         target.root,
-        'That builder has expired. Start a new one with `/giveaway create`.',
+        errorStatus('That builder has expired. Start a new one with `/giveaway create`.'),
       );
       return 'handled';
     }
@@ -128,7 +129,7 @@ export async function handleBuilderPress(
       { applicationId, interaction: ref },
       interaction.userId,
       target.root,
-      started.content,
+      started.body,
     );
 
     return 'handled';
@@ -188,7 +189,7 @@ export async function handleBuilderSubmit(
   // Discord refuses a modal opened from a modal submission, so a validation failure comes back as
   // an ephemeral message naming the field rather than the form again.
   if (reply.kind === 'modal') {
-    await refuseNow(ctx, ref, interaction.userId, target.root, NOT_WIRED);
+    await refuseNow(ctx, ref, interaction.userId, target.root, errorStatus(NOT_WIRED));
     return 'handled';
   }
 
