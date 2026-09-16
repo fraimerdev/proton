@@ -79,7 +79,7 @@ describe('0006_joinroles', () => {
     expect(config.grantWhenScreeningPasses).toBe(true);
   });
 
-  test('a guild that configured roles has granting switched on, because it never worked before', async () => {
+  test('a guild that configured roles has granting enabled, because it never worked before', async () => {
     await seedLegacy({ enabled: false, autoroleIds: [ROLE] });
 
     await applyRename();
@@ -87,7 +87,7 @@ describe('0006_joinroles', () => {
     expect((await joinrolesRow())?.config).toMatchObject({ enabled: true });
   });
 
-  test('a guild with no configured roles is left switched off', async () => {
+  test('a guild with no configured roles is left disabled', async () => {
     await seedLegacy({ enabled: false, autoroleIds: [], stickyEnabled: true });
 
     await applyRename();

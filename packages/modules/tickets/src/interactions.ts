@@ -4,6 +4,7 @@ import {
   type EventListener,
   type EventType,
   encodeCustomId,
+  errorStatus,
   followUp,
   type InteractionBase,
   interactionRef,
@@ -16,6 +17,8 @@ import {
   readMemberPermissions,
   readModalInteraction,
   replyEphemeral,
+  type StatusBody,
+  successStatus,
   TICKET_PRIORITIES,
   type TicketPriority,
 } from '@proton/core';
@@ -79,7 +82,7 @@ import {
   UNCLAIM_ACTION,
   UNLOCK_ACTION,
 } from './interface.ts';
-import { closeTicket, deleteTicket, openTicket, reopenTicket } from './lifecycle.ts';
+import { closeTicket, deleteTicket, openTicket, refusalBody, reopenTicket } from './lifecycle.ts';
 import {
   buildCloseReasonModal,
   buildIntakeModal,
@@ -178,7 +181,7 @@ interface Session {
   applicationId: string;
 }
 
-async function say(session: Session, content: string, root = 'reply'): Promise<void> {
+async function say(session: Session, message: string | StatusBody, root = 'reply'): Promise<void> {
   const result = await session.ctx.executor.execute(
     followUp(
       {
@@ -186,7 +189,7 @@ async function say(session: Session, content: string, root = 'reply'): Promise<v
         idempotencyKey: `${session.to.idempotencyKey}:${root}`,
         applicationId: session.applicationId,
       },
-      content,
+      message,
     ),
   );
 
@@ -327,14 +330,18 @@ async function reportControl(
   root: string,
 ): Promise<PressOutcome> {
   if (!outcome.ok) {
-    await say(session, outcome.humanReason, root);
+    await say(session, errorStatus(outcome.humanReason), root);
     return { action: 'refused', reason: outcome.humanReason };
   }
 
-  await say(session, outcome.message, root);
+  await say(
+    session,
+    outcome.partial ? errorStatus(outcome.message) : successStatus(outcome.message),
+    root,
+  );
   await refresh(session, outcome.ticket);
 
-  return { action: 'done', reason: outcome.message };
+  return { action: outcome.partial ? 'refused' : 'done', reason: outcome.message };
 }
 
 export async function handleTicketInteraction(
@@ -480,8 +487,10 @@ async function startOpen(
     await session.ctx.executor.execute(
       replyEphemeral(
         session.to,
-        'That button belongs to a ticket panel that no longer exists in this server’s settings, ' +
-          'so nothing was opened. An admin can repost the panel from the Proton dashboard.',
+        errorStatus(
+          'That button belongs to a ticket panel that no longer exists in this server’s settings, ' +
+            'so nothing was opened. An admin can repost the panel from the Proton dashboard.',
+        ),
       ),
     );
     return { action: 'refused', reason: 'the panel is gone' };
@@ -504,7 +513,7 @@ async function startOpen(
         : 'That option is no longer one this panel offers. An admin can repost the panel from the ' +
           'Proton dashboard so its buttons match the settings again.';
 
-    await session.ctx.executor.execute(replyEphemeral(session.to, message));
+    await session.ctx.executor.execute(replyEphemeral(session.to, errorStatus(message)));
     return { action: 'refused', reason: 'the ticket type is gone' };
   }
 
@@ -542,8 +551,10 @@ async function submitForm(
     await session.ctx.executor.execute(
       replyEphemeral(
         session.to,
-        'The ticket type you filled that form in for has been removed from this server’s ' +
-          'settings, so nothing was opened and nothing was recorded.',
+        errorStatus(
+          'The ticket type you filled that form in for has been removed from this server’s ' +
+            'settings, so nothing was opened and nothing was recorded.',
+        ),
       ),
     );
     return { action: 'refused', reason: 'the ticket type is gone' };
@@ -593,14 +604,16 @@ async function finishOpen(
   }
 
   if (opened.status === 'refused') {
-    await say(session, opened.humanReason, 'refused');
+    await say(session, refusalBody(opened), 'refused');
     return { action: 'refused', reason: opened.humanReason };
   }
 
   await say(
     session,
-    `Opened ticket #${opened.ticket.number} — <#${opened.ticket.channelId}>. ` +
-      'Everything you say there is visible only to you and the support team.',
+    successStatus(
+      `Opened ticket #${opened.ticket.number} — <#${opened.ticket.channelId}>. ` +
+        'Everything you say there is visible only to you and the support team.',
+    ),
     'opened',
   );
 
@@ -618,12 +631,16 @@ async function runControl(
   const allowed = gate(session, action, ticket);
 
   if (!allowed.ok) {
-    await say(session, allowed.humanReason, 'refused');
+    await say(session, errorStatus(allowed.humanReason), 'refused');
     return { action: 'refused', reason: allowed.humanReason };
   }
 
   if (!ticket) {
-    await say(session, 'There is no ticket attached to this channel any more.', 'refused');
+    await say(
+      session,
+      errorStatus('There is no ticket attached to this channel any more.'),
+      'refused',
+    );
     return { action: 'refused', reason: 'no ticket here' };
   }
 
@@ -638,7 +655,11 @@ async function pressClose(session: Session): Promise<PressOutcome> {
     await session.ctx.executor.execute(
       replyEphemeral(
         session.to,
-        allowed.ok ? 'There is no ticket attached to this channel any more.' : allowed.humanReason,
+        errorStatus(
+          allowed.ok
+            ? 'There is no ticket attached to this channel any more.'
+            : allowed.humanReason,
+        ),
       ),
     );
     return { action: 'refused', reason: allowed.ok ? 'no ticket here' : allowed.humanReason };
@@ -664,7 +685,7 @@ async function performClose(session: Session, reason: string | null): Promise<Pr
   if (!allowed.ok || !ticket) {
     await say(
       session,
-      allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason,
+      errorStatus(allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason),
       'refused',
     );
     return { action: 'refused', reason: 'not permitted' };
@@ -678,7 +699,7 @@ async function performClose(session: Session, reason: string | null): Promise<Pr
     const outcome = await requestClose(controlInput(session, ticket), reason);
 
     if (!outcome.ok) {
-      await say(session, outcome.humanReason, 'refused');
+      await say(session, errorStatus(outcome.humanReason), 'refused');
       return { action: 'refused', reason: outcome.humanReason };
     }
 
@@ -704,7 +725,7 @@ async function performClose(session: Session, reason: string | null): Promise<Pr
       });
     }
 
-    await say(session, outcome.message, 'requested');
+    await say(session, successStatus(outcome.message), 'requested');
     return { action: 'done', reason: outcome.message };
   }
 
@@ -719,11 +740,11 @@ async function performClose(session: Session, reason: string | null): Promise<Pr
   });
 
   if (!closed.ok) {
-    await say(session, closed.humanReason, 'refused');
+    await say(session, errorStatus(closed.humanReason), 'refused');
     return { action: 'refused', reason: closed.humanReason };
   }
 
-  await say(session, `Closed ticket #${closed.ticket.number}.`, 'closed');
+  await say(session, successStatus(`Closed ticket #${closed.ticket.number}.`), 'closed');
   await refresh(session, closed.ticket);
 
   return { action: 'done', reason: 'closed' };
@@ -735,7 +756,7 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
   const ticket = await ticketHere(session);
 
   if (!ticket || ticket.closeRequestedAt === null) {
-    await say(session, 'There is no open request to close this ticket.', 'refused');
+    await say(session, errorStatus('There is no open request to close this ticket.'), 'refused');
     return { action: 'refused', reason: 'no close request pending' };
   }
 
@@ -743,7 +764,11 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
   const mayAnswer = session.actor.userId === ticket.ownerId || gate(session, 'close', ticket).ok;
 
   if (!mayAnswer) {
-    await say(session, 'That question is for the member who raised this ticket.', 'refused');
+    await say(
+      session,
+      errorStatus(`That question is for <@${ticket.ownerId}>, who raised this ticket.`),
+      'refused',
+    );
     return { action: 'refused', reason: 'not the ticket owner' };
   }
 
@@ -759,7 +784,13 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
       });
     }
 
-    await say(session, 'Kept open. Tell the team what is still wrong.', 'kept');
+    await say(
+      session,
+      successStatus(
+        `Ticket #${ticket.number} stays open. Tell the team what is still wrong with it.`,
+      ),
+      'kept',
+    );
     return { action: 'done', reason: 'close request declined' };
   }
 
@@ -776,11 +807,15 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
   });
 
   if (!closed.ok) {
-    await say(session, closed.humanReason, 'refused');
+    await say(session, errorStatus(closed.humanReason), 'refused');
     return { action: 'refused', reason: closed.humanReason };
   }
 
-  await say(session, `Closed ticket #${closed.ticket.number}. Thanks for confirming.`, 'closed');
+  await say(
+    session,
+    successStatus(`Closed ticket #${closed.ticket.number}. Thanks for confirming.`),
+    'closed',
+  );
   return { action: 'done', reason: 'closed' };
 }
 
@@ -804,14 +839,17 @@ async function pickMember(session: Session, adding: boolean): Promise<PressOutco
   if (!allowed.ok || !ticket) {
     await say(
       session,
-      allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason,
+      errorStatus(allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason),
       'refused',
     );
     return { action: 'refused', reason: 'not permitted' };
   }
 
   const encoded = encodeCustomId(MODULE_ID, adding ? ADD_SELECT_ACTION : REMOVE_SELECT_ACTION);
-  if (!encoded.ok) return { action: 'refused', reason: encoded.humanReason };
+  if (!encoded.ok) {
+    await say(session, errorStatus(encoded.humanReason), 'refused');
+    return { action: 'refused', reason: encoded.humanReason };
+  }
 
   await show(
     session,
@@ -849,7 +887,7 @@ async function pickTarget(session: Session, action: 'assign' | 'move'): Promise<
   if (!allowed.ok || !ticket) {
     await say(
       session,
-      allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason,
+      errorStatus(allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason),
       'refused',
     );
     return { action: 'refused', reason: 'not permitted' };
@@ -860,7 +898,10 @@ async function pickTarget(session: Session, action: 'assign' | 'move'): Promise<
     action === 'assign' ? ASSIGN_SELECT_ACTION : MOVE_SELECT_ACTION,
   );
 
-  if (!encoded.ok) return { action: 'refused', reason: encoded.humanReason };
+  if (!encoded.ok) {
+    await say(session, errorStatus(encoded.humanReason), 'refused');
+    return { action: 'refused', reason: encoded.humanReason };
+  }
 
   await show(
     session,
@@ -906,7 +947,9 @@ async function pressRename(session: Session): Promise<PressOutcome> {
     await session.ctx.executor.execute(
       replyEphemeral(
         session.to,
-        allowed.ok ? 'There is no ticket attached to this channel.' : allowed.humanReason,
+        errorStatus(
+          allowed.ok ? 'There is no ticket attached to this channel.' : allowed.humanReason,
+        ),
       ),
     );
     return { action: 'refused', reason: 'not permitted' };
@@ -926,7 +969,11 @@ async function pressInfo(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'info', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(session, allowed.ok ? 'There is no ticket here.' : allowed.humanReason, 'refused');
+    await say(
+      session,
+      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
+      'refused',
+    );
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -952,13 +999,17 @@ async function pressOptions(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'priority', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(session, allowed.ok ? 'There is no ticket here.' : allowed.humanReason, 'refused');
+    await say(
+      session,
+      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
+      'refused',
+    );
     return { action: 'refused', reason: 'not permitted' };
   }
 
   const rows = buildOptionRows(await viewOf(session, ticket));
   if (!rows.ok) {
-    await say(session, rows.humanReason, 'refused');
+    await say(session, errorStatus(rows.humanReason), 'refused');
     return { action: 'refused', reason: rows.humanReason };
   }
 
@@ -978,7 +1029,11 @@ async function pressTranscript(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'transcript', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(session, allowed.ok ? 'There is no ticket here.' : allowed.humanReason, 'refused');
+    await say(
+      session,
+      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
+      'refused',
+    );
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -999,7 +1054,9 @@ async function pressTranscript(session: Session): Promise<PressOutcome> {
         applicationId: session.applicationId,
       },
       {
-        content: `Transcript of ticket #${ticket.number}, as it stands right now.`,
+        ...successStatus(
+          `The transcript of ticket #${ticket.number}, as it stands right now, is attached.`,
+        ),
         files: [
           {
             filename: built.filename,
@@ -1016,7 +1073,11 @@ async function pressTranscript(session: Session): Promise<PressOutcome> {
   if (result.status === 'failed_precheck' || result.status === 'failed_api') {
     await say(
       session,
-      `I built the transcript but could not send it: ${result.failure?.humanReason ?? 'unknown reason'}`,
+      errorStatus(
+        `I built the transcript of ticket #${ticket.number} but could not send it: ${
+          result.failure?.humanReason ?? 'unknown reason'
+        }`,
+      ),
       'transcript-failed',
     );
   }
@@ -1031,18 +1092,22 @@ async function pressReopen(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'reopen', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(session, allowed.ok ? 'There is no ticket here.' : allowed.humanReason, 'refused');
+    await say(
+      session,
+      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
+      'refused',
+    );
     return { action: 'refused', reason: 'not permitted' };
   }
 
   const reopened = await reopenTicket(session.ctx, session.store, ticket, session.actor.userId);
 
   if (!reopened.ok) {
-    await say(session, reopened.humanReason, 'refused');
+    await say(session, errorStatus(reopened.humanReason), 'refused');
     return { action: 'refused', reason: reopened.humanReason };
   }
 
-  await say(session, `Reopened ticket #${reopened.ticket.number}.`, 'reopened');
+  await say(session, successStatus(`Reopened ticket #${reopened.ticket.number}.`), 'reopened');
   await refresh(session, reopened.ticket);
 
   return { action: 'done', reason: 'reopened' };
@@ -1055,13 +1120,20 @@ async function pressDelete(session: Session, confirmed: boolean): Promise<PressO
   const allowed = gate(session, 'delete', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(session, allowed.ok ? 'There is no ticket here.' : allowed.humanReason, 'refused');
+    await say(
+      session,
+      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
+      'refused',
+    );
     return { action: 'refused', reason: 'not permitted' };
   }
 
   if (!confirmed) {
     const encoded = encodeCustomId(MODULE_ID, DELETE_CONFIRM_ACTION);
-    if (!encoded.ok) return { action: 'refused', reason: encoded.humanReason };
+    if (!encoded.ok) {
+      await say(session, errorStatus(encoded.humanReason), 'refused');
+      return { action: 'refused', reason: encoded.humanReason };
+    }
 
     await show(
       session,
@@ -1100,7 +1172,7 @@ async function pressDelete(session: Session, confirmed: boolean): Promise<PressO
   );
 
   if (!removed.ok) {
-    await say(session, removed.humanReason, 'refused');
+    await say(session, errorStatus(removed.humanReason), 'refused');
     return { action: 'refused', reason: removed.humanReason };
   }
 
@@ -1144,7 +1216,7 @@ async function saveRating(
   // The rating button can arrive by DM, where the channel says nothing about which guild or ticket
   // it belongs to, so the owner check is the only thing standing between a stranger and the score.
   if (!ticket || ticket.ownerId !== session.actor.userId) {
-    await say(session, 'That rating is not yours to give.', 'refused');
+    await say(session, errorStatus('That rating is not yours to give.'), 'refused');
     return { action: 'refused', reason: 'not the ticket owner' };
   }
 
@@ -1159,8 +1231,8 @@ async function saveRating(
   await say(
     session,
     saved
-      ? `Thank you — ${score} out of 5 recorded for ticket #${ticket.number}.`
-      : 'You have already rated this ticket.',
+      ? successStatus(`Thank you — ${score} out of 5 recorded for ticket #${ticket.number}.`)
+      : errorStatus(`You have already rated ticket #${ticket.number}.`),
     'rated',
   );
 
@@ -1188,8 +1260,10 @@ export function createTicketInteractionListener(deps: TicketsDeps): EventListene
               interaction: interactionRef(facts),
               idempotencyKey: `${MODULE_ID}:${event.id}`,
             },
-            'Tickets is switched off in this server, so that button does nothing. An admin can ' +
-              'turn it back on in the Proton dashboard.',
+            errorStatus(
+              'Tickets is disabled in this server, so that button does nothing. An admin can ' +
+                'turn it back on in the Proton dashboard.',
+            ),
           ),
         );
         return;

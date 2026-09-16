@@ -295,53 +295,53 @@ export function NumberStepper({
 
   return (
     <div className="stepper" style={{ width }} data-invalid={invalid ? 'true' : undefined}>
-      <input
-        className="input"
-        type="number"
-        inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
-        value={value ?? ''}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-        aria-label={label}
-        aria-invalid={invalid ? true : undefined}
-        onChange={(event) => {
-          const raw = event.currentTarget.value;
-          onChange(raw === '' ? null : Number(raw));
-        }}
-        onBlur={(event) => {
-          const raw = event.currentTarget.value;
-          if (raw !== '') onChange(clamp(Number(raw)));
-        }}
-      />
-      {unit ? (
-        <span className="field-unit" style={{ paddingRight: 8 }}>
-          {unit}
-        </span>
-      ) : null}
-      <div className="stepper-buttons">
-        <button
-          type="button"
-          className="stepper-button"
-          tabIndex={-1}
-          aria-hidden
-          disabled={disabled || atMax}
-          onClick={() => nudge(step)}
-        >
-          <Icon name="caret-up" size={11} weight="fill" />
-        </button>
-        <button
-          type="button"
-          className="stepper-button"
-          tabIndex={-1}
-          aria-hidden
-          disabled={disabled || atMin}
-          onClick={() => nudge(-step)}
-        >
-          <Icon name="caret-down" size={11} weight="fill" />
-        </button>
-      </div>
+      {/* Hidden from AT and off the tab ring on purpose: the input they flank already steps with
+          the arrow keys, so exposing them would read and tab as a duplicate of it. */}
+      <button
+        type="button"
+        className="stepper-button"
+        tabIndex={-1}
+        aria-hidden
+        disabled={disabled || atMin}
+        onClick={() => nudge(-step)}
+      >
+        <Icon name="minus" size={14} />
+      </button>
+
+      <span className="stepper-value">
+        <input
+          className="input"
+          type="number"
+          inputMode={Number.isInteger(step) ? 'numeric' : 'decimal'}
+          value={value ?? ''}
+          min={min}
+          max={max}
+          step={step}
+          disabled={disabled}
+          aria-label={label}
+          aria-invalid={invalid ? true : undefined}
+          onChange={(event) => {
+            const raw = event.currentTarget.value;
+            onChange(raw === '' ? null : Number(raw));
+          }}
+          onBlur={(event) => {
+            const raw = event.currentTarget.value;
+            if (raw !== '') onChange(clamp(Number(raw)));
+          }}
+        />
+        {unit ? <span className="field-unit">{unit}</span> : null}
+      </span>
+
+      <button
+        type="button"
+        className="stepper-button"
+        tabIndex={-1}
+        aria-hidden
+        disabled={disabled || atMax}
+        onClick={() => nudge(step)}
+      >
+        <Icon name="plus" size={14} />
+      </button>
     </div>
   );
 }

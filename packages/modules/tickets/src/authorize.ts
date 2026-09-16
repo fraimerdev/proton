@@ -175,7 +175,7 @@ export function authorizeTicket(input: TicketAuthInput): TicketAuthDecision {
   if (action === 'claim' && (input.claimMode ?? 'single') === 'off') {
     return refusal(
       'claiming_off',
-      'Claiming is switched off for this kind of ticket. An admin can turn it on in the Proton ' +
+      'Claiming is disabled for this kind of ticket. An admin can turn it on in the Proton ' +
         'dashboard under Tickets → Ticket types.',
     );
   }

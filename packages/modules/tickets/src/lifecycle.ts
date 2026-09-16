@@ -1,10 +1,12 @@
 import {
   type ActionResult,
   checkLimit,
+  errorStatus,
   limitFor,
   type ModuleContext,
   type PermissionOverwriteSpec,
   parseDuration,
+  type StatusBody,
   type TicketPriority,
 } from '@proton/core';
 import { clipGraphemes } from '@proton/core/placeholders';
@@ -85,7 +87,7 @@ export function refused(result: ActionResult): boolean {
 export type OpenOutcome =
   | { status: 'opened'; ticket: Ticket }
   | { status: 'duplicate' }
-  | { status: 'refused'; humanReason: string };
+  | { status: 'refused'; humanReason: string; authored?: boolean };
 
 export interface OpenInput {
   ctx: ModuleContext<TicketsConfig>;
@@ -112,7 +114,9 @@ export interface GateInput {
   priority?: TicketPriority | undefined;
 }
 
-export type GateOutcome = { ok: true } | { ok: false; humanReason: string };
+// `authored` marks a refusal whose words are the admin's own blacklist template, not Proton's.
+// Wrapping that in a status embed would print Proton's cross against somebody else's sentence.
+export type GateOutcome = { ok: true } | { ok: false; humanReason: string; authored?: boolean };
 
 async function blacklistRefusal(input: GateInput, entry: BlacklistEntry): Promise<string> {
   const { ctx, type, openerId } = input;
@@ -152,7 +156,9 @@ export async function mayOpen(input: GateInput): Promise<GateOutcome> {
   const { ctx, store, type, openerId } = input;
 
   const entry = await store.blacklistEntry(ctx.guildId, openerId, input.now);
-  if (entry) return { ok: false, humanReason: await blacklistRefusal(input, entry) };
+  if (entry) {
+    return { ok: false, humanReason: await blacklistRefusal(input, entry), authored: true };
+  }
 
   const tier = checkLimit(
     ctx.tier ?? 'free',
@@ -255,6 +261,13 @@ async function overCap(input: OpenInput, ticket: Ticket): Promise<string | null>
     : null;
 }
 
+export function refusalBody(outcome: {
+  humanReason: string;
+  authored?: boolean;
+}): string | StatusBody {
+  return outcome.authored ? outcome.humanReason : errorStatus(outcome.humanReason);
+}
+
 export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
   const { ctx, store, type, deps } = input;
 
@@ -268,7 +281,13 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     priority: input.priority,
   });
 
-  if (!gate.ok) return { status: 'refused', humanReason: gate.humanReason };
+  if (!gate.ok) {
+    return {
+      status: 'refused',
+      humanReason: gate.humanReason,
+      ...(gate.authored ? { authored: true } : {}),
+    };
+  }
 
   const ticket = await store.reserve({
     guildId: ctx.guildId,

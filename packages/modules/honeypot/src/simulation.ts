@@ -5,11 +5,11 @@ import { buildNoticeMessage } from './notice.ts';
 import { buildDirectMessage } from './render.ts';
 
 const NOTICE_OFF =
-  'the warning message is switched off, so Proton posts nothing in a bait channel. Switch ' +
+  'the warning message is disabled, so Proton posts nothing in a bait channel. Switch ' +
   '“Post the warning” on before testing it.';
 
 const DM_OFF =
-  'the direct message is switched off, so a caught member is never told why. Switch “Send a ' +
+  'the direct message is disabled, so a caught member is never told why. Switch “Send a ' +
   'direct message” on before testing it.';
 
 const NO_BAIT =

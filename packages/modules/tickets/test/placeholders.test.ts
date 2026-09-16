@@ -665,6 +665,24 @@ describe('the blacklist refusal', () => {
     );
   });
 
+  test('goes out as the admin wrote it, never inside Proton’s status embed', async () => {
+    const h = harness({
+      config: { blacklistMessage: 'No tickets for you.', creationCooldown: '0s' },
+    });
+
+    await h.store.blacklist({
+      guildId: GUILD,
+      userId: MEMBER,
+      reason: 'spam',
+      createdBy: HELPER,
+      expiresAt: null,
+    });
+    await h.press(pressEvent(OPEN));
+
+    expect(h.lastTold()).toStartWith('No tickets for you.');
+    expect(h.lastStatus()).toBeNull();
+  });
+
   test('stays within 2000 units with the reason appended whole', async () => {
     const h = harness();
     const reason = 'r'.repeat(500);

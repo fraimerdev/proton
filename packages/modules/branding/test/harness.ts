@@ -326,7 +326,10 @@ export interface Harness {
   styleBodies(): Record<string, unknown>[];
   otherCalls(): RestRequestOptions[];
   memberReads(): RestRequestOptions[];
+  reply(): string | undefined;
+  replyEmbed(): { description?: string; color?: number } | undefined;
   report(): string | undefined;
+  reportEmbed(): { description?: string; color?: number } | undefined;
   keys(): string[];
   kinds(): ActionKind[];
 
@@ -339,7 +342,7 @@ export interface HarnessOptions {
   colourRolePosition?: number;
   deps?: Partial<BrandingDeps>;
   status?: number;
-  unbind?: Array<'nameStyles' | 'rest'>;
+  unbind?: Array<'nameStyles' | 'rest' | 'applicationId'>;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -401,7 +404,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     ...(unbind.has('nameStyles') ? {} : { nameStyles }),
     ...(unbind.has('rest') ? {} : { rest }),
     botUserId: BOT,
-    applicationId: BOT,
+    ...(unbind.has('applicationId') ? {} : { applicationId: BOT }),
     ...options.deps,
   };
 
@@ -411,6 +414,28 @@ export function harness(options: HarnessOptions = {}): Harness {
   const isStyle = (call: RestRequestOptions) => call.method === 'PATCH' && isStyleBody(call.body);
   const isMemberRead = (call: RestRequestOptions) =>
     call.method === 'GET' && call.path === MEMBER_PATH;
+
+  type MessageBody = {
+    content?: unknown;
+    embeds?: { description?: string; color?: number }[];
+  };
+
+  const describe = (body: MessageBody | undefined) => {
+    const text = body?.content || body?.embeds?.[0]?.description;
+    return typeof text === 'string' ? text : undefined;
+  };
+
+  const reportBody = () =>
+    rest.calls.findLast((call) => call.path.startsWith('/webhooks/'))?.body as
+      | MessageBody
+      | undefined;
+
+  const replyBody = () =>
+    (
+      rest.calls.findLast((call) => call.path.startsWith('/interactions/'))?.body as
+        | { data?: MessageBody }
+        | undefined
+    )?.data;
 
   return {
     rest,
@@ -434,11 +459,10 @@ export function harness(options: HarnessOptions = {}): Harness {
         (call) => !isStyle(call) && !isMemberRead(call) && !call.path.startsWith('/webhooks/'),
       ),
     memberReads: () => rest.calls.filter(isMemberRead),
-    report: () => {
-      const followup = rest.calls.findLast((call) => call.path.startsWith('/webhooks/'));
-      const content = (followup?.body as { content?: unknown } | undefined)?.content;
-      return typeof content === 'string' ? content : undefined;
-    },
+    reply: () => describe(replyBody()),
+    replyEmbed: () => replyBody()?.embeds?.[0],
+    report: () => describe(reportBody()),
+    reportEmbed: () => reportBody()?.embeds?.[0],
     keys: () => dedupe.keys,
     kinds: () => requested,
 

@@ -1,9 +1,11 @@
 import {
+  errorStatus,
   interactionRef,
   type ModuleContext,
   type ProtonEvent,
   parseCustomId,
   readComponentInteraction,
+  successStatus,
 } from '@proton/core';
 import { ComponentType } from 'discord-api-types/v10';
 import { findMenu, MODULE_ID, type RolemenuConfig } from './config.ts';
@@ -68,7 +70,7 @@ export async function handleComponent(
       describeUnbound(`a press on menu '${menuId}' could not be completed`, bound.unbound),
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    await replyEphemeral(ctx, interaction, facts.userId, event.id, NOT_WIRED);
+    await replyEphemeral(ctx, interaction, facts.userId, event.id, errorStatus(NOT_WIRED));
     return { action: 'refused', reason: 'the follow-up port is unbound' };
   }
 
@@ -78,8 +80,10 @@ export async function handleComponent(
       interaction,
       facts.userId,
       event.id,
-      'Role menus are switched off in this server, so this button does nothing right now. An ' +
-        'admin can turn them back on from the Proton dashboard.',
+      errorStatus(
+        'Role menus are disabled in this server, so this button does nothing right now. An ' +
+          'admin can turn them back on from the Proton dashboard.',
+      ),
     );
     return { action: 'ignored', reason: 'role menus are off in this server' };
   }
@@ -91,8 +95,13 @@ export async function handleComponent(
       interaction,
       facts.userId,
       event.id,
-      `This menu (${menuId}) is no longer set up in this server, so I can't give you ` +
-        'anything from it. Ask an admin to re-post it or to delete the message.',
+      errorStatus(
+        menu
+          ? `'${menuId}' is a reaction menu now, so this button does nothing. React to the ` +
+              'message to pick up your roles, or ask an admin to re-post the menu.'
+          : `This menu (${menuId}) is no longer set up in this server, so I can't give you ` +
+              'anything from it. Ask an admin to re-post it or to delete the message.',
+      ),
     );
     return { action: 'refused', reason: `no button or dropdown menu '${menuId}'` };
   }
@@ -105,7 +114,7 @@ export async function handleComponent(
       interaction,
       facts.userId,
       event.id,
-      'You did not choose anything, so nothing changed.',
+      errorStatus('You did not choose anything, so none of your roles changed.'),
     );
     return { action: 'ignored', reason: 'no option was chosen' };
   }
@@ -144,7 +153,9 @@ export async function handleComponent(
     idempotencyRoot: event.id,
   });
 
-  const lines = [describeReport(report)];
+  // Only when something actually moved: describeReport's fallback sentence says the member
+  // already had what they asked for, which is a lie when the option is simply gone.
+  const lines = add.size + remove.size > 0 ? [describeReport(report)] : [];
   if (unknownKeys.length > 0) {
     lines.push(
       `${unknownKeys.length === 1 ? 'One option is' : `${unknownKeys.length} options are`} no ` +
@@ -152,12 +163,18 @@ export async function handleComponent(
     );
   }
 
+  const fellShort = report.failures.length > 0 || unknownKeys.length > 0;
+
+  // describeReport back as the last resort: with nothing else to say its "nothing changed" is
+  // true, and an empty description would render as a lone emoji.
+  const text = lines.length > 0 ? lines.join(' ') : describeReport(report);
+
   await followUp(
     ctx,
     { applicationId: bound.deps.applicationId, interaction },
     facts.userId,
     event.id,
-    lines.join(' '),
+    fellShort ? errorStatus(text) : successStatus(text),
   );
 
   if (report.failures.length > 0) {

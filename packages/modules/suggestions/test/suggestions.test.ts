@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { ModuleRegistry, Permissions } from '@proton/core';
+import {
+  ModuleRegistry,
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { SUGGESTION_CONTENT_MAX } from '../src/config.ts';
 import { DOWN_EMOJI, UP_EMOJI } from '../src/embed.ts';
 import { createSuggestionsModule } from '../src/index.ts';
@@ -369,14 +376,14 @@ describe('the vote buttons', () => {
     expect(h.calls()).toHaveLength(0);
   });
 
-  test('says so instead of counting a vote while the module is switched off', async () => {
+  test('says so instead of counting a vote while the module is disabled', async () => {
     const h = harness();
     const suggestion = await seed(h);
 
     await h.press(voteEvent(voteId(suggestion.id, 'up')), { config: { enabled: false } });
 
     expect(h.store.votes.get(suggestion.id)).toBeUndefined();
-    expect(h.replyContent()).toContain('switched off');
+    expect(h.replyContent()).toContain('disabled');
   });
 
   test('names the missing wiring when the store was never bound', async () => {
@@ -553,6 +560,71 @@ describe('/suggestion accept, deny and implement', () => {
     await h.run('suggestion', subcommand('accept', [integerOption('number', 1)]), { deps: {} });
 
     expect(h.replyContent()).toContain('a fault on my side');
+  });
+});
+
+describe('the status replies', () => {
+  test('a posted suggestion answers with the green status embed and no stale text', async () => {
+    const h = harness();
+
+    await h.run('suggest', [stringOption('text', 'Add a bot-commands channel.')]);
+
+    const body = h.followUpBodies().at(-1);
+    expect(body?.content).toBe('');
+    expect(body?.embeds?.[0]?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(body?.embeds?.[0]?.description?.startsWith(STATUS_SUCCESS_EMOJI)).toBe(true);
+  });
+
+  test('a counted vote answers with the green status embed', async () => {
+    const h = harness();
+    const suggestion = await seed(h);
+
+    await h.press(voteEvent(voteId(suggestion.id, 'up')));
+
+    const embed = h.followUpBodies().at(-1)?.embeds?.[0];
+    expect(embed?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(embed?.description?.startsWith(STATUS_SUCCESS_EMOJI)).toBe(true);
+  });
+
+  test('a refused vote answers with the red status embed', async () => {
+    const h = harness();
+    const suggestion = await seed(h, { status: 'denied', decidedBy: STAFF });
+
+    await h.press(voteEvent(voteId(suggestion.id, 'up')));
+
+    const embed = h.followUpBodies().at(-1)?.embeds?.[0];
+    expect(embed?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embed?.description?.startsWith(STATUS_ERROR_EMOJI)).toBe(true);
+  });
+
+  test('a refusal before the defer answers with the red status embed', async () => {
+    const h = harness();
+
+    await h.run('suggest', [stringOption('text', 'Add a bot-commands channel.')], {
+      config: { channelId: undefined },
+    });
+
+    const data = h.interactionBodies().at(-1)?.data;
+    expect(data?.content).toBe('');
+    expect(data?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(data?.embeds?.[0]?.description?.startsWith(STATUS_ERROR_EMOJI)).toBe(true);
+  });
+
+  test('a decision answers green and re-deciding the same way answers red', async () => {
+    const h = harness();
+    await seed(h);
+
+    await h.run('suggestion', subcommand('accept', [integerOption('number', 1)]), {
+      userId: STAFF,
+    });
+
+    expect(h.followUpBodies().at(-1)?.embeds?.[0]?.color).toBe(STATUS_SUCCESS_COLOUR);
+
+    await h.run('suggestion', subcommand('accept', [integerOption('number', 1)]), {
+      userId: OTHER,
+    });
+
+    expect(h.followUpBodies().at(-1)?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
   });
 });
 

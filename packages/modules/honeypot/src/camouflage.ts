@@ -170,7 +170,7 @@ export function createCamouflageHandler(deps: HoneypotDeps): ScheduledHandler<Ho
   return async (_data, ctx) => {
     if (!wanted(ctx.config)) {
       ctx.logger.info(
-        'honeypot camouflage stopped in this server: it is switched off, or no bait channel is ' +
+        'honeypot camouflage stopped in this server: it is disabled, or no bait channel is ' +
           'armed. Saving the module’s settings starts it again.',
         { guildId: ctx.guildId, moduleId: MODULE_ID },
       );

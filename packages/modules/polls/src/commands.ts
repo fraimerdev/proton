@@ -4,8 +4,10 @@ import {
   type CommandDefinition,
   checkLimit,
   type EntitlementTier,
+  errorStatus,
   POLL_MAX_DURATION_HOURS,
   POLL_MAX_QUESTION_LENGTH,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -144,7 +146,11 @@ async function create(ctx: Ctx, store: PollStore, applicationId: string): Promis
   });
 
   if (!composed.ok) {
-    await answer(ctx, applicationId, `I did not post that poll: ${composed.humanReason}`);
+    await answer(
+      ctx,
+      applicationId,
+      errorStatus(`I did not post that poll: ${composed.humanReason}`),
+    );
     return;
   }
 
@@ -154,7 +160,7 @@ async function create(ctx: Ctx, store: PollStore, applicationId: string): Promis
     await answer(
       ctx,
       applicationId,
-      `I did not post that poll: ${limit.humanReason} \`/poll end\` closes one early.`,
+      errorStatus(`I did not post that poll: ${limit.humanReason} \`/poll end\` closes one early.`),
     );
     return;
   }
@@ -174,14 +180,20 @@ async function create(ctx: Ctx, store: PollStore, applicationId: string): Promis
     await answer(
       ctx,
       applicationId,
-      'That poll was already posted — this is a repeat of the same command, so I did not post ' +
-        'a second one. `/poll list` shows what is running.',
+      errorStatus(
+        'That poll was already posted — this is a repeat of the same command, so I did not post ' +
+          'a second one. `/poll list` shows what is running.',
+      ),
     );
     return;
   }
 
   if (result.status !== 'executed') {
-    await answer(ctx, applicationId, `I could not post that poll: ${reasonOf(result)}`);
+    await answer(
+      ctx,
+      applicationId,
+      errorStatus(`I could not post that poll: ${reasonOf(result)}`),
+    );
     return;
   }
 
@@ -197,8 +209,10 @@ async function create(ctx: Ctx, store: PollStore, applicationId: string): Promis
     await answer(
       ctx,
       applicationId,
-      'Your poll is up, but Discord did not tell me which message it is. It will still close ' +
-        'itself on time — I just cannot end it early or announce its result.',
+      successStatus(
+        'Your poll is up, but Discord did not tell me which message it is. It will still close ' +
+          'itself on time — I just cannot end it early or announce its result.',
+      ),
     );
     return;
   }
@@ -222,9 +236,11 @@ async function create(ctx: Ctx, store: PollStore, applicationId: string): Promis
   await answer(
     ctx,
     applicationId,
-    `Your poll is up in <#${ctx.channelId}> and closes <t:${unixSeconds(endsAt)}:R>.\n` +
-      `${pollLink(ctx.guildId, ctx.channelId, messageId)}\n` +
-      `To close it sooner: \`/poll end message_id:${messageId}\`.${note}`,
+    successStatus(
+      `Your poll is up in <#${ctx.channelId}> and closes <t:${unixSeconds(endsAt)}:R>.\n` +
+        `${pollLink(ctx.guildId, ctx.channelId, messageId)}\n` +
+        `To close it sooner: \`/poll end message_id:${messageId}\`.${note}`,
+    ),
   );
 }
 
@@ -271,8 +287,10 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
     await answer(
       ctx,
       applicationId,
-      `\`${messageId}\` is not a message id. A message id is 17 to 20 digits — turn on ` +
-        'Developer Mode in Discord and use Copy Message ID, or take it from `/poll list`.',
+      errorStatus(
+        `\`${messageId}\` is not a message id. A message id is 17 to 20 digits — turn on ` +
+          'Developer Mode in Discord and use Copy Message ID, or take it from `/poll list`.',
+      ),
     );
     return;
   }
@@ -282,10 +300,12 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
     await answer(
       ctx,
       applicationId,
-      `There is no poll with the id \`${messageId}\` in this server’s records, so I left it ` +
-        'alone. Discord only lets an application close a poll it sent itself, so `/poll end` ' +
-        'works on polls started with `/poll create` and on nothing else — a poll a member ' +
-        'posted has to be closed by that member. `/poll list` shows the ones I can close.',
+      errorStatus(
+        `There is no poll with the id \`${messageId}\` in this server’s records, so I left it ` +
+          'alone. Discord only lets an application close a poll it sent itself, so `/poll end` ' +
+          'works on polls started with `/poll create` and on nothing else — a poll a member ' +
+          'posted has to be closed by that member. `/poll list` shows the ones I can close.',
+      ),
     );
     return;
   }
@@ -294,7 +314,7 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
     await answer(
       ctx,
       applicationId,
-      `That poll already closed <t:${unixSeconds(stored.endedAt)}:R>.`,
+      errorStatus(`That poll already closed <t:${unixSeconds(stored.endedAt)}:R>.`),
     );
     return;
   }
@@ -309,10 +329,12 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
     await answer(
       ctx,
       applicationId,
-      `That poll’s clock ran out <t:${unixSeconds(stored.endsAt)}:R>, so Discord had already ` +
-        'closed it and there was nothing left for me to expire. I have closed it in this ' +
-        `server’s records${closed === 'announced' ? ' and posted the result' : ''}, so it no ` +
-        'longer counts towards this server’s running-poll limit.',
+      successStatus(
+        `That poll’s clock ran out <t:${unixSeconds(stored.endsAt)}:R>, so Discord had already ` +
+          'closed it and there was nothing left for me to expire. I have closed it in this ' +
+          `server’s records${closed === 'announced' ? ' and posted the result' : ''}, so it no ` +
+          'longer counts towards this server’s running-poll limit.',
+      ),
     );
     return;
   }
@@ -337,9 +359,11 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
     await answer(
       ctx,
       applicationId,
-      `Discord has no message \`${messageId}\` in <#${stored.channelId}> any more, so that poll ` +
-        'was deleted and there was nothing left to close. I have closed it in this server’s ' +
-        'records instead, so it no longer counts towards this server’s running-poll limit.',
+      successStatus(
+        `Discord has no message \`${messageId}\` in <#${stored.channelId}> any more, so that poll ` +
+          'was deleted and there was nothing left to close. I have closed it in this server’s ' +
+          'records instead, so it no longer counts towards this server’s running-poll limit.',
+      ),
     );
     return;
   }
@@ -348,10 +372,12 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
     await answer(
       ctx,
       applicationId,
-      `I could not close that poll: ${reasonOf(result)} It is still running in ` +
-        `<#${stored.channelId}> and still counts towards this server’s running-poll limit. Fix ` +
-        `that and run \`/poll end message_id:${messageId}\` again, or leave it — it closes ` +
-        `itself <t:${unixSeconds(stored.endsAt)}:R> and stops counting then.`,
+      errorStatus(
+        `I could not close that poll: ${reasonOf(result)} It is still running in ` +
+          `<#${stored.channelId}> and still counts towards this server’s running-poll limit. Fix ` +
+          `that and run \`/poll end message_id:${messageId}\` again, or leave it — it closes ` +
+          `itself <t:${unixSeconds(stored.endsAt)}:R> and stops counting then.`,
+      ),
     );
     return;
   }
@@ -365,9 +391,11 @@ async function end(ctx: Ctx, store: PollStore, applicationId: string): Promise<v
   await answer(
     ctx,
     applicationId,
-    outcome === 'announced'
-      ? `Closed “${preview(stored.question)}” and posted the result.`
-      : `Closed “${preview(stored.question)}”.`,
+    successStatus(
+      outcome === 'announced'
+        ? `Closed “${preview(stored.question)}” and posted the result.`
+        : `Closed “${preview(stored.question)}”.`,
+    ),
   );
 }
 
@@ -392,7 +420,7 @@ export function pollCommand(deps: PollsDeps): Command {
             guildId: ctx.guildId,
             moduleId: MODULE_ID,
           });
-          await replyNow(ctx, NOT_WIRED);
+          await replyNow(ctx, errorStatus(NOT_WIRED));
           return;
         }
 
@@ -407,7 +435,7 @@ export function pollCommand(deps: PollsDeps): Command {
           guildId: ctx.guildId,
           moduleId: MODULE_ID,
         });
-        await replyNow(ctx, NOT_WIRED);
+        await replyNow(ctx, errorStatus(NOT_WIRED));
         return;
       }
 
@@ -419,7 +447,7 @@ export function pollCommand(deps: PollsDeps): Command {
         case 'end':
           return end(ctx, bound.store, bound.applicationId);
         default:
-          await answer(ctx, bound.applicationId, 'That subcommand is not one I know.');
+          await answer(ctx, bound.applicationId, errorStatus('That subcommand is not one I know.'));
       }
     },
   };

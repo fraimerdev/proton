@@ -116,7 +116,6 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
     <>
       <ModuleHeader
         meta={meta}
-        subtitle={`Stores message content — personal data — for ${MESSAGE_LOG_RETENTION_DAYS} days`}
         actions={
           <ModuleSwitch
             name={meta.label}
@@ -143,136 +142,18 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
         ) : null}
       </ModuleBanners>
 
-      <Section label="Stored data" note={form.dirty ? 'Includes unsaved changes.' : undefined}>
-        <div className="logging-ledger">
-          <Store
-            name="Archive"
-            figure={writing ? `${MESSAGE_LOG_RETENTION_DAYS} days` : 'Off'}
-            keeping={writing}
-            lede={
-              writing ? (
-                <>
-                  One entry for each edit and each deleted message, kept for the last{' '}
-                  {MESSAGE_LOG_RETENTION_DAYS} UTC days. Proton deletes a whole day of entries at a
-                  time, just after midnight UTC.
-                </>
-              ) : enabled ? (
-                <>Nothing is archived while edits and deletions are both off.</>
-              ) : (
-                <>Nothing is archived while {meta.label} is switched off.</>
-              )
-            }
-          >
-            {writing ? (
-              <>
-                <Outcome kept={config.logEdits}>
-                  {!config.logEdits ? (
-                    'Edits are not archived.'
-                  ) : config.cacheMessageContent ? (
-                    <>
-                      Each edit stores the new text, author, channel and message ID, plus the old
-                      text while Proton still remembers the message.
-                    </>
-                  ) : (
-                    <>
-                      Each edit stores the new text, author, channel and message ID. Discord does
-                      not send the old text.
-                    </>
-                  )}
-                </Outcome>
-
-                <Outcome kept={config.logDeletes}>
-                  {!config.logDeletes ? (
-                    'Deletions are not archived.'
-                  ) : config.cacheMessageContent ? (
-                    <>
-                      Each deletion stores the channel, message ID and time, plus the text and
-                      author while Proton still remembers the message.
-                    </>
-                  ) : (
-                    <>
-                      Each deletion stores the channel, message ID and time, but not the text or
-                      author. Discord sends neither with a deletion.
-                    </>
-                  )}
-                </Outcome>
-              </>
-            ) : (
-              <Outcome kept={false}>
-                Switching off stops new entries, but entries already archived are kept for the full{' '}
-                {MESSAGE_LOG_RETENTION_DAYS} days.
-              </Outcome>
-            )}
-          </Store>
-
-          <Store
-            name="Recent text"
-            figure={remembering ? held : 'Off'}
-            keeping={remembering}
-            lede={
-              remembering ? (
-                <>Each new message is remembered for {held}, then deleted.</>
-              ) : config.cacheMessageContent ? (
-                <>Nothing new is remembered while {meta.label} is switched off.</>
-              ) : (
-                <>Nothing is remembered before an edit or deletion.</>
-              )
-            }
-          >
-            {remembering ? (
-              <>
-                <Outcome kept>
-                  Each message’s text, author and channel are remembered, with the filename and link
-                  of up to 10 attachments.
-                </Outcome>
-                <Outcome kept={false}>Proton’s own messages are never remembered.</Outcome>
-                {clamped ? (
-                  <Outcome kept={false}>
-                    {humaniseDuration(config.cacheRetention)} is outside the range of 1 hour to 7
-                    days, so each message is remembered for {held} instead.
-                  </Outcome>
-                ) : (
-                  <Outcome kept={false}>
-                    Switching {meta.label} off stops new messages being remembered. Messages already
-                    remembered are kept for the rest of their {held}.
-                  </Outcome>
-                )}
-              </>
-            ) : (
-              <Outcome kept={false}>
-                Deletion logs show which message was deleted, but not what it said or who sent it.
-              </Outcome>
-            )}
-          </Store>
-
-          <p className="logging-ledger-foot">
-            {ignored > 0 ? (
-              <>
-                Nothing from {ignored} ignored {ignored === 1 ? 'channel' : 'channels'} is archived
-                or remembered.
-              </>
-            ) : (
-              <>No channels are ignored, so every channel Proton can read is included.</>
-            )}
-          </p>
-        </div>
-      </Section>
-
       <Section
         label="Recent message text"
         intro={
           <>
-            Discord does not send the old text with an edit, or any text with a deletion. Without
-            this, Server Logs shows{' '}
-            <strong>not remembered — turn on “Remember recent message text” in Message logs</strong>{' '}
-            in place of the text.
+            Enable to remember the text of recent messages, for up to {MESSAGE_LOG_RETENTION_DAYS} days
           </>
         }
       >
         <Rows>
           <SettingRow
             title="Remember recent message text"
-            description={`Personal data, held in memory apart from the ${MESSAGE_LOG_RETENTION_DAYS}-day archive`}
+            description={`Stores the text of recent messages in memory for up to ${MESSAGE_LOG_RETENTION_DAYS} days.`}
             note="Switching this off deletes everything already remembered when you save."
             error={form.errorAt('cacheMessageContent')}
           >

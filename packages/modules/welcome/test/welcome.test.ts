@@ -823,7 +823,7 @@ describe('boost listener', () => {
     expect(lines).toEqual([]);
   });
 
-  test('switched off, a boost posts nothing', async () => {
+  test('disabled, a boost posts nothing', async () => {
     const executor = new RecordingExecutor();
     const { logger, lines } = collectingLogger();
 

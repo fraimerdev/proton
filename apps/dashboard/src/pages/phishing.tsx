@@ -40,6 +40,8 @@ const NO_ALERT_CHANNEL =
   'No alert channel is set, so Proton still acts on the member, but nobody is told where the ' +
   'link was posted or which message is still up.';
 
+const SWITCHED_OFF = 'Settings are saved, but no links are checked until you switch it on.';
+
 export default function PhishingPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: phishingConfigSchema });
   const toggle = useModuleToggle(guildId, summary);

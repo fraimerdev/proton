@@ -169,6 +169,7 @@ export interface Harness {
   callPaths(): string[];
   cases(): CaseInput[];
   replyContent(): string | null;
+  replyEmbed(): { description?: string; color?: number } | null;
 
   alertContent(): string | null;
   logged(level: LogLine['level'], fragment: string): boolean;
@@ -289,14 +290,30 @@ export function harness(options: HarnessOptions = {}): Harness {
 
     replyContent() {
       const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      const body = call?.body as { data?: { content?: string } } | undefined;
-      return body?.data?.content ?? null;
+      const data = (
+        call?.body as
+          | { data?: { content?: string; embeds?: { description?: string }[] } }
+          | undefined
+      )?.data;
+
+      return data?.content || data?.embeds?.[0]?.description || null;
+    },
+
+    replyEmbed() {
+      const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
+      const data = (
+        call?.body as { data?: { embeds?: { description?: string; color?: number }[] } } | undefined
+      )?.data;
+
+      return data?.embeds?.[0] ?? null;
     },
 
     alertContent() {
       const call = rest.calls.find((c) => c.path === `/channels/${ALERT_CHANNEL}/messages`);
-      const body = call?.body as { content?: string } | undefined;
-      return body?.content ?? null;
+      const body = call?.body as
+        | { content?: string; embeds?: { description?: string }[] }
+        | undefined;
+      return body?.content || body?.embeds?.[0]?.description || null;
     },
 
     logged: (level, fragment) =>

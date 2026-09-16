@@ -512,6 +512,10 @@ export interface Harness {
 
   replied(): Record<string, unknown> | null;
 
+  repliedText(): string | null;
+
+  repliedEmbed(): Record<string, unknown> | null;
+
   repliedComponents(): Array<Record<string, unknown>>;
 
   deleted(): string[];
@@ -803,6 +807,20 @@ export function harness(
   const replied = (): Record<string, unknown> | null =>
     (replies().at(-1)?.data as Record<string, unknown> | undefined) ?? null;
 
+  const repliedEmbed = (): Record<string, unknown> | null => {
+    const embeds = replied()?.embeds;
+    return Array.isArray(embeds) ? ((embeds[0] as Record<string, unknown>) ?? null) : null;
+  };
+
+  const repliedText = (): string | null => {
+    const data = replied();
+    const content = typeof data?.content === 'string' ? data.content : '';
+
+    const description = repliedEmbed()?.description;
+
+    return content || (typeof description === 'string' ? description : null);
+  };
+
   let saves = 0;
 
   return {
@@ -821,6 +839,8 @@ export function harness(
     editedIn,
     replies,
     replied,
+    repliedText,
+    repliedEmbed,
     advance: (ms) => {
       clock += ms;
     },

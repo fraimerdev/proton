@@ -394,7 +394,7 @@ describe('validation on save', () => {
     }
   });
 
-  test('an unchanged stored clock does not stop the module being switched on', () => {
+  test('an unchanged stored clock does not stop the module being enabled', () => {
     const stored = { ...config([pointed('{count} at {now}')]), enabled: false };
     const report = validateConfigTemplates(countersTemplates, { ...stored, enabled: true }, stored);
 

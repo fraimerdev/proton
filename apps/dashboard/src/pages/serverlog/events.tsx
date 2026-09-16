@@ -221,7 +221,7 @@ export function Events({
   const openSpec = openRow === null ? undefined : LOG_SPECS.find((spec) => spec.key === openRow);
 
   return (
-    <Section label="Overrides" note="On still applies when the category is switched off.">
+    <Section label="Overrides" note="On still applies when the category is disabled.">
       <div className="matrix-toolbar">
         <SearchField
           value={draft}

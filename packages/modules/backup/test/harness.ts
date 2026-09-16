@@ -225,6 +225,10 @@ export interface Harness {
   current: { layout: GuildLayout | null };
   run(options: RawOption[], config?: Partial<BackupConfig>): Promise<void>;
   replyContent(): string | null;
+  replyEmbed(): { description?: string; color?: number } | null;
+  replyData():
+    | { content?: string; embeds?: { description?: string; color?: number }[] }
+    | undefined;
   logged(level: LogLine['level'], fragment: string): boolean;
 }
 
@@ -323,9 +327,21 @@ export function harness(options: HarnessOptions = {}): Harness {
     },
 
     replyContent() {
+      const data = this.replyData();
+      return data?.content || data?.embeds?.[0]?.description || null;
+    },
+
+    replyEmbed() {
+      return this.replyData()?.embeds?.[0] ?? null;
+    },
+
+    replyData() {
       const call = rest.calls.filter((c) => c.path.startsWith('/interactions/')).at(-1);
-      const body = call?.body as { data?: { content?: string } } | undefined;
-      return body?.data?.content ?? null;
+      return (
+        call?.body as
+          | { data?: { content?: string; embeds?: { description?: string; color?: number }[] } }
+          | undefined
+      )?.data;
     },
 
     logged: (level, fragment) =>
@@ -339,4 +355,8 @@ export function subcommand(name: string, options: RawOption[] = []): RawOption[]
 
 export function stringOption(name: string, value: string): RawOption {
   return { name, type: OptionType.String, value };
+}
+
+export function booleanOption(name: string, value: boolean): RawOption {
+  return { name, type: OptionType.Boolean, value };
 }

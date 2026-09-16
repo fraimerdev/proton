@@ -129,8 +129,13 @@ function harness(options: Options = {}) {
 
     replyContent(): string | null {
       const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      const body = call?.body as { data?: { content?: string; flags?: number } } | undefined;
-      return body?.data?.content ?? null;
+      const data = (
+        call?.body as
+          | { data?: { content?: string; embeds?: { description?: string }[] } }
+          | undefined
+      )?.data;
+
+      return data?.content || data?.embeds?.[0]?.description || null;
     },
     replyFlags(): number | undefined {
       const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));

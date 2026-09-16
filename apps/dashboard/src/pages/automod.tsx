@@ -42,7 +42,7 @@ export default function AutomodPage({
         ) : null}
 
         {!enabled ? (
-          <StatusBanner tone="neutral">{`${meta.label} is switched off. ${SWITCHED_OFF}`}</StatusBanner>
+          <StatusBanner tone="neutral">{`${meta.label} is disabled. ${SWITCHED_OFF}`}</StatusBanner>
         ) : null}
       </>
     ) : undefined;

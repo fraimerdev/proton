@@ -24,7 +24,7 @@ const QUOTE_NOTE =
 const NO_LOG_CHANNEL =
   'No incident log is set, so Honeypot reports nothing: no incident embed and no quoted message.';
 
-const NO_APPEAL_FORM = 'No appeal form is switched on.';
+const NO_APPEAL_FORM = 'No appeal form is enabled.';
 
 const UNREADABLE = 'Proton cannot read this server’s appeal forms, so it cannot offer the list.';
 
@@ -82,7 +82,7 @@ function AppealFormRow({ form, guildId }: { form: HoneypotForm; guildId: string 
                     label:
                       stored === undefined
                         ? `${chosen} — no longer a form`
-                        : `${stored.name} — switched off`,
+                        : `${stored.name} — disabled`,
                   },
                 ]
               : []),

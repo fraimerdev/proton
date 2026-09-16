@@ -434,7 +434,7 @@ const registry = createModuleRegistry(
       placeholders,
       availability: {
         // The same cached config path every module surface already reads, so the picker never
-        // offers a requirement whose owning module is switched off in this guild.
+        // offers a requirement whose owning module is disabled in this guild.
         async isEnabled(guildId, moduleId) {
           try {
             return (await config.get(guildId, moduleId)).enabled;

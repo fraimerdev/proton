@@ -125,8 +125,8 @@ export default function BackupPage({
         ) : null}
 
         {!enabled ? (
-          <StatusBanner tone="neutral" icon="info" title="Backup is switched off">
-            /backup only replies “Backups are switched off in this server. An admin can turn the
+          <StatusBanner tone="neutral" icon="info" title="Backup is disabled">
+            /backup only replies “Backups are disabled in this server. An admin can turn the
             Backup module back on from the Proton dashboard.”
           </StatusBanner>
         ) : null}

@@ -84,6 +84,12 @@ function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
+// Refusals named in the report do not make a refresh red: one counter left showing the right
+// number is the thing the invoker asked for.
+export function refreshSucceeded(outcome: RefreshOutcome): boolean {
+  return outcome.created + outcome.updated + outcome.unchanged > 0;
+}
+
 export function renderReport(outcome: RefreshOutcome): string {
   if (outcome.total === 0) return NO_COUNTERS;
 

@@ -29,8 +29,10 @@ export interface ControlInput {
   idempotencyKey: string;
 }
 
+// `partial` stays ok:true so the panel still refreshes against the state that did change,
+// but it answers red: the ticket flipped or moved and the permissions behind it did not.
 export type ControlOutcome =
-  | { ok: true; message: string; ticket: Ticket }
+  | { ok: true; message: string; ticket: Ticket; partial?: boolean }
   | { ok: false; humanReason: string };
 
 function failureOf(result: ActionResult, fallback: string): string {
@@ -246,6 +248,16 @@ export async function setLock(input: ControlInput, locked: boolean): Promise<Con
         `permission change(s) were refused: ${failures.join('; ')}`,
       { guildId: input.ctx.guildId, moduleId: MODULE_ID },
     );
+
+    return {
+      ok: true,
+      ticket: flipped,
+      partial: true,
+      message:
+        `Ticket #${flipped.number} is marked ${locked ? 'locked' : 'unlocked'}, but ` +
+        `${failures.length} permission change(s) were refused, so some members still ` +
+        'have the access they had before. Check the channel permissions.',
+    };
   }
 
   return {
@@ -340,6 +352,17 @@ export async function move(input: ControlInput, categoryId: string): Promise<Con
   }
 
   await note(input, 'moved', { categoryId });
+
+  if (refused(revalidated)) {
+    return {
+      ok: true,
+      ticket: input.ticket,
+      partial: true,
+      message:
+        `Ticket #${input.ticket.number} was moved, but its permissions could not be ` +
+        'reapplied, so the wrong people may be able to read it. Check the channel permissions.',
+    };
+  }
 
   return { ok: true, ticket: input.ticket, message: `Moved ticket #${input.ticket.number}.` };
 }

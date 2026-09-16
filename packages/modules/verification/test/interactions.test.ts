@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { Permissions, readVerifyLink } from '@proton/core';
+import {
+  Permissions,
+  readVerifyLink,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import {
   ABOVE_BOT_ROLE,
+  answerModal,
   BARE,
   CAPTCHA,
   captchaPress,
@@ -73,13 +81,13 @@ describe('the panel button in button mode', () => {
     expect(h.roleCalls()).toEqual([]);
   });
 
-  test('answers a press while verification is switched off instead of ignoring it', async () => {
+  test('answers a press while verification is disabled instead of ignoring it', async () => {
     const h = harness();
 
     const outcome = await h.press(verifyPress(), { config: { ...GATED, enabled: false } });
 
     expect(outcome.action).toBe('refused');
-    expect(h.lastTold()).toContain('switched off');
+    expect(h.lastTold()).toContain('disabled');
     expect(h.roleCalls()).toEqual([]);
   });
 
@@ -90,6 +98,61 @@ describe('the panel button in button mode', () => {
 
     expect(outcome).toEqual({ action: 'ignored', reason: 'another module owns that component' });
     expect(h.rest.calls).toEqual([]);
+  });
+});
+
+describe('the status embed every outcome is answered with', () => {
+  test('a member who is verified gets the green one, and no stray sentence beside it', async () => {
+    const h = harness();
+    h.memberRoles.set(MEMBER, new Set([EVERYONE_ROLE, UNVERIFIED_ROLE]));
+
+    await h.press(verifyPress(), { config: GATED });
+
+    const status = h.lastStatus();
+    expect(status?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(status?.description).toStartWith(STATUS_SUCCESS_EMOJI);
+    expect(status?.description).toContain("You're verified");
+    expect(status?.content).toBe('');
+  });
+
+  test('a refusal gets the red one', async () => {
+    const h = harness();
+    h.memberRoles.set(MEMBER, new Set([EVERYONE_ROLE, VERIFIED_ROLE]));
+
+    await h.press(verifyPress(), { config: GATED });
+
+    const status = h.lastStatus();
+    expect(status?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(status?.description).toStartWith(STATUS_ERROR_EMOJI);
+    expect(status?.description).toContain("You're already verified");
+  });
+
+  test('a grant the bot is not allowed to make is red, not a silent green', async () => {
+    const h = harness();
+    h.memberRoles.set(MEMBER, new Set([EVERYONE_ROLE, UNVERIFIED_ROLE]));
+
+    await h.press(verifyPress(), { config: { ...GATED, verifiedRoleId: ABOVE_BOT_ROLE } });
+
+    expect(h.lastStatus()?.color).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('a wrong captcha code is red and keeps the buttons that answer it', async () => {
+    const h = harness();
+    const challenge = await h.seed();
+
+    await h.submit(answerModal(challenge.challengeId), { code: 'WRONG1' }, { config: CAPTCHA });
+
+    expect(h.lastStatus()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.button('Enter code').customId).toBe(captchaPress(challenge.challengeId));
+  });
+
+  test('the captcha itself stays a plain prompt — it is not an outcome', async () => {
+    const h = harness();
+
+    await h.press(verifyPress(), { config: CAPTCHA });
+
+    expect(h.statuses()).toEqual([]);
+    expect(h.lastTold()).toContain('Read the characters in the image');
   });
 });
 

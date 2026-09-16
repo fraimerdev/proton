@@ -89,7 +89,7 @@ describe('arming the activity prune', () => {
     expect(booked).toEqual([nextRun]);
   });
 
-  test('a Leveling settings change re-arms it, restarting a prune dropped while switched off', async () => {
+  test('a Leveling settings change re-arms it, restarting a prune dropped while disabled', async () => {
     const { ctx, booked } = scheduling();
 
     await createPruneListener({ now: () => NOW }).handler(
@@ -112,7 +112,7 @@ describe('arming the activity prune', () => {
     expect(cancelled).toHaveLength(0);
   });
 
-  test('Leveling switched off in its own settings cancels the prune instead of booking one', async () => {
+  test('Leveling disabled in its own settings cancels the prune instead of booking one', async () => {
     const { ctx, booked, cancelled } = scheduling({ enabled: false });
 
     await createPruneListener({ now: () => NOW }).handler(

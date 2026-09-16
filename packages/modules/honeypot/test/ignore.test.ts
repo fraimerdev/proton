@@ -20,7 +20,7 @@ function quiet(h: Harness): { calls: string[]; claims: number; published: number
 const NOTHING = { calls: [], claims: 0, published: 0 };
 
 describe('a message the honeypot must not act on', () => {
-  test('the module is switched off in this server', async () => {
+  test('the module is disabled in this server', async () => {
     const h = harness();
 
     const outcome = await h.trip({ config: { channels: [trap()] } });
@@ -50,7 +50,7 @@ describe('a message the honeypot must not act on', () => {
     expect(quiet(h)).toEqual(NOTHING);
   });
 
-  test('the honeypot row is switched off', async () => {
+  test('the honeypot row is disabled', async () => {
     const h = harness();
 
     const outcome = await h.trip({

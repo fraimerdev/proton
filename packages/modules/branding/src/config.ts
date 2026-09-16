@@ -44,7 +44,7 @@ const editable = {
   displayNameStyle: displayNameStyleSchema.nullable().default(null),
 
   restoreOnDisable: z.boolean().default(true).register(protonFields, {
-    label: 'Reset when switched off',
+    label: 'Reset when disabled',
     description: 'Remove the server nickname, avatar, banner, bio and display name style.',
   }),
 };

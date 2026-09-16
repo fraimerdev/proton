@@ -38,7 +38,7 @@ describe('the schedule on a template', () => {
     expect(config([template('rules')]).templates[0]?.schedule).toBeUndefined();
   });
 
-  test('defaults to posting once, switched on', () => {
+  test('defaults to posting once, enabled', () => {
     const parsed = schedule();
 
     expect(parsed.mode).toBe('once');
@@ -130,14 +130,14 @@ describe('reconcile', () => {
     expect(plan.cancel).toEqual([]);
   });
 
-  test('cancels everything while the module is switched off', () => {
+  test('cancels everything while the module is disabled', () => {
     const plan = reconcile(config([template('rules', { schedule: schedule() })], false), now);
 
     expect(plan.schedule).toEqual([]);
     expect(plan.cancel[0]?.reason).toBe('module-off');
   });
 
-  test('cancels a schedule switched off on its own', () => {
+  test('cancels a schedule disabled on its own', () => {
     const off = schedule({ enabled: false });
     const plan = reconcile(config([template('rules', { schedule: off })]), now);
 

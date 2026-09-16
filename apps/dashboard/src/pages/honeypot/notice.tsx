@@ -19,7 +19,7 @@ import {
 const SAVE_RECONCILES = 'Saving deletes the warning message from paused and removed bait channels.';
 
 const OVERRIDDEN =
-  '“Hide channel purpose” is switched on, so this text replaces your paragraph when the warning ' +
+  '“Hide channel purpose” is enabled, so this text replaces your paragraph when the warning ' +
   'message is posted.';
 
 const PLACEHOLDERS =
@@ -35,7 +35,7 @@ const REFUSED =
   'text that could come out empty.';
 
 const NOT_POSTED =
-  'The warning message is switched off. This layout is kept, and saving deletes any warning ' +
+  'The warning message is disabled. This layout is kept, and saving deletes any warning ' +
   'messages already posted in bait channels.';
 
 const FREE_TIER =

@@ -196,7 +196,7 @@ describe('ProviderRegistry lookup', () => {
 });
 
 describe('listAvailable', () => {
-  test('omits providers whose owning module is switched off for that guild', async () => {
+  test('omits providers whose owning module is disabled for that guild', async () => {
     const registry = new ProviderRegistry();
     registry.register({
       id: 'leveling',

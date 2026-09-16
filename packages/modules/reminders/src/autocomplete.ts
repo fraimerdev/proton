@@ -38,7 +38,7 @@ export async function handleAutocomplete(
     return { action: 'ignored', reason: 'the focused option is not a reminder' };
   }
 
-  if (!ctx.config.enabled) return { action: 'ignored', reason: 'reminders is switched off' };
+  if (!ctx.config.enabled) return { action: 'ignored', reason: 'reminders is disabled' };
 
   const bound = bindStore(deps);
   if ('unbound' in bound) {

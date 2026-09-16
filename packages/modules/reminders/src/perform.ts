@@ -1,4 +1,9 @@
-import type { AllowedMentions, CommandContext } from '@proton/core';
+import {
+  type AllowedMentions,
+  type CommandContext,
+  MESSAGE_CONTENT_MAX,
+  type StatusBody,
+} from '@proton/core';
 import { MODULE_ID, type RemindersConfig } from './config.ts';
 
 export const MENTIONS_OFF: AllowedMentions = { parse: [] };
@@ -16,9 +21,12 @@ export interface ReplyOptions {
 
 export async function reply(
   ctx: CommandContext<RemindersConfig>,
-  content: string,
+  message: string | StatusBody,
   options: ReplyOptions = {},
 ): Promise<void> {
+  const body =
+    typeof message === 'string' ? { content: message.slice(0, MESSAGE_CONTENT_MAX) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -30,7 +38,7 @@ export async function reply(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: content.slice(0, 2000),
+      ...body,
       ephemeral: options.ephemeral ?? true,
       ...(options.allowedMentions ? { allowedMentions: options.allowedMentions } : {}),
     },

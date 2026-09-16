@@ -246,7 +246,7 @@ describe('dispatch', () => {
     expect(logs).toEqual([]);
   });
 
-  test('a module switched off still hears about it, so it can undo what it owns', async () => {
+  test('a module disabled still hears about it, so it can undo what it owns', async () => {
     const seen: Seen[] = [];
     const manifest = testModule({ id: 'alpha', types: ['proton.config_changed'], seen });
     const { runtime } = build([manifest], {

@@ -242,7 +242,7 @@ describe('durable module schedules', () => {
     expect(fired).toHaveLength(0);
   }, 120_000);
 
-  test('a job for a module switched off in this server is dropped and names the module', async () => {
+  test('a job for a module disabled in this server is dropped and names the module', async () => {
     const { ctx, sweeper, fired, logger } = build({
       snapshot: { enabled: false, config: { enabled: true, message: 'stand up' } },
     });
@@ -252,7 +252,7 @@ describe('durable module schedules', () => {
 
     expect((await sweeper.sweep()).ran).toBe(1);
     expect(fired).toHaveLength(0);
-    expect(logger.matching('warn', 'Reminders is switched off')).toHaveLength(1);
+    expect(logger.matching('warn', 'Reminders is disabled')).toHaveLength(1);
     expect(await pendingRows()).toHaveLength(0);
   }, 120_000);
 

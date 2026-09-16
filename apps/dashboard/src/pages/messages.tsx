@@ -23,7 +23,7 @@ const MIGRATED =
   'template, check its embeds, then save once to store them in the current format.';
 
 const SWITCHED_OFF =
-  'Messages is switched off. Settings are saved, but nothing runs until you switch it on. ' +
+  'Messages is disabled. Settings are saved, but nothing runs until you switch it on. ' +
   '/message post is refused, scheduled posts are cancelled, and buttons already posted say the ' +
   'module is off.';
 

@@ -96,7 +96,7 @@ export function createMessagesScheduleListener(): EventListener<MessagesConfig> 
       if (ourChange && field(event.payload, 'moduleId') !== MODULE_ID) return;
 
       // The module-level switch is not part of the config schema, so a module that has just been
-      // switched off can only learn it from the event that announced the change — and it has to,
+      // disabled can only learn it from the event that announced the change — and it has to,
       // or every schedule it owns keeps firing with nothing left running to stop it.
       const active = ourChange ? field(event.payload, 'enabledAfter') !== false : true;
       const config = active ? ctx.config : { ...ctx.config, enabled: false };

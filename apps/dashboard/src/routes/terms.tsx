@@ -25,7 +25,7 @@ function Terms(): ReactElement {
           heading: 'What you are responsible for',
           bullets: [
             'The configuration you save. Proton performs the actions you configure — bans, kicks, timeouts, channel and role changes — for real, in every environment.',
-            'Telling your members what you have switched on, in particular message logging and ticket transcripts.',
+            'Telling your members what you have enabled, in particular message logging and ticket transcripts.',
             'Holding the permissions Proton needs. Where a permission is missing, Proton says so rather than acting partially.',
           ],
         },

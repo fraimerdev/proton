@@ -129,7 +129,7 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
 
         {!enabled ? (
           <StatusBanner tone="warning">
-            {meta.label} is switched off. No protection is in place, and no alerts are sent.
+            {meta.label} is disabled. No protection is in place, and no alerts are sent.
           </StatusBanner>
         ) : null}
 

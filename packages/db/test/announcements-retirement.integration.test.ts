@@ -153,7 +153,7 @@ describe('0018_announcements_into_messages', () => {
     expect(new Date(booked?.run_at as string).toISOString()).toBe('2026-09-01T09:00:00.000Z');
   });
 
-  test('a guild that never had the messages module gets one, switched off', async () => {
+  test('a guild that never had the messages module gets one, disabled', async () => {
     await seedModule('announcements', { enabled: true, scheduled: [WEEKLY] });
 
     await retire();

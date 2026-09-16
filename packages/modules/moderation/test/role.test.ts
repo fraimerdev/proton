@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { STATUS_ERROR_COLOUR, STATUS_SUCCESS_COLOUR } from '@proton/core';
 import { moderationModule } from '../src/index.ts';
 import { ROLE_RUN_JOB, ROLE_RUN_KEY } from '../src/role-run.ts';
 import type { RoleRun } from '../src/run-store.ts';
@@ -271,6 +272,19 @@ describe('/role all, bots, humans and in', () => {
       { jobId: ROLE_RUN_JOB, runAt: expect.any(Date), naturalKey: ROLE_RUN_KEY },
     ]);
     expect(h.replyContent()).toContain('Started');
+    expect(h.replyMessage()?.embeds?.[0]?.color).toBe(STATUS_SUCCESS_COLOUR);
+  });
+
+  // The mass path answers as a followup, so its refusals have to carry the red embed too.
+  test('a refusal after the deferral is red, and says what was not changed', async () => {
+    const h = harness();
+    await h.roleRuns.put(run({ applied: 12 }));
+
+    await h.run('role', subcommand('all', [roleOption('role', GRANT_ROLE)]));
+
+    const embed = h.replyMessage()?.embeds?.[0];
+    expect(embed?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embed?.description).toContain('/role cancel');
   });
 
   // A mass run posts a message, writes Redis and books a job before it can say anything useful,
@@ -289,7 +303,9 @@ describe('/role all, bots, humans and in', () => {
     expect((answers[0]?.body as { data?: { content?: string } })?.data?.content).toBeUndefined();
 
     expect(answers[1]?.path).toBe(`/webhooks/${APPLICATION_ID}/interaction-token`);
-    expect((answers[1]?.body as { content?: string })?.content).toContain('Started');
+
+    const followup = answers[1]?.body as { embeds?: Array<{ description?: string }> } | undefined;
+    expect(followup?.embeds?.[0]?.description).toContain('Started');
   });
 
   test('refuses a second run while one is going, and says how to stop it', async () => {

@@ -914,7 +914,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'proton.module_toggled',
     category: 'proton',
-    label: 'Module switched on or off',
+    label: 'Module enabled or off',
     colour: ServerLogColors.Modify,
     triggers: ['proton.config_changed'],
     primary: 'immediate',

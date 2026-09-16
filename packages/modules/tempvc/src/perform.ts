@@ -1,11 +1,13 @@
-import type { CommandContext } from '@proton/core';
+import type { CommandContext, StatusBody } from '@proton/core';
 import { MODULE_ID, type TempVcConfig } from './config.ts';
 
 export async function reply(
   ctx: CommandContext<TempVcConfig>,
-  content: string,
+  message: string | StatusBody,
   suffix = 'reply',
 ): Promise<void> {
+  const body = typeof message === 'string' ? { content: message.slice(0, 2000) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -17,7 +19,7 @@ export async function reply(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: content.slice(0, 2000),
+      ...body,
       ephemeral: true,
     },
   });

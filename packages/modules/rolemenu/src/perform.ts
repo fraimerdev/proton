@@ -8,6 +8,7 @@ import {
   MESSAGE_CONTENT_MAX,
   type ModuleContext,
   type RespondTo,
+  type StatusBody,
 } from '@proton/core';
 import { MODULE_ID, type RolemenuConfig } from './config.ts';
 
@@ -131,11 +132,11 @@ export async function replyEphemeral(
   interaction: InteractionRef,
   actorId: string,
   idempotencyRoot: string,
-  content: string,
+  message: string | StatusBody,
 ): Promise<ActionResult> {
   return run(
     ctx,
-    buildReplyEphemeral(respondTo(ctx, interaction, actorId, idempotencyRoot), content),
+    buildReplyEphemeral(respondTo(ctx, interaction, actorId, idempotencyRoot), message),
     'acknowledge an interaction',
   );
 }
@@ -145,7 +146,7 @@ export async function followUp(
   target: { applicationId: string; interaction: InteractionRef },
   actorId: string,
   idempotencyRoot: string,
-  content: string,
+  message: string | StatusBody,
 ): Promise<ActionResult> {
   return run(
     ctx,
@@ -154,7 +155,7 @@ export async function followUp(
         ...respondTo(ctx, target.interaction, actorId, idempotencyRoot),
         applicationId: target.applicationId,
       },
-      content,
+      message,
     ),
     'tell the member what happened',
   );

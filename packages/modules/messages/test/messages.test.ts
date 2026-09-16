@@ -4,6 +4,10 @@ import {
   DEFAULT_MENTION_POLICY,
   INTERACTION_CALLBACK_MODAL,
   Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
 } from '@proton/core';
 import { ChannelType } from 'discord-api-types/v10';
 import { messagesCommands } from '../src/commands.ts';
@@ -374,6 +378,28 @@ describe('/message post', () => {
     expect(h.sends()).toHaveLength(1);
   });
 
+  test('the confirmation is the green status embed, and carries no other text', async () => {
+    const h = harness();
+
+    await h.run(subcommand('post', [stringOption('name', 'welcome')]), { templates: [WELCOME] });
+
+    expect(h.lastStatus()).toEqual({
+      description: `${STATUS_SUCCESS_EMOJI} Posted **welcome** in <#${CHANNEL}>.`,
+      color: STATUS_SUCCESS_COLOUR,
+    });
+    expect(h.bodies().at(-1)?.content).toBe('');
+  });
+
+  test('a refusal is the red status embed, and carries no other text', async () => {
+    const h = harness();
+
+    await h.run(subcommand('post', [stringOption('name', 'goodbye')]), { templates: [WELCOME] });
+
+    expect(h.lastStatus()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.lastStatus()?.description).toContain(STATUS_ERROR_EMOJI);
+    expect(h.bodies().at(-1)?.data?.content).toBe('');
+  });
+
   test('posting an embed is not a moderation case', async () => {
     const h = harness();
 
@@ -514,7 +540,7 @@ describe('the /message send modal submission', () => {
     await h.modal(modalEvent({ [DESCRIPTION_FIELD]: 'x' }), { config: { enabled: false } });
 
     expect(h.sends()).toHaveLength(0);
-    expect(h.lastSaid()).toContain('switched off');
+    expect(h.lastSaid()).toContain('disabled');
   });
 
   test('names the missing wiring when it has no way to confirm', async () => {
@@ -606,7 +632,7 @@ describe('autocomplete on /message post', () => {
     expect(h.calls()).toHaveLength(0);
   });
 
-  test('stays quiet while the module is switched off', async () => {
+  test('stays quiet while the module is disabled', async () => {
     const h = harness();
 
     await h.autocomplete(autocompleteEvent('w'), {

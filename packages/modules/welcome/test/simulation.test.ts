@@ -147,7 +147,7 @@ describe('rendering', () => {
     expect(built.humanReason).toContain('empty');
   });
 
-  test('attaches the card only when the card is switched on', () => {
+  test('attaches the card only when the card is enabled', () => {
     const withCard = welcomeConfigSchema.parse({ ...config, card: true });
     const built = WELCOME_JOIN_SIMULATION.build(withCard, scene());
 

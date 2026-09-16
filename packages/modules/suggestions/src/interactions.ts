@@ -1,9 +1,12 @@
 import {
+  errorStatus,
   interactionRef,
   type ModuleContext,
   type ProtonEvent,
   parseCustomId,
   readComponentInteraction,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { MODULE_ID, type SuggestionsConfig } from './config.ts';
 import { votingOpen } from './decide.ts';
@@ -79,8 +82,10 @@ export async function handleVote(
     await answer(
       ctx,
       to,
-      'Suggestions are switched off in this server, so this button does nothing right now. An ' +
-        'admin can turn them back on from the Proton dashboard.',
+      errorStatus(
+        'Suggestions are disabled in this server, so this button does nothing right now. An ' +
+          'admin can turn them back on from the Proton dashboard.',
+      ),
     );
     return { action: 'refused', reason: 'suggestions are off in this server' };
   }
@@ -91,20 +96,21 @@ export async function handleVote(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await answer(ctx, to, NOT_WIRED);
+    await answer(ctx, to, errorStatus(NOT_WIRED));
     return { action: 'refused', reason: 'the suggestion store or application id is unbound' };
   }
 
   await acknowledge(ctx, to);
 
-  const say = (content: string): Promise<unknown> =>
-    tell(ctx, to, bound.deps.applicationId, content);
+  const say = (body: StatusBody): Promise<unknown> => tell(ctx, to, bound.deps.applicationId, body);
 
   const suggestion = await bound.deps.store.get(ctx.guildId, press.suggestionId);
   if (!suggestion) {
     await say(
-      'That suggestion is no longer on record, so I cannot count your vote. Ask an admin to ' +
-        'delete the post — the buttons on it lead nowhere.',
+      errorStatus(
+        'That suggestion is no longer on record, so I cannot count your vote. Ask an admin to ' +
+          'delete the post — the buttons on it lead nowhere.',
+      ),
     );
     return { action: 'refused', reason: 'no such suggestion' };
   }
@@ -113,17 +119,22 @@ export async function handleVote(
 
   if (!votingOpen(suggestion.status)) {
     await say(
-      `**Suggestion #${suggestion.number}** was already **${STATUS_LABELS[suggestion.status]}**, ` +
-        'so voting on it is closed and your press changed nothing.',
+      errorStatus(
+        `**Suggestion #${suggestion.number}** was already ` +
+          `**${STATUS_LABELS[suggestion.status]}**, so voting on it is closed and your press ` +
+          'changed nothing.',
+      ),
     );
     return { action: 'refused', reason: `the suggestion is ${suggestion.status}` };
   }
 
   if (!ctx.config.allowSelfVote && facts.userId === suggestion.authorId) {
     await say(
-      `**Suggestion #${suggestion.number}** is your own, and this server has **Let members vote ` +
-        'on their own suggestion** switched off, so I did not count your ' +
-        `${emoji}. Everyone else can still vote on it.`,
+      errorStatus(
+        `**Suggestion #${suggestion.number}** is your own, and this server has **Let members ` +
+          'vote on their own suggestion** disabled, so I did not count your ' +
+          `${emoji}. Everyone else can still vote on it.`,
+      ),
     );
     return { action: 'refused', reason: 'self-vote is not allowed in this server' };
   }
@@ -145,7 +156,9 @@ export async function handleVote(
       : `Counted your ${emoji} on **suggestion #${suggestion.number}** — it is now ` +
         `${describeTally(tally)}. Press the other button to change your mind.`;
 
-  await say(`${counted}${await repaint(ctx, event.id, facts.userId, suggestion, tally)}`);
+  const stale = await repaint(ctx, event.id, facts.userId, suggestion, tally);
+
+  await say(successStatus(`${counted}${stale}`));
 
   return {
     action: 'counted',

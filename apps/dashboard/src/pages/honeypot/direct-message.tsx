@@ -29,7 +29,7 @@ const BUILT_IN =
   'Once its placeholders are filled in, this layout cannot be sent, so Proton sends its own ' +
   'wording instead, shown here. Check the links, and any text that could come out empty.';
 
-const NOT_SENT = 'The direct message is switched off. This layout is kept, but nothing is sent.';
+const NOT_SENT = 'The direct message is disabled. This layout is kept, but nothing is sent.';
 
 const FREE_TIER =
   'On the Free plan, Proton sends its own wording. Yours is saved and used once the server is on ' +

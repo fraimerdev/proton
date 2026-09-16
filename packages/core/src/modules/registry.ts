@@ -388,7 +388,7 @@ export class ModuleRegistry {
           humanReason:
             `${manifest.name} can't run without ${intentLabels(missingIntents).join(' and ')}, ` +
             ((missingIntents & PRIVILEGED_INTENTS) !== 0
-              ? 'which is switched off for Proton. Turn it on in the Discord developer ' +
+              ? 'which is disabled for Proton. Turn it on in the Discord developer ' +
                 'portal, under Bot → Privileged Gateway Intents.'
               : "which Proton isn't set up to receive. Nothing in this server's " +
                 'settings can change that.'),

@@ -80,6 +80,7 @@ export {
   NO_COUNTERS,
   plan,
   type RefreshOutcome,
+  refreshSucceeded,
   renderName,
   renderReport,
 } from './render.ts';

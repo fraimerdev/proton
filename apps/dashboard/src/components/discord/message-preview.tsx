@@ -108,23 +108,6 @@ function EmbedView({
             ))}
           </div>
         ) : null}
-
-        {embed.footer || embed.timestamp ? (
-          <div className="dc-embed-footer">
-            {embed.footer?.iconUrl ? (
-              <img className="dc-embed-footer-icon" src={embed.footer.iconUrl} alt="" />
-            ) : null}
-            <span>
-              {embed.footer?.text}
-              {embed.footer?.text && embed.timestamp ? ' • ' : ''}
-              {embed.timestamp
-                ? embed.timestamp === 'now'
-                  ? 'Today at 00:00'
-                  : new Date(embed.timestamp).toLocaleString()
-                : ''}
-            </span>
-          </div>
-        ) : null}
       </div>
 
       {embed.thumbnailUrl ? (
@@ -132,6 +115,24 @@ function EmbedView({
       ) : null}
 
       {embed.imageUrl ? <img className="dc-embed-image" src={embed.imageUrl} alt="" /> : null}
+
+      {/* Outside dc-embed-main, after the image: Discord draws the footer last, under the image. */}
+      {embed.footer || embed.timestamp ? (
+        <div className="dc-embed-footer">
+          {embed.footer?.iconUrl ? (
+            <img className="dc-embed-footer-icon" src={embed.footer.iconUrl} alt="" />
+          ) : null}
+          <span>
+            {embed.footer?.text}
+            {embed.footer?.text && embed.timestamp ? ' • ' : ''}
+            {embed.timestamp
+              ? embed.timestamp === 'now'
+                ? 'Today at 00:00'
+                : new Date(embed.timestamp).toLocaleString()
+              : ''}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

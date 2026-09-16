@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { limitFor } from '@proton/core';
+import {
+  limitFor,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import {
   autocompleteEvent,
   harness,
@@ -24,6 +30,8 @@ describe('/tags create', () => {
       uses: 0,
     });
     expect(h.replyContent()).toContain('/tag rules');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('refuses a duplicate and points at edit', async () => {
@@ -39,7 +47,8 @@ describe('/tags create', () => {
     );
 
     expect((await h.tags.get('900000000000000001', 'rules'))?.content).toBe('a');
-    expect(h.bodies().at(-1)?.data?.content).toContain('/tags edit');
+    expect(h.bodies().at(-1)?.data?.embeds?.[0]?.description).toContain('/tags edit');
+    expect(h.bodies().at(-1)?.data?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('refuses an unusable name before touching storage', async () => {
@@ -118,6 +127,21 @@ describe('/tag', () => {
     expect((await h.tags.get('900000000000000001', 'rules'))?.uses).toBe(1);
   });
 
+  test('posts an admin-written tag body as plain text, never inside a status embed', async () => {
+    const h = harness();
+    await h.tags.create({
+      guildId: '900000000000000001',
+      name: 'rules',
+      content: 'Be kind.',
+      createdBy: MEMBER,
+    });
+
+    await h.run('tag', [stringOption('name', 'rules')]);
+
+    expect(h.bodies()[0]?.data?.content).toBe('Be kind.');
+    expect(h.bodies()[0]?.data?.embeds).toBeUndefined();
+  });
+
   test('strips every mention by default, so a stored @everyone cannot ping', async () => {
     const h = harness();
     await h.tags.create({
@@ -153,6 +177,8 @@ describe('/tag', () => {
 
     expect(h.replyContent()).toContain('no tag called **missing**');
     expect(h.replyContent()).toContain('/tags list');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('names the missing wiring when the store was never bound', async () => {
@@ -295,7 +321,7 @@ describe('autocomplete', () => {
     expect(h.calls()).toHaveLength(0);
   });
 
-  test('stays quiet while the module is switched off', async () => {
+  test('stays quiet while the module is disabled', async () => {
     const h = harness();
 
     await h.autocomplete(autocompleteEvent('tag', 'r'), { config: { enabled: false } });

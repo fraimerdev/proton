@@ -406,7 +406,7 @@ describe('dispatch', () => {
     expect(lines.some((l) => l.message.includes(`belongs to guild ${OTHER_GUILD}`))).toBe(true);
   });
 
-  test('a rule switched off in the dashboard is reported as off', async () => {
+  test('a rule disabled in the dashboard is reported as off', async () => {
     const { runtime, requests, lines } = build({ rules: [rule({ enabled: false })] });
 
     await runtime.handle(event());

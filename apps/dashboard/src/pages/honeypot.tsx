@@ -24,7 +24,7 @@ import { armedChannelIds } from './honeypot/shape.ts';
 import { TrapsArea } from './honeypot/traps.tsx';
 
 const SWITCHED_OFF =
-  'Honeypot is switched off. Settings are saved, but nothing runs until you switch it on. ' +
+  'Honeypot is disabled. Settings are saved, but nothing runs until you switch it on. ' +
   'Proton has deleted the warning messages it posted.';
 
 const MIGRATED =
@@ -32,7 +32,7 @@ const MIGRATED =
   'and timeout duration. Honeypot now uses one of each for all bait channels, taken from the ' +
   'first armed one. Check Response before you save.';
 
-const NO_TRAPS = 'Honeypot is switched on, but no bait channel is armed, so nothing is watched.';
+const NO_TRAPS = 'Honeypot is enabled, but no bait channel is armed, so nothing is watched.';
 
 const SAVE_NOTE =
   'Saving also posts, updates or deletes warning messages in bait channels, and restarts the ' +

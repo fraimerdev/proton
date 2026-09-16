@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { type CommandContext, createCommandOptions } from '@proton/core';
+import {
+  type CommandContext,
+  createCommandOptions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+} from '@proton/core';
 import { createPhishingStatusCommand } from '../src/commands.ts';
 import type { PhishingConfig } from '../src/config.ts';
 import type { PhishingDeps } from '../src/deps.ts';
@@ -25,11 +30,34 @@ function commandContext(config: Partial<PhishingConfig> = {}): CommandHarness {
   };
 }
 
-async function run(deps: PhishingDeps, config: Partial<PhishingConfig> = {}): Promise<string> {
+interface ReplyPayload {
+  content?: string;
+  embeds?: { description?: string; color?: number }[];
+}
+
+async function replyPayload(
+  deps: PhishingDeps,
+  config: Partial<PhishingConfig> = {},
+): Promise<ReplyPayload> {
   const harness = commandContext(config);
   await createPhishingStatusCommand(deps).handler(harness.ctx);
-  const payload = harness.executor.of('interaction_reply')?.payload as { content: string };
-  return payload.content;
+
+  const request = harness.executor.of('interaction_reply');
+  if (!request) throw new Error('expected /phishing to have answered the invoker');
+
+  return request.payload as ReplyPayload;
+}
+
+async function run(deps: PhishingDeps, config: Partial<PhishingConfig> = {}): Promise<string> {
+  const payload = await replyPayload(deps, config);
+
+  return payload.content || (payload.embeds?.[0]?.description ?? '');
+}
+
+async function replyEmbed(
+  deps: PhishingDeps,
+): Promise<{ description?: string; color?: number } | undefined> {
+  return (await replyPayload(deps)).embeds?.[0];
 }
 
 describe('/phishing', () => {
@@ -42,10 +70,12 @@ describe('/phishing', () => {
       failures: [],
     });
 
-    const content = await run({ blocklist: store, botUserId: BOT });
+    const payload = await replyPayload({ blocklist: store, botUserId: BOT });
 
-    expect(content).toContain('2 domains');
-    expect(content).toContain('1 feed');
+    expect(payload.content).toContain('2 domains');
+    expect(payload.content).toContain('1 feed');
+
+    expect(payload.embeds).toBeUndefined();
   });
 
   test('says plainly when nothing is loaded, and that it is not a server setting', async () => {
@@ -78,6 +108,10 @@ describe('/phishing', () => {
     expect(content).toContain('no links are being checked');
     expect(content).not.toContain('RedisBlocklistStore');
     expect(content).not.toContain('createPhishingModule');
+
+    const embed = await replyEmbed({});
+    expect(embed?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embed?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('answers even when the cache read throws', async () => {
@@ -89,6 +123,10 @@ describe('/phishing', () => {
     const content = await run({ blocklist: store, botUserId: BOT });
     expect(content).toContain('could not read the phishing blocklist');
     expect(content).not.toContain('Connection is closed.');
+
+    const embed = await replyEmbed({ blocklist: store, botUserId: BOT });
+    expect(embed?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embed?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 
   test('replies ephemerally — this is server health, not an announcement', async () => {

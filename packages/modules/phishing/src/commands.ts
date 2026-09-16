@@ -1,4 +1,10 @@
-import { type CommandDefinition, formatDuration, type Logger, Permissions } from '@proton/core';
+import {
+  type CommandDefinition,
+  errorStatus,
+  formatDuration,
+  type Logger,
+  Permissions,
+} from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import type { PhishingConfig } from './config.ts';
@@ -33,10 +39,17 @@ export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefiniti
         });
       }
 
-      const body =
+      const report =
         'unbound' in bound
-          ? NOT_WIRED
+          ? { failure: NOT_WIRED }
           : await describeStats(bound.deps.blocklist.stats(), ctx.config, ctx.logger);
+
+      // The stats themselves are a report, not a confirmation, so only the two ways of having no
+      // stats to give take the red status embed.
+      const body =
+        'failure' in report
+          ? errorStatus(report.failure)
+          : { content: report.report.slice(0, 2000) };
 
       const result = await ctx.executor.execute({
         guildId: ctx.guildId,
@@ -48,7 +61,7 @@ export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefiniti
         payload: {
           interactionId: ctx.interaction.id,
           interactionToken: ctx.interaction.token,
-          content: body.slice(0, 2000),
+          ...body,
 
           ephemeral: true,
         },
@@ -70,7 +83,7 @@ async function describeStats(
   pending: Promise<BlocklistStats>,
   config: PhishingConfig,
   logger: Logger,
-): Promise<string> {
+): Promise<{ report: string } | { failure: string }> {
   let stats: BlocklistStats;
   try {
     stats = await pending;
@@ -82,11 +95,12 @@ async function describeStats(
       { moduleId: MODULE_ID },
     );
 
-    return (
-      'I could not read the phishing blocklist, so I cannot tell you whether this server is ' +
-      'protected right now. Link checking may still be running. This is a fault on my side, ' +
-      'not a setting in this server.'
-    );
+    return {
+      failure:
+        'I could not read the phishing blocklist, so I cannot tell you whether this server is ' +
+        'protected right now. Link checking may still be running. This is a fault on my side, ' +
+        'not a setting in this server.',
+    };
   }
 
   const lines: string[] = [];
@@ -128,5 +142,5 @@ async function describeStats(
     );
   }
 
-  return lines.join('\n');
+  return { report: lines.join('\n') };
 }

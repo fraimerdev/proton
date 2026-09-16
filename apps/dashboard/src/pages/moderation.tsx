@@ -26,7 +26,7 @@ const BAN_DELETE_MIN = 0;
 const BAN_DELETE_MAX = 7;
 
 const SWITCHED_OFF =
-  'Moderation is switched off. Settings are saved, but nothing runs until you switch it on. Its ' +
+  'Moderation is disabled. Settings are saved, but nothing runs until you switch it on. Its ' +
   'commands are not registered and warn escalation does not run.';
 
 // perform.ts, verbatim: what a moderator is told when they leave the reason option empty.

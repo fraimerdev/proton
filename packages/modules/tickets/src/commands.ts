@@ -1,8 +1,11 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   formatDuration,
   parseDuration,
+  type StatusBody,
+  successStatus,
   TICKET_PRIORITIES,
   type TicketPriority,
   tryParseDuration,
@@ -51,7 +54,7 @@ import {
   describeStatus,
   type TicketView,
 } from './interface.ts';
-import { closeTicket, deleteTicket, openTicket, reopenTicket } from './lifecycle.ts';
+import { closeTicket, deleteTicket, openTicket, refusalBody, reopenTicket } from './lifecycle.ts';
 import { renderTicketText, TICKET_RESPONSE_SURFACE } from './placeholders.ts';
 import { sendPanel } from './post.ts';
 import type { Ticket, TicketStore } from './store.ts';
@@ -69,9 +72,11 @@ const NOT_A_TICKET =
 
 async function reply(
   ctx: CommandContext<TicketsConfig>,
-  content: string,
+  message: string | StatusBody,
   suffix = 'reply',
 ): Promise<void> {
+  const body = typeof message === 'string' ? { content: message.slice(0, 2000) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -83,7 +88,7 @@ async function reply(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: content.slice(0, 2000),
+      ...body,
       ephemeral: true,
       allowedMentions: { parse: [] },
     },
@@ -108,7 +113,7 @@ async function ready(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, NOT_WIRED);
+    await reply(ctx, errorStatus(NOT_WIRED));
     return null;
   }
 
@@ -139,9 +144,11 @@ async function resolve(
   if (!ticket) {
     await reply(
       ctx,
-      number === null
-        ? NOT_A_TICKET
-        : `This server has no ticket #${number}. \`/ticket list\` shows the open ones.`,
+      errorStatus(
+        number === null
+          ? NOT_A_TICKET
+          : `This server has no ticket #${number}. \`/ticket list\` shows the open ones.`,
+      ),
     );
     return null;
   }
@@ -167,7 +174,7 @@ async function permitted(
 
   if (decision.allowed) return true;
 
-  await reply(ctx, decision.humanReason, 'refused');
+  await reply(ctx, errorStatus(decision.humanReason), 'refused');
   return false;
 }
 
@@ -183,8 +190,10 @@ function controlInput(
 async function report(ctx: CommandContext<TicketsConfig>, outcome: ControlOutcome): Promise<void> {
   await reply(
     ctx,
-    outcome.ok ? outcome.message : outcome.humanReason,
-    outcome.ok ? 'done' : 'refused',
+    outcome.ok && !outcome.partial
+      ? successStatus(outcome.message)
+      : errorStatus(outcome.ok ? outcome.message : outcome.humanReason),
+    outcome.ok && !outcome.partial ? 'done' : 'refused',
   );
 }
 
@@ -489,7 +498,7 @@ export function ticketCommand(deps: TicketsDeps): Command {
         case 'stats':
           return stats(ctx, store, deps);
         default:
-          await reply(ctx, 'That subcommand is not one I know.');
+          await reply(ctx, errorStatus('That is not a `/ticket` subcommand I know.'));
       }
     },
   };
@@ -506,10 +515,12 @@ async function postPanel(ctx: CommandContext<TicketsConfig>): Promise<void> {
 
     await reply(
       ctx,
-      known.length === 0
-        ? 'This server has no ticket panels configured yet. An admin can add one in the Proton ' +
-            'dashboard under Tickets.'
-        : `There is no panel called **${panelId}**. This server has ${known.join(', ')}.`,
+      errorStatus(
+        known.length === 0
+          ? 'This server has no ticket panels configured yet. An admin can add one in the Proton ' +
+              'dashboard under Tickets.'
+          : `There is no panel called **${panelId}**. This server has ${known.join(', ')}.`,
+      ),
     );
     return;
   }
@@ -520,11 +531,21 @@ async function postPanel(ctx: CommandContext<TicketsConfig>): Promise<void> {
   });
 
   if (!posted.ok) {
-    await reply(ctx, `I couldn't post that panel: ${posted.humanReason}`, 'refused');
+    await reply(
+      ctx,
+      errorStatus(
+        `I couldn't post the **${found.name}** panel in <#${found.channelId}>: ${posted.humanReason}`,
+      ),
+      'refused',
+    );
     return;
   }
 
-  await reply(ctx, `Posted the **${found.name}** panel in <#${found.channelId}>.`, 'done');
+  await reply(
+    ctx,
+    successStatus(`Posted the **${found.name}** panel in <#${found.channelId}>.`),
+    'done',
+  );
 }
 
 async function create(
@@ -540,10 +561,12 @@ async function create(
 
     await reply(
       ctx,
-      known.length === 0
-        ? 'This server has no ticket types configured yet. An admin can add one in the Proton ' +
-            'dashboard under Tickets.'
-        : `There is no ticket type called **${typeId}**. This server has ${known.join(', ')}.`,
+      errorStatus(
+        known.length === 0
+          ? 'This server has no ticket types configured yet. An admin can add one in the Proton ' +
+              'dashboard under Tickets.'
+          : `There is no ticket type called **${typeId}**. This server has ${known.join(', ')}.`,
+      ),
     );
     return;
   }
@@ -565,8 +588,8 @@ async function create(
   await reply(
     ctx,
     opened.status === 'refused'
-      ? opened.humanReason
-      : `Opened ticket #${opened.ticket.number} — <#${opened.ticket.channelId}>.`,
+      ? refusalBody(opened)
+      : successStatus(`Opened ticket #${opened.ticket.number} — <#${opened.ticket.channelId}>.`),
     opened.status === 'refused' ? 'refused' : 'done',
   );
 }
@@ -592,16 +615,18 @@ async function close(
   });
 
   if (!outcome.ok) {
-    await reply(ctx, outcome.humanReason);
+    await reply(ctx, errorStatus(outcome.humanReason));
     return;
   }
 
   await reply(
     ctx,
-    outcome.replayed
-      ? `Ticket #${outcome.ticket.number} was already marked closed, so I finished the parts that ` +
-          'had not run. Anything that had already happened was left alone.'
-      : `Closed ticket #${outcome.ticket.number}.`,
+    successStatus(
+      outcome.replayed
+        ? `Ticket #${outcome.ticket.number} was already marked closed, so I finished the parts ` +
+            'that had not run. Anything that had already happened was left alone.'
+        : `Closed ticket #${outcome.ticket.number}.`,
+    ),
     'done',
   );
 }
@@ -616,7 +641,9 @@ async function reopen(ctx: CommandContext<TicketsConfig>, store: TicketStore): P
 
   await reply(
     ctx,
-    outcome.ok ? `Reopened ticket #${outcome.ticket.number}.` : outcome.humanReason,
+    outcome.ok
+      ? successStatus(`Reopened ticket #${outcome.ticket.number}.`)
+      : errorStatus(outcome.humanReason),
     outcome.ok ? 'done' : 'refused',
   );
 }
@@ -642,7 +669,9 @@ async function remove(
 
   await reply(
     ctx,
-    outcome.ok ? `Deleted ticket #${outcome.ticket.number}.` : outcome.humanReason,
+    outcome.ok
+      ? successStatus(`Deleted ticket #${outcome.ticket.number} and its channel.`)
+      : errorStatus(outcome.humanReason),
     outcome.ok ? 'done' : 'refused',
   );
 }
@@ -672,7 +701,7 @@ async function withUser(
   const userId = ctx.options.getUserId('user');
 
   if (userId === null) {
-    await reply(ctx, 'That command needs somebody to act on.');
+    await reply(ctx, errorStatus('Name the member this command should act on.'));
     return;
   }
 
@@ -687,7 +716,7 @@ async function priority(
   const level = ctx.options.getString('level') ?? '';
 
   if (!(TICKET_PRIORITIES as readonly string[]).includes(level)) {
-    await reply(ctx, `**${level}** is not a priority I know.`);
+    await reply(ctx, errorStatus(`**${level}** is not a priority I know.`));
     return;
   }
 
@@ -726,7 +755,7 @@ async function transcript(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: `Transcript of ticket #${ticket.number}.`,
+      ...successStatus(`The transcript of ticket #${ticket.number} is attached.`),
       ephemeral: true,
       files: [
         {
@@ -792,7 +821,9 @@ async function info(ctx: CommandContext<TicketsConfig>, store: TicketStore): Pro
   if (result.status === 'failed_precheck' || result.status === 'failed_api') {
     await reply(
       ctx,
-      `I couldn't show that ticket: ${result.failure?.humanReason ?? 'unknown reason'}`,
+      errorStatus(
+        `I couldn't show ticket #${ticket.number}: ${result.failure?.humanReason ?? 'unknown reason'}`,
+      ),
     );
   }
 }
@@ -858,10 +889,12 @@ async function quickResponse(
 
     await reply(
       ctx,
-      known.length === 0
-        ? 'This server has no saved replies yet. An admin can add them in the Proton dashboard ' +
-            'under Tickets.'
-        : `There is no saved reply called **${name}**. This server has ${known.join(', ')}.`,
+      errorStatus(
+        known.length === 0
+          ? 'This server has no saved replies yet. An admin can add them in the Proton dashboard ' +
+              'under Tickets.'
+          : `There is no saved reply called **${name}**. This server has ${known.join(', ')}.`,
+      ),
     );
     return;
   }
@@ -900,7 +933,11 @@ async function quickResponse(
   if (posted.status === 'failed_precheck' || posted.status === 'failed_api') {
     await reply(
       ctx,
-      `I couldn't post that reply: ${posted.failure?.humanReason ?? 'unknown reason'}`,
+      errorStatus(
+        `I couldn't post the **${saved.label}** reply in <#${ticket.channelId}>: ${
+          posted.failure?.humanReason ?? 'unknown reason'
+        }`,
+      ),
       'refused',
     );
     return;
@@ -914,7 +951,11 @@ async function quickResponse(
     data: { responseId: saved.id },
   });
 
-  await reply(ctx, `Posted the **${saved.label}** reply.`, 'done');
+  await reply(
+    ctx,
+    successStatus(`Posted the **${saved.label}** reply in <#${ticket.channelId}>.`),
+    'done',
+  );
 }
 
 function duration(ms: number | null): string {
@@ -994,7 +1035,7 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
 
   const userId = ctx.options.getUserId('user');
   if (userId === null) {
-    await reply(ctx, 'That command needs somebody to act on.');
+    await reply(ctx, errorStatus('Name the member this command should act on.'));
     return;
   }
 
@@ -1004,8 +1045,8 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
     await reply(
       ctx,
       lifted
-        ? `<@${userId}> can open tickets again.`
-        : `<@${userId}> was not blocked from opening tickets.`,
+        ? successStatus(`<@${userId}> can open tickets again.`)
+        : errorStatus(`<@${userId}> was not blocked from opening tickets.`),
       lifted ? 'done' : 'refused',
     );
     return;
@@ -1016,7 +1057,7 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
   if (raw !== null && tryParseDuration(raw) === null) {
     await reply(
       ctx,
-      `**${raw}** is not a duration. Use something like \`7d\`, \`12h\` or \`30m\`.`,
+      errorStatus(`**${raw}** is not a duration. Use something like \`7d\`, \`12h\` or \`30m\`.`),
     );
     return;
   }
@@ -1033,9 +1074,11 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
 
   await reply(
     ctx,
-    `<@${userId}> can no longer open tickets` +
-      (expiresAt ? ` until <t:${Math.floor(expiresAt.getTime() / 1000)}:f>` : '') +
-      '. Their existing tickets were left alone.',
+    successStatus(
+      `<@${userId}> can no longer open tickets` +
+        (expiresAt ? ` until <t:${Math.floor(expiresAt.getTime() / 1000)}:f>` : '') +
+        '. Their existing tickets were left alone.',
+    ),
     'done',
   );
 }

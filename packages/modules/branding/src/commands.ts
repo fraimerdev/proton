@@ -1,8 +1,11 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   INTERACTION_CALLBACK_DEFERRED_MESSAGE,
   Permissions,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { BRANDING_ACTOR, type BrandingConfig, isBlank, MODULE_ID } from './config.ts';
@@ -35,7 +38,7 @@ function summarise(config: BrandingConfig): string {
   ].join('\n');
 }
 
-function replyNow(ctx: CommandContext<BrandingConfig>, content: string): Promise<unknown> {
+function replyNow(ctx: CommandContext<BrandingConfig>, message: StatusBody): Promise<unknown> {
   return ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -46,7 +49,7 @@ function replyNow(ctx: CommandContext<BrandingConfig>, content: string): Promise
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content,
+      ...message,
       ephemeral: true,
     },
   });
@@ -95,7 +98,7 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
       if (!ctx.config.enabled) {
         await replyNow(
           ctx,
-          'Branding is switched off in this server, so Proton is using its own name.',
+          errorStatus('Branding is disabled in this server, so Proton is using its own name.'),
         );
         return;
       }
@@ -103,8 +106,10 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
       if (isBlank(ctx.config)) {
         await replyNow(
           ctx,
-          'Branding is on but nothing is set yet. Add a nickname, avatar, banner, bio or display ' +
-            'name style in the Proton dashboard.',
+          errorStatus(
+            'Branding is on but nothing is set yet. Add a nickname, avatar, banner, bio or display ' +
+              'name style in the Proton dashboard.',
+          ),
         );
         return;
       }
@@ -112,8 +117,10 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
       if (!deps.applicationId) {
         await replyNow(
           ctx,
-          `${summarise(ctx.config)}\n\nProton cannot re-apply this from a command right now: its ` +
-            'application id is not bound, which is a deployment fault rather than a setting.',
+          errorStatus(
+            `${summarise(ctx.config)}\n\nProton cannot re-apply this from a command right now: its ` +
+              'application id is not bound, which is a deployment fault rather than a setting.',
+          ),
         );
         return;
       }
@@ -215,12 +222,15 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
           applicationId: deps.applicationId,
           interactionToken: ctx.interaction.token,
           ephemeral: true,
-          content:
-            problems.length === 0
-              ? `Re-applied.\n${head}`
-              : `${head}\n\nSome of it did not go through:\n${problems
+          // Red whenever anything was refused, including a name style Discord accepted but would
+          // not read back: an unverified style is one Proton cannot claim it applied.
+          ...(problems.length === 0
+            ? successStatus(`Re-applied.\n${head}`)
+            : errorStatus(
+                `${head}\n\nSome of it did not go through:\n${problems
                   .map((p) => `- ${p}`)
                   .join('\n')}`,
+              )),
         },
       });
     },

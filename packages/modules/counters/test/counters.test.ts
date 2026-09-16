@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { ModuleRegistry, Permissions } from '@proton/core';
+import {
+  ModuleRegistry,
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { GatewayIntentBits } from 'discord-api-types/v10';
 import { MODULE_ID, REFRESH_INTERVAL_MS } from '../src/config.ts';
 import { createCountersModule } from '../src/index.ts';
@@ -27,6 +34,13 @@ const ROLES = {
   id: COUNTER_B,
   channelId: COUNTER_B,
   template: 'Roles: {count}',
+  source: 'roles',
+} as const;
+
+const BOOSTS = {
+  id: COUNTER_B,
+  channelId: COUNTER_B,
+  template: '{server.boost_count}',
   source: 'roles',
 } as const;
 
@@ -59,6 +73,8 @@ describe('/counters refresh', () => {
 
     expect(h.patches()).toHaveLength(0);
     expect(h.replyContent()).toContain('1 already correct');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('reports the skips alongside the changes', async () => {
@@ -89,9 +105,25 @@ describe('/counters refresh', () => {
     const reply = h.replyContent() ?? '';
     expect(reply).toContain('Manage Channels');
     expect(reply).toContain(`<#${COUNTER_A}>`);
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
     expect(
       h.logs.some((line) => line.level === 'error' && line.message.includes('Manage Channels')),
     ).toBe(true);
+  });
+
+  test('stays green when one counter was renamed and another refused', async () => {
+    const h = harness();
+    h.state.boostCount = null;
+
+    await h.run(refreshSubcommand, { config: { counters: [MEMBERS, BOOSTS] } });
+
+    expect(h.patches()).toHaveLength(1);
+
+    const reply = h.replyContent() ?? '';
+    expect(reply).toContain('1 renamed');
+    expect(reply).toContain('1 refused');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('says a counter reading an uncached member count was left alone', async () => {
@@ -102,6 +134,17 @@ describe('/counters refresh', () => {
 
     expect(h.patches()).toHaveLength(0);
     expect(h.replyContent()).toContain('1 skipped');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('names the subcommand when it is not one the module knows', async () => {
+    const h = harness();
+
+    await h.run(subcommand('destroy'), { config: { counters: [MEMBERS] } });
+
+    expect(h.patches()).toHaveLength(0);
+    expect(h.replyContent()).toContain('/counters destroy');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('points an admin at the dashboard when nothing is configured', async () => {
@@ -110,6 +153,8 @@ describe('/counters refresh', () => {
     await h.run(refreshSubcommand, { config: { counters: [] } });
 
     expect(h.replyContent()).toContain('No counter channels are set up');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
     expect(h.patches()).toHaveLength(0);
   });
 
@@ -284,6 +329,7 @@ describe('a counter Proton makes the channel for', () => {
     expect(h.owned.rows.size).toBe(0);
     expect(h.replyContent()).toContain('could not make the channel');
     expect(h.replyContent()).toContain(`Members: ${MEMBER_COUNT}`);
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('counts a channel it could not lock as made, and says it is not locked', async () => {
@@ -406,7 +452,7 @@ describe('the schedule listener', () => {
     expect(h.scheduler.cancelled).toHaveLength(0);
   });
 
-  test('cancels the refresh when the module is switched off in the dashboard', async () => {
+  test('cancels the refresh when the module is disabled in the dashboard', async () => {
     const h = harness();
 
     await h.listen(

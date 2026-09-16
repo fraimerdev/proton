@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import {
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import { SNAPSHOT_VERSION } from '../src/snapshot.ts';
 import {
   ADMIN,
+  booleanOption,
   fixtureLayout,
   GUILD,
   HIDDEN_CHANNEL,
@@ -10,6 +17,7 @@ import {
   MemoryBackupStore,
   NOW,
   rawChannel,
+  rawRole,
   stringOption,
   subcommand,
 } from './harness.ts';
@@ -30,6 +38,8 @@ describe('/backup create', () => {
     expect(store.records[0]?.createdBy).toBe(ADMIN);
     expect(store.records[0]?.createdAt.getTime()).toBe(NOW);
     expect(bot.replyContent()).toContain('Backed up 1 channel and 2 roles.');
+    expect(bot.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(bot.replyEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('tells the admin at backup time which channels it could not capture', async () => {
@@ -97,6 +107,8 @@ describe('/backup create', () => {
     expect(store.records).toHaveLength(0);
     expect(bot.replyContent()).toContain('NO new backup');
     expect(bot.replyContent()).not.toContain('connection refused');
+    expect(bot.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(bot.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
     expect(bot.logged('error', 'could not be saved')).toBe(true);
   });
 
@@ -119,12 +131,12 @@ describe('/backup create', () => {
     expect(bot.replyContent()).toContain('channel and role list yet');
   });
 
-  test('answers when the module is switched off, rather than failing the interaction', async () => {
+  test('answers when the module is disabled, rather than failing the interaction', async () => {
     const bot = harness();
 
     await bot.run(subcommand('create'), { enabled: false });
 
-    expect(bot.replyContent()).toContain('switched off in this server');
+    expect(bot.replyContent()).toContain('disabled in this server');
   });
 
   test('tells the admin nothing was saved, and leaves the wiring detail in the log', async () => {
@@ -201,5 +213,54 @@ describe('/backup restore', () => {
     await bot.run(subcommand('restore', [stringOption('backup_id', 'someone-elses')]));
 
     expect(bot.replyContent()).toContain('no snapshot with the id');
+  });
+
+  test('the preview is a prompt, not an outcome, so it stays neutral', async () => {
+    const store = new MemoryBackupStore();
+    const bot = harness({ store, layout: layout([rawChannel()]) });
+
+    await bot.run(subcommand('create'));
+
+    bot.current.layout = layout([]);
+    await bot.run(subcommand('restore', [stringOption('backup_id', BACKUP_ID)]));
+
+    expect(bot.replyData()?.content).toContain('Restore plan for backup');
+    expect(bot.replyData()?.embeds).toBeUndefined();
+  });
+
+  test('a confirmed restore reports what it recreated', async () => {
+    const store = new MemoryBackupStore();
+    const bot = harness({ store, layout: layout([rawChannel()]) });
+
+    await bot.run(subcommand('create'));
+
+    bot.current.layout = layout([]);
+    await bot.run(
+      subcommand('restore', [stringOption('backup_id', BACKUP_ID), booleanOption('confirm', true)]),
+    );
+
+    const reply = bot.replyContent() ?? '';
+    expect(reply).toContain('Restored 0 roles and 1 channel');
+    expect(reply).toContain(BACKUP_ID);
+    expect(bot.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(bot.replyEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
+  });
+
+  test('a restore that only half landed is red, and names what did not', async () => {
+    const store = new MemoryBackupStore();
+    const bot = harness({ store, layout: layout([rawChannel()], [rawRole()]) });
+
+    await bot.run(subcommand('create'));
+
+    bot.current.layout = layout([]);
+    await bot.run(
+      subcommand('restore', [stringOption('backup_id', BACKUP_ID), booleanOption('confirm', true)]),
+    );
+
+    const reply = bot.replyContent() ?? '';
+    expect(reply).toContain('1 did not go through');
+    expect(reply).toContain('role Member');
+    expect(bot.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(bot.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
 });

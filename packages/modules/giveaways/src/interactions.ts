@@ -1,11 +1,13 @@
 import {
   absentMemberContext,
+  errorStatus,
   evaluateRequirement,
   interactionRef,
   memberContextFromGuildMember,
   type ProtonEvent,
   parseCustomId,
   readComponentInteraction,
+  successStatus,
 } from '@proton/core';
 import { MODULE_ID } from './config.ts';
 import { bindEntry, clockOf, type GiveawaysDeps } from './deps.ts';
@@ -79,7 +81,7 @@ export async function handleEnter(
       `Giveaways cannot answer a button press: ${bound.unbound.join(', ')} is not bound.`,
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    await refuseNow(ctx, ref, interaction.userId, root, NOT_WIRED);
+    await refuseNow(ctx, ref, interaction.userId, root, errorStatus(NOT_WIRED));
     return 'unbound';
   }
 
@@ -96,7 +98,7 @@ export async function handleEnter(
       { applicationId, interaction: ref },
       interaction.userId,
       root,
-      'That giveaway no longer exists.',
+      errorStatus('That giveaway no longer exists.'),
     );
     return 'missing';
   }
@@ -113,8 +115,8 @@ export async function handleEnter(
       interaction.userId,
       root,
       claimed
-        ? `Claimed. **${giveaway.title}** is yours — the host will be in touch.`
-        : 'That prize is not yours to claim, or you already claimed it.',
+        ? successStatus(`**${giveaway.title}** is yours — the host will be in touch.`)
+        : errorStatus('That prize is not yours to claim, or you have already claimed it.'),
     );
 
     return 'answered';
@@ -130,8 +132,10 @@ export async function handleEnter(
       interaction.userId,
       root,
       left
-        ? `You have left **${giveaway.title}**. You can enter again while it is still running.`
-        : `You are not in the draw for **${giveaway.title}**.`,
+        ? successStatus(
+            `You have left **${giveaway.title}**. You can enter again while it is still running.`,
+          )
+        : errorStatus(`You are not in the draw for **${giveaway.title}**.`),
     );
 
     return 'answered';
@@ -159,7 +163,7 @@ export async function handleEnter(
       { applicationId, interaction: ref },
       interaction.userId,
       root,
-      'I could not read who you are from that button press. Try again.',
+      errorStatus('I could not read who you are from that button press. Please try again later.'),
     );
     return 'answered';
   }
@@ -180,7 +184,7 @@ export async function handleEnter(
         { applicationId, interaction: ref },
         interaction.userId,
         root,
-        'You are not eligible for giveaways in this server.',
+        errorStatus('You are not eligible for giveaways in this server.'),
       );
       return 'answered';
     }
@@ -191,10 +195,12 @@ export async function handleEnter(
         { applicationId, interaction: ref },
         interaction.userId,
         root,
-        [
-          `You cannot claim **${giveaway.title}**. Here is what is missing:`,
-          ...verdict.failures.map((failure) => `• ${failure.humanReason}`),
-        ].join('\n'),
+        errorStatus(
+          [
+            `You cannot claim **${giveaway.title}**. Here is what is missing:`,
+            ...verdict.failures.map((failure) => `• ${failure.humanReason}`),
+          ].join('\n'),
+        ),
       );
       return 'answered';
     }
@@ -207,10 +213,10 @@ export async function handleEnter(
       interaction.userId,
       root,
       dropped.outcome === 'won'
-        ? `You claimed **${giveaway.title}**. It is yours.`
+        ? successStatus(`You claimed **${giveaway.title}**. It is yours.`)
         : dropped.outcome === 'taken'
-          ? `Somebody was faster — **${giveaway.title}** has already gone.`
-          : 'That giveaway no longer exists.',
+          ? errorStatus(`Somebody was faster — **${giveaway.title}** has already gone.`)
+          : errorStatus('That giveaway no longer exists.'),
     );
 
     return 'answered';
@@ -276,12 +282,14 @@ export async function handleEnter(
     await deps.dirty?.mark(giveaway.guildId, giveaway.id);
   }
 
+  const joined = describeJoin(outcome, giveaway.title);
+
   await tellEntrant(
     ctx,
     { applicationId, interaction: ref },
     interaction.userId,
     root,
-    describeJoin(outcome, giveaway.title),
+    outcome.outcome === 'entered' ? successStatus(joined) : errorStatus(joined),
   );
 
   return 'answered';

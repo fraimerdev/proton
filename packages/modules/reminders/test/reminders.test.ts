@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { limitFor, newId, Permissions } from '@proton/core';
+import {
+  limitFor,
+  newId,
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_SUCCESS_COLOUR,
+} from '@proton/core';
 import { DELIVER_JOB } from '../src/deliver.ts';
 import type { Reminder } from '../src/store.ts';
 import {
@@ -72,6 +78,7 @@ describe('/remind', () => {
     const reminder = await set(h);
 
     expect(h.replyContent()).toContain(`<t:${Math.floor(reminder.remindAt.getTime() / 1000)}:R>`);
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('refuses an unreadable duration before storage is touched', async () => {
@@ -175,13 +182,13 @@ describe('/remind', () => {
     ).toBe(true);
   });
 
-  test('says the module is switched off rather than saving a reminder nobody will see', async () => {
+  test('says the module is disabled rather than saving a reminder nobody will see', async () => {
     const h = harness();
 
     await h.run('remind', remind(), { config: { enabled: false } });
 
     expect(h.reminders.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('switched off');
+    expect(h.replyContent()).toContain('disabled');
   });
 
   test('names the missing wiring when the store was never bound', async () => {
@@ -313,7 +320,8 @@ describe('/reminders cancel', () => {
 
     expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
     expect(h.scheduler.cancelled).toEqual([{ jobId: DELIVER_JOB, naturalKey: reminder.id }]);
-    expect(h.bodies().at(-1)?.data?.content).toContain('Cancelled');
+    expect(h.replyEmbed()?.description).toContain('Cancelled');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
   });
 
   test('refuses to cancel a reminder somebody else set, and says whose it is', async () => {
@@ -327,7 +335,7 @@ describe('/reminders cancel', () => {
     expect(await h.reminders.get(GUILD, reminder.id)).not.toBeNull();
     expect(h.scheduler.cancelled).toHaveLength(0);
 
-    const reply = h.bodies().at(-1)?.data?.content ?? '';
+    const reply = h.replyEmbed()?.description ?? '';
     expect(reply).toContain(`<@${MEMBER}>`);
     expect(reply).toContain('only they can cancel it');
     expect(h.bodies().at(-1)?.data?.allowed_mentions).toEqual({ parse: [] });
@@ -339,6 +347,19 @@ describe('/reminders cancel', () => {
     await h.run('reminders', subcommand('cancel', [stringOption('reminder', 'nothing-like-it')]));
 
     expect(h.replyContent()).toContain('/reminders list');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('asks for a reminder when the option arrives blank, and cancels nothing', async () => {
+    const h = harness();
+    const reminder = await set(h);
+
+    await h.run('reminders', subcommand('cancel', [stringOption('reminder', '   ')]));
+
+    expect(await h.reminders.get(GUILD, reminder.id)).not.toBeNull();
+    expect(h.scheduler.cancelled).toHaveLength(0);
+    expect(h.replyEmbed()?.description).toContain('which reminder to cancel');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('says so when the reminder has already been posted', async () => {
@@ -348,7 +369,8 @@ describe('/reminders cancel', () => {
 
     await h.run('reminders', subcommand('cancel', [stringOption('reminder', reminder.id)]));
 
-    expect(h.bodies().at(-1)?.data?.content).toContain('already been posted');
+    expect(h.replyEmbed()?.description).toContain('already been posted');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('still cancels, and warns, when the deployment has no scheduler', async () => {
@@ -421,7 +443,7 @@ describe('autocomplete', () => {
     expect(h.calls()).toHaveLength(0);
   });
 
-  test('stays quiet while the module is switched off', async () => {
+  test('stays quiet while the module is disabled', async () => {
     const h = harness();
 
     await h.autocomplete(autocompleteEvent('reminders', ''), { config: { enabled: false } });

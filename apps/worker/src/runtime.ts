@@ -4,6 +4,7 @@ import {
   type EntitlementTier,
   type EventBus,
   type EventType,
+  errorStatus,
   isScopedActionExecutor,
   type Logger,
   type ModuleManifest,
@@ -239,7 +240,7 @@ export class ModuleRuntime {
         ? 'the switch at the top of that page'
         : `the switch on the **${manifest.name}** card`;
       await reply(
-        `**${manifest.name}** is switched off in this server, so \`/${commandName}\` did nothing.\n\n` +
+        `**${manifest.name}** is disabled in this server, so \`/${commandName}\` did nothing.\n\n` +
           `A server admin can turn it on at ${this.#dashboardLink(guildId, manifest)} — ${where}.`,
         'module-disabled',
         manifest.id,
@@ -267,29 +268,50 @@ export class ModuleRuntime {
     const actorNick = memberNickOf(d);
     const actorDisplayName = displayNameOf(d);
 
-    await command.handler({
-      guildId,
-      channelId,
-      userId,
-      actorRoleIds: memberRoleIds(d),
-      ...(actorPermissions === undefined ? {} : { actorPermissions }),
-      ...(actorNick === undefined ? {} : { actorNick }),
-      ...(actorDisplayName === undefined ? {} : { actorDisplayName }),
-      options: createCommandOptions((nested(d.data, 'options') as RawOption[] | undefined) ?? []),
-      config: parsed.data,
-      tier: snapshot.tier ?? 'free',
-      // Not the same executor the refusal replies above use: those run under the permissions
-      // module's id on behalf of a module that never got to declare anything.
-      executor: moduleExecutor(this.#deps.registry, manifest.id, executor),
-      logger: this.#deps.logger,
-      ...(this.#deps.publisherFor
-        ? { publish: this.#deps.publisherFor(manifest.id, guildId) }
-        : {}),
-      ...(this.#deps.schedulerFor ? this.#deps.schedulerFor(manifest.id, guildId) : {}),
-      interaction: { id: interactionId, token: interactionToken },
+    try {
+      await command.handler({
+        guildId,
+        channelId,
+        userId,
+        actorRoleIds: memberRoleIds(d),
+        ...(actorPermissions === undefined ? {} : { actorPermissions }),
+        ...(actorNick === undefined ? {} : { actorNick }),
+        ...(actorDisplayName === undefined ? {} : { actorDisplayName }),
+        options: createCommandOptions((nested(d.data, 'options') as RawOption[] | undefined) ?? []),
+        config: parsed.data,
+        tier: snapshot.tier ?? 'free',
+        // Not the same executor the refusal replies above use: those run under the permissions
+        // module's id on behalf of a module that never got to declare anything.
+        executor: moduleExecutor(this.#deps.registry, manifest.id, executor),
+        logger: this.#deps.logger,
+        ...(this.#deps.publisherFor
+          ? { publish: this.#deps.publisherFor(manifest.id, guildId) }
+          : {}),
+        ...(this.#deps.schedulerFor ? this.#deps.schedulerFor(manifest.id, guildId) : {}),
+        interaction: { id: interactionId, token: interactionToken },
 
-      idempotencyKey: event.id,
-    });
+        idempotencyKey: event.id,
+      });
+    } catch (error) {
+      this.#deps.logger.error(
+        `/${commandName} threw, so ${manifest.id} answered nothing of its own: ${
+          error instanceof Error ? (error.stack ?? error.message) : String(error)
+        }`,
+        { guildId, moduleId: manifest.id, userId },
+      );
+
+      await reply(
+        `\`/${commandName}\` hit an unexpected problem, so it may not have finished. Please try ` +
+          'again in a moment.',
+        'handler-threw',
+        manifest.id,
+      );
+
+      // Rethrown so the bus still retries and dead-letters as it did before this catch existed.
+      // Both the reply above and the handler's own actions are keyed on the event id, so the
+      // redelivery is deduplicated rather than doubled.
+      throw error;
+    }
   }
 
   // No dashboard sections means no settings page: the module is only a switch on the overview.
@@ -320,7 +342,7 @@ export class ModuleRuntime {
       payload: {
         interactionId: ctx.interaction.id,
         interactionToken: ctx.interaction.token,
-        content: ctx.content.slice(0, 2000),
+        ...errorStatus(ctx.content),
         ephemeral: true,
       },
     });
@@ -394,7 +416,7 @@ export class ModuleRuntime {
       payload: {
         interactionId: ctx.interaction.id,
         interactionToken: ctx.interaction.token,
-        content: refusal.humanReason,
+        ...errorStatus(refusal.humanReason),
 
         ephemeral: true,
       },

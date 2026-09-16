@@ -206,7 +206,11 @@ export interface RunOverrides {
 
 export interface CallBody {
   name?: string;
-  data?: { content?: string; flags?: number };
+  data?: {
+    content?: string;
+    flags?: number;
+    embeds?: { description?: string; color?: number }[];
+  };
 }
 
 export interface HarnessOptions {
@@ -228,6 +232,7 @@ export interface Harness {
   creates(): RestRequestOptions[];
   overwrites(): RestRequestOptions[];
   replyContent(): string | null;
+  replyEmbed(): { description?: string; color?: number } | null;
 
   run(options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
   refresh(overrides?: Partial<RunOverrides>): Promise<void>;
@@ -313,7 +318,13 @@ export function harness(options: HarnessOptions = {}): Harness {
 
     replyContent: () => {
       const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      return (call?.body as CallBody | undefined)?.data?.content ?? null;
+      const data = (call?.body as CallBody | undefined)?.data;
+      return data?.content || data?.embeds?.[0]?.description || null;
+    },
+
+    replyEmbed: () => {
+      const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
+      return (call?.body as CallBody | undefined)?.data?.embeds?.[0] ?? null;
     },
 
     async run(raw, overrides = {}) {

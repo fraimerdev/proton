@@ -16,7 +16,7 @@ import { RoutePending } from '../components/ui/pending.tsx';
 import { CaseLogArea } from './cases/log.tsx';
 
 const SWITCHED_OFF =
-  'Cases is switched off. Proton still records every action in the case log. Its No active ' +
+  'Cases is disabled. Proton still records every action in the case log. Its No active ' +
   'moderation and Clean recent record conditions are no longer offered, but requirements that ' +
   'already use them are still checked.';
 

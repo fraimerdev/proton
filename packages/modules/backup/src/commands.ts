@@ -1,4 +1,10 @@
-import { type CommandContext, type CommandDefinition, Permissions } from '@proton/core';
+import {
+  type CommandContext,
+  type CommandDefinition,
+  Permissions,
+  type StatusKind,
+  statusBody,
+} from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import { applyRestore } from './apply.ts';
@@ -25,7 +31,7 @@ export { MODULE_ID };
 const CONTENT_MAX = 2000;
 
 const DISABLED =
-  'Backups are switched off in this server. An admin can turn the Backup module back on from ' +
+  'Backups are disabled in this server. An admin can turn the Backup module back on from ' +
   'the Proton dashboard.';
 
 const NO_LAYOUT =
@@ -112,7 +118,7 @@ async function bound(
   deps: BackupDeps,
 ): Promise<BoundBackupDeps | null> {
   if (!ctx.config.enabled) {
-    await reply(ctx, [DISABLED]);
+    await reply(ctx, [DISABLED], 'error');
     return null;
   }
 
@@ -122,7 +128,7 @@ async function bound(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, [NOT_WIRED]);
+    await reply(ctx, [NOT_WIRED], 'error');
     return null;
   }
 
@@ -134,7 +140,7 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
   if (!ports) return;
 
   const layout = await ports.readLayout(ctx.guildId);
-  if (!layout) return reply(ctx, [NO_LAYOUT]);
+  if (!layout) return reply(ctx, [NO_LAYOUT], 'error');
 
   if (layout.guildId !== ctx.guildId) {
     ctx.logger.error(
@@ -142,7 +148,7 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
         'save it',
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    return reply(ctx, [WRONG_SERVER]);
+    return reply(ctx, [WRONG_SERVER], 'error');
   }
 
   const capturedAt = ports.now();
@@ -164,7 +170,7 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    return reply(ctx, [STORE_UNWRITABLE]);
+    return reply(ctx, [STORE_UNWRITABLE], 'error');
   }
 
   const lines = [`Backup \`${backupId}\` saved.`, ...describeCapture(report)];
@@ -185,7 +191,7 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
     );
   }
 
-  await reply(ctx, lines);
+  await reply(ctx, lines, 'success');
 }
 
 async function list(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Promise<void> {
@@ -227,7 +233,7 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
 
   const backupId = ctx.options.getString('backup_id');
   if (!backupId) {
-    return reply(ctx, ['I need the id of a snapshot. Run `/backup list` to see them.']);
+    return reply(ctx, ['I need the id of a snapshot. Run `/backup list` to see them.'], 'error');
   }
 
   let record: BackupRecord | null;
@@ -239,18 +245,22 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    return reply(ctx, [STORE_UNREADABLE]);
+    return reply(ctx, [STORE_UNREADABLE], 'error');
   }
 
   if (!record) {
-    return reply(ctx, [
-      `This server has no snapshot with the id \`${backupId}\`. Run \`/backup list\` to see the ` +
-        'ones it does have.',
-    ]);
+    return reply(
+      ctx,
+      [
+        `This server has no snapshot with the id \`${backupId}\`. Run \`/backup list\` to see the ` +
+          'ones it does have.',
+      ],
+      'error',
+    );
   }
 
   const layout = await ports.readLayout(ctx.guildId);
-  if (!layout) return reply(ctx, [NO_LAYOUT]);
+  if (!layout) return reply(ctx, [NO_LAYOUT], 'error');
 
   const confirmed = ctx.options.getBoolean('confirm') === true;
 
@@ -261,7 +271,7 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
     dryRun: restoreIsDryRun(confirmed),
   });
 
-  if (isRestoreRefusal(planned)) return reply(ctx, [planned.refusal]);
+  if (isRestoreRefusal(planned)) return reply(ctx, [planned.refusal], 'error');
 
   const counts = summariseRestore(planned);
 
@@ -296,10 +306,19 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
     );
   }
 
-  await reply(ctx, lines);
+  await reply(ctx, lines, applied.failures.length > 0 ? 'error' : 'success');
 }
 
-async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]): Promise<void> {
+// Red when anything in the plan did not land: a restore that recreated half a server is not a
+// restore, and the lines above already name every op that failed.
+async function reply(
+  ctx: CommandContext<BackupConfig>,
+  lines: readonly string[],
+  kind?: StatusKind,
+): Promise<void> {
+  const content = clamp(lines.join('\n'));
+  const body = kind === undefined ? { content } : statusBody(kind, content);
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -311,7 +330,7 @@ async function reply(ctx: CommandContext<BackupConfig>, lines: readonly string[]
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: clamp(lines.join('\n')),
+      ...body,
       ephemeral: true,
     },
   });

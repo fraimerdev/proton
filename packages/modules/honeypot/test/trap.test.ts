@@ -199,7 +199,7 @@ describe('threads', () => {
     expect(h.calls()).toContain(BAN);
   });
 
-  test('does not trip it when threads are switched off', async () => {
+  test('does not trip it when threads are disabled', async () => {
     const h = harness();
 
     const outcome = await h.trip({

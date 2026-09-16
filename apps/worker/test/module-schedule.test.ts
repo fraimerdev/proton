@@ -481,7 +481,7 @@ describe('the runner that turns a claimed row back into a module handler', () =>
     expect(warned?.message).toContain('constructor');
   });
 
-  test('a module switched off through its own config field drops the job rather than running it', async () => {
+  test('a module disabled through its own config field drops the job rather than running it', async () => {
     const { ctx, sweeper, fired, store, logger } = build({
       snapshot: { enabled: true, config: { enabled: false, message: 'stand up' } },
     });
@@ -491,7 +491,7 @@ describe('the runner that turns a claimed row back into a module handler', () =>
 
     expect((await sweeper.sweep()).ran).toBe(1);
     expect(fired).toHaveLength(0);
-    expect(logger.matching('warn', 'Reminders is switched off')).toHaveLength(1);
+    expect(logger.matching('warn', 'Reminders is disabled')).toHaveLength(1);
     expect(store.rows).toHaveLength(0);
   });
 

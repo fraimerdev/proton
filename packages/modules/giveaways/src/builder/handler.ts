@@ -1,10 +1,13 @@
 import {
   type AvailableProvider,
   encodeCustomId,
+  errorStatus,
   type ModuleAvailability,
   newId,
   type ProviderRegistry,
   parseCustomId,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import {
   MODULE_ID,
@@ -107,9 +110,13 @@ export interface BuilderDeps {
 export type BuilderReply =
   | { kind: 'update'; content: string; components: Record<string, unknown>[] }
   | { kind: 'modal'; modal: import('@proton/core').Modal }
-  | { kind: 'message'; content: string }
+  | { kind: 'message'; body: StatusBody }
   | { kind: 'preview'; components: Record<string, unknown>[] }
   | { kind: 'ignored' };
+
+function refused(text: string): BuilderReply {
+  return { kind: 'message', body: errorStatus(text) };
+}
 
 async function screenFor(
   deps: BuilderDeps,
@@ -121,7 +128,7 @@ async function screenFor(
 
   return screen.ok
     ? { kind: 'update', content: screen.content, components: screen.components }
-    : { kind: 'message', content: screen.humanReason };
+    : refused(screen.humanReason);
 }
 
 function readItemArgs(args: readonly string[]): { kind: 'r' | 'm'; providerId: string } | null {
@@ -162,12 +169,10 @@ export async function handleBuilderComponent(
   const draft = await deps.drafts.get(key);
 
   if (!draft) {
-    return {
-      kind: 'message',
-      content:
-        'That builder has expired or belongs to somebody else. Start a new one with ' +
+    return refused(
+      'That builder has expired or belongs to somebody else. Start a new one with ' +
         '`/giveaway create`.',
-    };
+    );
   }
 
   switch (input.action) {
@@ -192,9 +197,7 @@ export async function handleBuilderComponent(
       if (!isStep(step)) return { kind: 'ignored' };
 
       const built = stepModal(step, draft);
-      return built.ok
-        ? { kind: 'modal', modal: built.modal }
-        : { kind: 'message', content: built.humanReason };
+      return built.ok ? { kind: 'modal', modal: built.modal } : refused(built.humanReason);
     }
 
     case BUILDER_PICK:
@@ -235,9 +238,7 @@ export async function handleBuilderComponent(
 
     case BUILDER_BASICS: {
       const built = stepModal('basics', draft);
-      return built.ok
-        ? { kind: 'modal', modal: built.modal }
-        : { kind: 'message', content: built.humanReason };
+      return built.ok ? { kind: 'modal', modal: built.modal } : refused(built.humanReason);
     }
 
     case BUILDER_LOGIC: {
@@ -257,10 +258,9 @@ export async function handleBuilderComponent(
       const provider = pickerFor(available, providerId);
 
       if (!provider) {
-        return {
-          kind: 'message',
-          content: `That option is no longer available — the module that provides it was switched off.`,
-        };
+        return refused(
+          'That option is no longer available — the module that provides it was disabled.',
+        );
       }
 
       const kind = input.action === BUILDER_ADD_REQUIREMENT ? 'r' : 'm';
@@ -272,13 +272,11 @@ export async function handleBuilderComponent(
       }
 
       const encoded = encodeCustomId(MODULE_ID, ITEM_MODAL, kind, provider.id);
-      if (!encoded.ok) return { kind: 'message', content: encoded.humanReason };
+      if (!encoded.ok) return refused(encoded.humanReason);
 
       const built = descriptorsToModal(encoded.customId, provider.label, provider.builder);
 
-      return built.ok
-        ? { kind: 'modal', modal: built.modal }
-        : { kind: 'message', content: built.humanReason };
+      return built.ok ? { kind: 'modal', modal: built.modal } : refused(built.humanReason);
     }
 
     case BUILDER_REMOVE: {
@@ -301,12 +299,15 @@ export async function handleBuilderComponent(
       const preview = previewComponents(deps, draft);
       return preview.ok
         ? { kind: 'preview', components: preview.components }
-        : { kind: 'message', content: preview.humanReason };
+        : refused(preview.humanReason);
     }
 
     case BUILDER_CANCEL: {
       await deps.drafts.delete(key);
-      return { kind: 'message', content: 'Builder closed. Nothing was posted.' };
+      return {
+        kind: 'message',
+        body: successStatus('The giveaway builder is closed. Nothing was posted.'),
+      };
     }
 
     default:
@@ -415,22 +416,19 @@ async function pickProvider(
   // Enforced here, not only in the template schema: without it a host can add rules past the cap
   // in the builder and only discover the limit when saving the giveaway as a template.
   if (held >= cap) {
-    return {
-      kind: 'message',
-      content:
-        `A giveaway can hold ${cap} ${kind === 'r' ? 'requirements' : 'bonus-entry rules'}, and ` +
+    return refused(
+      `A giveaway can hold ${cap} ${kind === 'r' ? 'requirements' : 'bonus-entry rules'}, and ` +
         'this one is full. Remove one before adding another.',
-    };
+    );
   }
 
   const available = await deps.providers.listAvailable(draft.guildId, deps.availability);
   const provider = pickerFor(available, providerId);
 
   if (!provider) {
-    return {
-      kind: 'message',
-      content: 'That option is no longer available — the module that provides it was switched off.',
-    };
+    return refused(
+      'That option is no longer available — the module that provides it was disabled.',
+    );
   }
 
   // A provider with no settings is fully configured by picking it, and Discord refuses a modal
@@ -440,13 +438,11 @@ async function pickProvider(
   }
 
   const encoded = encodeCustomId(MODULE_ID, ITEM_MODAL, kind, provider.id);
-  if (!encoded.ok) return { kind: 'message', content: encoded.humanReason };
+  if (!encoded.ok) return refused(encoded.humanReason);
 
   const built = descriptorsToModal(encoded.customId, provider.label, provider.builder);
 
-  return built.ok
-    ? { kind: 'modal', modal: built.modal }
-    : { kind: 'message', content: built.humanReason };
+  return built.ok ? { kind: 'modal', modal: built.modal } : refused(built.humanReason);
 }
 
 /**
@@ -467,27 +463,23 @@ async function editItem(
 
   const provider = deps.providers.get(item.providerId);
   if (!provider) {
-    return {
-      kind: 'message',
-      content: 'That rule is no longer available — the module that provides it was switched off.',
-    };
+    return refused(
+      'That rule is no longer available — the module that provides it was disabled.',
+    );
   }
 
   if (provider.builder.length === 0) {
-    return {
-      kind: 'message',
-      content: `“${provider.label}” has nothing to configure. Remove it if you no longer want it.`,
-    };
+    return refused(
+      `“${provider.label}” has nothing to configure. Remove it if you no longer want it.`,
+    );
   }
 
   const encoded = encodeCustomId(MODULE_ID, ITEM_MODAL, kind, provider.id, String(index));
-  if (!encoded.ok) return { kind: 'message', content: encoded.humanReason };
+  if (!encoded.ok) return refused(encoded.humanReason);
 
   const built = descriptorsToModal(encoded.customId, provider.label, provider.builder, item.config);
 
-  return built.ok
-    ? { kind: 'modal', modal: built.modal }
-    : { kind: 'message', content: built.humanReason };
+  return built.ok ? { kind: 'modal', modal: built.modal } : refused(built.humanReason);
 }
 
 async function addItem(
@@ -500,7 +492,7 @@ async function addItem(
   replaceIndex?: number,
 ): Promise<BuilderReply> {
   const parsed = deps.providers.parseConfig(providerId, config);
-  if (!parsed.ok) return { kind: 'message', content: parsed.humanReason };
+  if (!parsed.ok) return refused(parsed.humanReason);
 
   if (kind === 'r') {
     const entry = { providerId, config: parsed.config };
@@ -542,10 +534,7 @@ export async function handleBuilderModal(
   const draft = await deps.drafts.get(key);
 
   if (!draft) {
-    return {
-      kind: 'message',
-      content: 'That builder has expired. Start a new one with `/giveaway create`.',
-    };
+    return refused('That builder has expired. Start a new one with `/giveaway create`.');
   }
 
   if (input.action === STEP_MODAL) {
@@ -553,7 +542,7 @@ export async function handleBuilderModal(
     if (!isStep(step)) return { kind: 'ignored' };
 
     const applied = applyStepModal(step, draft, input.fields);
-    if (!applied.ok) return { kind: 'message', content: applied.humanReason };
+    if (!applied.ok) return refused(applied.humanReason);
 
     draft.updatedAt = deps.now?.() ?? Date.now();
     await deps.drafts.put(key, draft);
@@ -564,23 +553,18 @@ export async function handleBuilderModal(
   if (input.action === BASICS_MODAL) {
     const title = (input.fields[TITLE_FIELD] ?? '').trim();
     if (title.length === 0) {
-      return {
-        kind: 'message',
-        content: 'A giveaway needs a prize. Say what is being given away.',
-      };
+      return refused('A giveaway needs a prize. Say what is being given away.');
     }
 
     const duration = parseGiveawayDuration((input.fields[DURATION_FIELD] ?? '').trim());
-    if (!duration.ok) return { kind: 'message', content: duration.humanReason };
+    if (!duration.ok) return refused(duration.humanReason);
 
     const winners = Number((input.fields[WINNERS_FIELD] ?? '').trim());
     if (!Number.isInteger(winners) || winners < 1 || winners > WINNER_COUNT_MAX) {
-      return {
-        kind: 'message',
-        content:
-          `“${input.fields[WINNERS_FIELD]}” is not a number of winners I can use. Give a whole ` +
+      return refused(
+        `“${input.fields[WINNERS_FIELD]}” is not a number of winners I can use. Give a whole ` +
           `number between 1 and ${WINNER_COUNT_MAX}.`,
-      };
+      );
     }
 
     const description = (input.fields[DESCRIPTION_FIELD] ?? '').trim();
@@ -602,14 +586,13 @@ export async function handleBuilderModal(
 
   const provider = deps.providers.get(item.providerId);
   if (!provider) {
-    return {
-      kind: 'message',
-      content: 'That option is no longer available — the module that provides it was switched off.',
-    };
+    return refused(
+      'That option is no longer available — the module that provides it was disabled.',
+    );
   }
 
   const read = readDescriptorValues(provider.builder, input.fields, input.values);
-  if (!read.ok) return { kind: 'message', content: read.humanReason };
+  if (!read.ok) return refused(read.humanReason);
 
   // A third arg means the modal was opened to edit rule N rather than to add a new one.
   const at = input.args[2] === undefined ? undefined : Number(input.args[2]);
@@ -627,7 +610,7 @@ export async function handleBuilderModal(
 
 export interface StartResult {
   ok: boolean;
-  content: string;
+  body: StatusBody;
   giveawayId?: string;
   endsAt?: Date;
 }
@@ -694,7 +677,7 @@ export async function startFromDraft(
   if (!rendered.ok) {
     return {
       ok: false,
-      content: `I could not build the giveaway message: ${rendered.humanReason}`,
+      body: errorStatus(`I could not build the giveaway message: ${rendered.humanReason}`),
     };
   }
 
@@ -708,9 +691,11 @@ export async function startFromDraft(
   if (!succeeded(posted)) {
     return {
       ok: false,
-      content: `The giveaway was created but I could not post it: ${
-        posted.failure?.humanReason ?? 'Discord refused the message.'
-      }`,
+      body: errorStatus(
+        `**${draft.title}** was created but I could not post it in <#${draft.channelId}>: ${
+          posted.failure?.humanReason ?? 'Discord refused the message.'
+        }`,
+      ),
     };
   }
 
@@ -730,8 +715,15 @@ export async function startFromDraft(
     ok: true,
     giveawayId: id,
     endsAt,
-    content:
-      `**${draft.title}** is live — ${plural(draft.winnerCount, 'winner')}, drawn ` +
-      `<t:${Math.floor(endsAt.getTime() / 1000)}:R>.`,
+    body: successStatus(
+      startsAt === null
+        ? `**${draft.title}** is live in <#${draft.channelId}> — ` +
+            `${plural(draft.winnerCount, 'winner')}, drawn ` +
+            `<t:${Math.floor(endsAt.getTime() / 1000)}:R>.`
+        : `**${draft.title}** is scheduled in <#${draft.channelId}> — ` +
+            `${plural(draft.winnerCount, 'winner')}, opening ` +
+            `<t:${Math.floor(startsAt.getTime() / 1000)}:R> and drawn ` +
+            `<t:${Math.floor(endsAt.getTime() / 1000)}:R>.`,
+    ),
   };
 }

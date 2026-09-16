@@ -67,7 +67,7 @@ describe('a link that is not', () => {
     });
   });
 
-  test('is closed when the form was switched off', () => {
+  test('is closed when the form was disabled', () => {
     const view = appealView(
       input({
         config: appealsConfigSchema.parse({ enabled: true, panels: [panel({ enabled: false })] }),
@@ -101,7 +101,7 @@ describe('a link that is not', () => {
 });
 
 // The same link is how a banned member is told what came of their appeal, so an appeal already
-// filed outranks every closed reason: a form switched off afterwards must not take the answer away
+// filed outranks every closed reason: a form disabled afterwards must not take the answer away
 // from somebody who used the link in time.
 describe('a link that has already been used', () => {
   test('shows the appeal as filed while it waits', () => {
@@ -117,7 +117,7 @@ describe('a link that has already been used', () => {
     expect(view.state).toBe('filed');
   });
 
-  test('still shows it after the form was switched off', () => {
+  test('still shows it after the form was disabled', () => {
     const view = appealView(
       input({
         existing: filed(),

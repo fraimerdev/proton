@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { Permissions } from '@proton/core';
+import {
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import {
   AFK_EXPIRE_JOB,
   AFK_RETENTION_MS,
@@ -111,6 +117,8 @@ describe('/afk set', () => {
         'message in this server.',
     );
     expect(h.followUps()[0]?.allowed_mentions).toEqual({ parse: [] });
+    expect(h.lastFollowUpEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(h.lastFollowUpEmbed()?.description).toStartWith(STATUS_SUCCESS_EMOJI);
   });
 
   test('with no reason and no nickname, tags the display name and remembers there was no nickname', async () => {
@@ -242,12 +250,12 @@ describe('/afk set', () => {
     expect(h.lastFollowUp()).toBe('Updated your AFK reason: \\*\\*dinner\\*\\*');
   });
 
-  test('is refused while AFK is switched off in config', async () => {
+  test('is refused while AFK is disabled in config', async () => {
     const h = harness();
     await h.run('set', [], { config: { enabled: false } });
 
     expect(h.store.statuses.size).toBe(0);
-    expect(h.lastFollowUp()).toContain('switched off');
+    expect(h.lastFollowUp()).toContain('disabled');
   });
 
   test('without a store it says it cannot run, and names the missing binding in the log', async () => {
@@ -264,10 +272,14 @@ describe('/afk set', () => {
     const h = harness({ deps: { store: new MemoryAfkStore() } });
     await h.run('set');
 
-    const body = h.rest.calls[0]?.body as { type?: number; data?: { content?: string } };
+    const body = h.rest.calls[0]?.body as {
+      type?: number;
+      data?: { embeds?: { description?: string; color?: number }[] };
+    };
     expect(h.rest.calls).toHaveLength(1);
     expect(body.type).toBe(4);
-    expect(body.data?.content).toContain('fault on my side');
+    expect(body.data?.embeds?.[0]?.description).toContain('fault on my side');
+    expect(body.data?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
     expect(h.logs.find((log) => log.level === 'error')?.message).toContain(
       'env.DISCORD_APPLICATION_ID',
     );
@@ -726,7 +738,7 @@ describe('coming back', () => {
   });
 });
 
-describe('with AFK switched off in config', () => {
+describe('with AFK disabled in config', () => {
   test('messages do nothing at all', async () => {
     const h = harness();
     await goAfk(h, 'lunch');
@@ -777,10 +789,10 @@ describe('/afk clear', () => {
       h
         .followUps()
         .slice(-2)
-        .map((body) => body.content),
+        .map((body) => body.embeds?.[0]?.description),
     ).toEqual([
-      "You need the Manage Nicknames permission to clear someone else's AFK.",
-      "You need the Manage Nicknames permission to clear someone else's AFK.",
+      `${STATUS_ERROR_EMOJI} You need the Manage Nicknames permission to clear someone else's AFK.`,
+      `${STATUS_ERROR_EMOJI} You need the Manage Nicknames permission to clear someone else's AFK.`,
     ]);
     expect(await h.store.get(GUILD, MEMBER)).not.toBeNull();
   });

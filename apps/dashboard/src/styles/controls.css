@@ -276,7 +276,17 @@
   background: var(--surface-sunken);
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
+  /* The buttons are square to the container's edge, so the corners have to be clipped here. */
+  overflow: hidden;
   transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.stepper-value {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 
 .stepper:focus-within {
@@ -294,9 +304,12 @@
 
 .stepper .input {
   height: auto;
+  min-width: 0;
+  padding: 0 4px;
   border: none;
   background: transparent;
   box-shadow: none;
+  text-align: center;
   -moz-appearance: textfield;
 }
 
@@ -310,30 +323,28 @@
   box-shadow: none;
 }
 
-.stepper-buttons {
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  width: 22px;
-}
-
 .stepper-button {
-  flex: 1 1 0;
+  flex: none;
   display: grid;
   place-items: center;
-  color: var(--text-muted);
+  width: 28px;
+  background: var(--primary);
+  color: var(--on-primary);
   transition:
     background var(--motion-fast) var(--ease-standard),
-    color var(--motion-fast) var(--ease-standard);
+    opacity var(--motion-fast) var(--ease-standard);
 }
 
 .stepper-button:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--text-primary);
+  background: var(--primary-hover);
+}
+
+.stepper-button:active:not(:disabled) {
+  background: var(--primary-pressed);
 }
 
 .stepper-button:disabled {
-  color: var(--text-disabled);
+  opacity: 0.4;
 }
 
 .switch {

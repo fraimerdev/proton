@@ -251,11 +251,11 @@ describe('running a simulation', () => {
     expect(previewing.audits).toHaveLength(0);
   });
 
-  test('will not post from a module that is switched off, but will still render one', async () => {
+  test('will not post from a module that is disabled, but will still render one', async () => {
     const off = view({ enabled: false });
 
     await expect(harness({ view: off }).service.run(run({ mode: 'send' }))).rejects.toThrow(
-      /switched off/,
+      /disabled/,
     );
 
     await expect(harness({ view: off }).service.run(run())).resolves.toBeDefined();

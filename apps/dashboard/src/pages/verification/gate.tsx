@@ -18,7 +18,7 @@ const DURATION_INVALID = 'Enter a number followed by s, m, h, d or w — for exa
 
 // gate.ts:78-84, without the clause naming the member who joined: no member is in scope here.
 const UNGATED =
-  'This server has "Apply the unverified role on join" switched off, so a member who joins ' +
+  'This server has "Apply the unverified role on join" disabled, so a member who joins ' +
   'without the unverified role is NOT gated. The invite they used does not grant the role — add ' +
   'it under Server Settings → Invites, or turn the setting back on.';
 

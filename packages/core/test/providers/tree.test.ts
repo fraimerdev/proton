@@ -148,7 +148,7 @@ describe('folding the tree', () => {
   });
 
   // GIVEAWAYS.md §2: an unavailable provider is skipped and the draw marked degraded. Failing it
-  // closed would disqualify every entrant because one module happened to be switched off.
+  // closed would disqualify every entrant because one module happened to be disabled.
   test('a leaf whose provider is missing is skipped, not failed closed', async () => {
     const registry = new ProviderRegistry();
     const verdicts = await evaluateTree(registry, ctxs(2), group('all', leaf(0)));

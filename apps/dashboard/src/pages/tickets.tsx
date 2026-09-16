@@ -24,7 +24,7 @@ import { TypeDetail } from './tickets/type-detail.tsx';
 import { TypesArea } from './tickets/types.tsx';
 
 const SWITCHED_OFF =
-  'Tickets is switched off. Settings are saved, but nothing runs until you switch it on. No panel ' +
+  'Tickets is disabled. Settings are saved, but nothing runs until you switch it on. No panel ' +
   'opens a ticket and no ticket command works.';
 
 const MIGRATED =
@@ -34,7 +34,7 @@ const MIGRATED =
   'store them in the current format.';
 
 const NO_TYPES =
-  'Tickets is switched on but has no ticket types, so members have nothing to open. Create one ' +
+  'Tickets is enabled but has no ticket types, so members have nothing to open. Create one ' +
   'under Ticket types.';
 
 const NO_PANEL_CARRIES =

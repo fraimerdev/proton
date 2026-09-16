@@ -488,7 +488,7 @@ export function HubDetail({
           intro={
             <>
               Owners cannot use /voice or the control panel, because “Let owners manage their own
-              channel” is switched off.{' '}
+              channel” is disabled.{' '}
               <ModuleLink guildId={guildId} moduleId={moduleId} search={{ area: 'settings' }}>
                 Change it in Settings
               </ModuleLink>

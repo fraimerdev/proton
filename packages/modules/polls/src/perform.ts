@@ -7,6 +7,7 @@ import {
   type ModuleContext,
   type RespondTo,
   replyEphemeral,
+  type StatusBody,
 } from '@proton/core';
 import { MODULE_ID, type PollsConfig } from './config.ts';
 
@@ -43,20 +44,28 @@ export async function acknowledge(ctx: Ctx): Promise<void> {
   );
 }
 
-export async function answer(ctx: Ctx, applicationId: string, content: string): Promise<void> {
+export async function answer(
+  ctx: Ctx,
+  applicationId: string,
+  message: string | StatusBody,
+): Promise<void> {
+  const body = typeof message === 'string' ? { content: message } : message;
+
   const result = await ctx.executor.execute(
     followUp(
       { ...respondTo(ctx), applicationId },
-      { content, ephemeral: true, allowedMentions: MENTIONS_OFF },
+      { ...body, ephemeral: true, allowedMentions: MENTIONS_OFF },
     ),
   );
 
   report(ctx, 'answer the command', result);
 }
 
-export async function replyNow(ctx: Ctx, content: string): Promise<void> {
+export async function replyNow(ctx: Ctx, message: string | StatusBody): Promise<void> {
+  const body = typeof message === 'string' ? { content: message } : message;
+
   const result = await ctx.executor.execute(
-    replyEphemeral(respondTo(ctx), { content, allowedMentions: MENTIONS_OFF }),
+    replyEphemeral(respondTo(ctx), { ...body, allowedMentions: MENTIONS_OFF }),
   );
 
   report(ctx, 'answer the command', result);

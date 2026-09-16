@@ -41,7 +41,7 @@ const OPEN_NOTE =
   'and the dashboard cannot read them, so unrestricted does not mean anyone can use a command.';
 
 const OFF_NOTE =
-  'Permissions is switched off. Settings are saved, but nothing runs until you switch it on. ' +
+  'Permissions is disabled. Settings are saved, but nothing runs until you switch it on. ' +
   'Discord’s own command permissions apply instead.';
 
 export function CommandMatrix({

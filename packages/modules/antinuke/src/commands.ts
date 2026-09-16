@@ -1,9 +1,13 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   formatDuration,
+  MESSAGE_CONTENT_MAX,
   Permissions,
   parseDuration,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -26,7 +30,7 @@ const NO_STORE =
   'available — until then the breaker stays armed and cannot be suspended.';
 
 const DISABLED =
-  'Anti-nuke is switched off in this server, so there is no breaker to suspend. Turn the ' +
+  'Anti-nuke is disabled in this server, so there is no breaker to suspend. Turn the ' +
   'Anti-nuke module on from the Proton dashboard first.';
 
 export function createAntinukeCommands(deps: AntinukeDeps): CommandDefinition<AntinukeConfig>[] {
@@ -87,17 +91,20 @@ async function startMaintenance(
   deps: AntinukeDeps,
 ): Promise<void> {
   const store = requireStore(deps);
-  if (!store) return reply(ctx, NO_STORE);
-  if (!ctx.config.enabled) return reply(ctx, DISABLED);
+  if (!store) return reply(ctx, errorStatus(NO_STORE));
+  if (!ctx.config.enabled) return reply(ctx, errorStatus(DISABLED));
 
   const raw = ctx.options.getString('duration');
-  if (!raw) return reply(ctx, 'I need a duration, for example 20m.');
+  if (!raw) return reply(ctx, errorStatus('I need a duration, for example 20m.'));
 
   let durationMs: number;
   try {
     durationMs = parseDuration(raw);
   } catch (error) {
-    return reply(ctx, error instanceof Error ? error.message : `'${raw}' is not a duration.`);
+    return reply(
+      ctx,
+      errorStatus(error instanceof Error ? error.message : `'${raw}' is not a duration.`),
+    );
   }
 
   const maxMs = parseDuration(ctx.config.maintenanceMaxDuration);
@@ -112,13 +119,13 @@ async function startMaintenance(
     now,
   });
 
-  if (isMaintenanceRefusal(planned)) return reply(ctx, planned.refusal);
+  if (isMaintenanceRefusal(planned)) return reply(ctx, errorStatus(planned.refusal));
 
   await store.set(planned);
 
   const until = new Date(planned.expiresAt).toISOString();
   const audit =
-    `Anti-nuke maintenance mode was switched ON by ${ctx.userId} for ` +
+    `Anti-nuke maintenance mode was enabled by ${ctx.userId} for ` +
     `${formatDuration(durationMs)}, until ${until}` +
     `${planned.reason ? `, for: ${planned.reason}` : ''}. The breaker will not act on anything ` +
     'destructive in that time, and re-arms by itself at the end — nothing extends it.';
@@ -128,21 +135,23 @@ async function startMaintenance(
 
   await reply(
     ctx,
-    `Maintenance mode is on until ${until} (${formatDuration(durationMs)}). Anti-nuke will not ` +
-      'act until then. Run `/antinuke resume` the moment you are done — every minute of this is ' +
-      'a minute the breaker is not protecting the server.',
+    successStatus(
+      `Maintenance mode is on until ${until} (${formatDuration(durationMs)}). Anti-nuke will not ` +
+        'act until then. Run `/antinuke resume` the moment you are done — every minute of this is ' +
+        'a minute the breaker is not protecting the server.',
+    ),
   );
 }
 
 async function resume(ctx: CommandContext<AntinukeConfig>, deps: AntinukeDeps): Promise<void> {
   const store = requireStore(deps);
-  if (!store) return reply(ctx, NO_STORE);
+  if (!store) return reply(ctx, errorStatus(NO_STORE));
 
   const window = await store.get(ctx.guildId);
   const now = deps.now?.() ?? Date.now();
 
   if (!window || hasLapsed(window, now)) {
-    return reply(ctx, 'Maintenance mode is not on — the breaker is already armed.');
+    return reply(ctx, errorStatus('Maintenance mode is not on — the breaker is already armed.'));
   }
 
   await store.clear(ctx.guildId);
@@ -155,7 +164,7 @@ async function resume(ctx: CommandContext<AntinukeConfig>, deps: AntinukeDeps): 
   ctx.logger.warn(audit, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: ctx.userId });
   await announce(ctx, ctx.idempotencyKey, audit, 'maintenance-off');
 
-  await reply(ctx, 'Maintenance mode is off. The breaker is armed again.');
+  await reply(ctx, successStatus('Maintenance mode is off. The breaker is armed again.'));
 }
 
 async function status(ctx: CommandContext<AntinukeConfig>, deps: AntinukeDeps): Promise<void> {
@@ -210,7 +219,13 @@ function requireStore(deps: AntinukeDeps): MaintenanceStore | null {
   return deps.maintenance ?? null;
 }
 
-async function reply(ctx: CommandContext<AntinukeConfig>, content: string): Promise<void> {
+async function reply(
+  ctx: CommandContext<AntinukeConfig>,
+  message: string | StatusBody,
+): Promise<void> {
+  const body =
+    typeof message === 'string' ? { content: message.slice(0, MESSAGE_CONTENT_MAX) } : message;
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -221,7 +236,7 @@ async function reply(ctx: CommandContext<AntinukeConfig>, content: string): Prom
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      content: content.slice(0, 2000),
+      ...body,
       ephemeral: true,
     },
   });

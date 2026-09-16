@@ -18,6 +18,10 @@ import {
   type RestRequestOptions,
   type RestResponse,
   resolvePrecheckContext,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
 } from '@proton/core';
 import { ComponentType } from 'discord-api-types/v10';
 import { customIdFor } from '../src/component-id.ts';
@@ -100,11 +104,17 @@ class FakeRest implements RestProxyClient {
   }
 }
 
+interface CallEmbed {
+  description?: string;
+  color?: number;
+}
+
 interface CallBody {
   type?: number;
-  data?: { content?: string; flags?: number };
+  data?: { content?: string; flags?: number; embeds?: CallEmbed[] };
   content?: string;
   flags?: number;
+  embeds?: CallEmbed[];
 }
 
 interface PressOptions {
@@ -197,8 +207,13 @@ function harness(seed: MessagesDeps = { applicationId: APPLICATION }) {
   const said = (): string[] => {
     const lines: string[] = [];
     for (const body of bodies()) {
-      const content = body.data?.content ?? body.content;
-      if (typeof content === 'string') lines.push(content);
+      const data = body.data;
+      const text =
+        data?.content ||
+        data?.embeds?.[0]?.description ||
+        body.content ||
+        body.embeds?.[0]?.description;
+      if (typeof text === 'string') lines.push(text);
     }
     return lines;
   };
@@ -211,6 +226,11 @@ function harness(seed: MessagesDeps = { applicationId: APPLICATION }) {
     bodies,
     said,
     lastSaid: (): string | null => said().at(-1) ?? null,
+
+    lastStatus: (): CallEmbed | null =>
+      bodies()
+        .flatMap((body) => body.data?.embeds ?? body.embeds ?? [])
+        .at(-1) ?? null,
 
     roleCalls: (): RestRequestOptions[] =>
       rest.calls.filter((call) => call.path.includes('/roles/')),
@@ -389,7 +409,7 @@ describe('embeds component presses', () => {
     expect(h.lastSaid()).toContain('Modules → Messages');
   });
 
-  test('a press while the module is switched off says so instead of failing silently', async () => {
+  test('a press while the module is disabled says so instead of failing silently', async () => {
     const h = harness();
 
     const outcome = await h.press(pressEvent({ customId: blueButton, roles: [] }), {
@@ -398,10 +418,10 @@ describe('embeds component presses', () => {
 
     expect(outcome).toEqual({
       action: 'refused',
-      reason: 'embeds is switched off in this server',
+      reason: 'embeds is disabled in this server',
     });
     expect(h.roleCalls()).toHaveLength(0);
-    expect(h.lastSaid()).toContain('switched off in this server');
+    expect(h.lastSaid()).toContain('disabled in this server');
   });
 
   test('a press on another module’s component is left alone', async () => {
@@ -437,6 +457,31 @@ describe('embeds component presses', () => {
 
     expect(outcome).toMatchObject({ action: 'refused' });
     expect(h.lastSaid()).toContain('Manage Roles');
+  });
+
+  test('a role that was given is reported in the green status embed', async () => {
+    const h = harness();
+
+    await h.press(pressEvent({ customId: blueButton, roles: [] }), {
+      config: { templates: templates(ROLE_MESSAGE) },
+    });
+
+    expect(h.lastStatus()).toEqual({
+      description: `${STATUS_SUCCESS_EMOJI} Gave you <@&${BLUE_ROLE}>.`,
+      color: STATUS_SUCCESS_COLOUR,
+    });
+  });
+
+  test('a role that could not be given is reported in the red status embed', async () => {
+    const h = harness();
+
+    await h.press(pressEvent({ customId: blueButton, roles: [] }), {
+      config: { templates: templates(ROLE_MESSAGE) },
+      botPermissions: Permissions.ViewChannel | Permissions.SendMessages,
+    });
+
+    expect(h.lastStatus()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.lastStatus()?.description).toContain(STATUS_ERROR_EMOJI);
   });
 });
 

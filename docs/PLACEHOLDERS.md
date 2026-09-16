@@ -397,7 +397,7 @@ How older names differ from the current ones:
 | `{{` and `}}` now write a single literal brace. Before, `{{user}}` wrote `{<@123…>}`. | Every page that fills in placeholders |
 | `{name:modifier}` is read as a placeholder. Before, it was posted as written. | Every page that fills in placeholders |
 | Braces now mean placeholders in texts that were posted as written before. An unknown `{name}` is still posted as written. | Ticket closing, blacklist and quick response texts; appeal decision messages; giveaway winner messages |
-| Templates are unchanged until **Fill in placeholders** is switched on. | Messages |
+| Templates are unchanged until **Fill in placeholders** is enabled. | Messages |
 | Button keys, styles, emoji, colours and other settings that are not text are never filled in. | Welcomer, Leveling, Honeypot |
 | `{user}` in a button label, embed footer or author, or dropdown text shows the member's name instead of `<@123…>`, and `{now}` there shows a written-out date. | Welcomer, Leveling |
 | Older names in links: `{server}` and `{username}` are made link-safe; `{user}`, `{consequence}`, `{purge}` and `{action}` are left empty and refused when a changed link is saved. Number names such as `{level}` and `{memberCount}` are unchanged. | Link fields on Welcomer, Leveling and Honeypot |
@@ -825,7 +825,7 @@ _Generated from the placeholder registries by `bun packages/core/scripts/placeho
 | `v2.*.children.*.row.buttons.*.label` | Button label | plain text | 80 |
 | `v2.*.children.*.row.buttons.*.url` | Button link | link | 512 |
 
-Reply actions, filled in only on Messages templates with placeholders switched on:
+Reply actions, filled in only on Messages templates with placeholders enabled:
 
 | Path in the message | Label | Kind | Limit |
 | --- | --- | --- | --- |

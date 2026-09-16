@@ -275,7 +275,7 @@ export class ModuleConfigService {
    * — the worker is the only one allowed to talk to Discord — so everything that can be checked
    * here is checked here, and then the module's own listener does the posting.
    *
-   * What is checked: the module exists, is switched on, declares postables, and still has one under
+   * What is checked: the module exists, is enabled, declares postables, and still has one under
    * the id the button was drawn for. The answer is "asked", never "posted": the send happens in
    * another process and this one would be guessing.
    */
@@ -293,7 +293,7 @@ export class ModuleConfigService {
     if (!current.enabled) {
       throw new ModuleConfigError(
         'module_disabled',
-        `${manifest.name} is switched off in this server, so posting this would put a message ` +
+        `${manifest.name} is disabled in this server, so posting this would put a message ` +
           'nobody can use in a channel. Switch it on first.',
       );
     }

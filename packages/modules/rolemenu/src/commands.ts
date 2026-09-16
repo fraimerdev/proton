@@ -1,8 +1,11 @@
 import {
   type CommandContext,
   type CommandDefinition,
+  errorStatus,
   Permissions,
+  type StatusBody,
   snowflakeSchema,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -50,8 +53,10 @@ async function runRolemenu(ctx: Ctx): Promise<void> {
   if (!ctx.config.enabled) {
     return reply(
       ctx,
-      'Role menus are switched off in this server, so posting one would give nobody anything. ' +
-        'Turn the Role menus module on from the Proton dashboard first.',
+      errorStatus(
+        'Role menus are disabled in this server, so posting one would give nobody anything. ' +
+          'Turn the Role menus module on from the Proton dashboard first.',
+      ),
     );
   }
 
@@ -62,10 +67,12 @@ async function runRolemenu(ctx: Ctx): Promise<void> {
     const configured = ctx.config.menus.map((candidate) => candidate.id);
     return reply(
       ctx,
-      configured.length === 0
-        ? 'This server has no role menus configured yet. Add one in the Proton dashboard under ' +
-            'Role menus, then run this again.'
-        : `There is no menu called '${menuId}'. This server has: ${configured.join(', ')}.`,
+      errorStatus(
+        configured.length === 0
+          ? 'This server has no role menus configured yet. Add one in the Proton dashboard under ' +
+              'Role menus, then run this again.'
+          : `There is no menu called '${menuId}'. This server has: ${configured.join(', ')}.`,
+      ),
     );
   }
 
@@ -84,18 +91,23 @@ async function postComponents(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   if (!posted.ok) {
     return reply(
       ctx,
-      `I couldn't ${refreshing ? 'refresh' : 'post'} '${menu.id}': ${posted.humanReason}`,
+      errorStatus(
+        `I couldn't ${refreshing ? 'refresh' : 'post'} '${menu.id}' in <#${menu.channelId}>: ` +
+          `${posted.humanReason}`,
+      ),
     );
   }
 
   return reply(
     ctx,
-    refreshing
-      ? `Refreshed '${menu.id}' in <#${menu.channelId}>. It now offers ${menu.bindings.length} ` +
-          `role${menu.bindings.length === 1 ? '' : 's'}.`
-      : `Posted '${menu.id}' in <#${menu.channelId}>. Copy the new message's id into the menu's ` +
-          'settings so this command refreshes it in place next time instead of posting a ' +
-          'second copy.',
+    successStatus(
+      refreshing
+        ? `Refreshed '${menu.id}' in <#${menu.channelId}>. It now offers ${menu.bindings.length} ` +
+            `role${menu.bindings.length === 1 ? '' : 's'}.`
+        : `Posted '${menu.id}' in <#${menu.channelId}>. Copy the new message's id into the menu's ` +
+            'settings so this command refreshes it in place next time instead of posting a ' +
+            'second copy.',
+    ),
   );
 }
 
@@ -128,20 +140,27 @@ async function seedReactions(ctx: Ctx, menu: RolemenuMenu): Promise<void> {
   }
 
   const lines: string[] = [];
-  if (seeded.length > 0) lines.push(`Added ${seeded.join(' ')} to the message.`);
+  if (seeded.length > 0) {
+    lines.push(`Added ${seeded.join(' ')} to '${menu.id}' in <#${menu.channelId}>.`);
+  }
   if (manual.length > 0) {
+    const one = manual.length === 1;
     lines.push(
-      `${manual.length} custom emoji need adding by hand — I only have their ids ` +
-        `(${manual.join(', ')}), not their names, and Discord needs an emoji's name to react ` +
-        'with it. React to the message once with each and members can use them normally.',
+      `${one ? 'One custom emoji needs' : `${manual.length} custom emoji need`} adding by hand — I ` +
+        `only have ${one ? 'its id' : 'their ids'} (${manual.join(', ')}), not ${one ? 'its name' : 'their names'}, ` +
+        `and Discord needs an emoji's name to react with it. React to the message once with ` +
+        `${one ? 'it' : 'each'} and members can use ${one ? 'it' : 'them'} normally.`,
     );
   }
   if (failures.length > 0) lines.push(`I couldn't add: ${failures.join(' | ')}`);
-  if (lines.length === 0) lines.push('There was nothing to add.');
+  if (lines.length === 0) lines.push(`'${menu.id}' has no emoji for me to add.`);
 
-  return reply(ctx, lines.join(' '));
+  const fellShort = failures.length > 0 || manual.length > 0 || seeded.length === 0;
+  const text = lines.join(' ');
+
+  return reply(ctx, fellShort ? errorStatus(text) : successStatus(text));
 }
 
-async function reply(ctx: Ctx, content: string): Promise<void> {
-  await replyEphemeral(ctx, ctx.interaction, ctx.userId, ctx.idempotencyKey, content);
+async function reply(ctx: Ctx, message: string | StatusBody): Promise<void> {
+  await replyEphemeral(ctx, ctx.interaction, ctx.userId, ctx.idempotencyKey, message);
 }

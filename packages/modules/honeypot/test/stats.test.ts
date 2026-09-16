@@ -5,6 +5,7 @@ import {
   MESSAGE_FLAG_EPHEMERAL,
   MESSAGE_FLAG_IS_COMPONENTS_V2,
   Permissions,
+  STATUS_ERROR_COLOUR,
 } from '@proton/core';
 import { ComponentType } from 'discord-api-types/v10';
 import type { Redis } from 'ioredis';
@@ -178,7 +179,9 @@ describe('pressing the button on the notice', () => {
     const outcome = await h.press(statsId(TRAP), { config: armed() });
 
     expect(outcome).toEqual({ action: 'refused', reason: 'the stats port is unbound' });
-    expect(String(h.replied()?.content)).toContain('cannot read this trap');
+    expect(String(h.repliedText())).toContain(`I cannot read the numbers for <#${TRAP}>`);
+    expect(h.repliedEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(h.replied()?.content).toBe('');
     expect(h.replied()?.flags).toBe(MESSAGE_FLAG_EPHEMERAL);
     expect(h.said('error').at(-1)).toContain('stats: new RedisHoneypotStatsStore(redis)');
   });

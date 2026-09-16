@@ -54,7 +54,7 @@ describe('exempt administrators', () => {
     expect(outcome).toEqual({ action: 'exempt', reason: 'administrator' });
   });
 
-  test('switched off, an administrator is caught like anyone else', async () => {
+  test('disabled, an administrator is caught like anyone else', async () => {
     const h = harness();
 
     const outcome = await h.trip({

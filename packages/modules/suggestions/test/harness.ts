@@ -377,13 +377,13 @@ export function harness(options: HarnessOptions = {}): Harness {
 
     replyContent: () =>
       interactionBodies()
-        .map((body) => body.data?.content)
-        .findLast((text) => text !== undefined) ?? null,
+        .map((body) => body.data?.content || body.data?.embeds?.[0]?.description)
+        .findLast((text) => text !== undefined && text.length > 0) ?? null,
 
     followUpContent: () =>
       followUpBodies()
-        .map((body) => body.content)
-        .findLast((text) => text !== undefined) ?? null,
+        .map((body) => body.content || body.embeds?.[0]?.description)
+        .findLast((text) => text !== undefined && text.length > 0) ?? null,
 
     postedEmbed: () => sendBodies().at(-1)?.embeds?.[0] ?? null,
     editedEmbed: () => editBodies().at(-1)?.embeds?.[0] ?? null,

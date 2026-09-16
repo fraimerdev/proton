@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { Permissions } from '@proton/core';
+import {
+  Permissions,
+  STATUS_ERROR_COLOUR,
+  STATUS_ERROR_EMOJI,
+  STATUS_SUCCESS_COLOUR,
+  STATUS_SUCCESS_EMOJI,
+} from '@proton/core';
 import {
   ABOVE_BOT,
   BOT_PERMISSIONS,
@@ -423,6 +429,81 @@ describe('module policy', () => {
           | undefined
       )?.data?.flags,
     ).toBeUndefined();
+  });
+
+  test('an action that landed answers with the green status embed', async () => {
+    const h = harness();
+
+    await h.run('kick', [userOption('user', MEMBER)]);
+
+    const embed = h.replyMessage()?.embeds?.[0];
+    expect(embed?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(embed?.description).toContain(STATUS_SUCCESS_EMOJI);
+    expect(embed?.description).toContain('Kicked');
+  });
+
+  // The embed replaces the sentence rather than hanging under it, so an edit cannot leave stale
+  // text above the status.
+  test('a status reply carries no content of its own', async () => {
+    const h = harness();
+
+    await h.run('kick', [userOption('user', MEMBER)]);
+
+    expect(h.replyMessage()?.content).toBe('');
+  });
+
+  test('a refused action answers with the red status embed, naming the permission', async () => {
+    const h = harness();
+
+    await h.run('kick', [userOption('user', MEMBER)], {
+      botPermissions: BOT_PERMISSIONS & ~Permissions.KickMembers,
+    });
+
+    const embed = h.replyMessage()?.embeds?.[0];
+    expect(embed?.color).toBe(STATUS_ERROR_COLOUR);
+    expect(embed?.description).toContain(STATUS_ERROR_EMOJI);
+    expect(embed?.description).toContain('Kick Members');
+  });
+
+  test('a validation refusal is red too', async () => {
+    const h = harness();
+
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '0s')]),
+    );
+
+    expect(h.replyMessage()?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  // The ban landed, so the caveat rides in the same green description rather than turning it red.
+  test('a ban whose reversal could not be booked stays green', async () => {
+    const h = harness();
+
+    await h.run(
+      'ban',
+      subcommand('add', [userOption('user', MEMBER), stringOption('duration', '2h')]),
+      {
+        scheduleReversal: async () => {
+          throw new Error('database unavailable');
+        },
+      },
+    );
+
+    const embed = h.replyMessage()?.embeds?.[0];
+    expect(embed?.color).toBe(STATUS_SUCCESS_COLOUR);
+    expect(embed?.description).toContain('Banned');
+    expect(embed?.description).toContain("couldn't schedule it to lift on its own");
+  });
+
+  test('the case stamp rides in the same description, not a field of its own', async () => {
+    const h = harness();
+
+    await h.run('ban', subcommand('add', [userOption('user', MEMBER)]));
+
+    const embed = h.replyMessage()?.embeds?.[0];
+    expect(embed?.description).toMatch(/-# Case `[A-Za-z0-9]{7}`$/);
+    expect(Object.keys(embed ?? {}).sort()).toEqual(['color', 'description']);
   });
 
   test('every command acknowledges the interaction', async () => {

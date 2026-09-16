@@ -377,13 +377,13 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
             <Section label="Switching off">
               <Rows>
                 <SettingRow
-                  title="Reset when switched off"
+                  title="Reset when disabled"
                   description="Remove the server nickname, avatar, banner, bio and display name style."
                   error={form.errorAt('restoreOnDisable')}
                   note="Uploaded images and the display name style are kept and applied again when Branding is switched back on."
                 >
                   <Switch
-                    label="Reset when switched off"
+                    label="Reset when disabled"
                     checked={config.restoreOnDisable}
                     onChange={(next) =>
                       form.setValue((current) => ({ ...current, restoreOnDisable: next }))

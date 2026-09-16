@@ -112,7 +112,7 @@ export class SimulationService {
     if (input.mode === 'send' && !current.enabled) {
       throw new SimulationError(
         'module_disabled',
-        `${manifest.name} is switched off in this server, so Proton will not post one of its ` +
+        `${manifest.name} is disabled in this server, so Proton will not post one of its ` +
           'messages into a channel. Switch it on first, or use Preview instead.',
       );
     }

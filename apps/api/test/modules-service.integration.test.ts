@@ -463,13 +463,13 @@ describe('asking Proton to post a panel', () => {
     ).rejects.toThrow(/nothing Proton posts/);
   });
 
-  test('refuses to post for a module that is switched off', async () => {
+  test('refuses to post for a module that is disabled', async () => {
     await handle.db
       .update(guildModules)
       .set({ enabled: false })
       .where(and(eq(guildModules.guildId, GUILD), eq(guildModules.moduleId, PANELS)));
 
-    await expect(ask()).rejects.toThrow(/switched off/);
+    await expect(ask()).rejects.toThrow(/disabled/);
     expect(published).toHaveLength(0);
   });
 

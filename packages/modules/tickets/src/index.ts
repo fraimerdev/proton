@@ -21,7 +21,6 @@ import { bindStore, clockOf, PROTON_ACTOR, type TicketsDeps } from './deps.ts';
 import { createTicketInteractionListener } from './interactions.ts';
 import { archiveTicket, closeTicket, deleteTicket } from './lifecycle.ts';
 import { ticketsTemplates } from './placeholders.ts';
-import { ticketsSimulations } from './simulation.ts';
 import { createTicketPanelListener } from './post.ts';
 import { createTicketChannelListener, createTicketPatrolListener, patrol } from './reconcile.ts';
 import {
@@ -36,6 +35,7 @@ import {
   ticketJobDataSchema,
   warnAt,
 } from './schedule.ts';
+import { ticketsSimulations } from './simulation.ts';
 import type { Ticket, TicketStore } from './store.ts';
 
 export {

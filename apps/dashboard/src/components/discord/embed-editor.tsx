@@ -18,7 +18,7 @@ import type { ReactElement, ReactNode } from 'react';
 import type { FieldErrors } from '../module/form.ts';
 import type { PlaceholderFieldProps } from '../placeholders/use-placeholder-autocomplete.ts';
 import { LimitCounter, useRecent } from '../ui/collection.tsx';
-import { Button, Checkbox, cx, IconButton, Select, TextArea, TextInput } from '../ui/controls.tsx';
+import { Button, Checkbox, cx, IconButton, Switch, TextArea, TextInput } from '../ui/controls.tsx';
 import { DetailField, ExpandableRow, Rows, Section } from '../ui/layout.tsx';
 import { ColourPicker } from './inputs.tsx';
 
@@ -372,19 +372,18 @@ function EmbedFields({
       </DetailField>
 
       <DetailField label="Timestamp">
-        <Select
-          aria-label="Embed timestamp"
-          width="md"
-          value={timestamp ?? ''}
-          options={[
-            { value: '', label: 'None' },
-            { value: 'now', label: 'When posted' },
-            ...(timestamp !== undefined && timestamp !== 'now'
-              ? [{ value: timestamp, label: new Date(timestamp).toLocaleString() }]
-              : []),
-          ]}
-          onChange={(next) => onChange({ ...embed, timestamp: blank(next) })}
-        />
+        <span className="inline inline-8">
+          <Switch
+            label="Show the time this embed was posted"
+            checked={timestamp !== undefined}
+            onChange={(next) => onChange({ ...embed, timestamp: next ? 'now' : undefined })}
+          />
+          {/* The schema still allows a fixed instant, which no editor writes. Naming it stops the
+              switch reading as "when posted" for a stored value that is nothing of the kind. */}
+          {timestamp !== undefined && timestamp !== 'now' ? (
+            <span className="row-note">Fixed at {new Date(timestamp).toLocaleString()}</span>
+          ) : null}
+        </span>
       </DetailField>
 
       <DetailField label="Image">

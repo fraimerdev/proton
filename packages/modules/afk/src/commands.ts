@@ -4,11 +4,14 @@ import {
   type CommandContext,
   type CommandDefinition,
   deferEphemeral,
+  errorStatus,
   followUp,
   hasWithAdmin,
   Permissions,
   type RespondTo,
   replyEphemeral,
+  type StatusBody,
+  successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
@@ -37,12 +40,10 @@ type Ctx = CommandContext<AfkConfig>;
 const MENTIONS_OFF: AllowedMentions = { parse: [] };
 
 const NOT_WIRED =
-  'I can’t run AFK right now. Nothing was changed. This is a fault on my side, not a setting in ' +
-  'this server.';
+  'I can’t run AFK right now. Nothing was changed. This is a fault on my side, not a setting in this server.';
 
 const DISABLED =
-  'AFK is switched off in this server. An admin can turn the AFK module on from the Proton ' +
-  'dashboard.';
+  'AFK is disabled in this server. An admin can turn the AFK module on from the Proton dashboard.';
 
 const NEEDS_MANAGE_NICKNAMES =
   "You need the Manage Nicknames permission to clear someone else's AFK.";
@@ -72,10 +73,12 @@ async function run(ctx: Ctx, request: ActionRequest): Promise<void> {
   );
 }
 
-function say(ctx: Ctx, applicationId: string, content: string): Promise<void> {
+function say(ctx: Ctx, applicationId: string, message: string | StatusBody): Promise<void> {
+  const body = typeof message === 'string' ? { content: message } : message;
+
   return run(
     ctx,
-    followUp({ ...respondTo(ctx), applicationId }, { content, allowedMentions: MENTIONS_OFF }),
+    followUp({ ...respondTo(ctx), applicationId }, { ...body, allowedMentions: MENTIONS_OFF }),
   );
 }
 
@@ -155,7 +158,7 @@ async function tag(ctx: Ctx, store: AfkStore, status: AfkStatus): Promise<TagOut
 
 async function set(ctx: Ctx, store: AfkStore, applicationId: string): Promise<void> {
   const parsed = normaliseReason(ctx.options.getString('reason'));
-  if (!parsed.ok) return say(ctx, applicationId, parsed.humanReason);
+  if (!parsed.ok) return say(ctx, applicationId, errorStatus(parsed.humanReason));
 
   const reason = parsed.reason;
   const sessionId = ctx.interaction.id;
@@ -169,7 +172,7 @@ async function set(ctx: Ctx, store: AfkStore, applicationId: string): Promise<vo
   if (existing && existing.sessionId !== sessionId) {
     if (existing.endedAt === null) {
       await store.updateReason(ctx.guildId, ctx.userId, reason);
-      return say(ctx, applicationId, updated);
+      return say(ctx, applicationId, successStatus(updated));
     }
 
     await store.remove(existing.sessionId);
@@ -186,7 +189,7 @@ async function set(ctx: Ctx, store: AfkStore, applicationId: string): Promise<vo
 
   if (status.sessionId !== sessionId) {
     await store.updateReason(ctx.guildId, ctx.userId, reason);
-    return say(ctx, applicationId, updated);
+    return say(ctx, applicationId, successStatus(updated));
   }
 
   if (status.endedAt !== null) return;
@@ -199,12 +202,12 @@ async function set(ctx: Ctx, store: AfkStore, applicationId: string): Promise<vo
   await bookExpiry(ctx, status);
 
   const tagged = ctx.config.nicknameTag ? await tag(ctx, store, status) : TAG_DONE;
-  if (tagged.status === 'ended') return say(ctx, applicationId, ENDED_WHILE_SETTING);
+  if (tagged.status === 'ended') return say(ctx, applicationId, errorStatus(ENDED_WHILE_SETTING));
   if (tagged.status === 'refused') {
     confirmation.push(`I couldn't add [AFK] to your nickname: ${tagged.problem}`);
   }
 
-  return say(ctx, applicationId, confirmation.join(' '));
+  return say(ctx, applicationId, successStatus(confirmation.join(' ')));
 }
 
 async function clear(ctx: Ctx, store: AfkStore, applicationId: string): Promise<void> {
@@ -212,7 +215,7 @@ async function clear(ctx: Ctx, store: AfkStore, applicationId: string): Promise<
   const self = target === ctx.userId;
 
   if (!self && !hasWithAdmin(ctx.actorPermissions ?? 0n, Permissions.ManageNicknames)) {
-    return say(ctx, applicationId, NEEDS_MANAGE_NICKNAMES);
+    return say(ctx, applicationId, errorStatus(NEEDS_MANAGE_NICKNAMES));
   }
 
   const notAfk = self ? "You aren't AFK." : `<@${target}> isn't AFK.`;
@@ -220,7 +223,7 @@ async function clear(ctx: Ctx, store: AfkStore, applicationId: string): Promise<
 
   const status = await store.get(ctx.guildId, target);
   if (!status || (status.endedAt !== null && status.endedBy !== endedBy)) {
-    return say(ctx, applicationId, notAfk);
+    return say(ctx, applicationId, errorStatus(notAfk));
   }
 
   const ended = await endSession(ctx, store, status, {
@@ -232,7 +235,7 @@ async function clear(ctx: Ctx, store: AfkStore, applicationId: string): Promise<
     finish: 'tombstone',
   });
 
-  if (!ended) return say(ctx, applicationId, notAfk);
+  if (!ended) return say(ctx, applicationId, errorStatus(notAfk));
 
   const problem =
     ended.nick.status === 'failed'
@@ -244,12 +247,12 @@ async function clear(ctx: Ctx, store: AfkStore, applicationId: string): Promise<
     const note = renderRecapNote(ended.recap, ended.pingCount);
     if (note) parts.push(note);
     if (problem) parts.push(`I couldn't take [AFK] off your nickname: ${problem}`);
-    return say(ctx, applicationId, parts.join(' '));
+    return say(ctx, applicationId, successStatus(parts.join(' ')));
   }
 
   const parts = [`Cleared <@${target}>'s AFK.`];
   if (problem) parts.push(`I couldn't restore their nickname: ${problem}`);
-  return say(ctx, applicationId, parts.join(' '));
+  return say(ctx, applicationId, successStatus(parts.join(' ')));
 }
 
 function builder(): SlashCommandBuilder {
@@ -307,12 +310,12 @@ export function afkCommand(deps: AfkDeps): Command {
       }
 
       const { store, applicationId } = deps;
-      if (!applicationId) return run(ctx, replyEphemeral(respondTo(ctx), NOT_WIRED));
+      if (!applicationId) return run(ctx, replyEphemeral(respondTo(ctx), errorStatus(NOT_WIRED)));
 
       await run(ctx, deferEphemeral(respondTo(ctx)));
 
-      if (!store) return say(ctx, applicationId, NOT_WIRED);
-      if (!ctx.config.enabled) return say(ctx, applicationId, DISABLED);
+      if (!store) return say(ctx, applicationId, errorStatus(NOT_WIRED));
+      if (!ctx.config.enabled) return say(ctx, applicationId, errorStatus(DISABLED));
 
       switch (ctx.options.getSubcommand()) {
         case 'set':
@@ -320,7 +323,7 @@ export function afkCommand(deps: AfkDeps): Command {
         case 'clear':
           return clear(ctx, store, applicationId);
         default:
-          return say(ctx, applicationId, 'That subcommand is not one I know.');
+          return say(ctx, applicationId, errorStatus('That subcommand is not one I know.'));
       }
     },
   };

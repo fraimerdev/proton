@@ -191,7 +191,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
 
         {!enabled ? (
           <StatusBanner tone="neutral">
-            {meta.label} is switched off. Settings are saved, but nothing runs until you switch it
+            {meta.label} is disabled. Settings are saved, but nothing runs until you switch it
             on.
           </StatusBanner>
         ) : null}

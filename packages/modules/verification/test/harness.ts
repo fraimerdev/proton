@@ -332,6 +332,13 @@ export interface ShownMessage {
   files: Array<{ filename: string; data: Uint8Array }>;
 }
 
+export interface ShownStatus {
+  description: string;
+  color: number;
+
+  content: string | null;
+}
+
 export interface ShownButton {
   label: string;
   style: number;
@@ -379,6 +386,10 @@ export interface Harness {
   replyContent(): string | null;
 
   shown(): ShownMessage[];
+
+  statuses(): ShownStatus[];
+
+  lastStatus(): ShownStatus | null;
 
   told(): string[];
 
@@ -574,33 +585,66 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
 
   const discordCalls = () => rest.calls.filter((call) => !call.path.startsWith('/interactions/'));
 
+  const spoken = (data: Record<string, unknown> | undefined): string => {
+    const content = typeof data?.content === 'string' ? data.content : '';
+    if (content.length > 0) return content;
+
+    const embed = Array.isArray(data?.embeds)
+      ? (data.embeds[0] as { description?: unknown } | undefined)
+      : undefined;
+
+    return typeof embed?.description === 'string' ? embed.description : '';
+  };
+
   const replies = (): string[] =>
     rest.calls
       .filter((call) => call.path.startsWith('/interactions/'))
-      .map(
-        (call) => (call.body as { data?: { content?: string } } | undefined)?.data?.content ?? '',
-      );
+      .map((call) => spoken((call.body as { data?: Record<string, unknown> } | undefined)?.data));
 
   const facing = (): RestRequestOptions[] =>
     rest.calls.filter(
       (call) => call.path.startsWith('/interactions/') || call.path.startsWith('/webhooks/'),
     );
 
+  // A followup posts its message at the top of the body; a callback wraps it in `data`.
+  const dataOf = (call: RestRequestOptions): Record<string, unknown> => {
+    const body = (call.body ?? {}) as Record<string, unknown>;
+    if (call.path.startsWith('/webhooks/')) return body;
+
+    return (body.data ?? {}) as Record<string, unknown>;
+  };
+
   const shown = (): ShownMessage[] =>
     facing().map((call) => {
-      const body = (call.body ?? {}) as Record<string, unknown>;
-      const data = (
-        call.path.startsWith('/webhooks/') ? body : ((body.data as unknown) ?? {})
-      ) as Record<string, unknown>;
+      const data = dataOf(call);
 
       return {
-        content: typeof data.content === 'string' ? data.content : '',
+        content: spoken(data),
         components: Array.isArray(data.components)
           ? (data.components as Record<string, unknown>[])
           : [],
         files: (call.files ?? []).map((file) => ({ filename: file.filename, data: file.data })),
       };
     });
+
+  const statuses = (): ShownStatus[] =>
+    facing()
+      .map(dataOf)
+      .flatMap((data) => {
+        const embed = Array.isArray(data.embeds)
+          ? (data.embeds[0] as { description?: unknown; color?: unknown } | undefined)
+          : undefined;
+
+        if (typeof embed?.description !== 'string' || typeof embed.color !== 'number') return [];
+
+        return [
+          {
+            description: embed.description,
+            color: embed.color,
+            content: typeof data.content === 'string' ? data.content : null,
+          },
+        ];
+      });
 
   const buttons = (): ShownButton[] => {
     const message = [...shown()].reverse().find((entry) => entry.components.length > 0);
@@ -642,7 +686,9 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
     discordCalls,
     replies,
     shown,
+    statuses,
     buttons,
+    lastStatus: () => statuses().at(-1) ?? null,
     rolesOf: (userId) => [...(memberRoles.get(userId) ?? [])],
     replyContent: () => replies().at(-1) ?? null,
     cases: () => recorder.recorded.filter((c) => c.kind !== 'interaction_reply'),

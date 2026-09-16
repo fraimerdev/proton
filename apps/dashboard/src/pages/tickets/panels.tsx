@@ -47,7 +47,7 @@ const SLUG = /^[a-z0-9][a-z0-9._-]*$/;
 const DIRTY = 'Save your changes first. Posting uses the last saved version.';
 
 const MODULE_OFF =
-  'Tickets is switched off in this server, so posting this would put a message nobody can use in ' +
+  'Tickets is disabled in this server, so posting this would put a message nobody can use in ' +
   'a channel. Switch it on first.';
 
 const ASKED =

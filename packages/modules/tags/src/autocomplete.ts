@@ -41,7 +41,7 @@ export async function handleAutocomplete(
     return { action: 'ignored', reason: 'the focused option is not a tag name' };
   }
 
-  if (!ctx.config.enabled) return { action: 'ignored', reason: 'tags is switched off' };
+  if (!ctx.config.enabled) return { action: 'ignored', reason: 'tags is disabled' };
 
   const bound = bindStore(deps);
   if ('unbound' in bound) {

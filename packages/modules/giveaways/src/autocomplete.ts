@@ -61,7 +61,7 @@ export async function handleAutocomplete(
     return { action: 'ignored', reason: 'the focused option is not a giveaway' };
   }
 
-  if (!ctx.config.enabled) return { action: 'ignored', reason: 'giveaways are switched off' };
+  if (!ctx.config.enabled) return { action: 'ignored', reason: 'giveaways are disabled' };
 
   const bound = bindStore(deps);
   if ('unbound' in bound) {

@@ -106,7 +106,7 @@ export function moduleIndex(
       fields: registry.descriptors(m.id).map(({ path, label }) => ({ path, label })),
 
       commands: (m.commands ?? []).map((command) => command.name),
-      // The guild's own switch, which `status` is not: a module can be switched on here and still
+      // The guild's own switch, which `status` is not: a module can be enabled here and still
       // be unable to run, and the overview exists to show exactly that gap.
       enabled: switches[m.id] ?? false,
       // Both were populated by every module and read by nobody. Without `dashboard` the settings
@@ -404,7 +404,7 @@ export function createApiApp(deps: ApiDeps): Hono {
   });
 
   // The picker the in-Discord builder and the dashboard both read: a provider whose owning
-  // module is switched off in this guild is not offered, so nothing can be configured that could
+  // module is disabled in this guild is not offered, so nothing can be configured that could
   // never be evaluated.
   app.get('/guilds/:guildId/providers', async (c) => {
     const guildId = c.req.param('guildId');
