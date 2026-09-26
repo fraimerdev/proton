@@ -20,7 +20,7 @@ type Entry = readonly [label: string, description: string, example: PlaceholderV
 const EXAMPLE_BOT = '100000000000000099';
 
 const BOT: Record<BotKey, Entry> = {
-  id: ["Proton's ID", "Proton's Discord user id", v.text(EXAMPLE_BOT)],
+  id: ["Proton's ID", "Proton's Discord user ID", v.text(EXAMPLE_BOT)],
   mention: ['Proton', 'Mentions Proton', v.user(EXAMPLE_BOT, 'Proton')],
   name: ["Proton's name", "Proton's name on Discord", v.text('Proton')],
   avatar_url: [

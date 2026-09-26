@@ -40,7 +40,7 @@ export function bindPlaceholder(
   if (resolution === undefined) {
     reporter.report(
       'unknown_placeholder',
-      `${token.raw} is not a placeholder here, so it is posted as written.`,
+      `${token.raw} isn't a placeholder here, so it's posted as written.`,
       token.span,
     );
     return { kind: 'literal', unknown: true };
@@ -55,7 +55,7 @@ export function bindPlaceholder(
     reporter,
   );
 
-  const outcome = plan.fallback === undefined ? 'renders as nothing' : 'renders its fallback';
+  const outcome = plan.fallback === undefined ? 'shows nothing' : 'shows its fallback';
 
   const unavailable = unavailableReason(definition, context);
   if (unavailable !== undefined) {
@@ -66,8 +66,8 @@ export function bindPlaceholder(
   if (isRestricted(definition, context.audience)) {
     reporter.report(
       'restricted',
-      `${token.raw} may only be shown to ${SENSITIVITY_LABELS[definition.sensitivity]}, but this ` +
-        `destination is seen by ${SENSITIVITY_LABELS[context.audience ?? 'public']}, so it ${outcome}.`,
+      `${token.raw} can only be shown to ${SENSITIVITY_LABELS[definition.sensitivity]}, but this ` +
+        `can be seen by ${SENSITIVITY_LABELS[context.audience ?? 'public']}, so it ${outcome}.`,
       token.span,
     );
     return { kind: 'absent', state: 'restricted', plan };

@@ -9,10 +9,12 @@ import {
   INTERACTION_CALLBACK_UPDATE_MESSAGE,
   INTERACTION_TYPE_MODAL_SUBMIT,
   type InteractionReplyPayload,
+  interactionEditOriginalPayloadSchema,
   interactionFollowupPayloadSchema,
   interactionReplyPayloadSchema,
   MAX_AUTOCOMPLETE_CHOICES,
   MESSAGE_FLAG_EPHEMERAL,
+  MESSAGE_FLAG_IS_COMPONENTS_V2,
   modalSchema,
 } from '../../src/actions/payloads.ts';
 import { type PayloadResult, type RestCall, toRestCall } from '../../src/actions/rest-mapping.ts';
@@ -20,8 +22,10 @@ import type { ActionRequest } from '../../src/actions/types.ts';
 import type { ProtonEvent } from '../../src/events/types.ts';
 import { readModalInteraction } from '../../src/interactions/read.ts';
 import {
+  defer,
   deferEphemeral,
   deferUpdate,
+  editOriginal,
   type FollowUpTo,
   followUp,
   interactionRef,
@@ -130,6 +134,29 @@ describe('deferrals', () => {
   });
 });
 
+describe('defer', () => {
+  test('a private defer is exactly deferEphemeral', () => {
+    expect(defer(to, { ephemeral: true })).toEqual(deferEphemeral(to));
+  });
+
+  test('a public defer carries no flags at all', () => {
+    const request = defer(to, { ephemeral: false });
+
+    expect(dataOf(request)).toBeUndefined();
+    expect((bodyOf(request) as { type: number }).type).toBe(INTERACTION_CALLBACK_DEFERRED_MESSAGE);
+    expect(replyPayload(request).ephemeral).toBe(false);
+  });
+
+  test('both visibilities claim the defer key, so switching a module to it keeps its dedupe', () => {
+    expect(defer(to, { ephemeral: false }).idempotencyKey).toBe(`ticket:${INTERACTION}:defer`);
+    expect(defer(to, { ephemeral: true }).idempotencyKey).toBe(deferEphemeral(to).idempotencyKey);
+  });
+
+  test('never sends a flag other than ephemeral, which a deferral cannot carry', () => {
+    expect(dataOf(defer(to, { ephemeral: true }))).toEqual({ flags: MESSAGE_FLAG_EPHEMERAL });
+  });
+});
+
 describe('replyEphemeral', () => {
   test('is ephemeral whatever the caller passes', () => {
     const data = dataOf(replyEphemeral(to, { content: 'done', ephemeral: false }));
@@ -210,6 +237,146 @@ describe('followUp', () => {
     expect(bodyOf(followUp(followTo, { content: 'all done', ephemeral: false })).flags).toBe(
       undefined,
     );
+  });
+
+  test('without a suffix it keeps the key it always had', () => {
+    expect(followUp(followTo, 'x').idempotencyKey).toBe(`ticket:${INTERACTION}:followup`);
+  });
+
+  test('a suffix gives a second followup its own key, so the executor does not drop it', () => {
+    const first = followUp(followTo, 'Waiting for the moderator to confirm…', 'placeholder');
+    const second = followUp(followTo, 'Banned.', 'result');
+
+    expect(first.idempotencyKey).toBe(`ticket:${INTERACTION}:followup:placeholder`);
+    expect(second.idempotencyKey).toBe(`ticket:${INTERACTION}:followup:result`);
+    expect(
+      new Set([first, second, followUp(followTo, 'x')].map((r) => r.idempotencyKey)).size,
+    ).toBe(3);
+  });
+
+  test('a suffix changes nothing but the key', () => {
+    const plain = followUp(followTo, { content: 'done', ephemeral: false });
+    const suffixed = followUp(followTo, { content: 'done', ephemeral: false }, 'result');
+
+    expect({ ...suffixed, idempotencyKey: plain.idempotencyKey }).toEqual(plain);
+  });
+});
+
+describe('editOriginal', () => {
+  const V2 = [{ type: 17, components: [{ type: 10, content: 'Step 2 of 4' }] }];
+
+  test('patches the deferred response in place rather than posting a new message', () => {
+    const request = editOriginal(followTo, 'Saved.');
+    const call = callOf(toRestCall(request));
+
+    expect(request.kind).toBe('interaction_edit_original');
+    expect(call.method).toBe('PATCH');
+    expect(call.path).toBe(`/webhooks/${APPLICATION}/${TOKEN}/messages/@original`);
+    expect(call.body).toEqual({ content: 'Saved.' });
+  });
+
+  test('keys under edit-original, with a suffix for a second edit of the same response', () => {
+    expect(editOriginal(followTo, 'x').idempotencyKey).toBe(`ticket:${INTERACTION}:edit-original`);
+    expect(editOriginal(followTo, 'x', 'step').idempotencyKey).toBe(
+      `ticket:${INTERACTION}:edit-original:step`,
+    );
+    expect(
+      editOriginal({ ...followTo, idempotencyKey: 'ticket:event-7' }, 'x').idempotencyKey,
+    ).toBe('ticket:event-7:edit-original');
+  });
+
+  test('never collides with the defer or the followup of the same interaction', () => {
+    const keys = new Set([
+      deferEphemeral(followTo).idempotencyKey,
+      followUp(followTo, 'x').idempotencyKey,
+      editOriginal(followTo, 'x').idempotencyKey,
+    ]);
+
+    expect(keys.size).toBe(3);
+  });
+
+  test('drops the ephemeral bit the defer already fixed, and keeps Components V2', () => {
+    const request = editOriginal(followTo, {
+      components: V2,
+      flags: MESSAGE_FLAG_IS_COMPONENTS_V2 | MESSAGE_FLAG_EPHEMERAL,
+      ephemeral: true,
+    });
+
+    expect(bodyOf(request).flags).toBe(MESSAGE_FLAG_IS_COMPONENTS_V2);
+    expect(interactionEditOriginalPayloadSchema.safeParse(request.payload).success).toBe(true);
+  });
+
+  test('sends no flags at all when only the ephemeral bit was asked for', () => {
+    const request = editOriginal(followTo, { content: 'Saved.', flags: MESSAGE_FLAG_EPHEMERAL });
+
+    expect(bodyOf(request).flags).toBeUndefined();
+  });
+
+  test('trims content to Discord’s cap like every other builder', () => {
+    const payload = editOriginal(followTo, 'x'.repeat(MESSAGE_CONTENT_MAX + 50)).payload as {
+      content: string;
+    };
+
+    expect(payload.content).toHaveLength(MESSAGE_CONTENT_MAX);
+  });
+
+  test('is not a case and omits absent fields', () => {
+    const request = editOriginal(followTo, 'Saved.');
+    const payload = request.payload as Record<string, unknown>;
+
+    expect(request.record).toBe(false);
+    expect(request.dryRun).toBe(false);
+    expect(Object.entries(payload).filter(([, value]) => value === undefined)).toEqual([]);
+  });
+});
+
+// Discord's rule: the first followup after a defer shows as the defer did, whatever it asks for.
+function visibleTo(sequence: readonly ActionRequest[]): Array<'everyone' | 'invoker'> {
+  let deferred: boolean | null = null;
+  let answered = false;
+
+  return sequence.flatMap((request) => {
+    const payload = request.payload as { callbackType?: number; ephemeral?: boolean };
+
+    if (request.kind === 'interaction_reply') {
+      if (payload.callbackType === INTERACTION_CALLBACK_DEFERRED_MESSAGE) {
+        deferred = payload.ephemeral === true;
+        return [];
+      }
+      answered = true;
+      return [payload.ephemeral === true ? 'invoker' : 'everyone'];
+    }
+
+    const ephemeral = deferred !== null && !answered ? deferred : payload.ephemeral === true;
+    answered = true;
+    return [ephemeral ? 'invoker' : 'everyone'];
+  });
+}
+
+describe('what Discord shows after a deferral', () => {
+  test('a private followup after a public defer is shown to everyone', () => {
+    expect(
+      visibleTo([
+        defer(to, { ephemeral: false }),
+        followUp(followTo, { content: 'You need a role for that.', ephemeral: true }),
+      ]),
+    ).toEqual(['everyone']);
+  });
+
+  test('so a refusal decided after a public defer must not be its first followup', () => {
+    expect(
+      visibleTo([
+        defer(to, { ephemeral: false }),
+        followUp(followTo, { content: 'Here is the leaderboard.', ephemeral: false }),
+        followUp(followTo, { content: 'Only you can see this.', ephemeral: true }, 'note'),
+      ]),
+    ).toEqual(['everyone', 'invoker']);
+  });
+
+  test('a private defer keeps the first followup private even if it asks to be public', () => {
+    expect(
+      visibleTo([deferEphemeral(to), followUp(followTo, { content: 'Done.', ephemeral: false })]),
+    ).toEqual(['invoker']);
   });
 });
 

@@ -16,7 +16,7 @@ export function eventDefinitions(): PlaceholderDefinitionInput[] {
     {
       key: 'event.id',
       label: 'Event ID',
-      description: "Proton's id for the event behind this message",
+      description: "Proton's ID for the event behind this message",
       group: 'Event',
       type: typeOf(id),
       example: id,

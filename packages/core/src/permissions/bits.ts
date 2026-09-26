@@ -29,9 +29,12 @@ export function missing(permissions: bigint, required: bigint): bigint {
   return required & ~permissions;
 }
 
+const RETIRED_ALIASES: ReadonlySet<string> = new Set<PermissionName>(['ManageEmojisAndStickers']);
+
 export function permissionNames(permissions: bigint): PermissionName[] {
   const names: PermissionName[] = [];
   for (const [name, bit] of Object.entries(PermissionFlagsBits)) {
+    if (RETIRED_ALIASES.has(name)) continue;
     if ((permissions & bit) === bit && bit !== 0n) names.push(name as PermissionName);
   }
   return names;

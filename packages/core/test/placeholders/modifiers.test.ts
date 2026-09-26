@@ -309,7 +309,7 @@ describe('incompatible modifiers are reported and the value renders unmodified',
 
     const upper = bio('{member.bio:upper}', v.text('Hello'));
     expect(upper.output).toBe('Hello');
-    expect(upper.diagnostics[0]?.message).toContain('does not take :upper');
+    expect(upper.diagnostics[0]?.message).toContain("doesn't take :upper");
 
     expect(bio('{member.bio:truncate(3)}', v.text('Hello')).output).toBe('He…');
     expect(bio('{member.bio:fallback("-")}', v.notSet()).output).toBe('-');

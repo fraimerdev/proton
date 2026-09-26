@@ -13,8 +13,8 @@ const PATTERN = /^(\d+)\s*(s|m|h|d|w)$/i;
 export class InvalidDurationError extends Error {
   constructor(input: string) {
     super(
-      `'${input}' is not a valid duration. Use a number followed by s, m, h, d or w — ` +
-        'for example 30m, 12h or 7d.',
+      `'${input}' is not a valid duration. Use a number followed by s, m, h, d or w, like ` +
+        '30m, 12h or 7d.',
     );
     this.name = 'InvalidDurationError';
   }
@@ -53,5 +53,5 @@ export function formatDuration(ms: number): string {
 }
 
 export const durationStringSchema = z.string().refine((value) => tryParseDuration(value) !== null, {
-  message: 'must be a number followed by s, m, h, d or w — for example 30m, 12h or 7d',
+  message: 'must be a number followed by s, m, h, d or w, like 30m, 12h or 7d',
 });

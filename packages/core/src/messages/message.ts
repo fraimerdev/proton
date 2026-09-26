@@ -53,7 +53,7 @@ export function toAllowedMentions(policy: MentionPolicy = DEFAULT_MENTION_POLICY
 }
 
 const NOTHING_TO_SEND =
-  'this message has nothing in it — give it text, an embed or a component before it can be sent.';
+  'this message has nothing in it. Add text, an embed or a component before it can be sent.';
 
 export const messageShape = {
   content: z.string().max(MESSAGE_CONTENT_MAX).optional(),
@@ -98,8 +98,8 @@ export function refineMessage(
           path: ['v2'],
           message:
             `a components-v2 layout is the whole message, and this one also carries ` +
-            `${carried.join(' and ')}. Discord refuses that outright — move the ${carried[0]} into ` +
-            'a text display, or switch the layout off.',
+            `${carried.join(' and ')}. Discord refuses that, so move the ${carried[0]} into a ` +
+            'text display, or switch the layout off.',
         });
       }
 

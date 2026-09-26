@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { HttpRestProxyClient, type RestRequestOptions } from '../../src/actions/rest-client.ts';
+import {
+  HttpRestProxyClient,
+  type RestRequestOptions,
+  RestTimeoutError,
+} from '../../src/actions/rest-client.ts';
 
 const realFetch = globalThis.fetch;
 
@@ -121,5 +125,64 @@ describe('HttpRestProxyClient', () => {
     captureFetch();
 
     expect(await send({ body: {} })).toEqual({ status: 200, body: { ok: true } });
+  });
+
+  test('sends no abort signal unless the caller sets a timeout', async () => {
+    const { captured } = captureFetch();
+
+    await send({ body: {} });
+
+    expect(captured[0]?.init.signal).toBeUndefined();
+  });
+
+  test('a request that answers in time is untouched by its timeout', async () => {
+    const { captured } = captureFetch();
+
+    expect(await send({ body: {}, timeoutMs: 5_000 })).toEqual({ status: 200, body: { ok: true } });
+    expect(captured[0]?.init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  test('a finished request cancels its timer instead of aborting after the fact', async () => {
+    const { captured } = captureFetch();
+
+    await send({ body: {}, timeoutMs: 20 });
+    await Bun.sleep(60);
+
+    expect(captured[0]?.init.signal?.aborted).toBe(false);
+  });
+
+  test('a request that outlives its timeout rejects with a typed error naming the route', async () => {
+    globalThis.fetch = ((_url: string | URL | Request, init: RequestInit = {}) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      })) as typeof fetch;
+
+    const outcome = client.request({
+      method: 'PUT',
+      path: '/applications/1/guilds/2/commands',
+      body: [],
+      timeoutMs: 20,
+    });
+
+    await expect(outcome).rejects.toBeInstanceOf(RestTimeoutError);
+    await expect(outcome).rejects.toMatchObject({
+      name: 'RestTimeoutError',
+      method: 'PUT',
+      path: '/applications/1/guilds/2/commands',
+      timeoutMs: 20,
+    });
+    await expect(outcome).rejects.toThrow(
+      'The rest-proxy did not answer PUT /applications/1/guilds/2/commands within 20 ms. ' +
+        'Discord may still have applied the request.',
+    );
+  });
+
+  test('any other failure is passed through as it was', async () => {
+    const offline = new TypeError('fetch failed');
+    globalThis.fetch = (async () => {
+      throw offline;
+    }) as unknown as typeof fetch;
+
+    await expect(send({ body: {}, timeoutMs: 5_000 })).rejects.toBe(offline);
   });
 });

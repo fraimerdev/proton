@@ -1,10 +1,11 @@
 import type { Logger } from '../modules/manifest.ts';
 import type { CaseRecorder } from './case-recorder.ts';
 import type { DedupeStore } from './dedupe.ts';
+import { describeDiscordError, refusalDetail } from './discord-error.ts';
 import { type ActionKind, exposesUpstreamOnFailure, isNeverRecorded, reversalOf } from './kinds.ts';
 import { type PrecheckInput, runPrechecks } from './prechecks.ts';
 import type { RestProxyClient } from './rest-client.ts';
-import { toRestCall } from './rest-mapping.ts';
+import { type PayloadResult, toRestCall } from './rest-mapping.ts';
 import {
   type ActionExecutor,
   type ActionFailure,
@@ -47,50 +48,15 @@ export class DefaultActionExecutor implements ActionExecutor {
     return new DefaultActionExecutor(this.#deps, hints);
   }
 
+  async precheck(request: ActionRequest): Promise<ActionFailure | null> {
+    const checked = await this.#check(request);
+    return 'result' in checked ? (checked.result.failure ?? null) : null;
+  }
+
   async execute(request: ActionRequest): Promise<ActionResult> {
-    const parsed = actionRequestSchema.safeParse(request);
-    if (!parsed.success) {
-      return this.#precheckFailure(
-        'invalid_request',
-        "I couldn't carry that out, and nothing was changed. This is a Proton problem, not a " +
-          'setting in this server.',
-        `invalid action request: ${parsed.error.issues
-          .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
-          .join('; ')}`,
-        request,
-      );
-    }
-
-    if (request.expiresAt && !this.#deps.scheduleReversal) {
-      return this.#precheckFailure(
-        'unsupported_expiry',
-        "I can't set that to lift on its own — Proton can't schedule the reversal here. " +
-          'Nothing was changed.',
-        'the request carried an expiry but no reversal scheduler is bound',
-        request,
-      );
-    }
-
-    if (request.expiresAt && !reversalOf(request.kind)) {
-      return this.#precheckFailure(
-        'not_reversible',
-        `A '${request.kind}' can't be temporary — Proton has no action that undoes it. ` +
-          'Perform it without a duration, or pick an action that can be reversed.',
-      );
-    }
-
-    const payload = toRestCall(request);
-    if ('error' in payload) {
-      return this.#precheckFailure('invalid_payload', payload.error);
-    }
-
-    const resolved = await this.#deps.resolveContext(request, this.#hints);
-    if ('failure' in resolved) {
-      return { status: 'failed_precheck', failure: resolved.failure };
-    }
-
-    const failure = runPrechecks(resolved);
-    if (failure) return { status: 'failed_precheck', failure };
+    const checked = await this.#check(request);
+    if ('result' in checked) return checked.result;
+    const { payload, resolved } = checked;
 
     const claimed = await this.#deps.dedupe.claim(request.idempotencyKey, this.#ttl);
     if (!claimed) return { status: 'skipped_duplicate' };
@@ -110,14 +76,20 @@ export class DefaultActionExecutor implements ActionExecutor {
 
       if (response.status >= 400) {
         await this.#deps.dedupe.release(request.idempotencyKey);
-        const said = discordMessage(response.body);
-        this.#log(request, `Discord answered ${response.status}${said ? `: ${said}` : ''}`);
+        this.#log(request, refusalDetail(response.status, response.body));
+        const discordCode = discordErrorCode(response.body);
 
         return {
           status: 'failed_api',
           failure: {
             code: `discord_${response.status}`,
-            humanReason: describeDiscordError(response.status),
+            humanReason: describeDiscordError({
+              status: response.status,
+              body: response.body,
+              request,
+              resolved,
+            }),
+            ...(discordCode !== undefined ? { discordCode } : {}),
           },
           ...(exposesUpstreamOnFailure(request.kind)
             ? { upstream: { status: response.status, body: response.body } }
@@ -138,8 +110,8 @@ export class DefaultActionExecutor implements ActionExecutor {
             failure: {
               code: 'reversal_not_scheduled',
               humanReason:
-                `${appliedPhrase(request.kind)}, but I couldn't schedule it to lift on its own. ` +
-                'It will stay in place until somebody reverses it.',
+                `${appliedPhrase(request.kind)}, but it couldn't be scheduled to lift on its own. ` +
+                'It stays in place until somebody reverses it.',
             },
           };
         }
@@ -159,10 +131,67 @@ export class DefaultActionExecutor implements ActionExecutor {
         failure: {
           code: 'transport_failure',
           humanReason:
-            "I couldn't reach Discord. That may not have gone through — check before trying again.",
+            "Couldn't reach Discord, so that may not have gone through. Check before trying again.",
         },
       };
     }
+  }
+
+  async #check(
+    request: ActionRequest,
+  ): Promise<
+    | { result: ActionResult }
+    | { payload: Exclude<PayloadResult, { error: string }>; resolved: PrecheckInput }
+  > {
+    const parsed = actionRequestSchema.safeParse(request);
+    if (!parsed.success) {
+      return this.#precheckFailure(
+        'invalid_request',
+        "That couldn't be done, and nothing was changed. This is a Proton problem, not a " +
+          'setting in this server.',
+        `invalid action request: ${parsed.error.issues
+          .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
+          .join('; ')}`,
+        request,
+      );
+    }
+
+    if (request.expiresAt && !this.#deps.scheduleReversal) {
+      return this.#precheckFailure(
+        'unsupported_expiry',
+        "That can't be set to lift on its own here, so nothing was changed.",
+        'the request carried an expiry but no reversal scheduler is bound',
+        request,
+      );
+    }
+
+    if (request.expiresAt && !reversalOf(request.kind)) {
+      return this.#precheckFailure(
+        'not_reversible',
+        `A '${request.kind}' can't be temporary because nothing can undo it. Do it without a ` +
+          'duration, or pick an action that can be undone.',
+      );
+    }
+
+    const payload = toRestCall(request);
+    if ('error' in payload) {
+      return this.#precheckFailure('invalid_payload', payload.error);
+    }
+
+    // Ahead of the prechecks, not redundant with claim(): a kicked or banned member 404s the lookup.
+    if (await this.#deps.dedupe.has(request.idempotencyKey)) {
+      return { result: { status: 'skipped_duplicate' } };
+    }
+
+    const resolved = await this.#deps.resolveContext(request, this.#hints);
+    if ('failure' in resolved) {
+      return { result: { status: 'failed_precheck', failure: resolved.failure } };
+    }
+
+    const failure = runPrechecks(resolved);
+    if (failure) return { result: { status: 'failed_precheck', failure } };
+
+    return { payload, resolved };
   }
 
   #precheckFailure(
@@ -170,10 +199,10 @@ export class DefaultActionExecutor implements ActionExecutor {
     humanReason: string,
     detail?: string,
     request?: ActionRequest,
-  ): ActionResult {
+  ): { result: ActionResult } {
     if (detail && request) this.#log(request, detail);
 
-    return { status: 'failed_precheck', failure: { code, humanReason } };
+    return { result: { status: 'failed_precheck', failure: { code, humanReason } } };
   }
 
   #log(request: ActionRequest, detail: string): void {
@@ -228,10 +257,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
-function discordMessage(body: unknown): string | undefined {
-  return typeof body === 'object' && body !== null && 'message' in body
-    ? String((body as { message: unknown }).message)
-    : undefined;
+function discordErrorCode(body: unknown): number | undefined {
+  if (typeof body !== 'object' || body === null || !('code' in body)) return undefined;
+  const code = (body as { code: unknown }).code;
+  return typeof code === 'number' && Number.isInteger(code) ? code : undefined;
 }
 
 function detailOf(error: unknown): string {
@@ -247,30 +276,4 @@ const APPLIED: Partial<Record<ActionKind, string>> = {
 
 function appliedPhrase(kind: ActionKind): string {
   return APPLIED[kind] ?? 'That went through';
-}
-
-function describeDiscordError(status: number): string {
-  if (status === 403) {
-    return (
-      "Discord wouldn't let me do that. It is normally a permission I'm missing, or a role " +
-      'ranked above mine.'
-    );
-  }
-  if (status === 404) {
-    return (
-      "I couldn't find what that was meant to act on. It may have been deleted, or the member " +
-      'may have left.'
-    );
-  }
-  if (status === 429) {
-    return "Discord is rate-limiting Proton right now. I'll retry this on my own.";
-  }
-  if (status >= 500) {
-    return 'Discord is having trouble right now, so that may not have gone through.';
-  }
-
-  return (
-    'Discord refused that, and nothing was changed. This is a Proton problem, not a setting in ' +
-    'this server.'
-  );
 }

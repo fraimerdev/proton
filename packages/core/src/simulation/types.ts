@@ -65,26 +65,38 @@ export const SIMULATION_OUTPUTS = ['message', 'text'] as const;
 
 export type SimulationOutputKind = (typeof SIMULATION_OUTPUTS)[number];
 
-export const simulationCardSchema = z.object({
-  kind: z.enum(['rank', 'welcome', 'goodbye']),
-  preset: z.string().min(1).max(32).optional(),
-  accent: z.number().int().min(0).max(0xffffff).optional(),
-  background: z.string().max(2048).optional(),
-  displayName: z.string().min(1).max(64),
-  guildName: z.string().min(1).max(100).optional(),
-  avatar: z.string().max(2048).optional(),
-  showRank: z.boolean().optional(),
-  showPercent: z.boolean().optional(),
-  showTotalXp: z.boolean().optional(),
-  showMemberCount: z.boolean().optional(),
+export const simulationCardSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.enum(['rank', 'welcome', 'goodbye']),
+    preset: z.string().min(1).max(32).optional(),
+    accent: z.number().int().min(0).max(0xffffff).optional(),
+    background: z.string().max(2048).optional(),
+    displayName: z.string().min(1).max(64),
+    guildName: z.string().min(1).max(100).optional(),
+    avatar: z.string().max(2048).optional(),
+    showRank: z.boolean().optional(),
+    showPercent: z.boolean().optional(),
+    showTotalXp: z.boolean().optional(),
+    showMemberCount: z.boolean().optional(),
 
-  memberCount: z.number().int().min(0).optional(),
-  level: z.number().int().min(0).optional(),
-  rank: z.number().int().min(0).optional(),
-  totalXp: z.number().int().min(0).optional(),
-  xpIntoLevel: z.number().int().min(0).optional(),
-  xpForNextLevel: z.number().int().min(0).optional(),
-});
+    memberCount: z.number().int().min(0).optional(),
+    level: z.number().int().min(0).optional(),
+    rank: z.number().int().min(0).optional(),
+    totalXp: z.number().int().min(0).optional(),
+    xpIntoLevel: z.number().int().min(0).optional(),
+    xpForNextLevel: z.number().int().min(0).optional(),
+  }),
+  z.object({
+    kind: z.literal('badge'),
+    shape: z.string().min(1).max(16),
+    colour: z.number().int().min(0).max(0xffffff),
+    icon: z.string().min(1).max(32).optional(),
+    assetId: z
+      .string()
+      .regex(/^[a-z0-9]{8,40}$/)
+      .optional(),
+  }),
+]);
 
 export type SimulationCard = z.infer<typeof simulationCardSchema>;
 
@@ -94,10 +106,10 @@ export type SimulationCard = z.infer<typeof simulationCardSchema>;
  * card nobody is ever sent.
  */
 export function simulationCardQuery(card: SimulationCard): string {
-  const params = new URLSearchParams({ kind: card.kind, displayName: card.displayName });
+  const params = new URLSearchParams({ kind: card.kind });
 
   for (const [key, value] of Object.entries(card)) {
-    if (key === 'kind' || key === 'displayName' || value === undefined) continue;
+    if (key === 'kind' || value === undefined) continue;
     params.set(key, String(value));
   }
 
@@ -168,6 +180,8 @@ export interface SimulationScene {
   // rehearsal that did not know the tier would show a message that server never posts.
   tier: EntitlementTier;
   inputs: Readonly<Record<string, string | number | boolean>>;
+
+  commandLabel?(key: string, path?: string): string;
 }
 
 export type SimulationOutput =

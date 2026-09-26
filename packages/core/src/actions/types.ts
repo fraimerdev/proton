@@ -10,6 +10,7 @@ export interface ActionRequest {
   targetId?: string;
   actorId: string;
   reason?: string;
+  auditReason?: string;
   payload?: unknown;
   expiresAt?: Date;
   dryRun: boolean;
@@ -29,6 +30,8 @@ export interface ActionFailure {
   code: string;
 
   humanReason: string;
+
+  discordCode?: number;
 }
 
 export interface ActionResult {
@@ -45,6 +48,8 @@ export interface ActionResult {
 
 export interface ActionExecutor {
   execute(request: ActionRequest): Promise<ActionResult>;
+
+  precheck?(request: ActionRequest): Promise<ActionFailure | null>;
 }
 
 export interface ScopedActionExecutor extends ActionExecutor {
@@ -62,6 +67,7 @@ export const actionRequestSchema = z.object({
   targetId: z.string().min(1).optional(),
   actorId: z.string().min(1),
   reason: z.string().max(512).optional(),
+  auditReason: z.string().max(512).optional(),
   payload: z.unknown().optional(),
   expiresAt: z.date().optional(),
   dryRun: z.boolean(),

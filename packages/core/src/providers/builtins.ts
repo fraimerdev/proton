@@ -14,22 +14,22 @@ function unknown(humanReason: string): ConditionResult {
 }
 
 const NO_MEMBER =
-  'I could not read your server profile, so this could not be checked. That usually means the ' +
-  'Server Members intent is not granted to the bot, or you are no longer in the server.';
+  "Your server profile couldn't be read, so this couldn't be checked. Usually the Server Members " +
+  "Intent is off for Proton, or you're no longer in the server.";
 
 const NO_BOOST_DATE =
-  'Whether you are boosting this server could not be read from that event, so it could not be ' +
+  "Whether you're boosting this server couldn't be read from that event, so it couldn't be " +
   'checked here.';
 
 const NO_ROLES =
-  'That did not carry your roles, so the role check could not run. If it keeps happening an ' +
-  'admin should check the Server Members intent in the Discord developer portal.';
+  "Your roles weren't included, so the role check couldn't run. If this keeps happening, the " +
+  'Server Members Intent may be off for Proton in the Discord Developer Portal.';
 
 const NO_TIMEOUT_STATE =
-  'That event did not carry whether you are timed out, so it could not be checked here.';
+  "That event didn't say whether you're timed out, so it couldn't be checked here.";
 
 const NO_NAMES =
-  'Your name could not be read from that event, so a name requirement could not be checked here.';
+  "Your name couldn't be read from that event, so a name requirement couldn't be checked here.";
 
 const roleMode = z.enum(['any', 'all']).default('any').register(protonFields, { label: 'Match' });
 
@@ -170,7 +170,7 @@ function roleList(ids: readonly string[]): string {
 function ageVerdict(ageMs: number, config: AgeConfig): ConditionResult {
   const threshold = tryParseDuration(config.duration);
   if (threshold === null) {
-    return unknown(`'${config.duration}' is not a length of time I can read.`);
+    return unknown(`'${config.duration}' isn't a valid length of time.`);
   }
 
   const passed = config.operator === 'younger-than' ? ageMs < threshold : ageMs > threshold;
@@ -291,8 +291,8 @@ export const memberAgeProvider: ConditionProvider<typeof memberAgeSchema> = {
     const joinedAt = ctx.member.joinedAt;
     if (joinedAt === null) {
       return unknown(
-        'I could not read when you joined this server, so how long you have been here could ' +
-          'not be checked.',
+        "When you joined this server couldn't be read, so how long you've been here couldn't be " +
+          'checked.',
       );
     }
 
@@ -349,7 +349,7 @@ export const hasAvatarProvider: ConditionProvider<typeof emptySchema> = {
   id: 'core.has_avatar',
   moduleId: CORE_MODULE_ID,
   label: 'Has an avatar',
-  description: 'Must have set a profile picture. A cheap throwaway-account heuristic.',
+  description: 'Must have a profile picture. Helps filter out throwaway accounts.',
   emoji: '\u{1F5BC}',
   configSchema: emptySchema,
   builder: [],
@@ -357,7 +357,7 @@ export const hasAvatarProvider: ConditionProvider<typeof emptySchema> = {
 
   async evaluate(ctx) {
     if (ctx.user.hasAvatar === null) {
-      return unknown('I could not read your profile picture, so that could not be checked.');
+      return unknown("Your profile picture couldn't be read, so that couldn't be checked.");
     }
     return ctx.user.hasAvatar ? PASSED : { passed: false };
   },

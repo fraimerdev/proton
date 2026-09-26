@@ -55,7 +55,7 @@ export const testCustomIdFor = (key: string): string =>
 export function markerFor(actorId: string, interactive: boolean): string {
   const buttons = interactive ? ', and its buttons do nothing' : '';
 
-  return `-# Test message — <@${actorId}> sent this from the Proton dashboard. Nobody was pinged${buttons}.`;
+  return `-# Test message sent by <@${actorId}> from the Proton dashboard. Nobody was pinged${buttons}.`;
 }
 
 export interface TestDeliveryResult {

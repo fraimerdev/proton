@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import { commandIssueSchema } from '../commands/effective.ts';
+import { commandFieldSchema } from '../commands/fields.ts';
+import { commandKindSchema } from '../commands/names.ts';
+import { commandInputSchema, commandSettingsSchema } from '../commands/settings.ts';
+import { replyControlSchema } from '../commands/visibility.ts';
 import { jsonValueSchema } from '../config/json.ts';
 import { ENTITLEMENT_TIERS } from '../rules/facts.ts';
 import { simulationDescriptorSchema } from '../simulation/types.ts';
@@ -99,6 +104,100 @@ export const botInviteSchema = z.object({
   permissions: z.string().regex(/^\d+$/),
 });
 
+export const commandSettingsViewSchema = commandSettingsSchema.extend({
+  updatedAt: z.string().nullable().default(null),
+});
+
+export const COMMAND_SYNC_STATES = [
+  'synced',
+  'pending',
+  'failed',
+  'unsynced',
+  'not-this-environment',
+] as const;
+
+export const commandSyncFailureSchema = z.object({
+  code: z.string().nullable(),
+  status: z.number().int().nullable(),
+  message: z.string(),
+  detail: z.string(),
+  at: z.string(),
+  retryAt: z.string().nullable(),
+});
+
+export const commandSyncViewSchema = z.object({
+  state: z.enum(COMMAND_SYNC_STATES),
+  checkedAt: z.string().nullable(),
+  syncedAt: z.string().nullable(),
+  failure: commandSyncFailureSchema.nullable(),
+});
+
+export const commandViewSchema = z.object({
+  key: z.string(),
+  kind: commandKindSchema,
+  moduleId: z.string(),
+  moduleName: z.string(),
+  moduleOn: z.boolean(),
+  alwaysRegistered: z.boolean(),
+  name: z.string(),
+  description: z.string(),
+  fields: z.array(commandFieldSchema),
+  fixedSize: z.number().int().nonnegative(),
+  definitionHash: z.string(),
+  settings: commandSettingsViewSchema,
+  effectiveName: z.string(),
+  ignored: z.string().nullable(),
+  refused: z.boolean().default(false),
+  reply: replyControlSchema.nullable(),
+});
+
+export const lostCommandPermissionsSchema = z.object({
+  commands: z.array(z.object({ key: z.string(), name: z.string() })),
+  at: z.string(),
+});
+
+export const commandCatalogueViewSchema = z.object({
+  commands: z.array(commandViewSchema),
+  sync: commandSyncViewSchema,
+  lostPermissions: lostCommandPermissionsSchema.nullable(),
+});
+
+export const commandUpdateBodySchema = commandInputSchema.extend({
+  expectedUpdatedAt: z.string().nullable(),
+  definitionHash: z.string().min(1),
+  actorId: z.string().min(1),
+  source: z.literal('dashboard').default('dashboard'),
+  ipHash: z.string().optional(),
+});
+
+export const commandEnabledBodySchema = z.object({
+  enabled: z.boolean(),
+  actorId: z.string().min(1),
+  source: z.literal('dashboard').default('dashboard'),
+  ipHash: z.string().optional(),
+});
+
+export const commandUpdateResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), command: commandViewSchema }),
+  z.object({ ok: z.literal(false), issues: z.array(commandIssueSchema) }),
+]);
+
+export const commandWorkerViewSchema = z.object({
+  settings: z.record(z.string(), commandSettingsViewSchema),
+  modulesOn: z.record(z.string(), z.boolean()),
+});
+
+export type CommandSettingsView = z.infer<typeof commandSettingsViewSchema>;
+export type CommandSyncState = (typeof COMMAND_SYNC_STATES)[number];
+export type CommandSyncFailure = z.infer<typeof commandSyncFailureSchema>;
+export type CommandSyncView = z.infer<typeof commandSyncViewSchema>;
+export type CommandView = z.infer<typeof commandViewSchema>;
+export type LostCommandPermissions = z.infer<typeof lostCommandPermissionsSchema>;
+export type CommandCatalogueView = z.infer<typeof commandCatalogueViewSchema>;
+export type CommandUpdateBody = z.infer<typeof commandUpdateBodySchema>;
+export type CommandEnabledBody = z.infer<typeof commandEnabledBodySchema>;
+export type CommandUpdateResult = z.infer<typeof commandUpdateResultSchema>;
+export type CommandWorkerView = z.infer<typeof commandWorkerViewSchema>;
 export type ModuleField = z.infer<typeof moduleFieldSchema>;
 export type ModuleSection = z.infer<typeof moduleSectionSchema>;
 export type ModuleStatusView = z.infer<typeof moduleStatusSchema>;

@@ -1,5 +1,6 @@
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import type { Logger } from '../modules/manifest.ts';
-import { isActionKind } from './kinds.ts';
+import { type ActionKind, isActionKind } from './kinds.ts';
 import { AUTO_REVERSAL_ACTOR, type CaseReversalStore } from './reversal.ts';
 import {
   type CompleteOutcome,
@@ -10,7 +11,7 @@ import {
   type ScheduledReversalPayload,
   scheduledActionPayloadSchema,
 } from './scheduled-actions.ts';
-import type { ActionExecutor, ActionRequest } from './types.ts';
+import type { ActionExecutor, ActionRequest, ActionResult } from './types.ts';
 
 export interface ScheduledModuleJob {
   guildId: string;
@@ -90,6 +91,42 @@ interface Arm {
 
 const reasonFor = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+const MEMBER_GONE = 'the member is no longer in the server';
+
+// Discord's code, never the 404 alone: a misrouted proxy 404s too, while the ban still stands
+const LIFTED_BY_DISCORD_CODE: Partial<Record<ActionKind, ReadonlyMap<number, string>>> = {
+  unban: new Map([[RESTJSONErrorCodes.UnknownBan, 'the user is no longer banned']]),
+  untimeout: new Map([[RESTJSONErrorCodes.UnknownMember, MEMBER_GONE]]),
+  remove_role: new Map([
+    [RESTJSONErrorCodes.UnknownMember, MEMBER_GONE],
+    [RESTJSONErrorCodes.UnknownRole, 'the role no longer exists'],
+  ]),
+  unlock: new Map([[RESTJSONErrorCodes.UnknownChannel, 'the channel no longer exists']]),
+};
+
+interface Lifted {
+  why: string;
+  failure: string;
+  discordCode?: number;
+}
+
+function alreadyLifted(kind: ActionKind, result: ActionResult): Lifted | undefined {
+  const failure = result.failure;
+  if (!failure) return undefined;
+
+  // target_not_member is Discord's Unknown Member or User, read by the precheck's member lookup
+  if (result.status === 'failed_precheck' && failure.code === 'target_not_member') {
+    const why = LIFTED_BY_DISCORD_CODE[kind]?.get(RESTJSONErrorCodes.UnknownMember);
+    return why === undefined ? undefined : { why, failure: failure.code };
+  }
+
+  const discordCode = failure.discordCode;
+  if (result.status !== 'failed_api' || discordCode === undefined) return undefined;
+
+  const why = LIFTED_BY_DISCORD_CODE[kind]?.get(discordCode);
+  return why === undefined ? undefined : { why, failure: failure.code, discordCode };
+}
 
 export class ScheduledActionSweeper {
   readonly #deps: ScheduledActionSweeperDeps;
@@ -286,6 +323,7 @@ export class ScheduledActionSweeper {
     };
 
     let status = '';
+    let lifted: Lifted | undefined;
 
     return {
       label: `the ${payload.originalKind} reversal for case ${payload.caseId}`,
@@ -294,6 +332,9 @@ export class ScheduledActionSweeper {
       perform: async () => {
         const result = await this.#deps.executor.execute(request);
         status = result.status;
+
+        lifted = alreadyLifted(request.kind, result);
+        if (lifted) return null;
 
         return result.status === 'failed_precheck' || result.status === 'failed_api'
           ? (result.failure?.humanReason ?? `the executor returned ${result.status}`)
@@ -309,13 +350,24 @@ export class ScheduledActionSweeper {
         }),
 
       logSuccess: () => {
-        this.#deps.logger.info(`reverted a temporary ${payload.originalKind}`, {
+        const meta = {
           guildId: row.guildId,
           caseId: payload.caseId,
           kind: row.kind,
           status,
           attempts: row.attempts,
-        });
+        };
+
+        if (!lifted) {
+          this.#deps.logger.info(`reverted a temporary ${payload.originalKind}`, meta);
+          return;
+        }
+
+        this.#deps.logger.info(
+          `the temporary ${payload.originalKind} for case ${payload.caseId} was already lifted ` +
+            `(${lifted.why}), so its case is stamped reverted and the ${row.kind} is not retried`,
+          { ...meta, failure: lifted.failure, discordCode: lifted.discordCode },
+        );
       },
     };
   }

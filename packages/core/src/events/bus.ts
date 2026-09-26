@@ -12,6 +12,7 @@ export type GroupStartId = '0' | '$';
 
 export interface SubscribeOptions {
   startId?: GroupStartId;
+  concurrency?: number;
 }
 
 export interface EventBus {

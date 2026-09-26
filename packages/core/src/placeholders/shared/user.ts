@@ -80,7 +80,7 @@ type MemberKey = (typeof MEMBER_KEYS)[number];
 type Entry = readonly [label: string, description: string, example: PlaceholderValue];
 
 const ACCOUNT: Record<AccountKey, Entry> = {
-  id: ['ID', 'Discord user id', v.text(EXAMPLE_ID)],
+  id: ['ID', 'Discord user ID', v.text(EXAMPLE_ID)],
   mention: ['Mention', 'Pings them where mentions are allowed', v.user(EXAMPLE_ID, 'Fraimer')],
   username: ['Username', 'Unique account handle', v.text('fraimer')],
   global_name: [
@@ -95,7 +95,7 @@ const ACCOUNT: Record<AccountKey, Entry> = {
   ],
   avatar_url: [
     'Avatar',
-    'Server-independent avatar image',
+    'Account avatar image, not a server-specific one',
     v.imageUrl(`${CDN}/embed/avatars/0.png`),
   ],
   is_bot: ['Is a bot', 'Yes for bot accounts', v.boolean(false)],
@@ -116,19 +116,38 @@ const MEMBER: Record<MemberKey, Entry> = {
   role_count: ['Role count', 'How many roles they have', v.integer(3)],
 };
 
+const KEYWORDS: Partial<Record<AccountKey | MemberKey, readonly string[]>> = {
+  id: ['snowflake'],
+  mention: ['ping', 'tag', 'at'],
+  username: ['handle', 'tag', 'name'],
+  global_name: ['name'],
+  display_name: ['name', 'nick', 'nickname'],
+  avatar_url: ['pfp', 'picture', 'icon', 'image'],
+  is_bot: ['bot', 'app'],
+  created_at: ['registered', 'age'],
+  account_age: ['old', 'age'],
+  nickname: ['nick', 'name'],
+  joined_at: ['joined', 'join'],
+  is_boosting: ['booster', 'nitro', 'boost'],
+  boosting_since: ['booster', 'nitro', 'boost'],
+  role_mentions: ['ranks', 'roles'],
+  role_count: ['roles', 'ranks'],
+};
+
 export function userDefinitions(
   namespace: UserNamespace,
   options: { member: boolean },
 ): PlaceholderDefinitionInput[] {
   const group = GROUPS[namespace];
   const define = (
-    key: string,
+    key: AccountKey | MemberKey,
     [label, description, example]: Entry,
   ): PlaceholderDefinitionInput => ({
     key: `${namespace}.${key}`,
     label,
     description,
     group,
+    keywords: [...(KEYWORDS[key] ?? [])],
     type: typeOf(example),
     example,
   });

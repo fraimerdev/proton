@@ -26,6 +26,9 @@ describe('the table', () => {
       activePolls: 3,
       honeypotChannels: 3,
       appealPanels: 1,
+      achievements: 10,
+      applicationForms: 3,
+      applicationPanels: 2,
     });
   });
 

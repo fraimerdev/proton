@@ -18,6 +18,54 @@ export const protonConfigChangedSchema = z.object({
 
 export type ProtonConfigChanged = z.infer<typeof protonConfigChangedSchema>;
 
+export const COMMAND_CHANGES = [
+  'name',
+  'description',
+  'options',
+  'privateReply',
+  'enabled',
+] as const;
+
+export type CommandChange = (typeof COMMAND_CHANGES)[number];
+
+export const protonCommandsChangedSchema = z.object({
+  auditId: z.string().min(1),
+  guildId: snowflakeSchema,
+  actorId: z.string().min(1),
+  source: z.enum(['dashboard', 'command', 'system']),
+  key: z.string().min(1).max(100),
+  displayName: z.string().min(1).max(100),
+  newName: z.string().min(1).max(100).nullable().default(null),
+  changed: z.array(z.enum(COMMAND_CHANGES)).max(COMMAND_CHANGES.length).default([]),
+  enabledBefore: z.boolean(),
+  enabledAfter: z.boolean(),
+  registration: z.boolean(),
+});
+
+export type ProtonCommandsChanged = z.infer<typeof protonCommandsChangedSchema>;
+
+export const MODERATION_ACTION_KINDS = [
+  'warn',
+  'unwarn',
+  'ban',
+  'unban',
+  'kick',
+  'timeout',
+  'untimeout',
+  'purge',
+  'slowmode',
+  'lockdown',
+  'unlock',
+] as const satisfies readonly (typeof ACTION_KINDS)[number][];
+
+export type ModerationActionKind = (typeof MODERATION_ACTION_KINDS)[number];
+
+const MODERATION_KIND_SET: ReadonlySet<string> = new Set(MODERATION_ACTION_KINDS);
+
+export function isModerationActionKind(kind: string): kind is ModerationActionKind {
+  return MODERATION_KIND_SET.has(kind);
+}
+
 export const protonActionExecutedSchema = z.object({
   caseId: z.string().min(1),
   guildId: snowflakeSchema,
@@ -28,6 +76,10 @@ export const protonActionExecutedSchema = z.object({
   reason: z.string().max(512).nullable().default(null),
   dryRun: z.boolean().default(false),
   expiresAt: z.number().int().nullable().default(null),
+  until: z.number().int().nullable().optional(),
+  channelId: snowflakeSchema.nullable().optional(),
+  seconds: z.number().int().nonnegative().optional(),
+  reversal: z.boolean().optional(),
 });
 
 export type ProtonActionExecuted = z.infer<typeof protonActionExecutedSchema>;

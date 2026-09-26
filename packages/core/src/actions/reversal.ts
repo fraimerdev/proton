@@ -9,8 +9,14 @@ import type { ActionRequest } from './types.ts';
 
 export const AUTO_REVERSAL_ACTOR = 'proton:auto-reversal';
 
+const REVERSAL_KEY_PREFIX = 'reversal:';
+
 export function reversalIdempotencyKey(originalKey: string): string {
-  return `reversal:${originalKey}`;
+  return `${REVERSAL_KEY_PREFIX}${originalKey}`;
+}
+
+export function isReversalIdempotencyKey(key: string): boolean {
+  return key.startsWith(REVERSAL_KEY_PREFIX);
 }
 
 export interface CaseReversalInput {

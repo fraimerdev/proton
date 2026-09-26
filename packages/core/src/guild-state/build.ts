@@ -3,6 +3,8 @@ import type { ChannelState, GuildProfile, GuildState } from './types.ts';
 
 const IMAGE_HASH = /^[A-Za-z0-9_]{1,64}$/;
 
+const SNOWFLAKE = /^\d{17,20}$/;
+
 function str(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }
@@ -25,6 +27,11 @@ function count(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
+function nullableSnowflake(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return typeof value === 'string' && SNOWFLAKE.test(value) ? value : undefined;
+}
+
 export function parseGuildProfile(payload: Record<string, unknown>): GuildProfile {
   const name = str(own(payload, 'name'));
   const iconHash = imageHash(own(payload, 'icon'));
@@ -33,6 +40,7 @@ export function parseGuildProfile(payload: Record<string, unknown>): GuildProfil
   const rawBoostCount = own(payload, 'premium_subscription_count');
   const boostCount = rawBoostCount === null ? null : count(rawBoostCount);
   const boostTier = count(own(payload, 'premium_tier'));
+  const afkChannelId = nullableSnowflake(own(payload, 'afk_channel_id'));
 
   return {
     ...(name ? { name } : {}),
@@ -41,6 +49,7 @@ export function parseGuildProfile(payload: Record<string, unknown>): GuildProfil
     ...(description === undefined ? {} : { description }),
     ...(boostCount === undefined ? {} : { boostCount }),
     ...(boostTier === undefined ? {} : { boostTier }),
+    ...(afkChannelId === undefined ? {} : { afkChannelId }),
   };
 }
 

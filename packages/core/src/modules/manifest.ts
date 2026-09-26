@@ -1,10 +1,16 @@
-import type { RESTPostAPIChatInputApplicationCommandsJSONBody } from 'discord-api-types/v10';
+import type {
+  RESTPostAPIChatInputApplicationCommandsJSONBody,
+  RESTPostAPIContextMenuApplicationCommandsJSONBody,
+} from 'discord-api-types/v10';
 import type { z } from 'zod';
 import type { ActionKind } from '../actions/kinds.ts';
 import type { ScheduleOptions, ScheduleOutcome } from '../actions/scheduled-actions.ts';
 import type { ActionExecutor } from '../actions/types.ts';
+import type { CommandReplyPolicy } from '../commands/visibility.ts';
 import type { LimitKey } from '../entitlements/limits.ts';
 import type { EventType, ProtonEvent } from '../events/types.ts';
+import type { ProtonCustomId } from '../interactions/custom-id.ts';
+import type { ResolvedData } from '../interactions/read.ts';
 import type { ModuleTemplates } from '../placeholders/config-templates.ts';
 import type { Provider } from '../providers/types.ts';
 import type { EntitlementTier } from '../rules/facts.ts';
@@ -40,6 +46,8 @@ export interface ModuleContext<C = unknown> {
     options?: ScheduleOptions,
   ): Promise<ScheduleOutcome>;
   cancel?(jobId: string, naturalKey: string): Promise<void>;
+
+  commandLabel?(key: string, path?: string): string;
 }
 
 export type ScheduledHandler<C = unknown> = (data: unknown, ctx: ModuleContext<C>) => Promise<void>;
@@ -56,11 +64,16 @@ export interface CommandContext<C = unknown> extends ModuleContext<C> {
   // null is a member with no nickname; undefined is a nickname nobody read. Never merge the two.
   actorNick?: string | null;
   actorDisplayName?: string;
+  actorJoinedAt?: number | null;
 
   options: CommandOptions;
+  resolved?: ResolvedData;
   interaction: { id: string; token: string };
+  applicationId?: string;
 
   idempotencyKey: string;
+
+  privateReply?: boolean;
 }
 
 export interface CommandDefinition<C = unknown> {
@@ -69,6 +82,27 @@ export interface CommandDefinition<C = unknown> {
 
   data: RESTPostAPIChatInputApplicationCommandsJSONBody;
   handler(ctx: CommandContext<C>): Promise<void>;
+
+  reply?: CommandReplyPolicy<C>;
+  alwaysRegistered?: boolean;
+}
+
+export type ContextMenuType = 'user' | 'message';
+
+export interface ContextMenuContext<C = unknown> extends Omit<CommandContext<C>, 'options'> {
+  commandType: ContextMenuType;
+  targetId: string;
+  resolved: ResolvedData;
+}
+
+export interface ContextMenuDefinition<C = unknown> {
+  name: string;
+  type: ContextMenuType;
+  // Proton's listings only: Discord refuses a description on a context menu.
+  description: string;
+
+  data: RESTPostAPIContextMenuApplicationCommandsJSONBody;
+  handler(ctx: ContextMenuContext<C>): Promise<void>;
 }
 
 export interface EventListener<C = unknown> {
@@ -122,7 +156,13 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
   requiredEntitlement?: 'free' | 'plus' | 'pro';
   dependsOn?: string[];
   commands?: CommandDefinition<z.infer<C>>[];
+  contextMenus?: ContextMenuDefinition<z.infer<C>>[];
   listeners?: EventListener<z.infer<C>>[];
+
+  interactionConcurrency?: number;
+
+  // A DM press carries no member, so its handler must check the presser against its own record.
+  directInteractionGuild?(customId: ProtonCustomId): string | null;
 
   emits?: EventType[];
 
@@ -134,6 +174,7 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
 
   schedules?: string[];
   scheduledHandlers?: Record<string, ScheduledHandler<z.infer<C>>>;
+  scheduledWhileDisabled?: string[];
 
   // Condition and multiplier providers this module owns. A module may only register providers
   // namespaced to its own id, which is what lets giveaways consume leveling's without importing it.
@@ -153,6 +194,9 @@ export interface ModuleManifest<C extends z.ZodObject<z.ZodRawShape> = z.ZodObje
 
   // Writes only, never reads: a rule tightened here must not stop an older stored config loading.
   refineWrite?(next: z.infer<C>, before: z.infer<C>): ConfigWriteIssue[];
+
+  // Every role a saved config makes Proton hand out: one missing lets Proton's rank be a way up.
+  grantedRoles?(config: z.infer<C>): { path: string; roleId: string; scope?: string }[];
 
   /**
    * The messages this module puts in a channel and can put there again — a ticket panel, a role

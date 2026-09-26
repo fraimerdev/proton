@@ -1,3 +1,5 @@
+import type { ResolvedAttachment, ResolvedData } from '../interactions/read.ts';
+
 export const OptionType = {
   Subcommand: 1,
   SubcommandGroup: 2,
@@ -38,6 +40,7 @@ export interface CommandOptions {
   getUserId(name: string): string | null;
   getChannelId(name: string): string | null;
   getRoleId(name: string): string | null;
+  getAttachment(name: string): ResolvedAttachment | null;
 
   getSubcommand(): string | null;
   getSubcommandGroup(): string | null;
@@ -71,7 +74,10 @@ function resolve(raw: readonly RawOption[]): Resolved {
   return { flat, subcommand, group };
 }
 
-export function createCommandOptions(raw: readonly RawOption[] = []): CommandOptions {
+export function createCommandOptions(
+  raw: readonly RawOption[] = [],
+  resolved?: Pick<ResolvedData, 'attachments'>,
+): CommandOptions {
   const { flat, subcommand, group } = resolve(raw);
 
   function read(name: string, expectedTypes: number[], label: string): RawOption | null {
@@ -117,6 +123,11 @@ export function createCommandOptions(raw: readonly RawOption[] = []): CommandOpt
     getRoleId(name) {
       const option = read(name, [OptionType.Role, OptionType.Mentionable], 'a role');
       return option ? String(option.value) : null;
+    },
+
+    getAttachment(name) {
+      const option = read(name, [OptionType.Attachment], 'an attachment');
+      return option ? (resolved?.attachments.get(String(option.value)) ?? null) : null;
     },
 
     getSubcommand: () => subcommand,

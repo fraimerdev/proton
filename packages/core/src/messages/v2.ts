@@ -7,6 +7,7 @@ import {
   messageButtonSchema,
   toDiscordComponents,
 } from './components.ts';
+import { isLinkOrTemplate, LINK_MESSAGE } from './template-link.ts';
 
 export const COMPONENT_TYPE_SECTION = 9;
 export const COMPONENT_TYPE_TEXT_DISPLAY = 10;
@@ -36,9 +37,7 @@ const mediaLinkSchema = z
   .string()
   .trim()
   .min(1)
-  .refine((value) => /^https?:\/\//i.test(value) && URL.canParse(value), {
-    message: 'must be a complete http:// or https:// link',
-  });
+  .refine(isLinkOrTemplate, { message: LINK_MESSAGE });
 
 export const textDisplaySchema = z.object({
   kind: z.literal('text'),

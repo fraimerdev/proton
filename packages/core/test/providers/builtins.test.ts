@@ -44,7 +44,7 @@ describe('core.has_role', () => {
     const result = await hasRoleProvider.evaluate(ctx, { roleIds: [ROLE_A], mode: 'any' });
 
     expect(result.passed).toBe(false);
-    expect(result.indeterminate?.humanReason).toContain('Server Members intent');
+    expect(result.indeterminate?.humanReason).toContain('Server Members Intent');
   });
 
   test('an absent member is indeterminate', async () => {

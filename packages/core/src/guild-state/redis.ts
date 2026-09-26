@@ -54,6 +54,7 @@ function encode(state: GuildState): string {
     ...(state.description === undefined ? {} : { description: state.description }),
     ...(state.boostCount === undefined ? {} : { boostCount: state.boostCount }),
     ...(state.boostTier === undefined ? {} : { boostTier: state.boostTier }),
+    ...(state.afkChannelId === undefined ? {} : { afkChannelId: state.afkChannelId }),
     ...(state.profileAt === undefined ? {} : { profileAt: state.profileAt }),
     updatedAt: state.updatedAt,
   };
@@ -119,6 +120,7 @@ function decode(raw: string): GuildState | null {
     ...(isNullableText(wire.description) ? { description: wire.description } : {}),
     ...(isNullableNumber(wire.boostCount) ? { boostCount: wire.boostCount } : {}),
     ...(typeof wire.boostTier === 'number' ? { boostTier: wire.boostTier } : {}),
+    ...(isNullableText(wire.afkChannelId) ? { afkChannelId: wire.afkChannelId } : {}),
     ...(typeof wire.profileAt === 'number' ? { profileAt: wire.profileAt } : {}),
     updatedAt: wire.updatedAt,
   };
@@ -214,6 +216,7 @@ export class RedisGuildStateStore implements GuildStateStore {
         if (profile.description !== undefined) state.description = profile.description;
         if (profile.boostCount !== undefined) state.boostCount = profile.boostCount;
         if (profile.boostTier !== undefined) state.boostTier = profile.boostTier;
+        if (profile.afkChannelId !== undefined) state.afkChannelId = profile.afkChannelId;
         state.profileAt = patch.at;
         break;
       }

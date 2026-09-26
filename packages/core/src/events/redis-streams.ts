@@ -25,6 +25,9 @@ export interface RedisStreamsEventBusOptions {
   onSubscriptionError?: (group: string, error: unknown) => void;
 
   onMalformed?: (streamKey: string, id: string) => void;
+
+  retentionMs?: number;
+  deadLetterRetentionMs?: number;
 }
 
 type CallbackKeys = 'onDeadLetter' | 'onHandlerError' | 'onMalformed' | 'onSubscriptionError';
@@ -44,6 +47,8 @@ function resolve(options: RedisStreamsEventBusOptions): ResolvedOptions {
     maxDeliveries: options.maxDeliveries ?? 5,
     blockMs: options.blockMs ?? 500,
     batchSize: options.batchSize ?? 16,
+    retentionMs: options.retentionMs ?? 86_400_000,
+    deadLetterRetentionMs: options.deadLetterRetentionMs ?? 7 * 86_400_000,
     onDeadLetter: options.onDeadLetter,
     onHandlerError: options.onHandlerError,
     onMalformed: options.onMalformed,
@@ -66,6 +71,8 @@ class StreamSubscription implements Subscription {
   readonly #handler: (e: ProtonEvent) => Promise<void>;
   readonly #opts: ResolvedOptions;
   readonly #startId: GroupStartId;
+  readonly #concurrency: number;
+  readonly #inflight = new Map<string, Promise<void>>();
   #ensured = false;
   readonly #ready = Promise.withResolvers<void>();
 
@@ -77,6 +84,7 @@ class StreamSubscription implements Subscription {
     handler: (e: ProtonEvent) => Promise<void>,
     opts: ResolvedOptions,
     startId: GroupStartId,
+    concurrency: number,
   ) {
     this.#redis = redis;
     this.group = group;
@@ -85,6 +93,7 @@ class StreamSubscription implements Subscription {
     this.#handler = handler;
     this.#opts = opts;
     this.#startId = startId;
+    this.#concurrency = concurrency;
     this.#loop = this.#run();
   }
 
@@ -111,6 +120,8 @@ class StreamSubscription implements Subscription {
         await Bun.sleep(50);
       }
     }
+
+    await Promise.allSettled(this.#inflight.values());
   }
 
   async #ensureGroups(): Promise<void> {
@@ -144,12 +155,15 @@ class StreamSubscription implements Subscription {
         this.#opts.claimIdleMs,
         '-',
         '+',
-        this.#opts.batchSize,
+        this.#opts.batchSize + this.#inflight.size,
       )) as PendingEntry[] | null;
 
       if (!pending?.length) continue;
 
       for (const [id, , , deliveries] of pending) {
+        // In flight here past claimIdleMs: claiming it again would run it twice.
+        if (this.#inflight.has(slotOf(key, id))) continue;
+
         if (deliveries > this.#opts.maxDeliveries) {
           await this.#deadLetter(type, key, id, deliveries);
           continue;
@@ -164,20 +178,26 @@ class StreamSubscription implements Subscription {
         )) as StreamEntry[] | null;
 
         for (const entry of claimed ?? []) {
-          await this.#handleEntry(key, entry);
+          await this.#dispatch(key, entry);
         }
       }
     }
   }
 
   async #readNew(): Promise<void> {
+    const room = this.#concurrency - this.#inflight.size;
+    if (this.#concurrency > 1 && room <= 0) {
+      await Promise.race(this.#inflight.values());
+      return;
+    }
+
     const keys = this.#types.map(streamKey);
     const reply = (await this.#redis.xreadgroup(
       'GROUP',
       this.group,
       this.#consumer,
       'COUNT',
-      this.#opts.batchSize,
+      this.#concurrency > 1 ? Math.min(this.#opts.batchSize, room) : this.#opts.batchSize,
       'BLOCK',
       this.#opts.blockMs,
       'STREAMS',
@@ -190,9 +210,26 @@ class StreamSubscription implements Subscription {
     for (const [key, entries] of reply) {
       for (const entry of entries) {
         if (!this.#running) return;
-        await this.#handleEntry(key, entry);
+        await this.#dispatch(key, entry);
       }
     }
+  }
+
+  async #dispatch(key: string, entry: StreamEntry): Promise<void> {
+    if (this.#concurrency <= 1) {
+      await this.#handleEntry(key, entry);
+      return;
+    }
+
+    while (this.#inflight.size >= this.#concurrency) {
+      await Promise.race(this.#inflight.values());
+    }
+
+    const slot = slotOf(key, entry[0]);
+    const running = this.#handleEntry(key, entry)
+      .catch((error: unknown) => this.#opts.onSubscriptionError?.(this.group, error))
+      .finally(() => this.#inflight.delete(slot));
+    this.#inflight.set(slot, running);
   }
 
   async #handleEntry(key: string, [id, fields]: StreamEntry): Promise<void> {
@@ -218,13 +255,25 @@ class StreamSubscription implements Subscription {
 
     if (entry) {
       const event = parseEntry(entry[1]);
-      await this.#redis.xadd(dlqKey(type), '*', FIELD, entry[1][1] ?? '');
+      await this.#redis.xadd(
+        dlqKey(type),
+        'MINID',
+        '~',
+        oldestKept(this.#opts.deadLetterRetentionMs),
+        '*',
+        FIELD,
+        entry[1][1] ?? '',
+      );
       if (event) this.#opts.onDeadLetter?.(event, deliveries, this.group);
     }
 
     await this.#redis.xack(key, this.group, id);
   }
 }
+
+const oldestKept = (retentionMs: number): string => String(Date.now() - retentionMs);
+
+const slotOf = (key: string, id: string): string => `${key} ${id}`;
 
 function parseEntry(fields: string[]): ProtonEvent | null {
   const index = fields.indexOf(FIELD);
@@ -249,7 +298,33 @@ export class RedisStreamsEventBus implements EventBus {
   }
 
   async publish(event: ProtonEvent): Promise<void> {
-    await this.#redis.xadd(streamKey(event.type), '*', FIELD, JSON.stringify(event));
+    await this.#redis.xadd(
+      streamKey(event.type),
+      'MINID',
+      '~',
+      oldestKept(this.#opts.retentionMs),
+      '*',
+      FIELD,
+      JSON.stringify(event),
+    );
+  }
+
+  async trim(): Promise<void> {
+    const sweeps = [
+      [STREAM_PREFIX, this.#opts.retentionMs],
+      [DLQ_PREFIX, this.#opts.deadLetterRetentionMs],
+    ] as const;
+
+    for (const [prefix, retentionMs] of sweeps) {
+      let cursor = '0';
+      do {
+        const [next, keys] = await this.#redis.scan(cursor, 'MATCH', `${prefix}:*`, 'COUNT', 100);
+        cursor = next;
+        for (const key of keys) {
+          await this.#redis.xtrim(key, 'MINID', oldestKept(retentionMs));
+        }
+      } while (cursor !== '0');
+    }
   }
 
   subscribe(
@@ -260,6 +335,7 @@ export class RedisStreamsEventBus implements EventBus {
   ): Subscription {
     const connection = this.#redis.duplicate();
     const consumer = `${group}-${crypto.randomUUID().slice(0, 8)}`;
+    const concurrency = options.concurrency ?? 1;
 
     const subscription = new StreamSubscription(
       connection,
@@ -269,6 +345,7 @@ export class RedisStreamsEventBus implements EventBus {
       handler,
       this.#opts,
       options.startId ?? this.#opts.groupStartId,
+      Number.isInteger(concurrency) && concurrency > 1 ? concurrency : 1,
     );
     this.#subscriptions.add(subscription);
     return subscription;

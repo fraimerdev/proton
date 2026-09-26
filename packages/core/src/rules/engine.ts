@@ -119,6 +119,7 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
     case 'edit_message':
     case 'delete_message':
     case 'add_reaction':
+    case 'remove_reaction':
     case 'delete_channel':
     case 'edit_channel':
     case 'set_channel_overwrite':
@@ -134,6 +135,7 @@ function payloadDefaults(kind: ActionKind, facts: RuleFacts): Record<string, unk
 
     case 'interaction_reply':
     case 'interaction_followup':
+    case 'interaction_edit_original':
     case 'set_member_nickname':
       return {};
 

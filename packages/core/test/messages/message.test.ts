@@ -395,7 +395,7 @@ describe('components', () => {
       },
     ];
 
-    expect(componentIssues(rows)).toContain('could not say which');
+    expect(componentIssues(rows)).toContain("couldn't say which");
   });
 });
 

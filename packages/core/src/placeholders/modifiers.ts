@@ -61,6 +61,7 @@ interface ModifierSpec {
   args: readonly ArgumentKind[];
   range?: readonly [number, number];
   usage: string;
+  description: string;
   prose?: true;
   accepts(type: FlowType): boolean;
   result(type: FlowType): FlowType;
@@ -90,6 +91,7 @@ const MODIFIERS: Record<ModifierName, ModifierSpec> = {
   number: {
     args: [],
     usage: ':number',
+    description: 'Groups the digits, like 1,204.',
     prose: true,
     accepts: numeric,
     result: becomes('formatted'),
@@ -97,6 +99,7 @@ const MODIFIERS: Record<ModifierName, ModifierSpec> = {
   compact: {
     args: [],
     usage: ':compact',
+    description: 'Shortens big numbers, like 1.2K.',
     prose: true,
     accepts: oneOf('integer', 'number'),
     result: becomes('formatted'),
@@ -104,6 +107,7 @@ const MODIFIERS: Record<ModifierName, ModifierSpec> = {
   ordinal: {
     args: [],
     usage: ':ordinal',
+    description: 'Adds st, nd, rd or th, like 3rd.',
     prose: true,
     accepts: oneOf('integer'),
     result: becomes('formatted'),
@@ -111,42 +115,98 @@ const MODIFIERS: Record<ModifierName, ModifierSpec> = {
   percent: {
     args: [],
     usage: ':percent',
+    description: 'Adds a % sign, like 45%.',
     prose: true,
     accepts: numeric,
     result: becomes('formatted'),
   },
-  upper: { args: [], usage: ':upper', accepts: textual, result: keep },
-  lower: { args: [], usage: ':lower', accepts: textual, result: keep },
+  upper: {
+    args: [],
+    usage: ':upper',
+    description: 'All capital letters.',
+    accepts: textual,
+    result: keep,
+  },
+  lower: {
+    args: [],
+    usage: ':lower',
+    description: 'All lowercase letters.',
+    accepts: textual,
+    result: keep,
+  },
   truncate: {
     args: ['integer'],
     range: [1, PLACEHOLDER_LIMITS.outputLength],
     usage: ':truncate(40)',
+    description: 'Cuts it to a number of characters and adds … when it was longer.',
     accepts: textual,
     result: keep,
   },
-  slug: { args: [], usage: ':slug', accepts: oneOf('text'), result: keep },
+  slug: {
+    args: [],
+    usage: ':slug',
+    description: 'Lowercase with dashes, like proton-hq.',
+    accepts: oneOf('text'),
+    result: keep,
+  },
   relative: {
     args: [],
     usage: ':relative',
+    description: 'How long ago or from now, like 3 hours ago.',
     prose: true,
     accepts: dated,
     result: becomes('formatted'),
   },
-  full: { args: [], usage: ':full', prose: true, accepts: dated, result: becomes('formatted') },
-  date: { args: [], usage: ':date', prose: true, accepts: dated, result: becomes('formatted') },
-  time: { args: [], usage: ':time', prose: true, accepts: dated, result: becomes('formatted') },
-  unix: { args: [], usage: ':unix', accepts: dated, result: becomes('integer') },
+  full: {
+    args: [],
+    usage: ':full',
+    description: 'The full date and time, with the day of the week.',
+    prose: true,
+    accepts: dated,
+    result: becomes('formatted'),
+  },
+  date: {
+    args: [],
+    usage: ':date',
+    description: 'Just the date.',
+    prose: true,
+    accepts: dated,
+    result: becomes('formatted'),
+  },
+  time: {
+    args: [],
+    usage: ':time',
+    description: 'Just the time.',
+    prose: true,
+    accepts: dated,
+    result: becomes('formatted'),
+  },
+  unix: {
+    args: [],
+    usage: ':unix',
+    description: 'A Unix timestamp in seconds.',
+    accepts: dated,
+    result: becomes('integer'),
+  },
   duration: {
     args: [],
     usage: ':duration',
+    description: 'A readable length of time, like 3 days.',
     prose: true,
     accepts: oneOf('duration'),
     result: becomes('formatted'),
   },
-  fallback: { args: ['string'], usage: ':fallback("nobody")', accepts: () => true, result: keep },
+  fallback: {
+    args: ['string'],
+    usage: ':fallback("nobody")',
+    description: 'What to show when there’s no value.',
+    accepts: () => true,
+    result: keep,
+  },
   join: {
     args: ['string'],
     usage: ':join(", ")',
+    description: 'Joins the list with your own separator.',
     prose: true,
     accepts: isList,
     result: becomes('formatted'),
@@ -155,13 +215,21 @@ const MODIFIERS: Record<ModifierName, ModifierSpec> = {
     args: ['integer'],
     range: [1, PLACEHOLDER_LIMITS.listItems],
     usage: ':limit(5)',
+    description: 'Keeps only the first few items of the list.',
     accepts: isList,
     result: keep,
   },
-  count: { args: [], usage: ':count', accepts: isList, result: becomes('integer') },
+  count: {
+    args: [],
+    usage: ':count',
+    description: 'How many items the list has.',
+    accepts: isList,
+    result: becomes('integer'),
+  },
   label: {
     args: ['string', 'string'],
     usage: ':label("yes","no")',
+    description: 'Your own words for yes and no.',
     prose: true,
     accepts: oneOf('boolean'),
     result: becomes('formatted'),
@@ -172,10 +240,107 @@ export function modifierUsage(name: ModifierName): string {
   return MODIFIERS[name].usage;
 }
 
+export function modifierDescription(name: ModifierName): string {
+  return MODIFIERS[name].description;
+}
+
 export function modifiersFor(type: FlowType, field: TemplateField): ModifierName[] {
   return MODIFIER_NAMES.filter(
     (name) => MODIFIERS[name].accepts(type) && !(MODIFIERS[name].prose && field === 'url'),
   );
+}
+
+export interface ModifierChoice {
+  name: ModifierName;
+  usage: string;
+  description: string;
+  takesArguments: boolean;
+}
+
+export interface ModifierChoiceContext {
+  type: PlaceholderType;
+  field: TemplateField;
+  allowed?: readonly ModifierName[] | undefined;
+  previous: readonly string[];
+}
+
+function knownModifier(name: string): ModifierName | undefined {
+  return MODIFIER_NAMES.find((known) => known === name);
+}
+
+function offers(
+  name: ModifierName,
+  type: FlowType,
+  field: TemplateField,
+  allowed: readonly ModifierName[] | undefined,
+): boolean {
+  const spec = MODIFIERS[name];
+  if (name !== 'fallback' && allowed !== undefined && !allowed.includes(name)) return false;
+  if (spec.prose && field === 'url') return false;
+  return spec.accepts(type);
+}
+
+export function modifierChoices({
+  type,
+  field,
+  allowed,
+  previous,
+}: ModifierChoiceContext): ModifierChoice[] {
+  let flow: FlowType = type;
+  const used = new Set<ModifierName>();
+
+  for (const raw of previous) {
+    const name = knownModifier(raw);
+    if (name === undefined) continue;
+
+    used.add(name);
+    if (name !== 'fallback' && offers(name, flow, field, allowed))
+      flow = MODIFIERS[name].result(flow);
+  }
+
+  return MODIFIER_NAMES.filter((name) => !used.has(name) && offers(name, flow, field, allowed)).map(
+    (name) => ({
+      name,
+      usage: MODIFIERS[name].usage,
+      description: MODIFIERS[name].description,
+      takesArguments: MODIFIERS[name].args.length > 0,
+    }),
+  );
+}
+
+function closestModifier(name: string): ModifierName | undefined {
+  const lower = name.toLowerCase();
+  let best: ModifierName | undefined;
+  let distance = 3;
+
+  for (const known of MODIFIER_NAMES) {
+    if (known === lower) return known;
+    if (Math.abs(known.length - lower.length) >= distance) continue;
+
+    let previous = Array.from({ length: lower.length + 1 }, (_, index) => index);
+    for (let row = 1; row <= known.length; row += 1) {
+      const current = [row];
+      for (let column = 1; column <= lower.length; column += 1) {
+        const cost = known.charAt(row - 1) === lower.charAt(column - 1) ? 0 : 1;
+        current.push(
+          Math.min(
+            (previous[column] ?? distance) + 1,
+            (current[column - 1] ?? distance) + 1,
+            (previous[column - 1] ?? distance) + cost,
+          ),
+        );
+      }
+      previous = current;
+    }
+
+    const found = previous[lower.length] ?? distance;
+    if (found < distance) {
+      best = known;
+      distance = found;
+    }
+  }
+
+  return best;
 }
 
 function argumentProblem(
@@ -236,10 +401,11 @@ export function planModifiers(
     const name = MODIFIER_NAMES.find((known) => known === modifier.name);
 
     if (name === undefined) {
+      const guess = closestModifier(modifier.name);
       reporter.report(
         'unknown_modifier',
-        `:${modifier.name} is not a modifier, so ${subject.raw} ignores it. The modifiers are ` +
-          `${MODIFIER_NAMES.map((known) => `:${known}`).join(', ')}.`,
+        `:${modifier.name} isn't a modifier, so ${subject.raw} ignores it.` +
+          (guess === undefined ? '' : ` Did you mean :${guess}?`),
         modifier.span,
       );
       continue;
@@ -260,7 +426,7 @@ export function planModifiers(
     if (name !== 'fallback' && subject.allowed !== undefined && !subject.allowed.includes(name)) {
       reporter.report(
         'incompatible_modifier',
-        `${subject.raw} does not take :${name}, so it is ignored.`,
+        `${subject.raw} doesn't take :${name}, so it's ignored.`,
         modifier.span,
       );
       continue;
@@ -269,7 +435,7 @@ export function planModifiers(
     if (spec.prose && field === 'url') {
       reporter.report(
         'incompatible_modifier',
-        `:${name} writes readable text, which cannot go in ${FIELD_LABELS.url}, so ${subject.raw} ignores it.`,
+        `:${name} writes readable text, which can't go in ${FIELD_LABELS.url}, so ${subject.raw} ignores it.`,
         modifier.span,
       );
       continue;
@@ -278,7 +444,7 @@ export function planModifiers(
     if (!spec.accepts(type)) {
       reporter.report(
         'incompatible_modifier',
-        `:${name} does not apply to ${describeType(type)}, so ${subject.raw} ignores it.`,
+        `:${name} doesn't work on ${describeType(type)}, so ${subject.raw} ignores it.`,
         modifier.span,
       );
       continue;
@@ -308,7 +474,7 @@ export function planModifiers(
   if (!fits) {
     reporter.report(
       'incompatible_field',
-      `${subject.raw} is ${describeType(type)}, which cannot go in ${FIELD_LABELS[field]}.`,
+      `${subject.raw} is ${describeType(type)}, which can't go in ${FIELD_LABELS[field]}.`,
       subject.span,
     );
   }

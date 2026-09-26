@@ -228,7 +228,7 @@ describe('diagnostics the surface kit adds', () => {
     expect(codesAt(byDefault, 'welcomeMessage.content')).toContain('may_ping');
     expect(byDefault.blocking).toEqual([]);
     expect(byDefault.byPath.get('welcomeMessage.content')?.at(-1)?.message).toContain(
-      'Turn off role pings under Mentions',
+      'Turn off Roles under Mentions',
     );
 
     const policy = (roles: boolean, users: boolean, content: string) =>

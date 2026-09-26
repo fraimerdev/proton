@@ -56,6 +56,15 @@ export const placeholderDefinitionSchema = z
     label: z.string().trim().min(1).max(80),
     description: z.string().trim().max(300).default(''),
     group: z.string().trim().min(1).max(40),
+    keywords: z
+      .array(
+        z
+          .string()
+          .max(40)
+          .regex(/^[a-z0-9_]+$/, 'must be lowercase letters, digits and underscores'),
+      )
+      .max(12)
+      .default([]),
     type: placeholderTypeSchema,
     example: placeholderValueSchema,
     availability: z
@@ -268,13 +277,11 @@ export function unavailableReason(
   const { events, fields } = definition.availability;
 
   if (fields !== undefined && !fields.includes(context.field)) {
-    return `cannot be used in ${FIELD_LABELS[context.field]}`;
+    return `can't be used in ${FIELD_LABELS[context.field]}`;
   }
 
   if (events !== undefined && (context.event === undefined || !events.includes(context.event))) {
-    return context.event === undefined
-      ? `is only available for ${events.join(', ')}`
-      : `is not available for ${context.event}`;
+    return context.event === undefined ? 'only works in some messages' : "doesn't work here";
   }
 
   return undefined;

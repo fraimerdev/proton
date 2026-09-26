@@ -10,6 +10,7 @@ import {
   PROTON_SUPPORT_URL,
   type ResolvedValue,
   renderTemplate,
+  SAMPLE_ACHIEVEMENT,
   SAMPLE_BOT,
   SAMPLE_CONTEXT,
   SAMPLE_GIVEAWAY_WIN,
@@ -17,6 +18,7 @@ import {
   SAMPLE_LEVEL_UP,
   SAMPLE_MEMBER,
   SAMPLE_NOW,
+  SAMPLE_REPORTER,
   SAMPLE_SERVER,
   SAMPLE_TEMPVC,
   SAMPLE_TICKET_CLOSED,
@@ -37,6 +39,9 @@ function absentKeys(values: Record<string, ResolvedValue>): Record<string, strin
 describe('samples', () => {
   test('every sample id is distinct', () => {
     expect(new Set(SAMPLE_IDS).size).toBe(SAMPLE_IDS.length);
+    expect(SAMPLE_IDS).toContain('report');
+    expect(SAMPLE_IDS).toContain('punishment');
+    expect(SAMPLE_IDS).toContain('achievement');
   });
 
   test('the Discord ids across the samples are real snowflakes and never collide', () => {
@@ -45,8 +50,11 @@ describe('samples', () => {
       SAMPLE_SERVER.ownerId,
       SAMPLE_MEMBER.user.id,
       ...(SAMPLE_MEMBER.member.roleIds ?? []),
+      SAMPLE_REPORTER.user.id,
+      ...(SAMPLE_REPORTER.member.roleIds ?? []),
       SAMPLE_BOT.id,
       SAMPLE_TICKET_CLOSED.closedById,
+      SAMPLE_ACHIEVEMENT.rewardRole.id,
     ];
 
     for (const id of ids) expect(id).toMatch(/^\d{17,20}$/);
@@ -65,6 +73,27 @@ describe('samples', () => {
     expect(SAMPLE_BOT.supportUrl).toBe(PROTON_SUPPORT_URL);
     expect(SAMPLE_LEVEL_UP.level).toBe(SAMPLE_LEVEL_UP.previous + 1);
     expect(SAMPLE_LEVEL_UP.rank).toBeLessThanOrEqual(SAMPLE_LEVEL_UP.rankedMemberCount);
+    expect(SAMPLE_REPORTER.user).toMatchObject({
+      id: '100000000000000011',
+      username: 'nova',
+      globalName: 'Nova',
+    });
+    expect(Date.parse(SAMPLE_REPORTER.member.joinedAt ?? '')).toBeLessThan(SAMPLE_NOW);
+    expect(SAMPLE_ACHIEVEMENT.member.user).toBe(SAMPLE_MEMBER.user);
+    expect(Date.parse(SAMPLE_ACHIEVEMENT.member.member.joinedAt ?? '')).toBeLessThan(SAMPLE_NOW);
+    expect(SAMPLE_ACHIEVEMENT.unlockedAt).toBe(SAMPLE_NOW);
+    expect(SAMPLE_ACHIEVEMENT.tiersUnlocked.at(-1)).toBe(SAMPLE_ACHIEVEMENT.tier);
+    expect(SAMPLE_ACHIEVEMENT.achievement.tierCount).toBeGreaterThan(
+      SAMPLE_ACHIEVEMENT.tiersUnlocked.length,
+    );
+    for (const requirement of SAMPLE_ACHIEVEMENT.requirements) {
+      expect(requirement.current).toBeGreaterThanOrEqual(requirement.target);
+      expect(SAMPLE_ACHIEVEMENT.next.target).toBeGreaterThan(requirement.target);
+    }
+    expect(SAMPLE_ACHIEVEMENT.rewards.granted).toEqual([
+      { kind: 'add_role', roleId: SAMPLE_ACHIEVEMENT.rewardRole.id },
+      { kind: 'xp', amount: 250 },
+    ]);
     expect(SAMPLE_CONTEXT).toEqual({
       now: SAMPLE_NOW,
       server: SAMPLE_SERVER,
@@ -78,8 +107,12 @@ describe('samples', () => {
       SAMPLE_SERVER,
       SAMPLE_MEMBER.member,
       SAMPLE_MEMBER.member.roleIds,
+      SAMPLE_REPORTER.user,
+      SAMPLE_REPORTER.member.roleIds,
       SAMPLE_TICKET_CLOSED.answers[0],
       SAMPLE_CONTEXT,
+      SAMPLE_ACHIEVEMENT.rewards.granted,
+      SAMPLE_ACHIEVEMENT.requirements[0],
     ]) {
       expect(Object.isFrozen(sample)).toBe(true);
     }
@@ -93,6 +126,11 @@ describe('samples', () => {
     expect(
       absentKeys(buildUserValues('user', SAMPLE_MEMBER.user, SAMPLE_MEMBER.member, SAMPLE_NOW)),
     ).toEqual({ 'user.nickname': 'not_set', 'user.boosting_since': 'not_set' });
+    expect(
+      absentKeys(
+        buildUserValues('reporter', SAMPLE_REPORTER.user, SAMPLE_REPORTER.member, SAMPLE_NOW),
+      ),
+    ).toEqual({ 'reporter.nickname': 'not_set', 'reporter.boosting_since': 'not_set' });
     expect(absentKeys(buildServerValues(SAMPLE_SERVER))).toEqual({
       'server.icon_url': 'not_set',
       'server.banner_url': 'not_set',

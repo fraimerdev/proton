@@ -27,6 +27,7 @@ import {
   INTERACTION_CALLBACK_AUTOCOMPLETE_RESULT,
   INTERACTION_CALLBACK_MODAL,
   type InteractionReplyPayload,
+  interactionEditOriginalPayloadSchema,
   interactionFollowupPayloadSchema,
   interactionReplyPayloadSchema,
   isDeferral,
@@ -34,10 +35,13 @@ import {
   lockdownPayloadSchema,
   MAX_TIMEOUT_MS,
   MESSAGE_FLAG_EPHEMERAL,
+  MESSAGE_FLAG_IS_COMPONENTS_V2,
   moveMemberPayloadSchema,
   pinMessagePayloadSchema,
   purgePayloadSchema,
+  removeReactionPayloadSchema,
   roleChangePayloadSchema,
+  type SendPayload,
   sendPayloadSchema,
   setBotNameStylePayloadSchema,
   setBotNicknamePayloadSchema,
@@ -163,14 +167,32 @@ function interactionCallbackData(
   });
 }
 
+const MESSAGE_REFERENCE_FORWARD = 1;
+
+function messageReference(payload: SendPayload, guildId: string): unknown {
+  if (payload.forward) {
+    return {
+      type: MESSAGE_REFERENCE_FORWARD,
+      channel_id: payload.forward.channelId,
+      message_id: payload.forward.messageId,
+      guild_id: guildId,
+    };
+  }
+
+  return payload.replyToMessageId
+    ? { message_id: payload.replyToMessageId, fail_if_not_exists: false }
+    : undefined;
+}
+
 // snake_case at the edge, like every other body here. Null is kept and undefined dropped, because
 // null is how a gradient is taken back off a role and undefined is how it is left alone.
 function auditHeaders(request: ActionRequest): Record<string, string> | undefined {
-  if (!request.reason) return undefined;
+  const reason = request.auditReason ?? request.reason;
+  if (!reason) return undefined;
 
   // Sliced before encoding, never after. Discord counts the 512 against the decoded reason, and a
   // cut through a percent-escape leaves a tail like '%2' that decodes to nothing at all.
-  return { 'x-audit-log-reason': encodeURIComponent(request.reason.slice(0, AUDIT_REASON_MAX)) };
+  return { 'x-audit-log-reason': encodeURIComponent(reason.slice(0, AUDIT_REASON_MAX)) };
 }
 
 export function toRestCall(request: ActionRequest): PayloadResult {
@@ -197,9 +219,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             flags: p.data.flags,
             allowed_mentions: p.data.allowedMentions,
 
-            message_reference: p.data.replyToMessageId
-              ? { message_id: p.data.replyToMessageId, fail_if_not_exists: false }
-              : undefined,
+            message_reference: messageReference(p.data, guild),
           }),
           ...(files ? { files } : {}),
         },
@@ -218,6 +238,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
             embeds: p.data.embeds,
             components: p.data.components,
             flags: p.data.flags,
+            allowed_mentions: p.data.allowedMentions,
           }),
         },
       };
@@ -244,6 +265,20 @@ export function toRestCall(request: ActionRequest): PayloadResult {
           path: `/channels/${p.data.channelId}/messages/${p.data.messageId}/reactions/${encodeURIComponent(
             p.data.emoji,
           )}/@me`,
+        },
+      };
+    }
+
+    case 'remove_reaction': {
+      const p = removeReactionPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      return {
+        call: {
+          method: 'DELETE',
+          path: `/channels/${p.data.channelId}/messages/${p.data.messageId}/reactions/${encodeURIComponent(
+            p.data.emoji,
+          )}/${p.data.userId}`,
         },
       };
     }
@@ -288,6 +323,30 @@ export function toRestCall(request: ActionRequest): PayloadResult {
               (p.data.ephemeral ? MESSAGE_FLAG_EPHEMERAL : 0) | (p.data.flags ?? 0) || undefined,
           }),
           ...(files ? { files } : {}),
+        },
+      };
+    }
+
+    case 'interaction_edit_original': {
+      const p = interactionEditOriginalPayloadSchema.safeParse(request.payload);
+      if (!p.success) return issues(request, p.error.issues);
+
+      const v2 = ((p.data.flags ?? 0) & MESSAGE_FLAG_IS_COMPONENTS_V2) !== 0;
+      return {
+        call: {
+          method: 'PATCH',
+          path: `/webhooks/${p.data.applicationId}/${p.data.interactionToken}/messages/@original`,
+          body: {
+            ...present({
+              content: p.data.content,
+              embeds: p.data.embeds,
+              components: p.data.components,
+              allowed_mentions: p.data.allowedMentions,
+              flags: p.data.flags,
+            }),
+            // Not omitted: a V2 edit that leaves the original's content or embeds is refused.
+            ...(v2 ? { content: null, embeds: null } : {}),
+          },
         },
       };
     }
@@ -367,7 +426,7 @@ export function toRestCall(request: ActionRequest): PayloadResult {
         };
       }
       if (ms <= 0) {
-        return { error: 'That timeout would expire immediately — pick a time in the future.' };
+        return { error: 'That timeout would end immediately. Pick a time in the future.' };
       }
 
       return {

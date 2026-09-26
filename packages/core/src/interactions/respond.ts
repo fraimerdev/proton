@@ -8,6 +8,7 @@ import {
   INTERACTION_CALLBACK_DEFERRED_UPDATE,
   INTERACTION_CALLBACK_MODAL,
   INTERACTION_CALLBACK_UPDATE_MESSAGE,
+  MESSAGE_FLAG_EPHEMERAL,
   type Modal,
 } from '../actions/payloads.ts';
 import type { ActionRequest } from '../actions/types.ts';
@@ -101,6 +102,15 @@ export function deferEphemeral(to: RespondTo): ActionRequest {
   return reply(to, 'defer', { ephemeral: true }, INTERACTION_CALLBACK_DEFERRED_MESSAGE);
 }
 
+export function defer(to: RespondTo, options: { ephemeral: boolean }): ActionRequest {
+  return reply(
+    to,
+    'defer',
+    { ephemeral: options.ephemeral },
+    INTERACTION_CALLBACK_DEFERRED_MESSAGE,
+  );
+}
+
 export function deferUpdate(to: RespondTo): ActionRequest {
   return reply(to, 'defer-update', {}, INTERACTION_CALLBACK_DEFERRED_UPDATE);
 }
@@ -163,7 +173,7 @@ export function respondAutocomplete(
   );
 }
 
-export function followUp(to: FollowUpTo, input: MessageInput): ActionRequest {
+export function followUp(to: FollowUpTo, input: MessageInput, suffix?: string): ActionRequest {
   const message = messageOf(input);
 
   return {
@@ -172,7 +182,7 @@ export function followUp(to: FollowUpTo, input: MessageInput): ActionRequest {
     kind: 'interaction_followup',
     actorId: to.actorId,
     dryRun: false,
-    idempotencyKey: keyFor(to, 'followup'),
+    idempotencyKey: keyFor(to, suffix === undefined ? 'followup' : `followup:${suffix}`),
     record: false,
     payload: present({
       applicationId: to.applicationId,
@@ -184,6 +194,31 @@ export function followUp(to: FollowUpTo, input: MessageInput): ActionRequest {
       flags: message.flags,
       allowedMentions: message.allowedMentions,
       ephemeral: message.ephemeral ?? true,
+    }),
+  };
+}
+
+export function editOriginal(to: FollowUpTo, input: MessageInput, suffix?: string): ActionRequest {
+  const message = messageOf(input);
+  // Masked, not kept: the first response fixed the visibility, and an edit may not carry the bit.
+  const flags = (message.flags ?? 0) & ~MESSAGE_FLAG_EPHEMERAL;
+
+  return {
+    guildId: to.guildId,
+    moduleId: to.moduleId,
+    kind: 'interaction_edit_original',
+    actorId: to.actorId,
+    dryRun: false,
+    idempotencyKey: keyFor(to, suffix === undefined ? 'edit-original' : `edit-original:${suffix}`),
+    record: false,
+    payload: present({
+      applicationId: to.applicationId,
+      interactionToken: to.interaction.token,
+      content: message.content,
+      embeds: message.embeds,
+      components: message.components,
+      flags: flags === 0 ? undefined : flags,
+      allowedMentions: message.allowedMentions,
     }),
   };
 }

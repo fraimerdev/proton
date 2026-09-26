@@ -32,6 +32,7 @@ export interface GuildState {
   description?: string | null;
   boostCount?: number | null;
   boostTier?: number;
+  afkChannelId?: string | null;
   profileAt?: number;
 
   updatedAt: number;
@@ -44,6 +45,7 @@ export interface GuildProfile {
   description?: string | null;
   boostCount?: number | null;
   boostTier?: number;
+  afkChannelId?: string | null;
 }
 
 export type GuildStatePatch =

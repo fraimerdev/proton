@@ -130,6 +130,10 @@ export function fieldAccepts(field: TemplateField, type: FlowType): boolean {
   return field !== 'url' || URL_FIELD_TYPES.has(type);
 }
 
+export function rendersLink(type: FlowType): boolean {
+  return type === 'url' || type === 'image_url';
+}
+
 export type ReadValue =
   | { ok: true; resolved: ResolvedValue; total: number }
   | { ok: false; problem: string | undefined };

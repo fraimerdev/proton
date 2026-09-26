@@ -7,6 +7,7 @@ import {
   MAX_COMPONENTS_PER_MESSAGE,
   MAX_COMPONENTS_PER_MODAL,
   MESSAGE_FLAG_IS_COMPONENTS_V2,
+  sendPayloadSchema,
   setMemberNicknamePayloadSchema,
   THREAD_TYPE_PRIVATE,
   THREAD_TYPE_PUBLIC,
@@ -117,7 +118,7 @@ describe('delete_channel', () => {
 
   test('refuses a channel id that is not a snowflake', () => {
     expect(errorOf(toRestCall(request('delete_channel', { channelId: 'general' })))).toContain(
-      'snowflake',
+      'Discord ID',
     );
   });
 });
@@ -140,7 +141,7 @@ describe('delete_role', () => {
 
   test('refuses a role id that is not a snowflake', () => {
     expect(errorOf(toRestCall(request('delete_role', { roleId: 'Proton' })))).toContain(
-      'snowflake',
+      'Discord ID',
     );
   });
 });
@@ -330,6 +331,229 @@ describe('move_member', () => {
 
     expect(has(required, Permissions.MoveMembers)).toBe(true);
     expect(has(required, Permissions.Connect)).toBe(true);
+  });
+
+  test('a null destination disconnects them, sent to Discord as null rather than dropped', () => {
+    const call = callOf(
+      toRestCall(request('move_member', { userId: USER, channelId: null }, 'punished')),
+    );
+
+    expect(call.method).toBe('PATCH');
+    expect(call.path).toBe(`/guilds/${GUILD}/members/${USER}`);
+    expect(call.body).toEqual({ channel_id: null });
+    expect(call.headers?.['x-audit-log-reason']).toBe('punished');
+  });
+});
+
+describe('remove_reaction', () => {
+  const REACTOR = '100000000000000009';
+
+  test('deletes that member’s reaction, with a unicode emoji percent-encoded', () => {
+    const call = callOf(
+      toRestCall(
+        request('remove_reaction', {
+          channelId: CHANNEL,
+          messageId: MESSAGE,
+          emoji: '🚩',
+          userId: REACTOR,
+        }),
+      ),
+    );
+
+    expect(call.method).toBe('DELETE');
+    expect(call.path).toBe(
+      `/channels/${CHANNEL}/messages/${MESSAGE}/reactions/${encodeURIComponent('🚩')}/${REACTOR}`,
+    );
+    expect(call.body).toBeUndefined();
+  });
+
+  test('takes a custom emoji in Discord’s name:id form', () => {
+    const call = callOf(
+      toRestCall(
+        request('remove_reaction', {
+          channelId: CHANNEL,
+          messageId: MESSAGE,
+          emoji: 'report:112233445566778899',
+          userId: REACTOR,
+        }),
+      ),
+    );
+
+    expect(call.path).toContain('/reactions/report%3A112233445566778899/');
+  });
+
+  test('never removes Proton’s own reaction through @me', () => {
+    expect(
+      errorOf(
+        toRestCall(
+          request('remove_reaction', {
+            channelId: CHANNEL,
+            messageId: MESSAGE,
+            emoji: '🚩',
+            userId: '@me',
+          }),
+        ),
+      ),
+    ).toContain('userId');
+  });
+
+  test('refuses a payload without the member whose reaction it is', () => {
+    expect(
+      errorOf(
+        toRestCall(
+          request('remove_reaction', { channelId: CHANNEL, messageId: MESSAGE, emoji: '🚩' }),
+        ),
+      ),
+    ).toContain('userId');
+  });
+
+  test('refuses an emoji longer than 64 characters', () => {
+    expect(
+      errorOf(
+        toRestCall(
+          request('remove_reaction', {
+            channelId: CHANNEL,
+            messageId: MESSAGE,
+            emoji: 'x'.repeat(65),
+            userId: REACTOR,
+          }),
+        ),
+      ),
+    ).toContain('emoji');
+  });
+
+  test('carries no audit-log reason, which Discord does not record for reactions', () => {
+    const call = callOf(
+      toRestCall(
+        request(
+          'remove_reaction',
+          { channelId: CHANNEL, messageId: MESSAGE, emoji: '🚩', userId: REACTOR },
+          'report filed',
+        ),
+      ),
+    );
+
+    expect(call.headers).toBeUndefined();
+  });
+});
+
+describe('forwarding a message', () => {
+  const SOURCE_CHANNEL = '500000000000000077';
+  const FORWARD = { channelId: SOURCE_CHANNEL, messageId: MESSAGE };
+
+  test('is a message_reference of type 1 naming the source channel, message and server', () => {
+    const call = callOf(toRestCall(request('send', { channelId: CHANNEL, forward: FORWARD })));
+
+    expect(call.method).toBe('POST');
+    expect(call.path).toBe(`/channels/${CHANNEL}/messages`);
+    expect(call.body).toEqual({
+      message_reference: {
+        type: 1,
+        channel_id: SOURCE_CHANNEL,
+        message_id: MESSAGE,
+        guild_id: GUILD,
+      },
+    });
+  });
+
+  test('is enough of a message on its own', () => {
+    expect(sendPayloadSchema.safeParse({ channelId: CHANNEL, forward: FORWARD }).success).toBe(
+      true,
+    );
+  });
+
+  test.each([
+    ['content', { content: 'look at this' }],
+    ['embeds', { embeds: [{ title: 'Evidence' }] }],
+    ['components', { components: [{ type: 1, components: [] }] }],
+    ['files', { files: [{ filename: 'a.png', data: new Uint8Array([1]) }] }],
+    ['poll', { poll: { question: { text: 'Q?' }, answers: [{ poll_media: { text: 'A' } }] } }],
+    ['replyToMessageId', { replyToMessageId: MESSAGE }],
+  ] as const)('refuses %s alongside it', (_field, extra) => {
+    expect(
+      errorOf(toRestCall(request('send', { channelId: CHANNEL, forward: FORWARD, ...extra }))),
+    ).toContain('a forward carries the original message and nothing else');
+  });
+
+  test('keeps allowed mentions, which only narrow what the forward may ping', () => {
+    const call = callOf(
+      toRestCall(
+        request('send', { channelId: CHANNEL, forward: FORWARD, allowedMentions: { parse: [] } }),
+      ),
+    );
+
+    expect((call.body as { allowed_mentions: unknown }).allowed_mentions).toEqual({ parse: [] });
+  });
+
+  test('asks only for what posting in the destination needs', () => {
+    expect(requiredPermissionsFor('send', { channelId: CHANNEL, forward: FORWARD })).toBe(
+      Permissions.ViewChannel | Permissions.SendMessages,
+    );
+  });
+
+  test('refuses a source that is not a snowflake', () => {
+    expect(
+      errorOf(
+        toRestCall(
+          request('send', { channelId: CHANNEL, forward: { channelId: 'x', messageId: MESSAGE } }),
+        ),
+      ),
+    ).toContain('forward.channelId');
+  });
+
+  test('a reply is still a plain reference, with no type', () => {
+    const call = callOf(
+      toRestCall(request('send', { channelId: CHANNEL, content: 'hi', replyToMessageId: MESSAGE })),
+    );
+
+    expect((call.body as { message_reference: unknown }).message_reference).toEqual({
+      message_id: MESSAGE,
+      fail_if_not_exists: false,
+    });
+  });
+});
+
+describe('editing a message', () => {
+  test('carries allowed mentions, so an edit cannot ping what the send was kept from pinging', () => {
+    const call = callOf(
+      toRestCall(
+        request('edit_message', {
+          channelId: CHANNEL,
+          messageId: MESSAGE,
+          content: 'Claimed by <@100000000000000001>',
+          allowedMentions: { parse: [] },
+        }),
+      ),
+    );
+
+    expect(call.body).toEqual({
+      content: 'Claimed by <@100000000000000001>',
+      allowed_mentions: { parse: [] },
+    });
+  });
+
+  test('leaves allowed_mentions off an edit that sets none', () => {
+    const call = callOf(
+      toRestCall(
+        request('edit_message', { channelId: CHANNEL, messageId: MESSAGE, content: 'hi' }),
+      ),
+    );
+
+    expect(call.body).not.toHaveProperty('allowed_mentions');
+  });
+
+  test('allowed mentions alone are not something to edit', () => {
+    expect(
+      errorOf(
+        toRestCall(
+          request('edit_message', {
+            channelId: CHANNEL,
+            messageId: MESSAGE,
+            allowedMentions: { parse: [] },
+          }),
+        ),
+      ),
+    ).toContain('content, an embed');
   });
 });
 

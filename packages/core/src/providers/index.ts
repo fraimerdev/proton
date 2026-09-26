@@ -39,6 +39,16 @@ export {
   StaticMemberContextLoader,
 } from './member-context.ts';
 export {
+  type GuildMemberLister,
+  type GuildMemberSummary,
+  type MemberPage,
+  type MemberPageFailure,
+  type MemberPageResult,
+  RestGuildMemberLister,
+  type UpstreamRefusal,
+  upstreamRefusal,
+} from './member-list.ts';
+export {
   type AvailableProvider,
   type ParseConfigResult,
   PROVIDER_BUILDER_MAX,

@@ -682,7 +682,7 @@ describe('a channel that guild state has never seen', () => {
     const failure = runPrechecks(result.context);
     expect(failure?.humanReason).toContain('Create Public Threads');
     expect(failure?.humanReason).toContain('this server');
-    expect(failure?.humanReason).toContain("isn't in my channel list yet");
+    expect(failure?.humanReason).toContain("isn't in Proton's channel list yet");
   });
 
   test('is still reported as a channel-level check when app_permissions covered it', async () => {
@@ -701,6 +701,106 @@ describe('a channel that guild state has never seen', () => {
     const failure = runPrechecks(result.context);
     expect(failure?.humanReason).toContain(`<#${UNCACHED_CHANNEL}>`);
     expect(failure?.humanReason).not.toContain('cached channel list');
+  });
+});
+
+describe('a send marked as a direct message', () => {
+  const DM_CHANNEL = '600000000000000001';
+  const DM_PAYLOAD = {
+    channelId: DM_CHANNEL,
+    content: 'Your ticket was closed.',
+    embeds: [{ title: 'Ticket #4' }],
+    directMessage: true,
+  };
+
+  test('goes ahead on a server that grants Proton nothing, naming no channel', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(0n)), botUserId: BOT },
+      request({ payload: DM_PAYLOAD }),
+      INVOCATION,
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(result.context.requiredPermissions).toBe(0n);
+    expect(result.context.channelId).toBeUndefined();
+    expect(result.context.channelOverwritesUnknown).toBeUndefined();
+    expect(runPrechecks(result.context)).toBeNull();
+  });
+
+  test('goes ahead before Proton has this server’s state', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(null), botUserId: BOT },
+      request({ payload: DM_PAYLOAD }),
+    );
+    if (!('context' in result)) throw new Error(`expected a context, got ${result.failure.code}`);
+
+    expect(runPrechecks(result.context)).toBeNull();
+  });
+
+  test('without the mark is still judged as a channel Proton has not seen', async () => {
+    const { directMessage: _unmarked, ...payload } = DM_PAYLOAD;
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(Permissions.ViewChannel)), botUserId: BOT },
+      request({ payload }),
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    const failure = runPrechecks(result.context);
+    expect(failure?.code).toBe('missing_permission');
+    expect(failure?.humanReason).toContain('Send Messages, Embed Links');
+    expect(failure?.humanReason).toContain(`<#${DM_CHANNEL}>`);
+  });
+
+  test('on a channel this server has is ignored, and the channel is judged as ever', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(withChannels()), botUserId: BOT },
+      request({ payload: { channelId: OTHER_CHANNEL, content: 'hi', directMessage: true } }),
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    const failure = runPrechecks(result.context);
+    expect(failure?.code).toBe('missing_permission');
+    expect(failure?.humanReason).toBe(
+      `Missing the Send Messages permission in <#${OTHER_CHANNEL}>.`,
+    );
+  });
+
+  test('on a kind other than send is ignored', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(0n)), botUserId: BOT },
+      request({
+        kind: 'edit_message',
+        payload: { ...DM_PAYLOAD, messageId: MESSAGE },
+      }),
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(runPrechecks(result.context)?.code).toBe('missing_permission');
+  });
+});
+
+describe('opening a direct message', () => {
+  test('goes ahead before Proton has this server’s state, looking nobody up', async () => {
+    let lookups = 0;
+    const result = await resolvePrecheckContext(
+      {
+        store: store(null),
+        botUserId: BOT,
+        fetchMemberRoles: async () => {
+          lookups += 1;
+          return [];
+        },
+      },
+      request({ kind: 'create_dm', targetId: TARGET, payload: { userId: TARGET } }),
+      INVOCATION,
+    );
+    if (!('context' in result)) throw new Error(`expected a context, got ${result.failure.code}`);
+
+    expect(result.context.requiredPermissions).toBe(0n);
+    expect(result.context.channelId).toBeUndefined();
+    expect(result.context.target).toBeUndefined();
+    expect(runPrechecks(result.context)).toBeNull();
+    expect(lookups).toBe(0);
   });
 });
 
@@ -733,6 +833,152 @@ describe('the requirement the payload decides', () => {
 
     expect(result.context.requiredPermissions & Permissions.CreatePrivateThreads).toBe(0n);
     expect(runPrechecks(result.context)?.humanReason).toContain('Create Public Threads');
+  });
+});
+
+describe('a ban of somebody who is not in the server', () => {
+  const ABSENT: ResolveContextHints = { targetAbsent: true, targetRoleIds: [] };
+
+  function lookingUp(): { deps: Parameters<typeof resolvePrecheckContext>[0]; lookups: number[] } {
+    const lookups: number[] = [];
+    return {
+      lookups,
+      deps: {
+        store: store(state()),
+        botUserId: BOT,
+        fetchMemberRoles: async () => {
+          lookups.push(1);
+          return null;
+        },
+      },
+    };
+  }
+
+  test('is judged without a member lookup, and passes no matter how the bot is ranked', async () => {
+    const { deps, lookups } = lookingUp();
+    const unranked = store(
+      state({
+        botRoleIds: [],
+        roles: new Map([[GUILD, { id: GUILD, permissions: Permissions.BanMembers, position: 0 }]]),
+      }),
+    );
+    const ban = request({ kind: 'ban', targetId: TARGET, payload: { userId: TARGET } });
+
+    const absent = await resolvePrecheckContext({ ...deps, store: unranked }, ban, ABSENT);
+    const ranked = await resolvePrecheckContext({ ...deps, store: unranked }, ban, {
+      targetRoleIds: [],
+    });
+    if (!('context' in absent) || !('context' in ranked)) throw new Error('expected contexts');
+
+    expect(lookups).toEqual([]);
+    expect(absent.context.targetIsMember).toBe(false);
+    expect(runPrechecks(absent.context)).toBeNull();
+    expect(runPrechecks(ranked.context)?.code).toBe('role_hierarchy');
+  });
+
+  test('without the hint, a user the lookup cannot find is still refused', async () => {
+    const { deps } = lookingUp();
+    const result = await resolvePrecheckContext(
+      deps,
+      request({ kind: 'ban', targetId: TARGET, payload: { userId: TARGET } }),
+    );
+
+    expect('failure' in result && result.failure.code).toBe('target_state_unavailable');
+  });
+
+  test('still needs Ban Members', async () => {
+    const { deps } = lookingUp();
+    const result = await resolvePrecheckContext(
+      { ...deps, store: store(botHolding(MAY_POST)) },
+      request({ kind: 'ban', targetId: TARGET, payload: { userId: TARGET } }),
+      ABSENT,
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(runPrechecks(result.context)?.humanReason).toContain('Ban Members');
+  });
+
+  test('still refuses Proton itself', async () => {
+    const { deps } = lookingUp();
+    const result = await resolvePrecheckContext(
+      deps,
+      request({ kind: 'ban', targetId: BOT, payload: { userId: BOT } }),
+      ABSENT,
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(runPrechecks(result.context)?.code).toBe('target_is_self');
+  });
+
+  test.each([
+    'kick',
+    'timeout',
+    'untimeout',
+    'warn',
+    'add_role',
+    'remove_role',
+    'set_member_nickname',
+  ] as const)('is ignored for %s, which needs a member to act on', async (kind) => {
+    const { deps, lookups } = lookingUp();
+    const result = await resolvePrecheckContext(
+      deps,
+      request({ kind, targetId: TARGET, payload: { userId: TARGET } }),
+      { targetAbsent: true },
+    );
+
+    expect('failure' in result && result.failure.code).toBe('target_state_unavailable');
+    expect(lookups).toEqual([1]);
+  });
+});
+
+describe('a voice disconnect', () => {
+  test('is judged across the server, never in the channel the command was typed in', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(Permissions.MoveMembers)), botUserId: BOT },
+      request({
+        kind: 'move_member',
+        targetId: TARGET,
+        payload: { userId: TARGET, channelId: null },
+      }),
+      { ...INVOCATION, appPermissions: Permissions.Administrator },
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(result.context.channelId).toBeUndefined();
+    expect(result.context.requiredPermissions).toBe(Permissions.MoveMembers);
+    expect(runPrechecks(result.context)).toBeNull();
+  });
+
+  test('names Move Members as missing in the server', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(MAY_POST)), botUserId: BOT },
+      request({
+        kind: 'move_member',
+        targetId: TARGET,
+        payload: { userId: TARGET, channelId: null },
+      }),
+      INVOCATION,
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    const failure = runPrechecks(result.context);
+    expect(failure?.humanReason).toContain('Move Members');
+    expect(failure?.humanReason).toContain('this server');
+    expect(failure?.humanReason).not.toContain('Connect');
+  });
+
+  test('disconnects the owner, whom Discord does not rank for voice', async () => {
+    const result = await resolvePrecheckContext(
+      { store: store(botHolding(Permissions.MoveMembers)), botUserId: BOT },
+      request({
+        kind: 'move_member',
+        targetId: OWNER,
+        payload: { userId: OWNER, channelId: null },
+      }),
+    );
+    if (!('context' in result)) throw new Error('expected a context');
+
+    expect(runPrechecks(result.context)).toBeNull();
   });
 });
 

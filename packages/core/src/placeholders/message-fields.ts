@@ -1,5 +1,6 @@
 import type { ActionRow, MessageButton } from '../messages/components.ts';
 import type { Embed } from '../messages/embed.ts';
+import { holdsPlaceholder, isLiteralLink } from '../messages/template-link.ts';
 import type { ContainerChild, V2Component } from '../messages/v2.ts';
 import { DIAGNOSTIC_SEVERITY, type TemplateDiagnostic } from './diagnostics.ts';
 import { DISCORD_TEXT_LIMITS, enforceMessageLimits } from './discord-limits.ts';
@@ -251,6 +252,21 @@ export function visitTemplatePaths(
   found: (site: FoundSite) => void,
 ): void {
   walk(root, path.split('.'), 0, [], [], found);
+}
+
+export function placeholderLinkPaths(message: unknown): string[][] {
+  const paths: string[][] = [];
+
+  for (const spec of [...MESSAGE_TEMPLATE_FIELDS, ...REPLY_ACTION_FIELDS]) {
+    if (spec.kind !== 'url') continue;
+
+    // A complete link that merely contains braces was always valid, so it stays valid here.
+    visitTemplatePaths(message, spec.path, ({ segments, text }) => {
+      if (!isLiteralLink(text) && holdsPlaceholder(text)) paths.push([...segments]);
+    });
+  }
+
+  return paths;
 }
 
 export function isMessageLike(value: unknown): boolean {

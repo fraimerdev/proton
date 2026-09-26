@@ -13,26 +13,28 @@ export interface PrecheckInput {
   channelOverwritesUnknown?: boolean;
   threadParentId?: string;
   role?: { id: string; position: number };
-  target?: { id: string; highestRolePosition: number };
+  target?: { id: string; highestRolePosition: number; exemptAsAdministrator?: boolean };
 
   // Off for a kind Discord does not rank, so the owner and hierarchy gates below are skipped while
   // the target is still resolved for the audit record. See hierarchyApplies.
   hierarchy?: boolean;
+
+  targetIsMember?: boolean;
 }
 
-function whereItIsMissing(input: PrecheckInput): string {
+export function whereItIsMissing(input: PrecheckInput): string {
   if (!input.channelId) return 'this server';
 
   if (input.channelOverwritesUnknown) {
     return (
-      `this server. I couldn't check <#${input.channelId}> itself — it isn't in my channel list ` +
-      "yet, so that channel's own permission overwrites weren't taken into account"
+      `this server. <#${input.channelId}> isn't in Proton's channel list yet, so that ` +
+      "channel's own permission overwrites weren't checked"
     );
   }
 
   if (input.threadParentId) {
     return (
-      `<#${input.channelId}> — a thread has no permission overwrites of its own, so grant it in ` +
+      `<#${input.channelId}>. A thread has no permission overwrites of its own, so grant it in ` +
       `<#${input.threadParentId}> instead`
     );
   }
@@ -47,7 +49,7 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
     const names = labels.join(', ');
     return {
       code: 'missing_permission',
-      humanReason: `I'm missing the ${names} permission${labels.length === 1 ? '' : 's'} in ${whereItIsMissing(input)}.`,
+      humanReason: `Missing the ${names} permission${labels.length === 1 ? '' : 's'} in ${whereItIsMissing(input)}.`,
     };
   }
 
@@ -55,8 +57,8 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
     return {
       code: 'role_hierarchy',
       humanReason:
-        `The <@&${input.role.id}> role is above or equal to my highest role, so I can't ` +
-        'manage it. Move my role above it in Server Settings → Roles.',
+        `The <@&${input.role.id}> role is above or equal to Proton's highest role, so it can't ` +
+        "be managed. Move Proton's role above it in Server Settings → Roles.",
     };
   }
 
@@ -66,7 +68,7 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
   if (target.id === input.botUserId) {
     return {
       code: 'target_is_self',
-      humanReason: "I can't perform this action on myself.",
+      humanReason: "Proton can't do that to itself.",
     };
   }
 
@@ -77,7 +79,18 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
   if (target.id === input.guildOwnerId) {
     return {
       code: 'target_is_owner',
-      humanReason: "I can't perform this action on the server owner — Discord forbids it.",
+      humanReason: "Discord doesn't allow this on the server owner.",
+    };
+  }
+
+  if (input.targetIsMember === false) return null;
+
+  if (target.exemptAsAdministrator === true) {
+    return {
+      code: 'target_is_administrator',
+      humanReason:
+        "That member has the Administrator permission, and Discord won't let anyone time out an " +
+        'Administrator or change their timeout. A timeout has no effect on them while they hold it.',
     };
   }
 
@@ -85,8 +98,8 @@ export function runPrechecks(input: PrecheckInput): ActionFailure | null {
     return {
       code: 'role_hierarchy',
       humanReason:
-        "That member's highest role is above or equal to mine, so I can't act on them. " +
-        'Move my role higher in Server Settings → Roles.',
+        "That member's highest role is above or equal to Proton's highest role. Move Proton's " +
+        'role above theirs in Server Settings → Roles.',
     };
   }
 

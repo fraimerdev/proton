@@ -56,6 +56,10 @@ export const EVENT_TYPES = [
   'entity.invite_deleted',
 
   'moderation.warned',
+  'moderation.report_submitted',
+  'moderation.report_resolved',
+  'moderation.punishment_expired',
+  'moderation.report_action_requested',
 
   'giveaways.created',
   'giveaways.started',
@@ -66,12 +70,18 @@ export const EVENT_TYPES = [
   'giveaways.ended',
   'giveaways.rerolled',
   'giveaways.bonus_granted',
+  'giveaways.entered',
+  'giveaways.drop_claimed',
+
+  'starboard.message_posted',
 
   'tickets.opened',
   'tickets.claimed',
   'tickets.closed',
   'tickets.reopened',
   'tickets.deleted',
+  'tickets.open_requested',
+  'tickets.open_answered',
 
   'automod.executed',
 
@@ -80,9 +90,32 @@ export const EVENT_TYPES = [
   'appeals.submitted',
   'appeals.decided',
 
+  'applications.submitted',
+  'applications.review_started',
+  'applications.information_requested',
+  'applications.information_provided',
+  'applications.waitlisted',
+  'applications.accepted',
+  'applications.rejected',
+  'applications.withdrawn',
+  'applications.reopened',
+  'applications.expired',
+  'applications.action_failed',
+  'applications.work_requested',
+
   'xp.level_gained',
+  'xp.awarded',
+  'xp.grant_requested',
+  'xp.granted',
+
+  'achievements.unlocked',
+  'achievements.reward_retry_requested',
+  'achievements.job_requested',
+
+  'joinroles.sync_requested',
 
   'proton.config_changed',
+  'proton.commands_changed',
   'proton.action_executed',
   'proton.security_tripped',
   'proton.panel_requested',
@@ -96,11 +129,17 @@ export type EventType = (typeof EVENT_TYPES)[number];
 // reads this list; without it a serverlog listener for them looks like a typo.
 export const SERVICE_EMITTED_EVENT_TYPES = [
   'proton.config_changed',
+  'proton.commands_changed',
   'proton.action_executed',
   'proton.panel_requested',
   'proton.simulation_requested',
   'verification.web_passed',
   'appeals.submitted',
+  'applications.work_requested',
+  'joinroles.sync_requested',
+  'moderation.report_action_requested',
+  'achievements.reward_retry_requested',
+  'achievements.job_requested',
 ] as const satisfies readonly EventType[];
 
 export type ServiceEmittedEventType = (typeof SERVICE_EMITTED_EVENT_TYPES)[number];

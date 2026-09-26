@@ -162,7 +162,7 @@ describe('ModuleRegistry gating', () => {
     expect(status.disabledReason?.code).toBe('missing_intent');
     expect(status.disabledReason?.humanReason).toContain('Message Content Intent');
 
-    expect(status.disabledReason?.humanReason).toContain('developer portal');
+    expect(status.disabledReason?.humanReason).toContain('Developer Portal');
   });
 
   test('disables a module missing a permission and names which one and where', () => {
@@ -584,5 +584,43 @@ describe('schedules allowlist', () => {
 
     expect(registry.get('ping')?.jobs?.[0]?.id).toBe('sweep-expired');
     expect(registry.maySchedule('ping', 'sweep-expired')).toBe(false);
+  });
+
+  test('a job may run while the module is off only when the module schedules it', () => {
+    const registry = new ModuleRegistry();
+
+    expect(() =>
+      registry.register(
+        manifest({
+          schedules: ['remind'],
+          scheduledHandlers: { remind: noop },
+          scheduledWhileDisabled: ['close'],
+        }),
+      ),
+    ).toThrow(UndeclaredScheduleError);
+
+    registry.register(
+      manifest({
+        schedules: ['remind'],
+        scheduledHandlers: { remind: noop },
+        scheduledWhileDisabled: ['remind'],
+      }),
+    );
+    expect(registry.get('ping')?.scheduledWhileDisabled).toEqual(['remind']);
+  });
+});
+
+describe('interaction concurrency', () => {
+  test.each([1, 8, 16])('accepts %p', (interactionConcurrency) => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ interactionConcurrency }));
+
+    expect(registry.get('ping')?.interactionConcurrency).toBe(interactionConcurrency);
+  });
+
+  test.each([0, -2, 17, 2.5, Number.NaN])('refuses %p and names the range', (value) => {
+    expect(() =>
+      new ModuleRegistry().register(manifest({ interactionConcurrency: value })),
+    ).toThrow(/whole number from 1 to 16/);
   });
 });

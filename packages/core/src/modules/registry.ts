@@ -1,5 +1,7 @@
-import { GatewayIntentBits } from 'discord-api-types/v10';
+import { ApplicationCommandType, GatewayIntentBits } from 'discord-api-types/v10';
 import { type ActionKind, REQUIRED_PERMISSIONS } from '../actions/kinds.ts';
+import { validateCommand } from '../commands/effective.ts';
+import { leafPaths } from '../commands/fields.ts';
 import { type FieldDescriptor, zodToDescriptors } from '../config/descriptor.ts';
 import type { EventType } from '../events/types.ts';
 import { combinePermissions, missing, Permissions, permissionLabels } from '../permissions/bits.ts';
@@ -7,7 +9,7 @@ import type { AvailableProvider } from '../providers/registry.ts';
 import { ProviderRegistry } from '../providers/registry.ts';
 import type { ModuleAvailability } from '../providers/types.ts';
 import type { SimulationAdapter } from '../simulation/types.ts';
-import type { ModuleManifest } from './manifest.ts';
+import type { ContextMenuType, ModuleManifest } from './manifest.ts';
 
 export type DisabledCode =
   | 'missing_intent'
@@ -39,8 +41,10 @@ const CONDITIONAL_PERMISSIONS: Record<ActionKind, bigint> = {
   edit_message: 0n,
   delete_message: 0n,
   add_reaction: 0n,
+  remove_reaction: 0n,
   interaction_reply: 0n,
   interaction_followup: 0n,
+  interaction_edit_original: 0n,
   warn: 0n,
   unwarn: 0n,
   ban: 0n,
@@ -144,6 +148,135 @@ export interface ModuleRegistryOptions {
   // Passed in rather than owned when a module needs the registry at construction time: the
   // giveaway consumes providers other modules register, so one instance has to exist first.
   providers?: ProviderRegistry;
+}
+
+export const MAX_CONTEXT_MENUS_PER_TYPE = 15;
+
+export const MAX_CHAT_COMMANDS = 100;
+
+export const MAX_INTERACTION_CONCURRENCY = 16;
+
+const CONTEXT_MENU_COMMAND_TYPES: Record<ContextMenuType, ApplicationCommandType> = {
+  user: ApplicationCommandType.User,
+  message: ApplicationCommandType.Message,
+};
+
+function assertContextMenusValid(
+  manifest: ModuleManifest,
+  registered: readonly ModuleManifest[],
+): void {
+  const menus = manifest.contextMenus ?? [];
+  if (menus.length === 0) return;
+
+  for (const menu of menus) {
+    if (menu.data.name !== menu.name || menu.data.type !== CONTEXT_MENU_COMMAND_TYPES[menu.type]) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `the ${menu.type} context menu '${menu.name}' registers data for a different name or type`,
+      );
+    }
+  }
+
+  const everywhere = [...registered, manifest].flatMap((owner) =>
+    (owner.contextMenus ?? []).map((menu) => ({ owner: owner.id, menu })),
+  );
+
+  for (const type of ['user', 'message'] as const) {
+    const ofType = everywhere.filter(({ menu }) => menu.type === type);
+
+    for (const menu of menus.filter((candidate) => candidate.type === type)) {
+      const holders = ofType.filter(
+        ({ menu: other }) => other.name.toLowerCase() === menu.name.toLowerCase(),
+      );
+      if (holders.length > 1) {
+        const elsewhere = holders.find(({ owner }) => owner !== manifest.id);
+        throw new ModuleRegistrationError(
+          manifest.id,
+          `the ${type} context menu '${menu.name}' is ${
+            elsewhere ? `already declared by '${elsewhere.owner}'` : 'declared twice'
+          }`,
+        );
+      }
+    }
+
+    if (ofType.length > MAX_CONTEXT_MENUS_PER_TYPE) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `it brings Proton to ${ofType.length} ${type} context menus, and Discord allows ` +
+          `${MAX_CONTEXT_MENUS_PER_TYPE}`,
+      );
+    }
+  }
+}
+
+function describeLeaves(leaves: readonly string[]): string {
+  return leaves.length === 1 && leaves[0] === ''
+    ? 'it has no subcommands, so the only path is an empty string'
+    : `its subcommands are ${leaves.join(', ')}`;
+}
+
+function assertCommandsValid(
+  manifest: ModuleManifest,
+  registered: readonly ModuleManifest[],
+): void {
+  const commands = manifest.commands ?? [];
+  if (commands.length === 0) return;
+
+  for (const command of commands) {
+    if (command.data.name !== command.name) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `the command '/${command.name}' registers data named '${command.data.name}'`,
+      );
+    }
+
+    const issues = validateCommand(command.data);
+    if (issues.length > 0) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `Discord would refuse /${command.name}: ${issues
+          .map((issue) => `${issue.path}: ${issue.message}`)
+          .join(' ')}`,
+      );
+    }
+
+    const leaves = leafPaths(command.data);
+    const stray = (command.reply?.toggleable ?? []).filter((path) => !leaves.includes(path));
+    if (stray.length > 0) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `/${command.name} lets admins choose the reply visibility of ${stray
+          .map((path) => `'${path}'`)
+          .join(', ')}, which ${stray.length === 1 ? 'is' : 'are'} not a subcommand path of it — ` +
+          describeLeaves(leaves),
+      );
+    }
+  }
+
+  const everywhere = [...registered, manifest].flatMap((owner) =>
+    (owner.commands ?? []).map((command) => ({ owner: owner.id, command })),
+  );
+
+  for (const command of commands) {
+    const holders = everywhere.filter(({ command: other }) => other.name === command.name);
+    if (holders.length > 1) {
+      const elsewhere = holders.find(({ owner }) => owner !== manifest.id);
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `the command '/${command.name}' is ${
+          elsewhere ? `already declared by '${elsewhere.owner}'` : 'declared twice'
+        }`,
+      );
+    }
+  }
+
+  if (everywhere.length > MAX_CHAT_COMMANDS) {
+    throw new ModuleRegistrationError(
+      manifest.id,
+      `it brings Proton to ${everywhere.length} slash commands, and Discord allows ` +
+        `${MAX_CHAT_COMMANDS} per server`,
+    );
+  }
 }
 
 function assertSimulationsValid(manifest: ModuleManifest): void {
@@ -286,7 +419,33 @@ export class ModuleRegistry {
       }
     }
 
+    for (const jobId of manifest.scheduledWhileDisabled ?? []) {
+      if (!schedules.includes(jobId)) {
+        throw new UndeclaredScheduleError(
+          manifest.id,
+          jobId,
+          'it lets the id run while the module is off but does not declare it in `schedules`.',
+        );
+      }
+    }
+
+    const concurrency = manifest.interactionConcurrency;
+    if (
+      concurrency !== undefined &&
+      (!Number.isInteger(concurrency) ||
+        concurrency < 1 ||
+        concurrency > MAX_INTERACTION_CONCURRENCY)
+    ) {
+      throw new ModuleRegistrationError(
+        manifest.id,
+        `interactionConcurrency is ${concurrency}, and it must be a whole number from 1 to ` +
+          `${MAX_INTERACTION_CONCURRENCY}`,
+      );
+    }
+
     assertSimulationsValid(manifest);
+    assertCommandsValid(manifest, this.all());
+    assertContextMenusValid(manifest, this.all());
 
     // Before the module is stored: a duplicate or mis-namespaced provider must fail the same boot
     // that a bad defaultConfig fails, not the first time a host opens the requirement picker.
@@ -371,8 +530,7 @@ export class ModuleRegistry {
         enabled: false,
         disabledReason: {
           code: 'missing_dependency',
-          humanReason:
-            "Proton isn't running this module. Nothing in this server's settings can change that.",
+          humanReason: "This module isn't running. No setting in this server can change that.",
         },
       };
     }
@@ -380,18 +538,22 @@ export class ModuleRegistry {
     const requiredIntents = manifest.requiredIntents.reduce((acc, bit) => acc | bit, 0);
     const missingIntents = requiredIntents & ~env.grantedIntents;
     if (missingIntents !== 0) {
+      const intents = intentLabels(missingIntents).map((label) =>
+        label.endsWith('Intent') ? label : `${label} intent`,
+      );
+      const one = intents.length === 1;
+
       return {
         id,
         enabled: false,
         disabledReason: {
           code: 'missing_intent',
           humanReason:
-            `${manifest.name} can't run without ${intentLabels(missingIntents).join(' and ')}, ` +
+            `Needs the ${intents.join(' and the ')}, ` +
             ((missingIntents & PRIVILEGED_INTENTS) !== 0
-              ? 'which is disabled for Proton. Turn it on in the Discord developer ' +
-                'portal, under Bot → Privileged Gateway Intents.'
-              : "which Proton isn't set up to receive. Nothing in this server's " +
-                'settings can change that.'),
+              ? `which ${one ? 'is' : 'are'} off for Proton. Turn ${one ? 'it' : 'them'} on in ` +
+                'the Discord Developer Portal under Bot → Privileged Gateway Intents.'
+              : "which Proton isn't set up to receive. No setting in this server can change that."),
         },
       };
     }
@@ -399,15 +561,18 @@ export class ModuleRegistry {
     const requiredPermissions = combinePermissions(manifest.requiredPermissions);
     const lacking = missing(env.botPermissions, requiredPermissions);
     if (lacking !== 0n) {
+      const labels = permissionLabels(lacking);
+      const one = labels.length === 1;
+
       return {
         id,
         enabled: false,
         disabledReason: {
           code: 'missing_permission',
           humanReason:
-            `${manifest.name} needs the ${permissionLabels(lacking).join(', ')} permission` +
-            `${permissionLabels(lacking).length === 1 ? '' : 's'}, which Proton doesn't have in ` +
-            'this server. Grant it in Server Settings → Roles, or re-invite Proton with it.',
+            `Missing the ${labels.join(', ')} permission${one ? '' : 's'} in this server. Grant ` +
+            `${one ? 'it' : 'them'} to Proton's role in Server Settings → Roles, or invite Proton ` +
+            `again with ${one ? 'it' : 'them'}.`,
         },
       };
     }
@@ -420,8 +585,8 @@ export class ModuleRegistry {
           disabledReason: {
             code: 'missing_dependency',
             humanReason:
-              `${manifest.name} needs another Proton module that isn't running here. ` +
-              "Nothing in this server's settings can change that.",
+              "Needs another Proton module that isn't running here. No setting in this server " +
+              'can change that.',
           },
         };
       }
@@ -434,7 +599,7 @@ export class ModuleRegistry {
         enabled: false,
         disabledReason: {
           code: 'insufficient_entitlement',
-          humanReason: `${manifest.name} isn't included on this server's plan.`,
+          humanReason: "Not included in this server's plan.",
         },
       };
     }

@@ -240,7 +240,7 @@ describe('the executor running set_bot_name_style', () => {
 
   test('hands back the proxy’s own 502 body as well', async () => {
     const { executor, rest } = build();
-    const proxy = { error: 'rest_proxy_upstream_failure', message: 'Missing Permissions' };
+    const proxy = { error: 'rest_proxy_upstream_failure', message: 'Service Unavailable' };
     rest.answer = async () => ({ status: 502, body: proxy });
 
     const result = await executor.execute(styleRequest(null));

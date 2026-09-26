@@ -164,6 +164,41 @@ describe('a reply asks for Read Message History', () => {
   });
 });
 
+describe('a forward', () => {
+  const forward = fc.record({ channelId: snowflake, messageId: snowflake });
+
+  test('is sent as a type-1 reference and asks only for posting in the destination', () => {
+    fc.assert(
+      fc.property(forward, fc.boolean(), (source, inThread) => {
+        const payload = { channelId: CHANNEL, forward: source };
+        const result = toRestCall(request('send', payload));
+        if (!('call' in result)) return false;
+
+        const reference = (result.call.body as { message_reference: Record<string, unknown> })
+          .message_reference;
+        return (
+          reference.type === 1 &&
+          reference.channel_id === source.channelId &&
+          reference.message_id === source.messageId &&
+          reference.guild_id === GUILD &&
+          requiredPermissionsFor('send', payload, inThread) ===
+            requiredPermissionsFor('send', { channelId: CHANNEL, content: 'x' }, inThread)
+        );
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  test('is refused alongside anything else a message can carry', () => {
+    fc.assert(
+      fc.property(sendPayload, forward, (payload, source) => {
+        return !sendPayloadSchema.safeParse({ ...payload, forward: source }).success;
+      }),
+      { numRuns: 200 },
+    );
+  });
+});
+
 describe('set_member_nickname is refused exactly where Discord refuses a rename', () => {
   test('Manage Nicknames first, then Proton itself, then the owner, then anyone ranked at or above Proton', async () => {
     await fc.assert(

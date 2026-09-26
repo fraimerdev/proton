@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { snowflakeSchema } from '../actions/payloads.ts';
 import { CUSTOM_ID_SEPARATOR } from '../interactions/custom-id.ts';
+import { isLinkOrTemplate, LINK_MESSAGE } from './template-link.ts';
 
 export const COMPONENT_TYPE_ACTION_ROW = 1;
 export const COMPONENT_TYPE_BUTTON = 2;
@@ -40,7 +41,7 @@ export const componentKeySchema = z
     'must start with a letter or digit and hold only letters, digits, hyphens and underscores',
   )
   .refine((key) => !key.includes(CUSTOM_ID_SEPARATOR), {
-    message: `must not contain '${CUSTOM_ID_SEPARATOR}' — Proton reserves it to tell components apart`,
+    message: `must not contain '${CUSTOM_ID_SEPARATOR}', because Proton uses it to tell components apart`,
   });
 
 export const ROLE_ACTION_MODES = ['toggle', 'add', 'remove'] as const;
@@ -102,7 +103,7 @@ export function formatComponentEmoji(emoji: ComponentEmoji | undefined): string 
   return emoji.name ?? '';
 }
 
-const NO_LABEL_OR_EMOJI = 'a button needs a label, an emoji, or both — Discord refuses a bare one.';
+const NO_LABEL_OR_EMOJI = 'a button needs a label, an emoji, or both. Discord refuses a bare one.';
 
 export const messageButtonSchema = z
   .object({
@@ -126,12 +127,8 @@ export const messageButtonSchema = z
           path: ['url'],
           message: 'a link button needs the address it opens.',
         });
-      } else if (!/^https?:\/\//i.test(button.url) || !URL.canParse(button.url)) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['url'],
-          message: 'must be a complete http:// or https:// link',
-        });
+      } else if (!isLinkOrTemplate(button.url)) {
+        ctx.addIssue({ code: 'custom', path: ['url'], message: LINK_MESSAGE });
       }
 
       if (button.action) {
@@ -139,8 +136,8 @@ export const messageButtonSchema = z
           code: 'custom',
           path: ['action'],
           message:
-            'a link button never reaches Proton — Discord opens the address itself and sends no ' +
-            'interaction — so it cannot carry an action. Use another style, or drop the action.',
+            'a link button never reaches Proton, because Discord opens the address itself, so ' +
+            "it can't carry an action. Use another style, or remove the action.",
         });
       }
       return;
@@ -193,7 +190,7 @@ export const messageSelectSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['options', index, 'key'],
-          message: `two options are both called '${option.key}' — a pick could not say which.`,
+          message: `two options are both called '${option.key}', so a pick couldn't say which.`,
         });
       }
       seen.add(option.key);

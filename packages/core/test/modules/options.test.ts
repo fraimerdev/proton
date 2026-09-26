@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { readResolved } from '../../src/interactions/read.ts';
 import {
   CommandOptionTypeError,
   createCommandOptions,
@@ -56,6 +57,65 @@ describe('createCommandOptions', () => {
   test('asking for the wrong type throws rather than returning null', () => {
     expect(() => options.getInteger('text')).toThrow(CommandOptionTypeError);
     expect(() => options.getString('count')).toThrow(/registered options and its handler disagree/);
+  });
+});
+
+describe('attachment options', () => {
+  const ATTACHMENT = '1430000000000000001';
+  const resolved = readResolved({
+    data: {
+      resolved: {
+        attachments: {
+          [ATTACHMENT]: {
+            id: ATTACHMENT,
+            filename: 'proof.png',
+            size: 1024,
+            url: 'https://cdn.discordapp.com/ephemeral-attachments/1/2/proof.png?ex=6aae7940&is=1&hm=2',
+            ephemeral: true,
+          },
+        },
+      },
+    },
+  });
+
+  test('resolve the attachment Discord sent beside the option, not just its id', () => {
+    const options = createCommandOptions(
+      [
+        {
+          name: 'report',
+          type: OptionType.Subcommand,
+          options: [{ name: 'evidence', type: OptionType.Attachment, value: ATTACHMENT }],
+        },
+      ],
+      resolved,
+    );
+
+    expect(options.getAttachment('evidence')).toMatchObject({
+      id: ATTACHMENT,
+      filename: 'proof.png',
+      ephemeral: true,
+      expiresAt: Date.parse('2026-09-19T12:00:00Z'),
+    });
+  });
+
+  test('is null when the option was left out, or the resolved block never came', () => {
+    const raw: RawOption[] = [{ name: 'evidence', type: OptionType.Attachment, value: ATTACHMENT }];
+
+    expect(createCommandOptions([], resolved).getAttachment('evidence')).toBeNull();
+    expect(createCommandOptions(raw).getAttachment('evidence')).toBeNull();
+  });
+
+  test('asking for an attachment from another type throws, and the reverse does too', () => {
+    const options = createCommandOptions(
+      [
+        { name: 'evidence', type: OptionType.Attachment, value: ATTACHMENT },
+        { name: 'text', type: OptionType.String, value: 'hello' },
+      ],
+      resolved,
+    );
+
+    expect(() => options.getAttachment('text')).toThrow(CommandOptionTypeError);
+    expect(() => options.getString('evidence')).toThrow(CommandOptionTypeError);
   });
 });
 

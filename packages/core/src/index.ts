@@ -1,11 +1,13 @@
 export {
   CASE_PAGE_SIZE_DEFAULT,
   CASE_PAGE_SIZE_MAX,
+  CASE_SCOPES,
   CASE_SORT_DIRECTIONS,
   CASE_SORT_FIELDS,
   type CaseQuery,
   type CaseQueryInput,
   type CaseRecord,
+  type CaseScope,
   type CaseSearchResult,
   type CaseSortDirection,
   type CaseSortField,
@@ -24,8 +26,10 @@ export {
   type ActionKind,
   exposesUpstreamOnFailure,
   isActionKind,
+  isChannelScopedFor,
   isLedgerOnly,
   isNeverRecorded,
+  isVoiceDisconnect,
   LEDGER_ONLY_KINDS,
   NEVER_RECORDED_KINDS,
   REQUIRED_PERMISSIONS,
@@ -39,6 +43,7 @@ export {
 export * from './actions/payloads.ts';
 export { type PrecheckInput, runPrechecks } from './actions/prechecks.ts';
 export {
+  type MemberRolesLookup,
   type ResolveContextDeps,
   type ResolveContextHints,
   type ResolveContextResult,
@@ -50,12 +55,14 @@ export {
   type RestProxyClient,
   type RestRequestOptions,
   type RestResponse,
+  RestTimeoutError,
 } from './actions/rest-client.ts';
 export { type PayloadResult, type RestCall, toRestCall } from './actions/rest-mapping.ts';
 export {
   AUTO_REVERSAL_ACTOR,
   type CaseReversalInput,
   type CaseReversalStore,
+  isReversalIdempotencyKey,
   planReversal,
   type ReversalPlan,
   type ReversalPlanResult,
@@ -145,6 +152,7 @@ export {
   nameStyleAttemptSchema,
   nameStyleStateSchema,
 } from './branding/name-style-state.ts';
+export * from './commands/index.ts';
 export {
   type BooleanField,
   type ChannelIdField,
@@ -184,6 +192,28 @@ export {
 } from './entitlements/limits.ts';
 export { createEnv, EnvValidationError } from './env.ts';
 export {
+  ACHIEVEMENT_JOBS,
+  ACHIEVEMENT_RETRY_MAILBOX_PREFIX,
+  ACHIEVEMENT_RETRY_MAX,
+  ACHIEVEMENT_RETRY_STATUSES,
+  type AchievementJob,
+  type AchievementJobRequested,
+  type AchievementRetryOutcome,
+  type AchievementRetryResult,
+  type AchievementRetryStatus,
+  type AchievementRewardRef,
+  type AchievementRewardRetryRequested,
+  type AchievementUnlocked,
+  achievementJobRequestedSchema,
+  achievementRetryOutcomeSchema,
+  achievementRetryResultSchema,
+  achievementRewardRefSchema,
+  achievementRewardRetryRequestedSchema,
+  achievementUnlockedSchema,
+  TIER_IDS,
+  type TierId,
+} from './events/achievements.ts';
+export {
   APPEAL_DECISIONS,
   type AppealDecided,
   type AppealDecision,
@@ -191,6 +221,20 @@ export {
   appealDecidedSchema,
   appealSubmittedSchema,
 } from './events/appeals.ts';
+export {
+  APPLICATION_LIFECYCLE_EVENTS,
+  APPLICATION_STATUSES,
+  APPLICATION_WORK_REASONS,
+  type ApplicationActionFailed,
+  type ApplicationLifecycle,
+  type ApplicationLifecycleEvent,
+  type ApplicationStatus,
+  type ApplicationWorkReason,
+  type ApplicationWorkRequested,
+  applicationActionFailedSchema,
+  applicationLifecycleSchema,
+  applicationWorkRequestedSchema,
+} from './events/applications.ts';
 export {
   AUDIT_LOG_EVENT_TYPES,
   type AuditChange,
@@ -223,8 +267,10 @@ export {
   type GiveawayBonusGrantedEvent,
   type GiveawayCancelledEvent,
   type GiveawayCreatedEvent,
+  type GiveawayDropClaimedEvent,
   type GiveawayEditedEvent,
   type GiveawayEndedEvent,
+  type GiveawayEnteredEvent,
   type GiveawayPausedEvent,
   type GiveawayRerolledEvent,
   type GiveawayResumedEvent,
@@ -232,20 +278,55 @@ export {
   giveawayBonusGrantedEventSchema,
   giveawayCancelledEventSchema,
   giveawayCreatedEventSchema,
+  giveawayDropClaimedEventSchema,
   giveawayEditedEventSchema,
   giveawayEndedEventSchema,
+  giveawayEnteredEventSchema,
   giveawayPausedEventSchema,
   giveawayRerolledEventSchema,
   giveawayResumedEventSchema,
   giveawayStartedEventSchema,
 } from './events/giveaways.ts';
 export {
+  JOINROLES_RUN_KINDS,
+  type JoinrolesRunKind,
+  type JoinrolesSyncRequested,
+  joinrolesSyncRequestedSchema,
+} from './events/joinroles.ts';
+export {
+  type ModerationPunishmentExpired,
+  type ModerationReportActionRequested,
+  type ModerationReportResolved,
+  type ModerationReportSubmitted,
+  moderationPunishmentExpiredSchema,
+  moderationReportActionRequestedSchema,
+  moderationReportResolvedSchema,
+  moderationReportSubmittedSchema,
+  REPORT_ACTIONS,
+  REPORT_METHODS,
+  REPORT_STATUSES,
+  type ReportAction,
+  type ReportActionOutcome,
+  type ReportActionParams,
+  type ReportMethod,
+  type ReportStatus,
+  reportActionOutcomeSchema,
+  reportActionParamsSchema,
+} from './events/moderation.ts';
+export {
+  COMMAND_CHANGES,
+  type CommandChange,
   diffKeys,
+  isModerationActionKind,
+  MODERATION_ACTION_KINDS,
+  type ModerationActionKind,
   type ProtonActionExecuted,
+  type ProtonCommandsChanged,
   type ProtonConfigChanged,
   type ProtonPanelRequested,
   type ProtonSecurityTripped,
   protonActionExecutedSchema,
+  protonCommandsChangedSchema,
   protonConfigChangedSchema,
   protonPanelRequestedSchema,
   protonSecurityTrippedSchema,
@@ -259,18 +340,30 @@ export {
   streamKey,
 } from './events/redis-streams.ts';
 export {
+  type StarboardMessagePosted,
+  starboardMessagePostedSchema,
+} from './events/starboard.ts';
+export {
+  TICKET_OPEN_OUTCOMES,
   TICKET_PRIORITIES,
   type TicketClaimedEvent,
   type TicketClosedEvent,
   type TicketDeletedEvent,
+  type TicketOpenAnswered,
   type TicketOpenedEvent,
+  type TicketOpenOutcome,
+  type TicketOpenRequested,
   type TicketPriority,
   type TicketReopenedEvent,
+  type TicketSource,
   ticketClaimedEventSchema,
   ticketClosedEventSchema,
   ticketDeletedEventSchema,
+  ticketOpenAnsweredSchema,
   ticketOpenedEventSchema,
+  ticketOpenRequestedSchema,
   ticketReopenedEventSchema,
+  ticketSourceSchema,
 } from './events/tickets.ts';
 export {
   EVENT_TYPES,
@@ -285,6 +378,32 @@ export {
   verificationWebPassedSchema,
 } from './events/verification.ts';
 export {
+  CAUSATION_KINDS,
+  type Causation,
+  type CausationKind,
+  causationSchema,
+  XP_GRANT_MAX,
+  XP_GRANT_STATUSES,
+  XP_SOURCES,
+  type XpAwarded,
+  type XpGranted,
+  type XpGrantRequested,
+  type XpGrantStatus,
+  type XpLevelGained,
+  type XpSource,
+  xpAwardedSchema,
+  xpGrantedSchema,
+  xpGrantRequestedSchema,
+  xpLevelGainedSchema,
+} from './events/xp.ts';
+export {
+  ACTOR_ROLE_REFUSAL_CODES,
+  type ActorRoleRefusal,
+  type ActorRoleRefusalCode,
+  type ActorRoleRefusalInput,
+  actorRoleRefusal,
+} from './guild-state/actor-roles.ts';
+export {
   buildGuildState,
   parseChannel,
   parseGuildProfile,
@@ -292,6 +411,12 @@ export {
   parseRole,
 } from './guild-state/build.ts';
 export { GUILD_STATE_PREFIX, RedisGuildStateStore } from './guild-state/redis.ts';
+export {
+  ROLE_GRANT_REFUSAL_CODES,
+  type RoleGrantRefusal,
+  type RoleGrantRefusalCode,
+  roleGrantRefusal,
+} from './guild-state/roles.ts';
 export {
   type ChannelState,
   type GuildState,
@@ -316,18 +441,28 @@ export {
 } from './interactions/custom-id.ts';
 export {
   type AutocompleteInteraction,
+  attachmentExpiry,
   type ComponentInteraction,
   type FocusedOption,
   type InteractionBase,
   type ModalInteraction,
+  type ResolvedAttachment,
+  type ResolvedData,
+  type ResolvedMember,
+  type ResolvedMessage,
+  type ResolvedUser,
   readAutocompleteInteraction,
   readComponentInteraction,
   readMemberPermissions,
   readModalInteraction,
+  readResolved,
+  toResolvedMessage,
 } from './interactions/read.ts';
 export {
+  defer,
   deferEphemeral,
   deferUpdate,
+  editOriginal,
   type FollowUpTo,
   followUp,
   type InteractionMessage,
@@ -350,6 +485,7 @@ export {
   type LeaderboardRow,
   leaderboardQuerySchema,
 } from './leaderboard.ts';
+export { REPORT_ACTION_MAILBOX_PREFIX, RedisMailbox } from './mailbox.ts';
 export {
   ACTION_ROWS_MAX,
   type ActionRow,
@@ -433,6 +569,7 @@ export {
   isEmptyEmbed,
   toDiscordEmbed,
 } from './messages/embed.ts';
+export { messageUrl, type ParsedMessageLink, parseMessageLink } from './messages/link.ts';
 export {
   DEFAULT_MENTION_POLICY,
   type DiscordMessageBody,
@@ -452,7 +589,12 @@ export {
   toAllowedMentions,
   toDiscordMessage,
 } from './messages/message.ts';
-export { HUMAN_MESSAGE_TYPES, isHumanMessage } from './messages/message-type.ts';
+export {
+  BOOST_MESSAGE_TYPES,
+  HUMAN_MESSAGE_TYPES,
+  isBoostMessageType,
+  isHumanMessage,
+} from './messages/message-type.ts';
 export {
   errorEmbed,
   errorStatus,
@@ -514,10 +656,32 @@ export {
 export {
   type BotInvite,
   botInviteSchema,
+  COMMAND_SYNC_STATES,
+  type CommandCatalogueView,
+  type CommandEnabledBody,
+  type CommandSettingsView,
+  type CommandSyncFailure,
+  type CommandSyncState,
+  type CommandSyncView,
+  type CommandUpdateBody,
+  type CommandUpdateResult,
+  type CommandView,
+  type CommandWorkerView,
+  commandCatalogueViewSchema,
+  commandEnabledBodySchema,
+  commandSettingsViewSchema,
+  commandSyncFailureSchema,
+  commandSyncViewSchema,
+  commandUpdateBodySchema,
+  commandUpdateResultSchema,
+  commandViewSchema,
+  commandWorkerViewSchema,
   type GuildOverview,
   type GuildPresence,
   guildOverviewSchema,
   guildPresenceSchema,
+  type LostCommandPermissions,
+  lostCommandPermissionsSchema,
   type ModuleConfigView,
   type ModuleField,
   type ModuleIndex,
@@ -543,6 +707,9 @@ export type {
   CommandDefinition,
   ConfigLimit,
   ConfigWriteIssue,
+  ContextMenuContext,
+  ContextMenuDefinition,
+  ContextMenuType,
   EventListener,
   Logger,
   ModuleCategory,
@@ -561,6 +728,8 @@ export {
 } from './modules/options.ts';
 export {
   type DisabledCode,
+  MAX_CHAT_COMMANDS,
+  MAX_CONTEXT_MENUS_PER_TYPE,
   ModuleRegistrationError,
   ModuleRegistry,
   type ModuleRegistryOptions,
@@ -568,6 +737,11 @@ export {
   type RegistryEnvironment,
   UndeclaredScheduleError,
 } from './modules/registry.ts';
+export {
+  type ChannelAudience,
+  type ChannelAudienceInput,
+  channelAudience,
+} from './permissions/audience.ts';
 export {
   ALL_PERMISSIONS,
   combinePermissions,
@@ -745,6 +919,7 @@ export {
   unavailableMember,
   unresolvedDiagnostics,
 } from './simulation/index.ts';
+export { CSV_FORMULA_LEADS, type CsvValue, csvCell, toCsv } from './text/csv.ts';
 export {
   DOMAIN_MAX_LENGTH,
   domainCandidates,
@@ -757,6 +932,7 @@ export {
   normaliseDomain,
   toDomainSet,
 } from './text/domains.ts';
+export { type GuildMemberRead, readGuildMember } from './users/guild-member.ts';
 export {
   avatarUrl,
   CDN_BASE,
@@ -785,3 +961,20 @@ export {
   type VerifyLinkResult,
   verifyLinkClaimsSchema,
 } from './verify-link.ts';
+export {
+  RedisVoiceSessionStore,
+  type RedisVoiceSessionStoreOptions,
+} from './voice/redis-session-store.ts';
+export {
+  MAX_VOICE_STAY_MS,
+  type VoiceSession,
+  type VoiceSessionStore,
+  voiceSessionKey,
+  voiceSessionSchema,
+} from './voice/session.ts';
+export {
+  isVoiceEligible,
+  readVoiceState,
+  type VoiceEligibilityOptions,
+  type VoiceState,
+} from './voice/state.ts';

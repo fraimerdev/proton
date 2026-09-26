@@ -1,8 +1,10 @@
-import { Permissions } from '../permissions/bits.ts';
+import { ALL_PERMISSIONS, Permissions } from '../permissions/bits.ts';
 import {
   createChannelPayloadSchema,
+  createRolePayloadSchema,
   createThreadPayloadSchema,
   editChannelPayloadSchema,
+  moveMemberPayloadSchema,
   sendPayloadSchema,
   setChannelOverwritePayloadSchema,
   THREAD_TYPE_PUBLIC,
@@ -13,8 +15,10 @@ export const ACTION_KINDS = [
   'edit_message',
   'delete_message',
   'add_reaction',
+  'remove_reaction',
   'interaction_reply',
   'interaction_followup',
+  'interaction_edit_original',
   'warn',
   'unwarn',
   'ban',
@@ -65,9 +69,11 @@ export const REQUIRED_PERMISSIONS: Record<ActionKind, bigint> = {
   delete_message: Permissions.ManageMessages,
 
   add_reaction: Permissions.ViewChannel | Permissions.ReadMessageHistory | Permissions.AddReactions,
+  remove_reaction: Permissions.ManageMessages,
 
   interaction_reply: 0n,
   interaction_followup: 0n,
+  interaction_edit_original: 0n,
 
   warn: 0n,
   unwarn: 0n,
@@ -129,8 +135,10 @@ export const TARGETS_MEMBER: Record<ActionKind, boolean> = {
   edit_message: false,
   delete_message: false,
   add_reaction: false,
+  remove_reaction: false,
   interaction_reply: false,
   interaction_followup: false,
+  interaction_edit_original: false,
 
   // True despite issuing no REST call: I8 is about what Proton will do, not what Discord permits.
   warn: true,
@@ -188,10 +196,12 @@ export const CHANNEL_SCOPED: Record<ActionKind, boolean> = {
   edit_message: true,
   delete_message: true,
   add_reaction: true,
+  remove_reaction: true,
 
   // False despite landing in a channel: the interaction token authorises the response by itself.
   interaction_reply: false,
   interaction_followup: false,
+  interaction_edit_original: false,
 
   warn: false,
   unwarn: false,
@@ -287,6 +297,14 @@ export const PAYLOAD_PERMISSIONS: Partial<Record<ActionKind, (payload: unknown) 
     return Permissions.ManageRoles | grantedBits(parsed.data.permissionOverwrites);
   },
 
+  create_role: (payload) => {
+    const parsed = createRolePayloadSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.permissions === undefined) return 0n;
+
+    // Masked: an Administrator is judged by ALL_PERMISSIONS, which lacks bits newer than our types.
+    return BigInt(parsed.data.permissions) & ALL_PERMISSIONS;
+  },
+
   set_channel_overwrite: (payload) => {
     const parsed = setChannelOverwritePayloadSchema.safeParse(payload);
     if (!parsed.success) return 0n;
@@ -309,11 +327,23 @@ export const THREAD_PERMISSION_SUBSTITUTIONS: ReadonlyArray<readonly [bigint, bi
   [Permissions.SendMessages, Permissions.SendMessagesInThreads],
 ];
 
+export function isVoiceDisconnect(kind: ActionKind, payload: unknown): boolean {
+  if (kind !== 'move_member') return false;
+  const parsed = moveMemberPayloadSchema.safeParse(payload);
+  return parsed.success && parsed.data.channelId === null;
+}
+
+export function isChannelScopedFor(kind: ActionKind, payload: unknown): boolean {
+  return CHANNEL_SCOPED[kind] && !isVoiceDisconnect(kind, payload);
+}
+
 export function requiredPermissionsFor(
   kind: ActionKind,
   payload?: unknown,
   inThread = false,
 ): bigint {
+  if (isVoiceDisconnect(kind, payload)) return Permissions.MoveMembers;
+
   const required = REQUIRED_PERMISSIONS[kind] | (PAYLOAD_PERMISSIONS[kind]?.(payload) ?? 0n);
   if (!inThread) return required;
 
@@ -345,6 +375,15 @@ export function hierarchyApplies(kind: ActionKind): boolean {
   return TARGETS_MEMBER[kind] && !HIERARCHY_EXEMPT.has(kind);
 }
 
+const REFUSED_ON_ADMINISTRATORS: ReadonlySet<ActionKind> = new Set<ActionKind>([
+  'timeout',
+  'untimeout',
+]);
+
+export function refusedOnAdministrators(kind: ActionKind): boolean {
+  return REFUSED_ON_ADMINISTRATORS.has(kind);
+}
+
 export function reversalOf(kind: ActionKind): ActionKind | undefined {
   return REVERSAL_OF[kind];
 }
@@ -365,9 +404,11 @@ export function isLedgerOnly(kind: ActionKind): boolean {
 export const NEVER_RECORDED_KINDS: ReadonlySet<ActionKind> = new Set<ActionKind>([
   'interaction_reply',
   'interaction_followup',
+  'interaction_edit_original',
   // Opening a DM channel is a lookup, not a state change — the message sent into it is the
   // action, and that is recorded on its own.
   'create_dm',
+  'remove_reaction',
   // A branding push carries a data URI that can run to hundreds of kilobytes, and cases.payload is
   // jsonb. Recording these would write the whole image into the ledger on every reconnect.
   'set_bot_nickname',

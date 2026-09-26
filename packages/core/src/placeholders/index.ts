@@ -74,13 +74,18 @@ export {
   type MessageSite,
   type PathDiagnostic,
   type ProtonMessageLike,
+  placeholderLinkPaths,
   REPLY_ACTION_FIELDS,
   renderMessageTemplate,
 } from './message-fields.ts';
 export {
   MODIFIER_NAMES,
   type ModifierArgument,
+  type ModifierChoice,
+  type ModifierChoiceContext,
   type ModifierName,
+  modifierChoices,
+  modifierDescription,
   modifiersFor,
   modifierUsage,
   type ParsedModifier,
@@ -94,6 +99,7 @@ export {
   renderTemplate,
 } from './render.ts';
 export {
+  SAMPLE_ACHIEVEMENT,
   SAMPLE_BOT,
   SAMPLE_CONTEXT,
   SAMPLE_GIVEAWAY_WIN,
@@ -101,6 +107,7 @@ export {
   SAMPLE_LEVEL_UP,
   SAMPLE_MEMBER,
   SAMPLE_NOW,
+  SAMPLE_REPORTER,
   SAMPLE_SERVER,
   SAMPLE_TEMPVC,
   SAMPLE_TICKET_CLOSED,
@@ -178,6 +185,7 @@ export {
   placeholderValue,
   placeholderValueSchema,
   type ResolvedValue,
+  rendersLink,
   resolvedValueSchema,
   SCALAR_TYPES,
   type ScalarType,

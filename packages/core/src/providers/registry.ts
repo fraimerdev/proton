@@ -178,8 +178,8 @@ export class ProviderRegistry {
       return {
         ok: false,
         humanReason:
-          `No provider '${id}' is loaded, so what it was configured with cannot be read. The ` +
-          'module that owns it is probably not running in this deployment.',
+          `The '${id}' requirement isn't available, so its settings can't be read. The module ` +
+          "that provides it probably isn't running.",
       };
     }
 
@@ -187,7 +187,7 @@ export class ProviderRegistry {
     if (!parsed.success) {
       return {
         ok: false,
-        humanReason: `The settings saved for ${provider.label} are not valid: ${parsed.error.issues
+        humanReason: `The settings saved for ${provider.label} aren't valid: ${parsed.error.issues
           .map((issue) => `${issue.path.map(String).join('.') || 'value'} ${issue.message}`)
           .join('; ')}.`,
       };

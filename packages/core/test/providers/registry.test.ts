@@ -191,7 +191,7 @@ describe('ProviderRegistry lookup', () => {
     const parsed = registry.parseConfig('leveling.level', { min: 5 });
 
     expect(parsed.ok).toBe(false);
-    if (!parsed.ok) expect(parsed.humanReason).toContain('not running');
+    if (!parsed.ok) expect(parsed.humanReason).toContain("isn't running");
   });
 });
 

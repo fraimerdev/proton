@@ -4,7 +4,7 @@ import { sendPayloadSchema } from '../actions/payloads.ts';
 const { content, embeds, components, poll, flags } = sendPayloadSchema.shape;
 
 const NOTHING_TO_RENDER =
-  'a message template needs content, an embed, a component or a poll — this one has none of them.';
+  'a message template needs content, an embed, a component or a poll, and this one has none.';
 
 export const messageTemplateSchema = z
   .object({ content, embeds, components, poll, flags })
@@ -77,7 +77,7 @@ export function renderTemplate(
     ok: false,
     unknown,
     humanReason:
-      `the variables rendered into this template made it invalid — ${detail}. A variable's ` +
-      'value is longer than the field it was substituted into allows, or emptied it.',
+      `the values filled into this template made it invalid: ${detail}. A value was longer ` +
+      'than its field allows, or left the field empty.',
   };
 }

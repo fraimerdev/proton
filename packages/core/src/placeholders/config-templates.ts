@@ -68,9 +68,9 @@ const DOUBLED = /\{\{|\}\}/;
 
 const PING_COPY: Record<PingKind, (raw: string) => string> = {
   roles: (raw) =>
-    `${raw} writes role mentions, and this message's mention settings let roles be pinged, so every listed role is pinged when it posts. Turn off role pings under Mentions if that is not wanted.`,
+    `${raw} writes role mentions, and this message pings roles, so every listed role is pinged when it posts. Turn off Roles under Mentions if you don't want that.`,
   users: (raw) =>
-    `${raw} writes a user mention, and this message's mention settings let users be pinged, so that person is pinged when it posts. Turn off user pings under Mentions if that is not wanted.`,
+    `${raw} writes a member mention, and this message pings members, so that person is pinged when it posts. Turn off Members under Mentions if you don't want that.`,
 };
 
 function isPlaceholder(token: TemplateToken): token is PlaceholderToken {
@@ -80,13 +80,21 @@ function isPlaceholder(token: TemplateToken): token is PlaceholderToken {
 function withSuggestion(
   diagnostic: TemplateDiagnostic,
   surface: PlaceholderSurface<unknown>,
+  spec: TemplateFieldSpec,
   tokens: readonly TemplateToken[],
 ): TemplateDiagnostic {
   if (diagnostic.code !== 'unknown_placeholder' || diagnostic.span === null) return diagnostic;
 
   const { start } = diagnostic.span;
   const token = tokens.filter(isPlaceholder).find((candidate) => candidate.span.start === start);
-  const suggestion = token === undefined ? undefined : suggestKey(surface.registry, token.key);
+  const suggestion =
+    token === undefined
+      ? undefined
+      : suggestKey(surface.registry, token.key, {
+          field: spec.kind,
+          event: surface.event,
+          audience: surface.audience,
+        });
 
   return suggestion === undefined
     ? diagnostic
@@ -207,7 +215,7 @@ export function validateConfigTemplates(
     const found: SurfaceDiagnostic[] = [];
 
     for (const raw of result.diagnostics) {
-      const diagnostic = withSuggestion(raw, surface, result.tokens);
+      const diagnostic = withSuggestion(raw, surface, site.spec, result.tokens);
       found.push(diagnostic);
 
       if (changed && diagnostic.severity === 'error') {

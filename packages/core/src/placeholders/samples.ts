@@ -1,3 +1,4 @@
+import type { TierId } from '../events/achievements.ts';
 import { PROTON_SUPPORT_URL } from './shared/bot.ts';
 import type { BotFacts, MemberFacts, ServerFacts, UserFacts } from './shared/facts.ts';
 
@@ -12,6 +13,9 @@ export const SAMPLE_IDS = [
   'ticket_closed',
   'giveaway_winner',
   'tempvc',
+  'report',
+  'punishment',
+  'achievement',
 ] as const;
 
 export type SampleId = (typeof SAMPLE_IDS)[number];
@@ -52,6 +56,16 @@ export const SAMPLE_MEMBER: SampleMember = frozen({
     joinedAt: '2026-09-14T09:00:00.000Z',
     premiumSince: null,
     roleIds: ['100000000000000020'],
+  },
+});
+
+export const SAMPLE_REPORTER: SampleMember = frozen({
+  user: { id: '100000000000000011', username: 'nova', globalName: 'Nova', avatarHash: null },
+  member: {
+    nick: null,
+    joinedAt: '2025-03-02T18:30:00.000Z',
+    premiumSince: null,
+    roleIds: [],
   },
 });
 
@@ -98,6 +112,52 @@ export const SAMPLE_TEMPVC = frozen({
   hubName: 'Create a room',
   occupants: 3,
   owner: SAMPLE_MEMBER,
+});
+
+const SAMPLE_REWARD_ROLE_ID = '100000000000000021';
+
+interface SampleAchievementReward {
+  kind: 'add_role' | 'remove_role' | 'xp';
+  roleId?: string;
+  amount?: number;
+}
+
+export const SAMPLE_ACHIEVEMENT = frozen({
+  member: {
+    user: SAMPLE_MEMBER.user,
+    member: { ...SAMPLE_MEMBER.member, joinedAt: '2025-11-02T17:45:00.000Z' },
+  } satisfies SampleMember,
+  achievement: {
+    id: 'chatterbox',
+    name: 'Chatterbox',
+    description: 'Keep the conversation going in Proton HQ.',
+    kind: 'tiered' as 'single' | 'tiered',
+    tierCount: 4,
+  },
+  tier: 'gold' as TierId,
+  tiersUnlocked: ['bronze', 'silver', 'gold'] as TierId[],
+  requirements: [
+    {
+      trigger: 'messages.sent',
+      label: 'Send messages',
+      current: 1_000,
+      target: 1_000,
+      unit: { one: 'message', many: 'messages' },
+    },
+  ],
+  next: { tier: 'diamond' as TierId, target: 5_000 },
+  rewardRole: { id: SAMPLE_REWARD_ROLE_ID, name: 'Regular' },
+  rewards: {
+    granted: [
+      { kind: 'add_role', roleId: SAMPLE_REWARD_ROLE_ID },
+      { kind: 'xp', amount: 250 },
+    ] as SampleAchievementReward[],
+    pending: [] as SampleAchievementReward[],
+    failed: [] as SampleAchievementReward[],
+  },
+  unlockedAt: SAMPLE_NOW,
+  deadline: null as number | null,
+  earnedCount: 5,
 });
 
 export const SAMPLE_BOT: BotFacts = frozen({

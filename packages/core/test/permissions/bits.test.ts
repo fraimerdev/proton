@@ -6,6 +6,7 @@ import {
   hasWithAdmin,
   missing,
   Permissions,
+  permissionLabels,
   permissionNames,
 } from '../../src/permissions/bits.ts';
 
@@ -84,6 +85,22 @@ describe('permission helpers', () => {
     ]);
 
     expect(combined).toBe(Permissions.ViewChannel | Permissions.SendMessages);
+  });
+
+  test('a bit with two API names is labelled once, by the name Discord shows today', () => {
+    expect(permissionLabels(Permissions.ManageGuildExpressions)).toEqual(['Manage Expressions']);
+    expect(permissionNames(Permissions.ManageEmojisAndStickers)).toEqual([
+      'ManageGuildExpressions',
+    ]);
+  });
+
+  test('every known bit is named exactly once', () => {
+    for (let shift = 0n; 1n << shift <= ALL_PERMISSIONS; shift += 1n) {
+      const bit = 1n << shift;
+      if (!has(ALL_PERMISSIONS, bit)) continue;
+
+      expect(permissionNames(bit)).toHaveLength(1);
+    }
   });
 
   test('ALL_PERMISSIONS contains every known bit', () => {

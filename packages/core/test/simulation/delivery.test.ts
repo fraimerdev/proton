@@ -121,7 +121,7 @@ describe('asTestDelivery', () => {
 
     expect(markerOmitted).toBeUndefined();
     expect(test.content).toBe(
-      `Welcome!\n-# Test message — <@${ACTOR}> sent this from the Proton dashboard. Nobody was pinged.`,
+      `Welcome!\n-# Test message sent by <@${ACTOR}> from the Proton dashboard. Nobody was pinged.`,
     );
   });
 

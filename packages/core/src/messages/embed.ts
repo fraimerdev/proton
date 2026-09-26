@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isLinkOrTemplate, LINK_MESSAGE } from './template-link.ts';
 
 export const EMBED_TITLE_MAX = 256;
 export const EMBED_DESCRIPTION_MAX = 4096;
@@ -22,9 +23,7 @@ export const EMBED_URL_MAX = 2048;
 export const embedLinkSchema = z
   .string()
   .max(EMBED_URL_MAX)
-  .refine((value) => /^https?:\/\//i.test(value) && URL.canParse(value), {
-    message: 'must be a complete http:// or https:// link',
-  });
+  .refine(isLinkOrTemplate, { message: LINK_MESSAGE });
 
 export const embedFieldSchema = z.object({
   name: z.string().trim().min(1).max(EMBED_FIELD_NAME_MAX),

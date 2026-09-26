@@ -88,6 +88,19 @@ export const giveawayBonusGrantedEventSchema = z.object({
   revoked: z.boolean(),
 });
 
+export const giveawayEnteredEventSchema = z.object({
+  ...base,
+  userId: snowflakeSchema,
+  totalEntries: z.number().int().min(1),
+  activityAt: z.number().int(),
+});
+
+export const giveawayDropClaimedEventSchema = z.object({
+  ...base,
+  userId: snowflakeSchema,
+  activityAt: z.number().int(),
+});
+
 export type GiveawayCreatedEvent = z.infer<typeof giveawayCreatedEventSchema>;
 export type GiveawayStartedEvent = z.infer<typeof giveawayStartedEventSchema>;
 export type GiveawayEditedEvent = z.infer<typeof giveawayEditedEventSchema>;
@@ -97,3 +110,5 @@ export type GiveawayCancelledEvent = z.infer<typeof giveawayCancelledEventSchema
 export type GiveawayEndedEvent = z.infer<typeof giveawayEndedEventSchema>;
 export type GiveawayRerolledEvent = z.infer<typeof giveawayRerolledEventSchema>;
 export type GiveawayBonusGrantedEvent = z.infer<typeof giveawayBonusGrantedEventSchema>;
+export type GiveawayEnteredEvent = z.infer<typeof giveawayEnteredEventSchema>;
+export type GiveawayDropClaimedEvent = z.infer<typeof giveawayDropClaimedEventSchema>;

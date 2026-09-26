@@ -3,6 +3,7 @@ import {
   createPlaceholderRegistry,
   definitionsFor,
   isRestricted,
+  type PlaceholderContext,
   type PlaceholderDefinition,
   PlaceholderDefinitionError,
   type PlaceholderDefinitionInput,
@@ -377,16 +378,23 @@ function editDistance(from: string, to: string, bound: number): number {
   return previous[to.length] ?? bound;
 }
 
-export function suggestKey(registry: PlaceholderRegistry, key: string): string | undefined {
+export function suggestKey(
+  registry: PlaceholderRegistry,
+  key: string,
+  context?: PlaceholderContext | undefined,
+): string | undefined {
+  const lower = key.toLowerCase();
+  const offered = context === undefined ? registry.definitions : definitionsFor(registry, context);
   let best: string | undefined;
   let distance = SUGGESTION_DISTANCE + 1;
 
-  for (const definition of registry.definitions) {
+  for (const definition of offered) {
     const names = definition.key.includes('<')
       ? definition.aliases
       : [definition.key, ...definition.aliases];
 
     for (const name of names) {
+      if (name !== key && name.toLowerCase() === lower) return name;
       if (Math.abs(name.length - key.length) >= distance) continue;
 
       const found = editDistance(name, key, distance);

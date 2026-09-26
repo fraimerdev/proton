@@ -1,12 +1,16 @@
 import { z } from 'zod';
 
-export const snowflakeSchema = z.string().regex(/^\d{17,20}$/, 'must be a Discord snowflake');
+export const snowflakeSchema = z
+  .string()
+  .regex(/^\d{17,20}$/, 'must be a Discord ID (a number of 17 to 20 digits)');
 
 export const INTERACTION_CALLBACK_CHANNEL_MESSAGE = 4;
 
 export const MESSAGE_FLAG_EPHEMERAL = 64;
 
 export const MESSAGE_FLAG_IS_COMPONENTS_V2 = 32768;
+
+export const MESSAGE_FLAG_SUPPRESS_EMBEDS = 4;
 
 export const BULK_DELETE_MAX = 100;
 
@@ -111,18 +115,50 @@ function hasSomethingToSend(value: {
   components?: unknown[] | undefined;
   files?: unknown[] | undefined;
   poll?: unknown;
+  forward?: unknown;
 }): boolean {
   return Boolean(
     value.content?.length ||
       value.embeds?.length ||
       value.components?.length ||
       value.files?.length ||
-      value.poll,
+      value.poll ||
+      value.forward,
   );
 }
 
 const NOTHING_TO_SEND =
-  'a message needs content, an embed, a component, a file or a poll — this one has none of them.';
+  'a message needs content, an embed, a component, a file or a poll, and this one has none.';
+
+const FORWARD_CARRIES_NOTHING_ELSE =
+  'a forward carries the original message and nothing else: content, embeds, components, files, ' +
+  'a poll and a reply are refused alongside it.';
+
+function forwardIsExclusive(payload: {
+  forward?: unknown;
+  content?: string | undefined;
+  embeds?: unknown[] | undefined;
+  components?: unknown[] | undefined;
+  files?: unknown[] | undefined;
+  poll?: unknown;
+  replyToMessageId?: string | undefined;
+}): boolean {
+  if (payload.forward === undefined) return true;
+
+  return (
+    payload.content === undefined &&
+    payload.embeds === undefined &&
+    payload.components === undefined &&
+    payload.files === undefined &&
+    payload.poll === undefined &&
+    payload.replyToMessageId === undefined
+  );
+}
+
+export const forwardReferenceSchema = z.object({
+  channelId: snowflakeSchema,
+  messageId: snowflakeSchema,
+});
 
 export const MENTION_PARSE_KINDS = ['roles', 'users', 'everyone'] as const;
 
@@ -176,9 +212,15 @@ export const sendPayloadSchema = z
     allowedMentions: allowedMentionsSchema.optional(),
 
     replyToMessageId: snowflakeSchema.optional(),
+
+    forward: forwardReferenceSchema.optional(),
+
+    // Never sent to Discord: it marks channelId as a DM, which no guild permission governs.
+    directMessage: z.boolean().optional(),
   })
   .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
-  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT });
+  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT })
+  .refine(forwardIsExclusive, { message: FORWARD_CARRIES_NOTHING_ELSE, path: ['forward'] });
 
 export const editMessagePayloadSchema = z
   .object({
@@ -190,6 +232,8 @@ export const editMessagePayloadSchema = z
 
     // Only ever set, never cleared — Discord refuses to take IS_COMPONENTS_V2 off a message.
     flags: z.number().int().optional(),
+
+    allowedMentions: allowedMentionsSchema.optional(),
   })
   .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
   .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT });
@@ -203,6 +247,13 @@ export const addReactionPayloadSchema = z.object({
   channelId: snowflakeSchema,
   messageId: snowflakeSchema,
   emoji: z.string().min(1).max(64),
+});
+
+export const removeReactionPayloadSchema = z.object({
+  channelId: snowflakeSchema,
+  messageId: snowflakeSchema,
+  emoji: z.string().min(1).max(64),
+  userId: snowflakeSchema,
 });
 
 export const modalSchema = z.object({
@@ -299,6 +350,29 @@ export const interactionFollowupPayloadSchema = z
   })
   .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
   .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT });
+
+const EDITABLE_FLAGS = MESSAGE_FLAG_SUPPRESS_EMBEDS | MESSAGE_FLAG_IS_COMPONENTS_V2;
+
+const EDIT_FLAGS_ONLY =
+  'an edit can set only the SUPPRESS_EMBEDS and IS_COMPONENTS_V2 flags. Whether a response is ' +
+  'ephemeral was fixed by the first response, and Discord will not change it.';
+
+export const interactionEditOriginalPayloadSchema = z
+  .object({
+    applicationId: snowflakeSchema,
+    interactionToken: z.string().min(1),
+    content: z.string().max(2000).optional(),
+    embeds: embedsSchema.optional(),
+    components: componentsSchema.optional(),
+    flags: z.number().int().optional(),
+    allowedMentions: allowedMentionsSchema.optional(),
+  })
+  .refine(hasSomethingToSend, { message: NOTHING_TO_SEND })
+  .refine(componentsV2IsExclusive, { message: COMPONENTS_V2_CONFLICT })
+  .refine((v) => ((v.flags ?? 0) & ~EDITABLE_FLAGS) === 0, {
+    message: EDIT_FLAGS_ONLY,
+    path: ['flags'],
+  });
 
 export const warnPayloadSchema = z.object({
   userId: snowflakeSchema,
@@ -469,7 +543,7 @@ export const createThreadPayloadSchema = z.object({
 
 export const moveMemberPayloadSchema = z.object({
   userId: snowflakeSchema,
-  channelId: snowflakeSchema,
+  channelId: snowflakeSchema.nullable(),
 });
 
 export const endPollPayloadSchema = z.object({
@@ -633,8 +707,11 @@ export type SendPayload = z.infer<typeof sendPayloadSchema>;
 export type EditMessagePayload = z.infer<typeof editMessagePayloadSchema>;
 export type DeleteMessagePayload = z.infer<typeof deleteMessagePayloadSchema>;
 export type AddReactionPayload = z.infer<typeof addReactionPayloadSchema>;
+export type RemoveReactionPayload = z.infer<typeof removeReactionPayloadSchema>;
+export type ForwardReference = z.infer<typeof forwardReferenceSchema>;
 export type InteractionReplyPayload = z.infer<typeof interactionReplyPayloadSchema>;
 export type InteractionFollowupPayload = z.infer<typeof interactionFollowupPayloadSchema>;
+export type InteractionEditOriginalPayload = z.infer<typeof interactionEditOriginalPayloadSchema>;
 export type WarnPayload = z.infer<typeof warnPayloadSchema>;
 export type UnwarnPayload = z.infer<typeof unwarnPayloadSchema>;
 export type BanPayload = z.infer<typeof banPayloadSchema>;

@@ -1,5 +1,20 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { CaseReversalInput, CaseReversalStore } from '../../src/actions/reversal.ts';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
+import type { CaseInput, CaseRecorder } from '../../src/actions/case-recorder.ts';
+import type { DedupeStore } from '../../src/actions/dedupe.ts';
+import { DefaultActionExecutor } from '../../src/actions/executor.ts';
+import type { PrecheckInput } from '../../src/actions/prechecks.ts';
+import {
+  type MemberRolesLookup,
+  resolvePrecheckContext,
+} from '../../src/actions/resolve-context.ts';
+import type { RestProxyClient, RestResponse } from '../../src/actions/rest-client.ts';
+import {
+  type CaseReversalInput,
+  type CaseReversalStore,
+  reversalIdempotencyKey,
+} from '../../src/actions/reversal.ts';
+import { DatabaseReversalScheduler } from '../../src/actions/reversal-scheduler.ts';
 import {
   ScheduledActionSweeper,
   type ScheduledModuleJob,
@@ -12,8 +27,15 @@ import type {
   ScheduledActionStore,
   ScheduleOutcome,
 } from '../../src/actions/scheduled-actions.ts';
-import type { ActionExecutor, ActionRequest, ActionResult } from '../../src/actions/types.ts';
+import type {
+  ActionExecutor,
+  ActionFailure,
+  ActionRequest,
+  ActionResult,
+} from '../../src/actions/types.ts';
+import type { GuildState, GuildStateStore } from '../../src/guild-state/types.ts';
 import type { Logger } from '../../src/modules/manifest.ts';
+import { Permissions } from '../../src/permissions/bits.ts';
 
 const GUILD = '900000000000000001';
 const NOW = new Date('2026-08-17T12:00:00.000Z');
@@ -169,9 +191,9 @@ class RecordingExecutor implements ActionExecutor {
 }
 
 class CollectingLogger implements Logger {
-  readonly lines: Array<{ level: string; message: string }> = [];
-  info(message: string) {
-    this.lines.push({ level: 'info', message });
+  readonly lines: Array<{ level: string; message: string; meta?: Record<string, unknown> }> = [];
+  info(message: string, meta?: Record<string, unknown>) {
+    this.lines.push({ level: 'info', message, ...(meta ? { meta } : {}) });
   }
   warn(message: string) {
     this.lines.push({ level: 'warn', message });
@@ -760,5 +782,417 @@ describe('ScheduledActionSweeper payload dispatch', () => {
       { caseId: 'case-legacy', revertedAt: NOW, revertedBy: 'proton:auto-reversal' },
     ]);
     expect(store.rows).toHaveLength(0);
+  });
+});
+
+const TARGET = '400000000000000000';
+const LIFTED_ROLE = '410000000000000001';
+const LOCKED_CHANNEL = '500000000000000001';
+
+type ReversalKind = 'unban' | 'untimeout' | 'remove_role' | 'unlock';
+
+const REVERSALS: Record<
+  ReversalKind,
+  {
+    originalKind: 'ban' | 'timeout' | 'add_role' | 'lockdown';
+    action: Record<string, unknown>;
+    targetId?: string;
+  }
+> = {
+  unban: { originalKind: 'ban', targetId: TARGET, action: { userId: TARGET } },
+  untimeout: { originalKind: 'timeout', targetId: TARGET, action: { userId: TARGET } },
+  remove_role: {
+    originalKind: 'add_role',
+    targetId: TARGET,
+    action: { userId: TARGET, roleId: LIFTED_ROLE },
+  },
+  unlock: {
+    originalKind: 'lockdown',
+    action: { channelId: LOCKED_CHANNEL, roleId: GUILD, restoreAllow: '0', restoreDeny: '0' },
+  },
+};
+
+async function scheduleLift(kind: ReversalKind) {
+  const { originalKind, action, targetId } = REVERSALS[kind];
+
+  await store.schedule({
+    guildId: GUILD,
+    runAt: new Date(clock.getTime() - 1000),
+    kind,
+    idempotencyKey: `reversal:${kind}`,
+    payload: {
+      kind: 'reversal',
+      caseId: `case-${kind}`,
+      moduleId: 'moderation',
+      actorId: '100000000000000000',
+      originalKind,
+      action,
+      ...(targetId ? { targetId } : {}),
+    },
+  });
+}
+
+function refusedWith(code: string, discordCode?: number): ActionResult {
+  return {
+    status: 'failed_api',
+    failure: {
+      code,
+      humanReason: 'Discord refused that, and nothing was changed.',
+      ...(discordCode === undefined ? {} : { discordCode }),
+    },
+  };
+}
+
+function prechecked(code: string): ActionResult {
+  return { status: 'failed_precheck', failure: { code, humanReason: 'Refused before Discord.' } };
+}
+
+const MEMBER_GONE = 'the member is no longer in the server';
+
+const LIFTED: ReadonlyArray<[ReversalKind, number, string]> = [
+  ['unban', RESTJSONErrorCodes.UnknownBan, 'the user is no longer banned'],
+  ['untimeout', RESTJSONErrorCodes.UnknownMember, MEMBER_GONE],
+  ['remove_role', RESTJSONErrorCodes.UnknownMember, MEMBER_GONE],
+  ['remove_role', RESTJSONErrorCodes.UnknownRole, 'the role no longer exists'],
+  ['unlock', RESTJSONErrorCodes.UnknownChannel, 'the channel no longer exists'],
+];
+
+const STILL_STANDING: ReadonlyArray<[string, ReversalKind, ActionResult]> = [
+  ['a codeless 404, as a misrouted proxy answers,', 'unban', refusedWith('discord_404')],
+  [
+    "Discord's unknown-route 404 (code 0)",
+    'unban',
+    refusedWith('discord_404', RESTJSONErrorCodes.GeneralError),
+  ],
+  ['Unknown Guild', 'unban', refusedWith('discord_404', RESTJSONErrorCodes.UnknownGuild)],
+  ['Unknown Member', 'unban', refusedWith('discord_404', RESTJSONErrorCodes.UnknownMember)],
+  ['Unknown Role', 'untimeout', refusedWith('discord_404', RESTJSONErrorCodes.UnknownRole)],
+  ['Unknown Channel', 'remove_role', refusedWith('discord_404', RESTJSONErrorCodes.UnknownChannel)],
+  ['Unknown Ban', 'unlock', refusedWith('discord_404', RESTJSONErrorCodes.UnknownBan)],
+  [
+    'Missing Permissions',
+    'unban',
+    refusedWith('discord_403', RESTJSONErrorCodes.MissingPermissions),
+  ],
+  ['a 502', 'untimeout', refusedWith('discord_502')],
+  ['a transport failure', 'remove_role', refusedWith('transport_failure')],
+  ['a member lookup that failed', 'untimeout', prechecked('target_state_unavailable')],
+  ['a member lookup that found nobody', 'unban', prechecked('target_not_member')],
+  ['a member lookup that found nobody', 'unlock', prechecked('target_not_member')],
+  ['an Administrator target', 'untimeout', prechecked('target_is_administrator')],
+  ['a role now at or above Proton', 'remove_role', prechecked('role_hierarchy')],
+  ['a missing permission', 'unlock', prechecked('missing_permission')],
+];
+
+describe('ScheduledActionSweeper reversals that were already lifted', () => {
+  test.each(LIFTED)(
+    'a %s Discord answers with code %d stamps the case and retires the row',
+    async (kind, discordCode, why) => {
+      await scheduleLift(kind);
+      executor.result = refusedWith('discord_404', discordCode);
+
+      expect(await sweeper().sweep()).toEqual({ ...NOTHING, claimed: 1, reverted: 1 });
+
+      expect(executor.requests).toHaveLength(1);
+      expect(store.reverted).toEqual([
+        { caseId: `case-${kind}`, revertedAt: NOW, revertedBy: 'proton:auto-reversal' },
+      ]);
+      expect(store.rows).toHaveLength(0);
+
+      const settled = logger.matching('info', 'was already lifted');
+      expect(settled).toHaveLength(1);
+      expect(settled[0]?.message).toContain(why);
+      expect(settled[0]?.meta).toMatchObject({
+        caseId: `case-${kind}`,
+        kind,
+        failure: 'discord_404',
+        discordCode,
+      });
+      expect(logger.lines.filter((line) => line.level !== 'info')).toHaveLength(0);
+    },
+  );
+
+  test.each(['untimeout', 'remove_role'] as const)(
+    'a %s whose member lookup found nobody stamps the case and retires the row',
+    async (kind) => {
+      await scheduleLift(kind);
+      executor.result = prechecked('target_not_member');
+
+      expect(await sweeper().sweep()).toEqual({ ...NOTHING, claimed: 1, reverted: 1 });
+
+      expect(store.reverted).toEqual([
+        { caseId: `case-${kind}`, revertedAt: NOW, revertedBy: 'proton:auto-reversal' },
+      ]);
+      expect(store.rows).toHaveLength(0);
+
+      const settled = logger.matching('info', 'was already lifted');
+      expect(settled).toHaveLength(1);
+      expect(settled[0]?.message).toContain(MEMBER_GONE);
+      expect(settled[0]?.meta).toMatchObject({ kind, failure: 'target_not_member' });
+      expect(logger.lines.filter((line) => line.level !== 'info')).toHaveLength(0);
+    },
+  );
+
+  test.each(STILL_STANDING)('%s keeps a %s on the bounded retry', async (_label, kind, result) => {
+    await scheduleLift(kind);
+    executor.result = result;
+
+    expect(await sweeper().sweep()).toEqual({ ...NOTHING, claimed: 1, retrying: 1 });
+
+    expect(store.reverted).toHaveLength(0);
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]?.lockToken).toBeNull();
+    expect(logger.matching('warn', 'will retry')).toHaveLength(1);
+    expect(logger.matching('info', 'already lifted')).toHaveLength(0);
+  });
+
+  test('a lift that keeps coming back as a codeless 404 is abandoned, never stamped', async () => {
+    await scheduleLift('unban');
+    executor.result = refusedWith('discord_404');
+    const bounded = sweeper({ maxAttempts: 2 });
+
+    expect((await bounded.sweep()).retrying).toBe(1);
+    expect((await bounded.sweep()).abandoned).toBe(1);
+    expect(await bounded.sweep()).toEqual(NOTHING);
+
+    expect(store.reverted).toHaveLength(0);
+    expect(logger.matching('error', 'by hand')).toHaveLength(1);
+  });
+
+  test('a retry that finds the ban gone settles the row an earlier 502 left behind', async () => {
+    await scheduleLift('unban');
+
+    executor.result = refusedWith('discord_502');
+    expect((await sweeper().sweep()).retrying).toBe(1);
+
+    executor.result = refusedWith('discord_404', RESTJSONErrorCodes.UnknownBan);
+    expect((await sweeper().sweep()).reverted).toBe(1);
+
+    expect(executor.requests).toHaveLength(2);
+    expect(store.reverted).toHaveLength(1);
+    expect(store.rows).toHaveLength(0);
+  });
+
+  test('an already-lifted answer on a lapsed lock neither stamps the case nor unlocks the row', async () => {
+    await scheduleLift('unban');
+    const upstream = gate();
+    const reached = gate();
+    executor.hold = upstream.opened;
+    executor.onExecute = () => reached.open();
+    executor.result = refusedWith('discord_404', RESTJSONErrorCodes.UnknownBan);
+
+    const overrunning = sweeper({ renewMs: NEVER }).sweep();
+    await Promise.race([reached.opened, Bun.sleep(2000)]);
+
+    clock = new Date(clock.getTime() + LOCK_MS + 1);
+    upstream.open();
+
+    expect(await overrunning).toEqual({ ...NOTHING, claimed: 1, aborted: 1 });
+
+    expect(store.reverted).toHaveLength(0);
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]?.lockToken).not.toBeNull();
+    expect(logger.matching('info', 'already lifted')).toHaveLength(0);
+  });
+});
+
+const BOT = '300000000000000000';
+const BOT_ROLE = '410000000000000005';
+
+class MemoryDedupe implements DedupeStore {
+  readonly #claimed = new Set<string>();
+
+  async claim(key: string): Promise<boolean> {
+    if (this.#claimed.has(key)) return false;
+    this.#claimed.add(key);
+    return true;
+  }
+
+  async release(key: string): Promise<void> {
+    this.#claimed.delete(key);
+  }
+
+  async has(key: string): Promise<boolean> {
+    return this.#claimed.has(key);
+  }
+}
+
+class MemoryRecorder implements CaseRecorder {
+  readonly recorded: CaseInput[] = [];
+
+  async record(input: CaseInput): Promise<{ caseId: string }> {
+    this.recorded.push(input);
+    return { caseId: `case-${this.recorded.length}` };
+  }
+}
+
+class ScriptedRest implements RestProxyClient {
+  readonly calls: Array<{ method: string; path: string }> = [];
+  answer: RestResponse = { status: 204, body: undefined };
+
+  async request(options: { method: string; path: string }): Promise<RestResponse> {
+    this.calls.push({ method: options.method, path: options.path });
+    return this.answer;
+  }
+}
+
+const GUILD_STATE: GuildState = {
+  guildId: GUILD,
+  ownerId: '200000000000000000',
+  everyoneRoleId: GUILD,
+  roles: new Map([
+    [GUILD, { id: GUILD, permissions: Permissions.ViewChannel, position: 0 }],
+    [
+      BOT_ROLE,
+      {
+        id: BOT_ROLE,
+        permissions: Permissions.BanMembers | Permissions.ModerateMembers | Permissions.ManageRoles,
+        position: 5,
+      },
+    ],
+  ]),
+  botRoleIds: [BOT_ROLE],
+  channels: new Map(),
+  updatedAt: NOW.getTime(),
+};
+
+const GUILD_STATE_STORE: GuildStateStore = {
+  get: async () => GUILD_STATE,
+  put: async () => undefined,
+  patch: async () => undefined,
+  delete: async () => undefined,
+};
+
+function pipeline(lookup: MemberRolesLookup = []) {
+  const rest = new ScriptedRest();
+
+  const real = new DefaultActionExecutor({
+    dedupe: new MemoryDedupe(),
+    rest,
+    recorder: new MemoryRecorder(),
+    resolveContext: async (request): Promise<PrecheckInput | { failure: ActionFailure }> => {
+      const resolved = await resolvePrecheckContext(
+        { store: GUILD_STATE_STORE, botUserId: BOT, fetchMemberRoles: async () => lookup },
+        request,
+      );
+      return 'context' in resolved ? resolved.context : resolved;
+    },
+  });
+
+  const sweep = new ScheduledActionSweeper({
+    store,
+    cases: store,
+    executor: real,
+    logger,
+    now: () => clock,
+    lockMs: LOCK_MS,
+  });
+
+  return { rest, sweep };
+}
+
+const DISCORD_SAYS_GONE: ReadonlyArray<[ReversalKind, string, number]> = [
+  ['unban', 'Unknown Ban', RESTJSONErrorCodes.UnknownBan],
+  ['untimeout', 'Unknown Member', RESTJSONErrorCodes.UnknownMember],
+  ['remove_role', 'Unknown Member', RESTJSONErrorCodes.UnknownMember],
+  ['remove_role', 'Unknown Role', RESTJSONErrorCodes.UnknownRole],
+  ['unlock', 'Unknown Channel', RESTJSONErrorCodes.UnknownChannel],
+];
+
+const NOT_DISCORDS_VERDICT: ReadonlyArray<[string, unknown]> = [
+  ['a plain-text 404 from a misrouted proxy', '404 Not Found'],
+  ['an empty 404', undefined],
+  ["Discord's unknown-route 404", { message: '404: Not Found', code: 0 }],
+  ['Unknown Guild', { message: 'Unknown Guild', code: RESTJSONErrorCodes.UnknownGuild }],
+  ["the REST proxy's own 404", { error: 'rest_proxy_upstream_failure', message: 'not found' }],
+];
+
+describe('ScheduledActionSweeper over the real executor', () => {
+  test.each(DISCORD_SAYS_GONE)(
+    'a %s Discord answers 404 %s is settled from the code the executor read',
+    async (kind, message, code) => {
+      const { rest, sweep } = pipeline();
+      await scheduleLift(kind);
+      rest.answer = { status: 404, body: { message, code } };
+
+      expect(await sweep.sweep()).toEqual({ ...NOTHING, claimed: 1, reverted: 1 });
+
+      expect(rest.calls).toHaveLength(1);
+      expect(store.reverted).toHaveLength(1);
+      expect(store.rows).toHaveLength(0);
+      expect(logger.matching('info', 'was already lifted')[0]?.meta).toMatchObject({
+        failure: 'discord_404',
+        discordCode: code,
+      });
+    },
+  );
+
+  test.each(NOT_DISCORDS_VERDICT)(
+    'an unban answered with %s is retried and its case left open',
+    async (_label, body) => {
+      const { rest, sweep } = pipeline();
+      await scheduleLift('unban');
+      rest.answer = { status: 404, body };
+
+      expect(await sweep.sweep()).toEqual({ ...NOTHING, claimed: 1, retrying: 1 });
+
+      expect(rest.calls).toHaveLength(1);
+      expect(store.reverted).toHaveLength(0);
+      expect(store.rows).toHaveLength(1);
+    },
+  );
+
+  test.each(['untimeout', 'remove_role'] as const)(
+    'a %s whose member lookup says they left is settled without calling Discord',
+    async (kind) => {
+      const { rest, sweep } = pipeline('not_member');
+      await scheduleLift(kind);
+
+      expect(await sweep.sweep()).toEqual({ ...NOTHING, claimed: 1, reverted: 1 });
+
+      expect(rest.calls).toHaveLength(0);
+      expect(store.reverted).toHaveLength(1);
+      expect(store.rows).toHaveLength(0);
+      expect(logger.matching('info', 'was already lifted')[0]?.meta).toMatchObject({
+        failure: 'target_not_member',
+      });
+    },
+  );
+
+  test('an untimeout whose member lookup failed outright stays on the retry without calling Discord', async () => {
+    const { rest, sweep } = pipeline(null);
+    await scheduleLift('untimeout');
+
+    expect(await sweep.sweep()).toEqual({ ...NOTHING, claimed: 1, retrying: 1 });
+
+    expect(rest.calls).toHaveLength(0);
+    expect(store.reverted).toHaveLength(0);
+    expect(logger.matching('info', 'already lifted')).toHaveLength(0);
+  });
+
+  test("moderation's unban cancels the row the scheduler wrote, so no sweep unbans again", async () => {
+    const { rest, sweep } = pipeline();
+    const ban: ActionRequest = {
+      guildId: GUILD,
+      moduleId: 'moderation',
+      kind: 'ban',
+      targetId: TARGET,
+      actorId: '100000000000000000',
+      payload: { userId: TARGET },
+      expiresAt: new Date(clock.getTime() - 1000),
+      dryRun: false,
+      idempotencyKey: 'moderation:ban:root',
+    };
+
+    await new DatabaseReversalScheduler({ store, logger }).schedule(ban, 'case-ban');
+    expect(store.rows.map((row) => row.kind)).toEqual(['unban']);
+
+    expect(await store.cancel(reversalIdempotencyKey(ban.idempotencyKey))).toEqual({
+      cancelled: true,
+    });
+    expect(await sweep.sweep()).toEqual(NOTHING);
+
+    expect(rest.calls).toHaveLength(0);
+    expect(store.reverted).toHaveLength(0);
   });
 });

@@ -12,11 +12,15 @@ export const CASE_PAGE_SIZE_DEFAULT = 50;
 
 export const CASE_PAGE_SIZE_MAX = 200;
 
+export const CASE_SCOPES = ['moderation', 'all'] as const;
+export type CaseScope = (typeof CASE_SCOPES)[number];
+
 export const caseQuerySchema = z
   .object({
     caseId: caseIdSchema.optional(),
 
     type: z.enum(ACTION_KINDS).optional(),
+    scope: z.enum(CASE_SCOPES).default('all'),
 
     moderatorId: snowflakeSchema.optional(),
     targetId: snowflakeSchema.optional(),
@@ -30,7 +34,7 @@ export const caseQuerySchema = z
   })
 
   .refine((q) => q.from === undefined || q.to === undefined || q.from <= q.to, {
-    message: 'the start of the date range must not be after its end',
+    message: 'the start date must be on or before the end date',
     path: ['from'],
   });
 

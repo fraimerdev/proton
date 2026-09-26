@@ -5,8 +5,10 @@ import {
   CHANNEL_SCOPED,
   hierarchyApplies,
   isChannelScoped,
+  isChannelScopedFor,
   isLedgerOnly,
   isNeverRecorded,
+  isVoiceDisconnect,
   NEVER_RECORDED_KINDS,
   PAYLOAD_PERMISSIONS,
   REQUIRED_PERMISSIONS,
@@ -19,6 +21,7 @@ import {
 import { THREAD_TYPE_PRIVATE, THREAD_TYPE_PUBLIC } from '../../src/actions/payloads.ts';
 import { type PayloadResult, type RestCall, toRestCall } from '../../src/actions/rest-mapping.ts';
 import type { ActionRequest } from '../../src/actions/types.ts';
+import { invitePermissionsFor } from '../../src/modules/registry.ts';
 import { ALL_PERMISSIONS, has, Permissions } from '../../src/permissions/bits.ts';
 
 const GUILD = '900000000000000001';
@@ -136,6 +139,23 @@ describe('REST mapping', () => {
     const call = callOf(toRestCall(request('kick', { userId: USER }, 'spamming')));
 
     expect(call.headers?.['x-audit-log-reason']).toBe('spamming');
+  });
+
+  test('an audit reason, when given, is what the audit log gets instead of the case reason', () => {
+    const call = callOf(
+      toRestCall({
+        ...request('ban', { userId: USER }, 'spamming'),
+        auditReason: 'Nova: spamming',
+      }),
+    );
+
+    expect(call.headers?.['x-audit-log-reason']).toBe(encodeURIComponent('Nova: spamming'));
+  });
+
+  test('an audit reason alone still reaches the audit log', () => {
+    const call = callOf(toRestCall({ ...request('kick', { userId: USER }), auditReason: 'raid' }));
+
+    expect(call.headers?.['x-audit-log-reason']).toBe('raid');
   });
 
   test('timeout beyond Discord’s 28-day cap is refused with an explanation', () => {
@@ -302,6 +322,7 @@ describe('the tables every action kind is read out of', () => {
     expect(ACTION_KINDS.filter((kind) => requiredPermissionsFor(kind) === 0n)).toEqual([
       'interaction_reply',
       'interaction_followup',
+      'interaction_edit_original',
       'warn',
       'unwarn',
       'giveaway_draw',
@@ -320,8 +341,10 @@ describe('the tables every action kind is read out of', () => {
 
   test('names the interaction acknowledgements, the DM lookup and the branding pushes as never recorded', () => {
     expect(ACTION_KINDS.filter((kind) => NEVER_RECORDED_KINDS.has(kind))).toEqual([
+      'remove_reaction',
       'interaction_reply',
       'interaction_followup',
+      'interaction_edit_original',
       'create_dm',
       // Not for noise: their payload carries an image as a data URI, and cases.payload is jsonb.
       'set_bot_nickname',
@@ -354,6 +377,7 @@ describe('the tables every action kind is read out of', () => {
       'edit_message',
       'delete_message',
       'add_reaction',
+      'remove_reaction',
       'purge',
       'slowmode',
       'lockdown',
@@ -502,12 +526,18 @@ const PAYLOAD_AWARE_CASES: Array<[ActionKind, unknown]> = [
   ['edit_channel', { channelId: CHANNEL, name: 'general' }],
   ['create_channel', PRIVATE_CREATE],
   ['create_channel', PUBLIC_CREATE],
+  [
+    'create_role',
+    { name: 'Admin', permissions: (Permissions.Administrator | (1n << 62n)).toString() },
+  ],
+  ['create_role', { name: 'Muted' }],
 ];
 
 describe('requirements the payload decides', () => {
-  test('exactly five kinds read their payload, and no mechanism leaks to the rest', () => {
+  test('exactly six kinds read their payload, and no mechanism leaks to the rest', () => {
     expect(Object.keys(PAYLOAD_PERMISSIONS).sort()).toEqual([
       'create_channel',
+      'create_role',
       'create_thread',
       'edit_channel',
       'send',
@@ -737,5 +767,140 @@ describe('a reply', () => {
     const required = requiredPermissionsFor('send', { channelId: CHANNEL, content: 'hi' });
 
     expect(has(required, Permissions.ReadMessageHistory)).toBe(false);
+  });
+});
+
+describe('remove_reaction', () => {
+  test('needs Manage Messages in the channel it is addressed to, and nothing else', () => {
+    expect(requiredPermissionsFor('remove_reaction')).toBe(Permissions.ManageMessages);
+    expect(requiredPermissionsFor('remove_reaction', undefined, true)).toBe(
+      Permissions.ManageMessages,
+    );
+    expect(isChannelScoped('remove_reaction')).toBe(true);
+  });
+
+  test('names no member, has no reversal and never becomes a case', () => {
+    expect(targetsMember('remove_reaction')).toBe(false);
+    expect(hierarchyApplies('remove_reaction')).toBe(false);
+    expect(reversalOf('remove_reaction')).toBeUndefined();
+    expect(isNeverRecorded('remove_reaction')).toBe(true);
+    expect(isLedgerOnly('remove_reaction')).toBe(false);
+  });
+
+  test('is covered by the invite of any module that declares it', () => {
+    expect(has(invitePermissionsFor('remove_reaction'), Permissions.ManageMessages)).toBe(true);
+  });
+});
+
+describe('interaction_edit_original', () => {
+  const APPLICATION = '800000000000000001';
+  const EDIT = { applicationId: APPLICATION, interactionToken: 'tok', content: 'Saved.' };
+
+  test('patches the original response through the interaction webhook', () => {
+    const call = callOf(toRestCall(request('interaction_edit_original', EDIT)));
+
+    expect(call.method).toBe('PATCH');
+    expect(call.path).toBe(`/webhooks/${APPLICATION}/tok/messages/@original`);
+    expect(call.body).toEqual({ content: 'Saved.' });
+  });
+
+  test('carries a Components V2 message with its flag, clearing any content and embeds the original had', () => {
+    const call = callOf(
+      toRestCall(
+        request('interaction_edit_original', {
+          applicationId: APPLICATION,
+          interactionToken: 'tok',
+          components: [{ type: 17, components: [] }],
+          flags: 32768,
+          allowedMentions: { parse: [] },
+        }),
+      ),
+    );
+
+    expect(call.body).toEqual({
+      components: [{ type: 17, components: [] }],
+      flags: 32768,
+      allowed_mentions: { parse: [] },
+      content: null,
+      embeds: null,
+    });
+  });
+
+  test('leaves content and embeds alone on an edit that does not switch to Components V2', () => {
+    const call = callOf(
+      toRestCall(
+        request('interaction_edit_original', { ...EDIT, embeds: [{ description: 'Details.' }] }),
+      ),
+    );
+
+    expect(call.body).toEqual({ content: 'Saved.', embeds: [{ description: 'Details.' }] });
+  });
+
+  test('refuses content beside the Components V2 flag', () => {
+    const result = toRestCall(request('interaction_edit_original', { ...EDIT, flags: 32768 }));
+
+    expect('error' in result && result.error).toContain('Components V2');
+  });
+
+  test('refuses the ephemeral flag, which only the first response can set', () => {
+    const result = toRestCall(request('interaction_edit_original', { ...EDIT, flags: 64 }));
+
+    expect('error' in result && result.error).toContain('ephemeral');
+  });
+
+  test('accepts suppressing embeds, the other flag Discord lets an edit set', () => {
+    const call = callOf(toRestCall(request('interaction_edit_original', { ...EDIT, flags: 4 })));
+
+    expect((call.body as { flags?: number }).flags).toBe(4);
+  });
+
+  test('refuses an edit that carries nothing', () => {
+    const result = toRestCall(
+      request('interaction_edit_original', { applicationId: APPLICATION, interactionToken: 'tok' }),
+    );
+
+    expect('error' in result && result.error).toContain('content, an embed, a component');
+  });
+
+  test('needs no permission, names no member or channel, and never becomes a case', () => {
+    expect(requiredPermissionsFor('interaction_edit_original')).toBe(0n);
+    expect(invitePermissionsFor('interaction_edit_original')).toBe(0n);
+    expect(targetsMember('interaction_edit_original')).toBe(false);
+    expect(isChannelScoped('interaction_edit_original')).toBe(false);
+    expect(isNeverRecorded('interaction_edit_original')).toBe(true);
+    expect(isLedgerOnly('interaction_edit_original')).toBe(false);
+    expect(reversalOf('interaction_edit_original')).toBeUndefined();
+  });
+});
+
+describe('a voice disconnect', () => {
+  const DISCONNECT = { userId: USER, channelId: null };
+  const MOVE = { userId: USER, channelId: CHANNEL };
+
+  test('needs Move Members alone, with no destination to connect to', () => {
+    expect(requiredPermissionsFor('move_member', DISCONNECT)).toBe(Permissions.MoveMembers);
+    expect(requiredPermissionsFor('move_member', DISCONNECT, true)).toBe(Permissions.MoveMembers);
+  });
+
+  test('is judged across the server, while a move is judged in its destination', () => {
+    expect(isVoiceDisconnect('move_member', DISCONNECT)).toBe(true);
+    expect(isChannelScopedFor('move_member', DISCONNECT)).toBe(false);
+    expect(isVoiceDisconnect('move_member', MOVE)).toBe(false);
+    expect(isChannelScopedFor('move_member', MOVE)).toBe(true);
+    expect(requiredPermissionsFor('move_member', MOVE)).toBe(REQUIRED_PERMISSIONS.move_member);
+  });
+
+  test('is only ever a move_member, whatever payload another kind carries', () => {
+    for (const kind of ACTION_KINDS.filter((k) => k !== 'move_member')) {
+      expect(isVoiceDisconnect(kind, DISCONNECT)).toBe(false);
+      expect(isChannelScopedFor(kind, DISCONNECT)).toBe(isChannelScoped(kind));
+    }
+  });
+
+  test('leaves the invite asking for Connect, since a move may need it', () => {
+    expect(requiredPermissionsFor('move_member')).toBe(
+      Permissions.MoveMembers | Permissions.Connect,
+    );
+    expect(has(invitePermissionsFor('move_member'), Permissions.Connect)).toBe(true);
   });
 });

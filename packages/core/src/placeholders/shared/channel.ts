@@ -28,7 +28,7 @@ const EXAMPLE_GUILD = '100000000000000001';
 const EXAMPLE_CHANNEL = '100000000000000040';
 
 const CHANNEL: Record<ChannelKey, Entry> = {
-  id: ['Channel ID', 'Discord channel id', v.text(EXAMPLE_CHANNEL)],
+  id: ['Channel ID', 'Discord channel ID', v.text(EXAMPLE_CHANNEL)],
   mention: [
     'Channel',
     'The channel as a clickable mention; its name where mentions cannot be shown',
@@ -47,6 +47,13 @@ const CHANNEL: Record<ChannelKey, Entry> = {
   ],
 };
 
+const KEYWORDS: Partial<Record<ChannelKey, readonly string[]>> = {
+  id: ['snowflake'],
+  mention: ['link', 'ping', 'tag'],
+  url: ['link', 'jump'],
+  category_mention: ['category', 'folder'],
+};
+
 export function channelDefinitions(namespace: ChannelNamespace): PlaceholderDefinitionInput[] {
   return CHANNEL_KEYS.map((key) => {
     const [label, description, example] = CHANNEL[key];
@@ -55,6 +62,7 @@ export function channelDefinitions(namespace: ChannelNamespace): PlaceholderDefi
       label,
       description,
       group: GROUPS[namespace],
+      keywords: [...(KEYWORDS[key] ?? [])],
       type: typeOf(example),
       example,
     };

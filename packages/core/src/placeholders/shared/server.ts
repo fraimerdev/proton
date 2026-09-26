@@ -93,7 +93,7 @@ type ServerKey = (typeof SERVER_KEYS)[number];
 type Entry = readonly [label: string, description: string, example: PlaceholderValue];
 
 const SERVER: Record<ServerKey, Entry> = {
-  id: ['Server ID', 'Discord server id', v.text(EXAMPLE_GUILD)],
+  id: ['Server ID', 'Discord server ID', v.text(EXAMPLE_GUILD)],
   name: ['Server name', "The server's name", v.text('Proton HQ')],
   member_count: ['Member count', 'How many members the server has', v.integer(1204)],
   owner_mention: [
@@ -135,6 +135,18 @@ const SERVER: Record<ServerKey, Entry> = {
   boost_tier: ['Boost level', "The server's boost level, from 0 to 3", v.integer(2)],
 };
 
+const KEYWORDS: Partial<Record<ServerKey, readonly string[]>> = {
+  id: ['guild', 'snowflake'],
+  name: ['guild', 'title'],
+  member_count: ['members', 'total', 'population', 'users'],
+  owner_mention: ['owner', 'ping', 'admin'],
+  created_at: ['age', 'founded'],
+  icon_url: ['logo', 'picture', 'image', 'avatar'],
+  banner_url: ['header', 'image'],
+  boost_count: ['boosts', 'nitro', 'boosters'],
+  boost_tier: ['boosts', 'nitro', 'level'],
+};
+
 export function serverDefinitions(): PlaceholderDefinitionInput[] {
   return SERVER_KEYS.map((key) => {
     const [label, description, example] = SERVER[key];
@@ -143,6 +155,7 @@ export function serverDefinitions(): PlaceholderDefinitionInput[] {
       label,
       description,
       group: 'Server',
+      keywords: [...(KEYWORDS[key] ?? [])],
       type: typeOf(example),
       example,
     };

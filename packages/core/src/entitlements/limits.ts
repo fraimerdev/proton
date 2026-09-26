@@ -13,6 +13,9 @@ export const LIMIT_KEYS = [
   'activePolls',
   'honeypotChannels',
   'appealPanels',
+  'achievements',
+  'applicationForms',
+  'applicationPanels',
 ] as const;
 
 export type LimitKey = (typeof LIMIT_KEYS)[number];
@@ -30,6 +33,9 @@ export const LIMIT_LABELS: Record<LimitKey, string> = {
   activePolls: 'running polls',
   honeypotChannels: 'honeypot channels',
   appealPanels: 'appeal forms',
+  achievements: 'achievements',
+  applicationForms: 'application forms',
+  applicationPanels: 'application panels',
 };
 
 export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
@@ -46,6 +52,9 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     activePolls: 3,
     honeypotChannels: 3,
     appealPanels: 1,
+    achievements: 10,
+    applicationForms: 3,
+    applicationPanels: 2,
   },
   plus: {
     tags: 125,
@@ -60,6 +69,9 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     activePolls: 15,
     honeypotChannels: 10,
     appealPanels: 5,
+    achievements: 50,
+    applicationForms: 10,
+    applicationPanels: 5,
   },
   pro: {
     tags: 500,
@@ -74,6 +86,9 @@ export const TIER_LIMITS: Record<EntitlementTier, Record<LimitKey, number>> = {
     activePolls: 60,
     honeypotChannels: 25,
     appealPanels: 15,
+    achievements: 100,
+    applicationForms: 25,
+    applicationPanels: 15,
   },
 };
 
@@ -105,7 +120,7 @@ function advice(tier: EntitlementTier, key: LimitKey): string {
 
   return next
     ? `Remove one first, or move to ${next} for ${limitFor(next, key)}.`
-    : `Remove one first — ${tier} is the highest tier there is.`;
+    : `Remove one first, since ${tier} is the highest tier.`;
 }
 
 export function checkLimit(tier: EntitlementTier, key: LimitKey, current: number): LimitCheck {
@@ -117,7 +132,7 @@ export function checkLimit(tier: EntitlementTier, key: LimitKey, current: number
     limit,
     tier,
     humanReason:
-      `the ${tier} tier allows ${limit} ${LIMIT_LABELS[key]} and ${subject(key)} ` +
+      `The ${tier} tier allows ${limit} ${LIMIT_LABELS[key]}, and ${subject(key)} ` +
       `${current}. ${advice(tier, key)}`,
   };
 }
@@ -133,7 +148,7 @@ export function checkListLimit(tier: EntitlementTier, key: LimitKey, length: num
     limit,
     tier,
     humanReason:
-      `the ${tier} tier allows ${limit} ${LIMIT_LABELS[key]} and this would save ${length}. ` +
+      `The ${tier} tier allows ${limit} ${LIMIT_LABELS[key]}, and this would save ${length}. ` +
       advice(tier, key),
   };
 }
