@@ -1,7 +1,10 @@
+@import "./modules/achievements.css";
 @import "./modules/afk.css";
 @import "./modules/antinuke.css";
 @import "./modules/antiraid.css";
 @import "./modules/appeals.css";
+@import "./modules/applications.css";
+@import "./modules/applications-review.css";
 @import "./modules/automod.css";
 @import "./modules/backup.css";
 @import "./modules/branding.css";

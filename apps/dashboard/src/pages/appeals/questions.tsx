@@ -62,7 +62,7 @@ function keyProblem(key: string, taken: ReadonlySet<string>): string | undefined
   if (key.trim() === '') return 'A question needs an answer key.';
   if (!KEY_SHAPE.test(key)) return KEY_SHAPE_MESSAGE;
   if (taken.has(key)) {
-    return `two questions are both keyed '${key}', so one answer would overwrite the other.`;
+    return `Another question already uses the answer key '${key}'.`;
   }
   return undefined;
 }
@@ -111,6 +111,7 @@ export function QuestionsSection({
   return (
     <Section
       label="Questions"
+      help="Even when every question is optional, an empty appeal is refused with “An appeal needs at least one answer.”"
       note={<LimitCounter used={questions.length} ceiling={QUESTIONS_MAX} label="questions" />}
       actions={
         full ? null : (
@@ -280,11 +281,6 @@ export function QuestionsSection({
           );
         })}
       </Rows>
-
-      <p className="appeals-note">
-        Even when every question is optional, an empty appeal is refused with “An appeal needs at
-        least one answer.”
-      </p>
     </Section>
   );
 }

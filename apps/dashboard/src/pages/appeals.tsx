@@ -105,6 +105,7 @@ export default function AppealsPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but no new appeals can be sent until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -118,7 +119,7 @@ export default function AppealsPage({
         {unreachable ? (
           <StatusBanner
             tone="info"
-            title="No appeal link leads to these forms"
+            title="No appeal links point to these forms"
             actions={
               <ModuleLink
                 guildId={guildId}
@@ -130,8 +131,8 @@ export default function AppealsPage({
               </ModuleLink>
             }
           >
-            Only Honeypot sends appeal links, and only when its action is Ban. Each link opens the
-            form chosen in its Appeal form setting.
+            Only Honeypot sends appeal links, and only when its action is Ban. Pick a form under
+            Follow-up in Honeypot.
           </StatusBanner>
         ) : null}
       </ModuleBanners>
@@ -165,7 +166,7 @@ export default function AppealsPage({
               </Button>
             }
           >
-            It may have been renamed or deleted.
+            It may have been deleted.
           </EmptyState>
         ) : null}
 

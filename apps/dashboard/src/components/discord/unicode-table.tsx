@@ -31,7 +31,7 @@ export default function UnicodeTable({
                 key={emoji.char}
                 type="button"
                 className="emoji-cell"
-                title={emoji.name}
+                aria-label={emoji.name}
                 onClick={() => onPick(emoji.char, emoji.name)}
               >
                 {emoji.char}

@@ -76,7 +76,22 @@
 }
 
 @media (max-width: 760px) {
-  .permissions-row-control,
+  .permissions-row > .checkbox {
+    align-self: flex-start;
+    margin-top: 2px;
+  }
+
+  .permissions-row-main {
+    flex-basis: calc(100% - 31px);
+  }
+
+  .permissions-row-control {
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    margin-left: 31px;
+  }
+
   .permissions-row-trailing {
     width: auto;
   }

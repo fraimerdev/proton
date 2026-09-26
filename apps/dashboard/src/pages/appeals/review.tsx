@@ -23,7 +23,10 @@ export function ReviewArea({
     : config.panels.filter((panel) => panel.enabled && panel.reviewChannelId === undefined).length;
 
   return (
-    <Section label="Decisions">
+    <Section
+      label="Decisions"
+      help="Staff accept or turn down appeals on the card Proton posts in the review channel, not in the dashboard."
+    >
       <Rows>
         <SettingRow
           title="Default review channel"
@@ -74,11 +77,6 @@ export function ReviewArea({
           />
         </SettingRow>
       </Rows>
-
-      <p className="appeals-note">
-        Appeals are accepted or turned down on the card Proton posts in the review channel, not in
-        the dashboard.
-      </p>
     </Section>
   );
 }

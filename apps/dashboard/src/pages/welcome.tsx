@@ -24,9 +24,6 @@ const GREETING_AREAS: Readonly<Record<string, GreetingKind>> = {
   boost: 'boost',
 };
 
-const switchedOff = (name: string): string =>
-  `${name} is not enabled. You can turn it on using the switch at the top of the page.`;
-
 export default function WelcomePage({
   guildId,
   meta,
@@ -63,6 +60,7 @@ export default function WelcomePage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but nothing is posted until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -72,8 +70,6 @@ export default function WelcomePage({
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {enabled ? null : <StatusBanner tone="neutral">{switchedOff(meta.label)}</StatusBanner>}
       </ModuleBanners>
 
       <div className="welcome-areas">

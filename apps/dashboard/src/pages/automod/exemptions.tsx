@@ -13,16 +13,13 @@ type Form = ModuleForm<AutomodConfig>;
 const ROLE_MAX = 20;
 const CHANNEL_MAX = 50;
 
-const ROLE_CEILING =
-  'You\'re allowed to add up to 20 exempt roles on an AutoMod rule.';
+const ROLE_CEILING = 'Discord allows up to 20 exempt roles on an AutoMod rule.';
 
 export function ExemptionsArea({ form, guildId }: { form: Form; guildId: string }): ReactElement {
   const config = form.value;
 
   return (
-    <Section
-      label="Skipped messages"
-    >
+    <Section label="Skipped messages">
       <Rows>
         <SettingRow
           title="Exempt roles"
@@ -30,7 +27,11 @@ export function ExemptionsArea({ form, guildId }: { form: Form; guildId: string 
           badge={
             <LimitCounter used={config.exemptRoleIds.length} ceiling={ROLE_MAX} label="roles" />
           }
-          error={form.errorAt('exemptRoleIds') ?? config.exemptRoleIds.length >= ROLE_MAX ? ROLE_CEILING : undefined}
+          error={
+            (form.errorAt('exemptRoleIds') ?? config.exemptRoleIds.length >= ROLE_MAX)
+              ? ROLE_CEILING
+              : undefined
+          }
           stacked
         >
           <RoleMultiPicker
@@ -64,7 +65,7 @@ export function ExemptionsArea({ form, guildId }: { form: Form; guildId: string 
 
         <SettingRow
           title="Exempt bots"
-          note="Proton’s own messages are always skipped, even when this is off."
+          help="Proton’s own messages are always skipped, even when this is off."
         >
           <Switch
             label="Exempt bots"

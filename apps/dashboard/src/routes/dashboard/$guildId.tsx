@@ -6,13 +6,13 @@ import { DashboardShell, Workspace } from '../../components/shell/app-shell.tsx'
 import { Button } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { RoutePending } from '../../components/ui/pending.tsx';
-import { isAccessError } from '../../lib/errors.ts';
+import { failureKind, isAccessError } from '../../lib/errors.ts';
 import { warmGuildShape } from '../../lib/modules/preload.ts';
 import { modulesQuery, sessionQuery } from '../../lib/queries.ts';
 import { signOut } from '../../server/session.ts';
 
 export const Route = createFileRoute('/dashboard/$guildId')({
-  loader: async ({ context, params }) => {
+  loader: async ({ context, params, location }) => {
     // fetchQuery, not ensureQueryData: a cached session would keep a revoked admin past the redirect.
     try {
       const session = await context.queryClient.fetchQuery(sessionQuery());
@@ -21,7 +21,7 @@ export const Route = createFileRoute('/dashboard/$guildId')({
       // Before the modules load: for a server Proton has left, the api answers with an empty list, not an error.
       if (session.presenceKnown && guild && !guild.present) {
         throw new Error(
-          `Proton is not in ${guild.name}, so there is nothing to configure yet. Invite it to that server and open this page again.`,
+          `Proton isn’t in ${guild.name} yet. Add it to the server, then open this page again.`,
         );
       }
 
@@ -31,6 +31,9 @@ export const Route = createFileRoute('/dashboard/$guildId')({
       // of them, so one request per server beats one per picker.
       warmGuildShape(context.queryClient, params.guildId);
     } catch (error) {
+      // Not /dashboard: its server list is cached for 30 seconds and would show the picker again.
+      if (failureKind(error) === 'signed-out')
+        throw redirect({ to: '/signin', search: { redirect: location.href } });
       if (isAccessError(error)) throw redirect({ to: '/dashboard' });
 
       throw error;
@@ -42,6 +45,7 @@ export const Route = createFileRoute('/dashboard/$guildId')({
   pendingComponent: ShellPending,
   component: GuildShell,
   errorComponent: ShellError,
+  notFoundComponent: GuildNotFound,
 });
 
 function useSignOut(): () => void {
@@ -102,13 +106,12 @@ function ShellError({ error }: { error: Error }): ReactElement {
       <Workspace>
         <header className="page-head">
           <div className="page-head-main">
-            <h1 className="page-title">Server not loaded</h1>
+            <h1 className="page-title">Couldn’t open this server</h1>
           </div>
         </header>
 
         <StatusBanner
           tone="danger"
-          title="Proton could not open this server"
           actions={
             <Link to="/dashboard" className="button button-secondary button-sm">
               Back to your servers
@@ -125,5 +128,18 @@ function ShellError({ error }: { error: Error }): ReactElement {
         </div>
       </Workspace>
     </main>
+  );
+}
+
+function GuildNotFound(): ReactElement {
+  return (
+    <Workspace>
+      <header className="page-head">
+        <div className="page-head-main">
+          <h1 className="page-title">Page not found</h1>
+          <p className="page-subtitle">There’s no page at this address.</p>
+        </div>
+      </header>
+    </Workspace>
   );
 }

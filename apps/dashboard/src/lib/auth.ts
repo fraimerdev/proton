@@ -1,5 +1,6 @@
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
 import { betterAuth } from 'better-auth';
+import { OAUTH_SCOPES } from '../components/site/catalogue.ts';
 import { db } from './db.ts';
 import { loadEnv } from './env.ts';
 
@@ -13,11 +14,24 @@ export const auth = betterAuth({
     discord: {
       clientId: env.DISCORD_CLIENT_ID,
       clientSecret: env.DISCORD_CLIENT_SECRET,
-      scope: ['identify', 'guilds', 'guilds.members.read'],
+      disableDefaultScope: true,
+      scope: [...OAUTH_SCOPES],
+      // Better Auth needs a unique email per user; without the email scope Discord sends none.
+      mapProfileToUser: (profile) => ({
+        email: `${profile.id}@users.discord.invalid`,
+        emailVerified: false,
+      }),
     },
   },
   account: {
     accountLinking: { enabled: false },
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => ({ data: { ...session, ipAddress: null, userAgent: null } }),
+      },
+    },
   },
 
   // Better Auth's default is `${baseURL}/error`, which is not a route here — so declining the

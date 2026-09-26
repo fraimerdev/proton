@@ -117,14 +117,16 @@ export function HubDetail({
     nameError !== undefined && nameDiagnostics.some(({ message }) => message === nameError);
   const nameInvalid =
     nameError !== undefined || report.blocking.some((issue) => issue.path === namePath);
-  const nameDescribedBy =
-    visibleDiagnostics(nameDiagnostics).shown.length > 0 ? nameDiagnosticsId : undefined;
-
   const name = usePlaceholderAutocomplete({
     surface: TEMPVC_NAME_SURFACE,
     path: namePath,
     onChange: (nameTemplate) => change((current) => ({ ...current, nameTemplate })),
   });
+
+  const nameDescribedBy =
+    visibleDiagnostics(nameDiagnostics, name.pending).shown.length > 0
+      ? nameDiagnosticsId
+      : undefined;
 
   const sampleName = renderTempVcName(hub.nameTemplate, NAME_SAMPLE.facts, SAMPLE_NOW).output;
 
@@ -237,7 +239,11 @@ export function HubDetail({
                 }
               />
               <PlaceholderSuggestions autocomplete={name} />
-              <TemplateDiagnostics id={nameDiagnosticsId} diagnostics={nameDiagnostics} />
+              <TemplateDiagnostics
+                id={nameDiagnosticsId}
+                diagnostics={nameDiagnostics}
+                autocomplete={name}
+              />
             </div>
           </SettingRow>
 
@@ -260,7 +266,7 @@ export function HubDetail({
 
           <SettingRow
             title="Bitrate"
-            description="Leave empty to use Discord’s default."
+            description="In bits per second. Leave empty to use Discord’s default."
             error={at('bitrate')}
           >
             <NumberStepper
@@ -414,10 +420,10 @@ export function HubDetail({
           </SettingRow>
 
           {hub.temporaryRoleMode !== 'off' ? (
-            <SettingRow title="The role to hand out" error={at('temporaryRoleId')}>
+            <SettingRow title="Role to give" error={at('temporaryRoleId')}>
               <RolePicker
                 guildId={guildId}
-                label="The role to hand out"
+                label="Role to give"
                 invalid={at('temporaryRoleId') !== undefined}
                 value={hub.temporaryRoleId}
                 onChange={(next) =>
@@ -487,8 +493,8 @@ export function HubDetail({
           label="What owners can do"
           intro={
             <>
-              Owners cannot use /voice or the control panel, because “Let owners manage their own
-              channel” is disabled.{' '}
+              Owners can’t use /voice or the control panel, because “Let owners manage their own
+              channel” is off.{' '}
               <ModuleLink guildId={guildId} moduleId={moduleId} search={{ area: 'settings' }}>
                 Change it in Settings
               </ModuleLink>
@@ -545,8 +551,9 @@ export function HubDetail({
       <ConfirmDialog
         open={removing}
         danger
+        icon="trash"
         title="Remove creator channel?"
-        confirmLabel="Remove"
+        confirmLabel="Remove creator channel"
         onClose={() => setRemoving(false)}
         onConfirm={() => {
           setHubs(

@@ -32,9 +32,11 @@ const NO_STAFF_ANYWHERE =
   'No staff roles are set here or on any ticket type, so only the member who opens a ticket can ' +
   'see it.';
 
-const BLACKLIST_NOTE =
-  'Shown to blacklisted members when they try to open a ticket. Proton adds the reason and when ' +
-  'the block lifts below it. Use /ticket blacklist in Discord to add or remove members.';
+const BLACKLIST_DESCRIPTION =
+  'Shown to blocked members when they try to open a ticket. Block members with /ticket blacklist ' +
+  'in Discord.';
+
+const BLACKLIST_HELP = 'Proton adds the reason and when the block ends below your message.';
 
 export function SettingsArea({
   form,
@@ -96,7 +98,7 @@ export function SettingsArea({
         <Rows>
           <SettingRow
             title="Staff roles"
-            description="Roles that can access every ticket. Each ticket type can add more."
+            description="Roles that can see and handle every ticket. Ticket types can add more."
             error={form.errorAt('staffRoleIds')}
             note={noStaffAnywhere ? NO_STAFF_ANYWHERE : undefined}
             stacked
@@ -148,7 +150,7 @@ export function SettingsArea({
               </>
             }
           >
-            <div className="message-field">
+            <div className="message-field tickets-name-field">
               <TextInput
                 {...name.autocomplete.field}
                 width="md"
@@ -161,7 +163,11 @@ export function SettingsArea({
                 onChange={(event) => setNamePattern(event.currentTarget.value)}
               />
               <PlaceholderSuggestions autocomplete={name.autocomplete} />
-              <TemplateDiagnostics id={name.diagnosticsId} diagnostics={name.diagnostics} />
+              <TemplateDiagnostics
+                id={name.diagnosticsId}
+                diagnostics={name.diagnostics}
+                autocomplete={name.autocomplete}
+              />
             </div>
           </SettingRow>
 
@@ -171,7 +177,7 @@ export function SettingsArea({
             error={closing.error}
             stacked
           >
-            <div className="stack stack-12">
+            <div className="stack stack-12 tickets-closing">
               <div className="message-field">
                 <TextArea
                   {...closing.autocomplete.field}
@@ -184,7 +190,11 @@ export function SettingsArea({
                   onChange={(event) => setCloseConfirmation(event.currentTarget.value)}
                 />
                 <PlaceholderSuggestions autocomplete={closing.autocomplete} />
-                <TemplateDiagnostics id={closing.diagnosticsId} diagnostics={closing.diagnostics} />
+                <TemplateDiagnostics
+                  id={closing.diagnosticsId}
+                  diagnostics={closing.diagnostics}
+                  autocomplete={closing.autocomplete}
+                />
               </div>
 
               <div>
@@ -204,7 +214,7 @@ export function SettingsArea({
         <Rows>
           <SettingRow
             title="Open tickets per member"
-            description="Ticket types can set a lower limit. Your plan caps this too."
+            description="Ticket types can set their own limit too."
             error={form.errorAt('maxOpenPerUser')}
             note={
               overPlan
@@ -229,7 +239,8 @@ export function SettingsArea({
 
           <SettingRow
             title="Total open tickets"
-            description="How many tickets can be open at once. Discord allows up to 500 channels in a server."
+            description="The most tickets that can be open at once in this server."
+            help="Discord allows up to 500 channels in a server, and every open ticket is one of them."
             error={form.errorAt('maxOpenPerGuild')}
           >
             <NumberStepper
@@ -264,11 +275,12 @@ export function SettingsArea({
 
           <SettingRow
             title="Blacklist message"
+            description={BLACKLIST_DESCRIPTION}
+            help={BLACKLIST_HELP}
             error={blacklist.error}
-            note={BLACKLIST_NOTE}
             stacked
           >
-            <div className="message-field">
+            <div className="message-field grow">
               <TextArea
                 {...blacklist.autocomplete.field}
                 aria-label="Blacklist message"
@@ -283,32 +295,15 @@ export function SettingsArea({
               <TemplateDiagnostics
                 id={blacklist.diagnosticsId}
                 diagnostics={blacklist.diagnostics}
+                autocomplete={blacklist.autocomplete}
               />
             </div>
           </SettingRow>
         </Rows>
       </Section>
 
-      <Section label="Logs and transcripts">
+      <Section label="Transcripts">
         <Rows>
-          <SettingRow
-            title="Log channel"
-            description="Where Proton logs when tickets are opened, claimed, closed and deleted."
-            error={form.errorAt('logChannelId')}
-          >
-            <ChannelPicker
-              guildId={guildId}
-              label="Log channel"
-              noneLabel="No log channel"
-              placeholder="No log channel"
-              types={[TEXT_CHANNEL_TYPE]}
-              value={config.logChannelId ?? null}
-              onChange={(next) =>
-                form.setValue((current) => ({ ...current, logChannelId: next ?? undefined }))
-              }
-            />
-          </SettingRow>
-
           <SettingRow
             title="Transcript channel"
             description="Where Proton posts ticket transcripts. Ticket types can set their own."

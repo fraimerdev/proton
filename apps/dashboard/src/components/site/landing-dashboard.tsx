@@ -70,24 +70,28 @@ export function DashboardShot(): ReactElement {
 
           <StatusBanner
             tone="warning"
-            title="Proton cannot run Honeypot"
+            title="Proton can’t run Honeypot"
             actions={
               <Button tone="secondary" size="sm">
                 Copy reason
               </Button>
             }
           >
-            I'm missing the Ban Members permission in this server.
+            Missing the Ban Members permission in this server. Grant it to Proton’s role in Server
+            Settings → Roles, or invite Proton again with it.
           </StatusBanner>
 
           <Rows>
-            <SettingRow title="Bait channels" description="Channels Honeypot watches for messages.">
+            <SettingRow
+              title="Bait channels"
+              description="Any message a member posts in these channels triggers Honeypot."
+            >
               <span className="chip">
                 <Icon name="hash" size={12} />
                 welcome-bonus
               </span>
             </SettingRow>
-            <SettingRow title="Action" description="What happens when someone triggers Honeypot.">
+            <SettingRow title="Action">
               <Select
                 width="sm"
                 value="softban"
@@ -96,10 +100,7 @@ export function DashboardShot(): ReactElement {
                 aria-label="Action"
               />
             </SettingRow>
-            <SettingRow
-              title="Delete trigger message"
-              description="Delete the message that triggered Honeypot."
-            >
+            <SettingRow title="Delete trigger message">
               <Switch checked onChange={ignore} label="Delete trigger message" />
             </SettingRow>
           </Rows>

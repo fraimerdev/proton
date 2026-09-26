@@ -15,12 +15,8 @@ import { AreaTabs } from '../components/ui/tabs.tsx';
 import { GateArea } from './verification/gate.tsx';
 import { PanelArea } from './verification/panel.tsx';
 
-const SWITCHED_OFF = 'Settings are saved, but nothing runs until you switch it on.';
-
-// planVerification, gate.ts:133-140, trimmed at the sentence that points back at this page.
 const GATE_INCOMPLETE =
-  "This server hasn't finished setting up verification: neither a member role nor an unverified " +
-  'role is chosen, so passing the gate would change nothing.';
+  'Choose a member role or an unverified role. Until you do, verifying changes nothing.';
 
 export default function VerificationPage({
   guildId,
@@ -58,6 +54,7 @@ export default function VerificationPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but nothing runs until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -66,10 +63,6 @@ export default function VerificationPage({
           <StatusBanner tone="danger" live="assertive" onDismiss={toggle.dismiss}>
             {toggle.failure}
           </StatusBanner>
-        ) : null}
-
-        {!enabled ? (
-          <StatusBanner tone="neutral">{`${meta.label} is disabled. ${SWITCHED_OFF}`}</StatusBanner>
         ) : null}
 
         {incomplete ? <StatusBanner tone="warning">{GATE_INCOMPLETE}</StatusBanner> : null}

@@ -74,16 +74,14 @@ export function previewNotesFor(
   const notes: string[] = [];
 
   if (!enabled) {
-    notes.push(
-      'Branding is disabled, so none of this reaches Discord until it is enabled.',
-    );
+    notes.push('Branding is off, so none of this reaches Discord yet.');
   }
   if (isRefused(config)) {
     notes.push('Proton will not send this nickname, so Discord keeps the one it has now.');
   }
   if (read.status === 'failed') {
     notes.push(
-      'Proton could not read its own Discord account, so any name or avatar this preview takes from it is a stand-in.',
+      'Proton couldn’t read its own Discord account, so any name or avatar this preview takes from it is a stand-in.',
     );
     if (config.avatarHash === undefined) {
       notes.push('With no avatar uploaded, Discord shows Proton’s own avatar.');

@@ -19,10 +19,7 @@
   flex-direction: column;
   gap: 2px;
   background: var(--surface-sunken);
-  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  max-height: 224px;
-  overflow-y: auto;
 }
 
 .sim-subject-result {
@@ -32,7 +29,7 @@
   width: 100%;
   padding: 6px 8px;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-md) - 4px);
   background: transparent;
   color: var(--text-primary);
   font: inherit;

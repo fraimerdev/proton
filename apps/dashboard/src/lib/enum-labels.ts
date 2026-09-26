@@ -15,7 +15,7 @@ export const ACTION_LABELS = {
   warn: 'Warn',
   timeout: 'Timeout',
   kick: 'Kick',
-  softban: 'Softban — remove and delete messages',
+  softban: 'Softban (remove and delete messages)',
   ban: 'Ban',
   quarantine: 'Add quarantine role',
   verify: 'Add verification role',

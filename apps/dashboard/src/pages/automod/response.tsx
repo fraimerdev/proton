@@ -27,12 +27,6 @@ const RESPONSE_OPTIONS: readonly SelectOption[] = [
   { value: 'ban', label: 'Ban' },
 ];
 
-const RESPONSE_PERMISSION: Partial<Record<Response, string>> = {
-  timeout: 'Needs Timeout Members',
-  kick: 'Needs Kick Members',
-  ban: 'Needs Ban Members',
-};
-
 const RUNGS: readonly {
   severity: ActiveSeverity;
   label: string;
@@ -44,9 +38,9 @@ const RUNGS: readonly {
 ];
 
 // Verbatim from durationStringSchema, which states it as a predicate on the field's own name.
-const DURATION_RULE = 'must be a number followed by s, m, h, d or w. For example: 30m, 12h or 7d';
+const DURATION_RULE = 'must be a number followed by s, m, h, d or w. For example: 30m, 12h or 7d.';
 
-const TIMEOUT_CEILING = 'Timeouts cannot be longer than 28 days. Any duration longer than 28 days will be treated as 28 days.';
+const TIMEOUT_CEILING = 'Discord caps timeouts at 28 days. Anything longer is applied as 28 days.';
 
 const LOW_TIMEOUT = 'A low severity timeout uses the medium timeout duration.';
 
@@ -73,7 +67,6 @@ function Rung({
 }): ReactElement {
   const config = form.value;
   const response = responseFor(config, severity);
-  const permission = RESPONSE_PERMISSION[response];
 
   const timeoutField = severity === 'high' ? 'highTimeout' : 'mediumTimeout';
   const timeoutLabel = severity === 'high' ? 'High timeout duration' : 'Medium timeout duration';
@@ -117,10 +110,12 @@ function Rung({
             </>
           ) : null}
 
-          <span className="rung-connector">&</span>
-          <span className="text-sm text-muted">
-            {deletesAt(config, severity) ? 'Message deleted' : null}
-          </span>
+          {deletesAt(config, severity) ? (
+            <span className="inline inline-8">
+              <span className="rung-connector">&</span>
+              <span className="text-sm text-muted">Message deleted</span>
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -148,7 +143,7 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
         <Rows>
           <SettingRow
             title="Delete messages"
-            description="Delete messages that trigger checks of this severity or higher."
+            description="Delete the message when a check of this severity or higher matches."
             error={form.errorAt('deleteFrom')}
           >
             <Select
@@ -166,9 +161,7 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
         </Rows>
       </Section>
 
-      <Section
-        label="Actions"
-      >
+      <Section label="Actions">
         <div className="ladder">
           {RUNGS.map((rung) => (
             <Rung
@@ -187,6 +180,7 @@ export function ResponseArea({ form, guildId }: { form: Form; guildId: string })
           <SettingRow
             title="Alert channel"
             description="Where Automod actions are reported."
+            help="Discord AutoMod also posts its own alerts here for the messages it blocks."
             error={form.errorAt('alertChannelId')}
           >
             <ChannelPicker

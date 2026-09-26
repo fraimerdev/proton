@@ -42,7 +42,7 @@ export function EmojiField({
         {parsed?.id ? (
           <img src={cdnUrl(parsed.id, parsed.animated === true)} alt="" />
         ) : (
-          (parsed?.name ?? '—')
+          (parsed?.name ?? null)
         )}
       </span>
 
@@ -99,7 +99,7 @@ export function EmojiField({
 
           {!isPending && !error && offered.length === 0 ? (
             <p className="picker-note">
-              {needle === '' ? 'No custom emoji.' : 'No matching emoji'}
+              {needle === '' ? 'This server has no custom emoji' : 'No matching emoji'}
             </p>
           ) : null}
 

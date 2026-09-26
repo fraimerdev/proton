@@ -1,3 +1,4 @@
+import { computeBasePermissions, Permissions } from '@proton/core';
 import { z } from 'zod';
 import type { DiscordUserGuild } from './guild-access.ts';
 
@@ -22,6 +23,19 @@ export function fetchUserGuilds(
   return request;
 }
 
+export class SignInExpiredError extends Error {
+  constructor() {
+    super('Discord no longer accepts your sign-in. Sign out, then sign in again.');
+    this.name = 'SignInExpiredError';
+  }
+}
+
+export function expiredSignInResponse(error: unknown): Response {
+  if (!(error instanceof SignInExpiredError)) throw error;
+
+  return new Response(error.message, { status: 401, headers: { 'content-type': 'text/plain' } });
+}
+
 async function requestUserGuilds(
   restProxyUrl: string,
   accessToken: string,
@@ -29,6 +43,8 @@ async function requestUserGuilds(
   const response = await fetch(`${restProxyUrl.replace(/\/$/, '')}/api/users/@me/guilds`, {
     headers: { 'x-proton-authorization': `Bearer ${accessToken}` },
   });
+
+  if (response.status === 401) throw new SignInExpiredError();
 
   if (!response.ok) {
     throw new Error(
@@ -62,6 +78,7 @@ interface RawRole {
   color?: number;
   managed?: boolean;
   tags?: Record<string, unknown> | null;
+  permissions?: string;
 }
 
 /**
@@ -124,6 +141,61 @@ async function protonRoleCeiling(
   const positions = roles.filter((role) => held.has(role.id)).map((role) => role.position);
 
   return positions.length === 0 ? null : Math.max(...positions);
+}
+
+export const protonRolePowerSchema = z.object({
+  manageRoles: z.boolean(),
+  highestPosition: z.number().int(),
+});
+
+export type ProtonRolePower = z.infer<typeof protonRolePowerSchema>;
+
+function permissionBits(raw: string | undefined): bigint {
+  return raw !== undefined && /^\d+$/.test(raw) ? BigInt(raw) : 0n;
+}
+
+// null rather than a throw: an unreadable answer must neither block a save nor wave one through.
+export async function fetchProtonRolePower(
+  restProxyUrl: string,
+  guildId: string,
+  botUserId: string,
+): Promise<ProtonRolePower | null> {
+  const base = restProxyUrl.replace(/\/$/, '');
+  const [rolesResponse, memberResponse] = await Promise.all([
+    fetch(`${base}/api/guilds/${guildId}/roles`).catch(() => null),
+    fetch(`${base}/api/guilds/${guildId}/members/${botUserId}`).catch(() => null),
+  ]);
+
+  if (!rolesResponse?.ok || !memberResponse?.ok) return null;
+
+  const roles = (await rolesResponse.json().catch(() => null)) as RawRole[] | null;
+  const member = (await memberResponse.json().catch(() => null)) as { roles?: unknown } | null;
+  if (!Array.isArray(roles) || !Array.isArray(member?.roles)) return null;
+
+  const held = member.roles.filter((id): id is string => typeof id === 'string');
+  const heldSet = new Set(held);
+
+  const permissions = computeBasePermissions({
+    guildOwnerId: '',
+    everyoneRoleId: guildId,
+    memberId: botUserId,
+    memberRoleIds: held,
+    roles: new Map(
+      roles.map((role) => [
+        role.id,
+        { id: role.id, permissions: permissionBits(role.permissions), position: role.position },
+      ]),
+    ),
+  });
+
+  const positions = roles
+    .filter((role) => role.id === guildId || heldSet.has(role.id))
+    .map((role) => role.position);
+
+  return {
+    manageRoles: (permissions & Permissions.ManageRoles) === Permissions.ManageRoles,
+    highestPosition: positions.length === 0 ? 0 : Math.max(...positions),
+  };
 }
 
 export interface GuildMember {
@@ -203,6 +275,22 @@ export async function fetchCurrentUser(
 const MEMBER_BATCH_MAX = 100;
 const MEMBER_CONCURRENCY = 6;
 
+const UNKNOWN_MEMBER = 10007;
+const UNKNOWN_USER = 10013;
+
+const discordErrorSchema = z.looseObject({ code: z.number().int() });
+
+// Keyed on Discord's code, not the 404: Unknown Guild and a misrouted proxy answer 404 as well.
+function departed(status: number, body: unknown): boolean {
+  if (status !== 404) return false;
+
+  const parsed = discordErrorSchema.safeParse(body);
+
+  return (
+    parsed.success && (parsed.data.code === UNKNOWN_MEMBER || parsed.data.code === UNKNOWN_USER)
+  );
+}
+
 /**
  * The members behind a page's snowflakes. An id that does not resolve is simply absent from the
  * answer — a member who has left the server is the normal case, and inventing a name for them
@@ -226,20 +314,24 @@ export async function fetchGuildMembers(
     const slice = wanted.slice(at, at + MEMBER_CONCURRENCY);
 
     const answers = await Promise.all(
-      slice.map(async (id) => {
+      slice.map(async (id): Promise<{ refused: number; member?: RawMember }> => {
         const response = await fetch(`${base}/api/guilds/${guildId}/members/${id}`).catch(
           () => null,
         );
 
-        if (!response) return { status: 0 };
-        if (!response.ok) return { status: response.status };
+        if (!response) return { refused: 0 };
 
-        return { status: 200, member: (await response.json().catch(() => null)) as RawMember };
+        if (!response.ok) {
+          const body: unknown = await response.json().catch(() => null);
+          return { refused: departed(response.status, body) ? 0 : response.status };
+        }
+
+        return { refused: 0, member: (await response.json().catch(() => null)) as RawMember };
       }),
     );
 
     for (const answer of answers) {
-      if (answer.status !== 404 && answer.status !== 200) refusal = answer.status;
+      if (answer.refused !== 0) refusal = answer.refused;
 
       const user = answer.member?.user;
       if (!user) continue;
@@ -365,14 +457,14 @@ export async function fetchProtonAccount(
 
   if (!response.ok) {
     throw new Error(
-      `Proton could not read its own account in this server — Discord answered ${response.status}.`,
+      `Proton couldn't read its own account in this server. Discord answered ${response.status}.`,
     );
   }
 
   const parsed = protonMemberSchema.safeParse(await response.json().catch(() => null));
   if (!parsed.success) {
     throw new Error(
-      'Proton could not read its own account in this server — Discord answered with no user.',
+      "Proton couldn't read its own account in this server. Discord answered with no user.",
     );
   }
 
@@ -486,30 +578,19 @@ export async function fetchGuildEmojis(
   );
 }
 
-// An empty array here reads as "this server has no channels", and a save then writes that blank
-// selection over a working config. Say which permission Discord refused instead.
+// Thrown, not []: a save would write the empty list over a working config.
 function unreadable(what: 'channels' | 'roles' | 'emoji' | 'members', status: number): Error {
   // "this server", not the snowflake: the page already names the server everywhere else, and the
   // destination is the same literal path every other failure in the product prints.
   if (status !== 403)
     return new Error(
-      `Proton could not read this server's ${what} — Discord answered ${status}. Reload the page; ` +
-        `if it keeps happening, Discord is the part that is refusing.`,
+      `Proton couldn't read this server's ${what}. Discord answered ${status}. Reload the page ` +
+        `to try again.`,
     );
 
-  // Listing emoji and reading one member need no permission at all, so a 403 on either is not a
-  // missing-permission story — it is Discord refusing the bot itself, and naming a permission to
-  // grant would send the admin to a settings page that cannot fix it.
-  if (what === 'emoji' || what === 'members')
-    return new Error(
-      `Proton cannot read this server's ${what} — Discord refused with 403. Reading ${what} needs ` +
-        `no permission, so this is Discord refusing Proton itself rather than a setting to change.`,
-    );
-
-  const missing = what === 'roles' ? 'Manage Roles' : 'View Channels';
-
+  // These reads need no permission; naming one sends the admin to a setting that cannot fix it.
   return new Error(
-    `Proton cannot read this server's ${what} — Discord refused with 403, because Proton's role ` +
-      `does not have ${missing}. Give it that permission in Server Settings → Roles → Proton.`,
+    `Proton can't read this server's ${what}. Discord refused with 403, usually because Proton ` +
+      `is no longer in this server. If so, add it to the server again.`,
   );
 }

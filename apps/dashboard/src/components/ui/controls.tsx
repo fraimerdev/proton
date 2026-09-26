@@ -9,7 +9,7 @@ import type {
 } from 'react';
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from './icon.tsx';
-import { Popover } from './overlay.tsx';
+import { HelpTip, Popover } from './overlay.tsx';
 
 export function cx(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
@@ -239,6 +239,30 @@ export function TextInput({ invalid, width, className, ...rest }: TextInputProps
       aria-invalid={invalid === true ? true : undefined}
       {...rest}
     />
+  );
+}
+
+interface PrefixedInputProps extends TextInputProps {
+  prefix: string;
+}
+
+export function PrefixedInput({
+  prefix,
+  invalid,
+  width,
+  className,
+  ...rest
+}: PrefixedInputProps): ReactElement {
+  return (
+    <span
+      className={cx('prefixed-input', width && width !== 'full' && `control-w-${width}`, className)}
+      data-invalid={invalid === true ? 'true' : undefined}
+    >
+      <span className="prefixed-input-prefix" aria-hidden>
+        {prefix}
+      </span>
+      <input className="input" aria-invalid={invalid === true ? true : undefined} {...rest} />
+    </span>
   );
 }
 
@@ -673,19 +697,23 @@ export function Badge({
 interface FieldProps {
   label: string;
   hint?: ReactNode;
+  help?: ReactNode;
   error?: string | undefined;
   children: (props: { id: string; 'aria-describedby': string | undefined }) => ReactNode;
 }
 
-export function Field({ label, hint, error, children }: FieldProps): ReactElement {
+export function Field({ label, hint, help, error, children }: FieldProps): ReactElement {
   const id = useId();
   const hintId = hint !== undefined || error !== undefined ? `${id}-hint` : undefined;
 
   return (
     <div className="field">
-      <label className="field-label" htmlFor={id}>
-        {label}
-      </label>
+      <div className="field-label-line">
+        <label className="field-label" htmlFor={id}>
+          {label}
+        </label>
+        {help !== undefined ? <HelpTip label={label}>{help}</HelpTip> : null}
+      </div>
       {children({ id, 'aria-describedby': hintId })}
       {error !== undefined ? (
         <span className="field-error" id={hintId}>

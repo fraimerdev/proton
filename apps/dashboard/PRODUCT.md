@@ -36,8 +36,8 @@ nothing is enabled until an admin switches it on.
 
 - Members meet Proton inside Discord: slash commands, buttons, select menus, panels, embeds and
   Components V2 messages in the server's channels.
-- Admins configure it in the dashboard after signing in with Discord (scopes: `identify`, `guilds`,
-  `guilds.members.read`), picking a server they own or hold Manage Server in.
+- Admins configure it in the dashboard after signing in with Discord (scopes: `identify` and
+  `guilds`; no email), picking a server they own or hold Manage Server in.
 - The public site has a landing page, a command reference, an FAQ, privacy and terms pages, and an
   invite route that asks Discord for exactly the permissions the installed modules need.
 - Production runs at `prtn.xyz`.
@@ -49,15 +49,15 @@ nothing is enabled until an admin switches it on.
   - Joining: Verification, Join Roles, Welcome & Goodbye.
   - Security: Automod, Anti-Raid, Anti-Nuke, Phishing, Honeypot.
   - Moderation: Moderation, Cases, Appeals, Permissions.
-  - Member tools: Tickets, Role Menus, Tags, Messages, Leveling, Giveaways, Polls, Suggestions,
-    Starboard, Temporary Voice Channels, Reminders, AFK, Counters.
+  - Member tools: Tickets, Applications, Role Menus, Tags, Messages, Leveling, Achievements,
+    Giveaways, Polls, Suggestions, Starboard, Temporary Voice Channels, Reminders, AFK, Counters.
   - Logs: Server Logs, Logging. Server: Branding, Backup, Help, Ping.
 - The command reference is generated from the bot's real commands (`src/components/site/command-set.gen.ts`).
 - Tiers are Free, Plus and Pro (Discord App Subscriptions and Stripe). Limits are shown as ambient
   counters, never paywalls. No public pricing exists; prices are undecided on the site.
-- Privacy defaults: every module starts off; message logging and ticket transcripts are opt-in;
-  stored message content is deleted after 30 days. Privileged intents are Server Members and
-  Message Content; Presence is not used.
+- Privacy defaults: every module starts off; message logging and ticket message capture are opt-in
+  and keep text for 30 days; the event queue keeps events for about a day. `/privacy` is the full,
+  code-checked account. Privileged intents are Server Members and Message Content; Presence is not used.
 - Destructive actions are performed for real; every state change goes through one action executor
   and lands in the case log.
 

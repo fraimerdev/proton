@@ -26,20 +26,24 @@ function BackupsArea(): ReactElement {
     <Section
       label="Commands"
       note="Each needs Manage Server"
-      intro="Use /backup in Discord to create, list and restore snapshots. The dashboard cannot show them; it only sets how many are kept."
+      intro="Snapshots are taken and restored with /backup in Discord. The dashboard only sets how many are kept."
     >
       <Rows>
         <SettingRow
           title={<Mono>/backup create</Mono>}
-          description="Save every channel, role and permission overwrite Proton can see, and delete the oldest snapshots beyond the number kept. The reply names any channel Proton cannot view."
+          description="Save every channel, role and channel permission Proton can see."
+          helpLabel="/backup create"
+          help="Snapshots beyond the number you keep are deleted, oldest first. The reply names any channel Proton can’t view."
         />
         <SettingRow
           title={<Mono>/backup list</Mono>}
-          description="Show saved snapshots, newest first, with each one’s ID, when and by whom it was taken, and its channel and role counts."
+          description="List saved snapshots, newest first."
         />
         <SettingRow
           title={<Mono>/backup restore</Mono>}
-          description="Recreate a snapshot’s missing channels and roles, using an ID from /backup list. It shows a preview until you add confirm: true, and never deletes or replaces anything."
+          description="Recreate a snapshot’s missing channels and roles. It shows a preview until you add confirm: true, and never deletes anything."
+          helpLabel="/backup restore"
+          help="Recreated channels don’t get their old permissions back, and members don’t get recreated roles back."
         />
       </Rows>
     </Section>
@@ -114,6 +118,7 @@ export default function BackupPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but /backup isn’t available in this server until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -121,13 +126,6 @@ export default function BackupPage({
         {toggle.failure !== null ? (
           <StatusBanner tone="danger" live="assertive" onDismiss={toggle.dismiss}>
             {toggle.failure}
-          </StatusBanner>
-        ) : null}
-
-        {!enabled ? (
-          <StatusBanner tone="neutral" icon="info" title="Backup is disabled">
-            /backup only replies “Backups are disabled in this server. An admin can turn the
-            Backup module back on from the Proton dashboard.”
           </StatusBanner>
         ) : null}
       </ModuleBanners>

@@ -39,6 +39,27 @@ export const requireGuildAccess = createMiddleware({ type: 'function' })
     return next({ context: { ...context, access } });
   });
 
+// Membership only: the api decides what a member may do, from a fresh read of their roles per call.
+export const requireGuildMember = createMiddleware({ type: 'function' })
+  .middleware([requireSession])
+
+  .validator(z.looseObject({ guildId: z.string().min(1) }))
+  .server(async ({ next, data, context }) => {
+    const token = await getDiscordAccessToken(getRequest().headers, context.session.user.id);
+
+    const guilds = await fetchUserGuilds(env.REST_PROXY_URL, token);
+    const guild = guilds.find((candidate) => candidate.id === data.guildId);
+
+    if (!guild) throw new ForbiddenError('forbidden: you are not a member of that server');
+
+    return next({
+      context: {
+        ...context,
+        member: { guildId: guild.id, owner: guild.owner, permissions: BigInt(guild.permissions) },
+      },
+    });
+  });
+
 export function requirePermission(permission: bigint) {
   return createMiddleware({ type: 'function' })
     .middleware([requireGuildAccess])

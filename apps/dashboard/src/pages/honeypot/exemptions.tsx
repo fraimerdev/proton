@@ -9,8 +9,11 @@ import type { HoneypotForm } from './shape.ts';
 const EXEMPT_ROLES_MAX = 50;
 
 const NOBODY_EXEMPT =
-  'With no exemption set, nobody is exempt — including a member whose roles Proton could not read ' +
-  'at the moment they posted.';
+  'Nobody is exempt, so administrators who post in a bait channel are acted on too.';
+
+const UNREADABLE_ROLES =
+  'If Proton can’t read a member’s roles when they post, they’re treated as exempt. With no ' +
+  'exemptions set, they’re acted on like everyone else.';
 
 export function ExemptionsArea({
   form,
@@ -27,11 +30,11 @@ export function ExemptionsArea({
     config.exemptRoleIds.length === 0;
 
   return (
-    <Section label="Roles and permissions">
+    <Section label="Roles and permissions" help={UNREADABLE_ROLES}>
       <Rows>
         <SettingRow
           title="Exempt administrators"
-          description="Anyone holding Administrator is caught and counted, but not acted on."
+          description="Members with Administrator are logged and counted, but not acted on."
         >
           <Switch
             label="Exempt administrators"

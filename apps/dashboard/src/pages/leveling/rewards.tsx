@@ -27,19 +27,22 @@ const MIN_LEVEL = 1;
 const LEVEL_GAP = 5;
 
 const MODE_DESCRIPTION =
-  'Stack keeps every reward role earned. Replace keeps only the roles for the highest level ' +
-  'reached and removes lower ones.';
+  'Stack keeps every reward role a member earns. Replace keeps only the roles for their highest ' +
+  'reward level and removes the lower ones.';
+
+const REWARDS_HELP =
+  'Proton gives reward roles when a member levels up, so members already past a new reward’s ' +
+  'level get it at their next level-up, not straight away.';
 
 const SHARED_LEVEL = 'More than one reward uses this level. All their roles are given.';
 
 const LADDER_FULL = `You can add up to ${REWARDS_MAX} role rewards. Remove one to add another.`;
 
-const NO_REWARDS = 'Add a reward for a level.';
+const NO_REWARDS = 'Give members a role when they reach a level.';
 
 const MANAGE_ROLES =
-  'Giving reward roles needs Manage Roles, and Proton’s highest role must be above every reward ' +
-  'role. Leveling does not check for Manage Roles in advance, so a missing permission only shows ' +
-  'when a member levels up.';
+  'Proton needs Manage Roles, and its highest role must be above every reward role. Without ' +
+  'that, members still level up but don’t get the role.';
 
 const MODE_OPTIONS = REWARD_MODES.map((mode) => ({ value: mode, label: humaniseOption(mode) }));
 
@@ -165,7 +168,7 @@ function Composer({
             if (candidate.success) onAdd(candidate.data);
           }}
         >
-          Add
+          Add reward
         </Button>
       </span>
     </div>
@@ -206,7 +209,7 @@ export function RewardsArea({
 
   return (
     <>
-      <Section label="Earned roles">
+      <Section label="Earned roles" help={REWARDS_HELP}>
         <Rows>
           <SettingRow
             title="Reward mode"

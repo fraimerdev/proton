@@ -3,6 +3,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { ModuleLink, type ModuleSearch } from '../module/route.tsx';
 import { cx } from './controls.tsx';
 import { Icon, type IconName } from './icon.tsx';
+import { HelpTip } from './overlay.tsx';
 
 const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -22,6 +23,7 @@ export function Section({
   label,
   note,
   intro,
+  help,
   actions,
   children,
   className,
@@ -29,6 +31,7 @@ export function Section({
   label?: string | undefined;
   note?: ReactNode;
   intro?: ReactNode;
+  help?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string | undefined;
@@ -38,6 +41,9 @@ export function Section({
       {label !== undefined || actions !== undefined ? (
         <div className="section-label">
           {label}
+          {help !== undefined && label !== undefined ? (
+            <HelpTip label={label}>{help}</HelpTip>
+          ) : null}
           {note !== undefined ? <span className="section-label-note">{note}</span> : null}
           {actions !== undefined ? <span className="push-right">{actions}</span> : null}
         </div>
@@ -58,6 +64,21 @@ export function Rows({
   return <div className={cx('rows', className)}>{children}</div>;
 }
 
+function RowHelp({
+  help,
+  label,
+  title,
+}: {
+  help: ReactNode;
+  label: string | undefined;
+  title: ReactNode;
+}): ReactElement | null {
+  const name = label ?? (typeof title === 'string' ? title : undefined);
+  if (help === undefined || name === undefined) return null;
+
+  return <HelpTip label={name}>{help}</HelpTip>;
+}
+
 interface SettingRowProps {
   title: ReactNode;
   description?: ReactNode;
@@ -65,6 +86,8 @@ interface SettingRowProps {
   stacked?: boolean | undefined;
   error?: string | undefined;
   note?: ReactNode;
+  help?: ReactNode;
+  helpLabel?: string | undefined;
   disabled?: boolean | undefined;
   badge?: ReactNode;
 }
@@ -76,6 +99,8 @@ export function SettingRow({
   stacked = false,
   error,
   note,
+  help,
+  helpLabel,
   disabled = false,
   badge,
 }: SettingRowProps): ReactElement {
@@ -84,6 +109,7 @@ export function SettingRow({
       <div className="row-main">
         <div className="row-title">
           {title}
+          <RowHelp help={help} label={helpLabel} title={title} />
           {badge}
         </div>
         {description !== undefined ? <p className="row-description">{description}</p> : null}
@@ -227,6 +253,8 @@ interface ExpandableRowProps {
   detail?: (() => ReactNode) | undefined;
   defaultOpen?: boolean | undefined;
   badge?: ReactNode;
+  help?: ReactNode;
+  helpLabel?: string | undefined;
   className?: string | undefined;
 }
 
@@ -238,6 +266,8 @@ export function ExpandableRow({
   detail,
   defaultOpen = false,
   badge,
+  help,
+  helpLabel,
   className,
 }: ExpandableRowProps): ReactElement {
   const [open, setOpen] = useState(defaultOpen);
@@ -250,6 +280,7 @@ export function ExpandableRow({
         <div className="row-main">
           <div className="row-title">
             {title}
+            <RowHelp help={help} label={helpLabel} title={title} />
             {badge}
           </div>
           {description !== undefined ? <p className="row-description">{description}</p> : null}

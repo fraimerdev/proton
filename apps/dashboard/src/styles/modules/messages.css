@@ -28,14 +28,6 @@
   min-width: 0;
 }
 
-.messages-keys {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-
 .messages-preview-note {
   margin-top: 8px;
 }

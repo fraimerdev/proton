@@ -48,13 +48,15 @@ const CLAIM_MAX_SECONDS = 7 * 24 * 60 * 60;
 
 const ACCESS_INTRO = 'These roles apply to every giveaway, including ones already running.';
 
-const LOG_CHANNEL_NOTE =
-  'Proton pings the host here when a winner could not be given the reward role, or when a draw ' +
-  'skipped a requirement because its module is disabled. With no channel set, the host is not ' +
-  'warned.';
+const NEW_GIVEAWAYS_ONLY = 'Applies to giveaways started after you change it.';
 
-const CLAIM_REASON =
-  'Off by default, because a timed reroll can take a prize from a winner who was asleep.';
+const CLAIM_HELP =
+  'Off by default, because a timed reroll can take a prize from a winner who was asleep. ' +
+  NEW_GIVEAWAYS_ONLY;
+
+const WARNING_HELP =
+  'Proton posts here, mentioning the host, when a draw skips a requirement because its module ' +
+  'is off, when it can’t check every entrant, or when a winner can’t be given the reward role.';
 
 function claimUnitFor(seconds: number): ClaimUnit {
   if (seconds % CLAIM_UNIT_SECONDS.days === 0) return 'days';
@@ -73,7 +75,7 @@ function claimUnitFits(seconds: number, unit: ClaimUnit): boolean {
 }
 
 function claimBoundsError(seconds: number): string | undefined {
-  if (!Number.isInteger(seconds)) return 'Give a whole number.';
+  if (!Number.isInteger(seconds)) return 'Use a whole number.';
   if (seconds < CLAIM_MIN_SECONDS) return 'At least 1 minute.';
   if (seconds > CLAIM_MAX_SECONDS) return 'At most 7 days.';
   return undefined;
@@ -83,10 +85,9 @@ function GiveawayList(): ReactElement {
   return (
     <div className="giveaways-empty">
       <EmptyState icon="gift" title="Giveaways run in Discord">
-        The dashboard cannot list giveaways. Use <code className="mono">/giveaway list</code> in
-        Discord to see running giveaways, <code className="mono">/giveaway info</code> for one of
-        them, and <code className="mono">/giveaway create</code> to build a new one with
-        requirements and bonus entries.
+        Start one with <code className="mono">/giveaway create</code>.{' '}
+        <code className="mono">/giveaway list</code> shows what’s running, and{' '}
+        <code className="mono">/giveaway info</code> shows one in detail.
       </EmptyState>
     </div>
   );
@@ -115,8 +116,8 @@ function ClaimWindowRows({ form }: { form: Form }): ReactElement {
     <>
       <SettingRow
         title="Claim window"
-        description="Winners must claim their prize in time. Unclaimed wins are forfeited and rerolled."
-        note={CLAIM_REASON}
+        description="Winners must claim in time. Unclaimed wins are forfeited and rerolled."
+        help={CLAIM_HELP}
       >
         <Switch
           checked={on}
@@ -133,8 +134,8 @@ function ClaimWindowRows({ form }: { form: Form }): ReactElement {
       </SettingRow>
 
       {on ? (
-        <SettingRow title="Time to claim" note="At least 1 minute, at most 7 days." error={error}>
-          <div className="inline inline-8">
+        <SettingRow title="Time to claim" note="Between 1 minute and 7 days." error={error}>
+          <div className="inline inline-8 inline-wrap">
             <NumberStepper
               label="Time to claim"
               value={Math.round(seconds / size)}
@@ -171,7 +172,7 @@ function Defaults({ form, guildId }: { form: Form; guildId: string }): ReactElem
         <Rows>
           <SettingRow
             title="Default number of winners"
-            note="Used when /giveaway start has no winners option. /giveaway create starts from this number."
+            help="Used by /giveaway start when no number of winners is given, and as the starting number in /giveaway create."
             error={winnersError}
           >
             <NumberStepper
@@ -191,7 +192,8 @@ function Defaults({ form, guildId }: { form: Form; guildId: string }): ReactElem
 
           <SettingRow
             title="Accent colour"
-            note="Colour of the stripe on giveaway messages. A giveaway with its own colour keeps it."
+            description="The stripe colour on giveaway messages."
+            help="Giveaways given their own colour in /giveaway create or /giveaway edit keep it."
             error={form.errorAt('embedColor')}
           >
             <ColourPicker
@@ -207,7 +209,8 @@ function Defaults({ form, guildId }: { form: Form; guildId: string }): ReactElem
         <Rows>
           <SettingRow
             title="Announce winners"
-            description="Post the result in the giveaway’s channel and ping the winners. When a claim window is on, the claim button is only on this message."
+            description="Post the result in the giveaway’s channel and ping the winners."
+            help="With a claim window on, winners claim from this message, so turning it off leaves them no way to claim."
             error={form.errorAt('announceInChannel')}
           >
             <Switch
@@ -221,7 +224,7 @@ function Defaults({ form, guildId }: { form: Form; guildId: string }): ReactElem
 
           <SettingRow
             title="Send winners a DM"
-            note="Winners with DMs closed are skipped, not retried."
+            help={`${NEW_GIVEAWAYS_ONLY} Winners with DMs closed are skipped.`}
             error={form.errorAt('dmWinners')}
           >
             <Switch
@@ -241,7 +244,8 @@ function Defaults({ form, guildId }: { form: Form; guildId: string }): ReactElem
         <Rows>
           <SettingRow
             title="Warning channel"
-            note={LOG_CHANNEL_NOTE}
+            description="Where Proton warns hosts about problems with a draw. With no channel set, these warnings aren’t sent."
+            help={WARNING_HELP}
             error={form.errorAt('logChannelId')}
           >
             <ChannelPicker
@@ -268,12 +272,14 @@ function RoleListRow({
   path,
   title,
   description,
+  help,
 }: {
   form: Form;
   guildId: string;
   path: 'managerRoleIds' | 'bypassRoleIds' | 'blacklistRoleIds';
   title: string;
   description: string;
+  help?: string | undefined;
 }): ReactElement {
   const value = form.value[path];
   const error = form.errorAt(path);
@@ -282,6 +288,7 @@ function RoleListRow({
     <SettingRow
       title={title}
       description={description}
+      help={help}
       error={error}
       badge={
         value.length > 0 ? (
@@ -311,7 +318,8 @@ function Access({ form, guildId }: { form: Form; guildId: string }): ReactElemen
           guildId={guildId}
           path="managerRoleIds"
           title="Manager roles"
-          description="Can pause, edit, end, cancel and reroll any giveaway, not only their own. Set who can use /giveaway in Permissions."
+          description="Can pause, edit, end, cancel and reroll any giveaway, not only their own."
+          help="Who can use /giveaway at all is set under Permissions."
         />
         <RoleListRow
           form={form}
@@ -325,7 +333,7 @@ function Access({ form, guildId }: { form: Form; guildId: string }): ReactElemen
           guildId={guildId}
           path="blacklistRoleIds"
           title="Blacklisted roles"
-          description="Cannot enter any giveaway. Proton checks this before requirements and bypass roles."
+          description="Can’t enter any giveaway, even with a bypass role."
         />
       </Rows>
     </Section>
@@ -364,6 +372,7 @@ export default function GiveawaysPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but nobody can start or enter giveaways until you turn it on. Giveaways that end in the meantime are drawn shortly after you turn it back on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}

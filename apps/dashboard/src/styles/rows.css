@@ -22,6 +22,14 @@
   text-transform: none;
 }
 
+.section-label > .push-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .section-intro {
   margin: -2px 0 12px;
   color: var(--text-secondary);
@@ -497,6 +505,7 @@ button.matrix-group-head:hover {
 
 .matrix-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
@@ -533,9 +542,18 @@ button.matrix-group-head:hover {
 }
 
 @media (max-width: 640px) {
+  .section-label {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
   .pairs {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
+  }
+
+  .pairs > .pairs-label:not(:first-child) {
+    margin-top: 8px;
   }
 
   .row {
@@ -544,8 +562,19 @@ button.matrix-group-head:hover {
     gap: 10px;
   }
 
+  .row:not(.stacked):has(> .row-control > .switch:only-child) {
+    flex-direction: row;
+    align-items: center;
+    gap: 16px;
+  }
+
   .row-control {
     justify-content: flex-start;
+  }
+
+  .row-control,
+  .row-control > .inline {
+    flex-wrap: wrap;
   }
 
   /* Without this the control keeps its width and squeezes the description to one word a line. */
@@ -558,12 +587,31 @@ button.matrix-group-head:hover {
     flex: 1 0 100%;
   }
 
+  .row-expandable > .nav-row-icon + .row-main {
+    flex-basis: calc(100% - 28px);
+  }
+
+  .row-expandable .row-title {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
   .row-expandable .row-control {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+  }
+
+  .row-detail {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .row-detail-inner {
     gap: 12px;
+  }
+
+  .row-detail-inner > *,
+  .row-detail-field {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .row-detail-explain {
@@ -572,9 +620,58 @@ button.matrix-group-head:hover {
     padding-top: 10px;
   }
 
+  .collection-head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .collection-head-main {
+    flex: 1 0 auto;
+    max-width: 100%;
+  }
+
+  .collection-head > .inline {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 100%;
+  }
+
+  .collection-head .search-field {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+
+  .collection-head .picker-trigger {
+    max-width: 100%;
+  }
+
   .collection-row,
   .nav-row {
     flex-wrap: wrap;
+  }
+
+  .collection-row-main,
+  .nav-row > .row-main {
+    flex: 1 1 0;
+    min-width: min(100%, 176px);
+  }
+
+  .collection-row-icon ~ .collection-row-aside,
+  .nav-row > .nav-row-icon ~ .row-main + :not(.nav-row-chevron) {
+    margin-left: 32px;
+  }
+
+  .nav-row:has(> .row-main + :not(.nav-row-chevron)) > .row-main {
+    flex-basis: 100%;
+  }
+
+  .nav-row:has(> .row-main + :not(.nav-row-chevron)) > .nav-row-icon + .row-main {
+    flex-basis: calc(100% - 32px);
+  }
+
+  .nav-row-chevron {
+    margin-left: auto;
   }
 
   .segmented.block,
@@ -584,6 +681,28 @@ button.matrix-group-head:hover {
 
   .row-expandable .segmented-option {
     flex: 1 1 0;
-    min-width: 0;
+    min-width: auto;
+  }
+}
+
+@media (max-width: 400px) {
+  .row-detail-body {
+    padding-inline: 8px;
+  }
+
+  .row-detail-inner {
+    padding-inline: 12px;
+  }
+}
+
+@media (pointer: coarse) {
+  .row-disclosure {
+    position: relative;
+  }
+
+  .row-disclosure::before {
+    content: "";
+    position: absolute;
+    inset: -5px;
   }
 }

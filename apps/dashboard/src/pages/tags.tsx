@@ -17,17 +17,18 @@ import { Rows, Section, SettingRow } from '../components/ui/layout.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
 import { AreaTabs } from '../components/ui/tabs.tsx';
 import { ceilingNote, listCeiling } from '../lib/limits.ts';
+import { useReplyOverrideNote } from './commands/reply-overrides.tsx';
 import { TagLibraryArea } from './tags/library.tsx';
 import { tagCountQuery } from './tags/queries.ts';
 
 const PERMISSIONS = 'Set who can use /tags in Permissions.';
 
-const EPHEMERAL_DESCRIPTION =
-  'Only the member who used /tag sees the tag, and it disappears when they dismiss it.';
+const EPHEMERAL_DESCRIPTION = 'Only the member who uses /tag sees the tag.';
 
-const MENTIONS_DESCRIPTION = 'A stored @everyone becomes pingable by any member.';
+const MENTIONS_DESCRIPTION = 'Let mentions in tags notify the members and roles they name.';
 
-const MENTIONS_NOTE = 'When this is off, mentions still show but do not notify anyone.';
+const MENTIONS_NOTE =
+  'With this on, anyone who can use /tag can ping @everyone with a tag that contains it.';
 
 export default function TagsPage({ guildId, meta, summary, area }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: tagsConfigSchema });
@@ -93,7 +94,7 @@ export default function TagsPage({ guildId, meta, summary, area }: ModulePagePro
         minHeight={320}
       >
         {library ? <TagLibraryArea guildId={guildId} moduleId={meta.id} /> : null}
-        {area === 'settings' ? <TagSettings form={form} /> : null}
+        {area === 'settings' ? <TagSettings guildId={guildId} form={form} /> : null}
       </LoadingBoundary>
 
       <SaveBar
@@ -107,13 +108,22 @@ export default function TagsPage({ guildId, meta, summary, area }: ModulePagePro
   );
 }
 
-function TagSettings({ form }: { form: ModuleForm<TagsConfig> }): ReactElement {
+function TagSettings({
+  guildId,
+  form,
+}: {
+  guildId: string;
+  form: ModuleForm<TagsConfig>;
+}): ReactElement {
+  const overridden = useReplyOverrideNote(guildId, 'tags');
+
   return (
     <Section label="Posting">
       <Rows>
         <SettingRow
           title="Reply privately"
           description={EPHEMERAL_DESCRIPTION}
+          note={overridden}
           error={form.errorAt('ephemeral')}
         >
           <Switch

@@ -37,10 +37,10 @@ const EMPTY =
 
 const SEARCH_FROM = 8;
 
-const ID_HINT = 'Honeypot points at this form by its ID. It cannot be changed later.';
+const ID_HINT = 'Honeypot links to this form by its ID. You can’t change it later.';
 
 function duplicateId(id: string): string {
-  return `two forms are both called '${id}'. A honeypot points at one by its id.`;
+  return `Another form already uses the ID '${id}'.`;
 }
 
 export function FormsArea({
@@ -217,28 +217,27 @@ export function FormsArea({
         </Rows>
       )}
 
-      {creating !== null ? (
-        <CreateFormDialog
-          taken={panelIds(config)}
-          initialName={creating.name}
-          onClose={() => setCreating(null)}
-          onCreate={create}
-        />
-      ) : null}
+      <CreateFormDialog
+        open={creating !== null}
+        taken={panelIds(config)}
+        initialName={creating?.name ?? ''}
+        onClose={() => setCreating(null)}
+        onCreate={create}
+      />
 
-      {deleting !== null ? (
-        <DeleteFormDialog panel={deleting} onClose={() => setDeleting(null)} onConfirm={remove} />
-      ) : null}
+      <DeleteFormDialog panel={deleting} onClose={() => setDeleting(null)} onConfirm={remove} />
     </Section>
   );
 }
 
 function CreateFormDialog({
+  open,
   taken,
   initialName,
   onClose,
   onCreate,
 }: {
+  open: boolean;
   taken: ReadonlySet<string>;
   initialName: string;
   onClose: () => void;
@@ -247,6 +246,16 @@ function CreateFormDialog({
   const [name, setName] = useState(initialName);
   const [id, setId] = useState('');
   const [touched, setTouched] = useState(false);
+
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) {
+      setName(initialName);
+      setId('');
+      setTouched(false);
+    }
+  }
 
   const proposed = touched ? id.trim() : slugify(name, PANEL_ID_MAX);
 
@@ -260,9 +269,11 @@ function CreateFormDialog({
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       title="Create appeal form"
+      size="compact"
+      icon="scales"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -271,42 +282,42 @@ function CreateFormDialog({
             disabled={nameError !== undefined || idError !== undefined}
             onClick={() => onCreate(proposed, name.trim())}
           >
-            Create
+            Create appeal form
           </Button>
         </>
       }
     >
-      <div className="stack stack-16">
-        <Field label="Name" error={nameError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              autoFocus
-              maxLength={PANEL_NAME_MAX}
-              invalid={nameError !== undefined}
-              value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
-            />
-          )}
-        </Field>
+      <Field label="Name" error={nameError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            autoFocus
+            width="lg"
+            maxLength={PANEL_NAME_MAX}
+            invalid={nameError !== undefined}
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        )}
+      </Field>
 
-        <Field label="ID" hint={ID_HINT} error={idError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              className="mono"
-              spellCheck={false}
-              maxLength={PANEL_ID_MAX}
-              invalid={idError !== undefined}
-              value={proposed}
-              onChange={(event) => {
-                setTouched(true);
-                setId(event.currentTarget.value);
-              }}
-            />
-          )}
-        </Field>
-      </div>
+      <Field label="ID" hint={ID_HINT} error={idError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            width="lg"
+            className="mono"
+            spellCheck={false}
+            maxLength={PANEL_ID_MAX}
+            invalid={idError !== undefined}
+            value={proposed}
+            onChange={(event) => {
+              setTouched(true);
+              setId(event.currentTarget.value);
+            }}
+          />
+        )}
+      </Field>
     </Dialog>
   );
 }
@@ -316,32 +327,36 @@ function DeleteFormDialog({
   onClose,
   onConfirm,
 }: {
-  panel: AppealPanel;
+  panel: AppealPanel | null;
   onClose: () => void;
   onConfirm: (panel: AppealPanel) => void;
 }): ReactElement {
   return (
     <Dialog
-      open
+      open={panel !== null}
       onClose={onClose}
-      title={`Delete ${panelTitle(panel)}?`}
+      title={panel !== null ? `Delete ${panelTitle(panel)}?` : 'Delete appeal form?'}
+      size="compact"
+      icon="trash"
+      tone="danger"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button tone="danger" onClick={() => onConfirm(panel)}>
-            Delete
+          <Button tone="danger" onClick={() => panel !== null && onConfirm(panel)}>
+            Delete appeal form
           </Button>
         </>
       }
     >
       <div className="stack stack-12">
         <p className="text-secondary text-sm">
-          Honeypot stops offering appeals through <span className="mono">{panel.id}</span>, and
-          links already sent show: “The appeal form this link points at no longer exists. Nothing
-          you did caused this — the server changed its settings.”
+          Honeypot stops offering appeals through this form. Appeal links that haven’t been used yet
+          will show “This link’s appeal form no longer exists because the server changed its
+          settings. Nothing you did caused this.”
         </p>
         <p className="text-secondary text-sm">
-          Appeals already sent through this form stay visible to moderators.
+          Appeals already sent through it stay in the review channel, but can’t be accepted or
+          turned down.
         </p>
       </div>
     </Dialog>

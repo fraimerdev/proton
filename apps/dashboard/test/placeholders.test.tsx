@@ -74,7 +74,7 @@ describe('TemplateDiagnostics', () => {
     expect(visibleDiagnostics([diagnostic('info', 'only')]).shown).toHaveLength(1);
   });
 
-  test('renders tones under the id the field describes itself with', () => {
+  test('renders tones, as sentences, under the id the field describes itself with', () => {
     const markup = renderToStaticMarkup(
       <TemplateDiagnostics id="title-diagnostics" diagnostics={list} />,
     );
@@ -82,8 +82,9 @@ describe('TemplateDiagnostics', () => {
     expect(markup).toContain('id="title-diagnostics"');
     expect(markup).toContain('class="field-error"');
     expect(markup).toContain('class="field-warning"');
+    expect(markup).toContain('>E1.</li>');
     expect(markup).toContain('and 1 more');
-    expect(markup).not.toContain('i1');
+    expect(markup).not.toContain('I1');
     expect(renderToStaticMarkup(<TemplateDiagnostics id="empty" diagnostics={[]} />)).toBe('');
   });
 });
@@ -140,7 +141,7 @@ describe('placeholder previews', () => {
       server: { ...SAMPLE_SERVER, name: 'Real Guild' },
     });
 
-    expect(preview.caption).toBe("Sample: your server's name, sample member");
+    expect(preview.caption).toBe("Sample: your server's name and a sample member");
     expect(preview.message.content).toContain('Real Guild');
     expect(previewCaption(sample, { eventId: 'another' })).toBe(sample.label);
   });

@@ -29,11 +29,10 @@ interface KindCopy {
   channelKey: 'welcomeChannelId' | 'goodbyeChannelId' | 'boostChannelId';
   messageKey: GreetingMessageKey;
   channelTitle: string;
-  channelDescription: string;
   unset: string | null;
   noChannel: string | null;
   intro: string | null;
-  toggle: { title: string; description: string } | null;
+  toggle: { title: string; description: string; help: string } | null;
   card: { kind: CardGreeting; attachment: string } | null;
 }
 
@@ -48,7 +47,6 @@ const COPY: Record<GreetingKind, KindCopy> = {
     channelKey: 'welcomeChannelId',
     messageKey: 'welcomeMessage',
     channelTitle: 'Welcome channel',
-    channelDescription: 'Message sent when a member joins.',
     unset: 'No channel is set, so nothing is posted when a member joins.',
     noChannel: null,
     intro: null,
@@ -59,7 +57,6 @@ const COPY: Record<GreetingKind, KindCopy> = {
     channelKey: 'goodbyeChannelId',
     messageKey: 'goodbyeMessage',
     channelTitle: 'Goodbye channel',
-    channelDescription: 'Message sent when a member leaves.',
     unset: 'No channel is set, so nothing is posted when a member leaves.',
     noChannel: null,
     intro: null,
@@ -70,21 +67,23 @@ const COPY: Record<GreetingKind, KindCopy> = {
     channelKey: 'boostChannelId',
     messageKey: 'boostMessage',
     channelTitle: 'Boost channel',
-    channelDescription: 'Message sent when a member boosts.',
     unset: null,
     noChannel: 'Same channel as Discord’s boost notice',
     intro: null,
     toggle: {
       title: 'Thank boosters',
-      description: 'Post this message every time a member boosts the server.',
+      description: 'Post this message every time a member boosts.',
+      help:
+        'Proton posts this when Discord posts its own boost notice, so boost notices need to be ' +
+        'on in your server’s system message settings.',
     },
     card: null,
   },
 };
 
-const REFUSED = 'Proton would post nothing for this sample.';
+const REFUSED = 'This message can’t be posted:';
 
-const EMPTY = 'This message is empty, so a real event posts nothing. There is nothing to test yet.';
+const EMPTY = 'The message is empty, so there is nothing to send.';
 
 const POSITIONS: ReadonlyMap<string, string> = new Map([
   ['embeds', 'embed'],
@@ -200,6 +199,7 @@ export function GreetingArea({
                 <SettingRow
                   title={copy.toggle.title}
                   description={copy.toggle.description}
+                  help={copy.toggle.help}
                   error={errors.at('boostEnabled')}
                 >
                   <Switch
@@ -214,7 +214,6 @@ export function GreetingArea({
 
               <SettingRow
                 title={copy.channelTitle}
-                description={copy.channelDescription}
                 error={errors.at(channelPath)}
                 note={
                   channelId === undefined && !silent && copy.unset !== null ? copy.unset : undefined

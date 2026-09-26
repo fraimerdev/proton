@@ -22,7 +22,7 @@ import {
   fetchUserGuilds,
   searchGuildMembers,
 } from '../lib/discord.ts';
-import { getDiscordAccessToken } from '../lib/discord-token.ts';
+import { getDiscordAccessToken, getDiscordUserId } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { administrableGuilds, type DiscordUserGuild, withPresence } from '../lib/guild-access.ts';
 import type { BotInvite } from '../lib/invite.ts';
@@ -80,7 +80,11 @@ export const listGuilds = createServerFn({ method: 'GET' })
     ]);
     const guilds = administrableGuilds(allGuilds);
 
-    const [joined, invite] = await Promise.all([presence(guilds), botInvite()]);
+    const [joined, invite, discordId] = await Promise.all([
+      presence(guilds),
+      botInvite(),
+      profile !== null ? profile.id : getDiscordUserId(user.id).catch(() => null),
+    ]);
 
     return {
       guilds: withPresence(guilds, joined.present),
@@ -88,9 +92,9 @@ export const listGuilds = createServerFn({ method: 'GET' })
       invite,
       user: {
         id: user.id,
+        discordId,
         name: profile?.name ?? user.name,
         image: profile?.avatarUrl ?? user.image ?? null,
-        email: user.email ?? null,
       },
     };
   });

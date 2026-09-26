@@ -1,6 +1,14 @@
+import interLatin from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createRootRouteWithContext, HeadContent, Outlet, Scripts } from '@tanstack/react-router';
+import {
+  createRootRouteWithContext,
+  HeadContent,
+  Link,
+  Outlet,
+  Scripts,
+} from '@tanstack/react-router';
 import { type ReactElement, useEffect } from 'react';
+import { ProtonMark } from '../components/shell/topbar.tsx';
 import { SignedInProvider } from '../components/site/chrome.tsx';
 import { viewerQuery } from '../lib/queries.ts';
 import type { RouterContext } from '../router.tsx';
@@ -19,29 +27,43 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     links: [
       { rel: 'icon', href: '/favicon.ico', sizes: '48x48 32x32 16x16' },
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
-      { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-      { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
       // Inter carries the whole product — 11px section labels through the 29px page title — so the
       // first paint discovering it only after the stylesheet parses reflows every row on the page.
-      // One variable woff2 covers 400..700.
+      // One variable woff2 covers every weight.
       {
         rel: 'preload',
         as: 'font',
         type: 'font/woff2',
-        href: 'https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2',
+        href: interLatin,
         crossOrigin: 'anonymous',
-      },
-      // Manrope is named by no CSS rule: @proton/cards rasterises the rank card in Manrope and
-      // Inter, and the dashboard's live preview has to match the PNG the bot actually posts.
-      {
-        rel: 'stylesheet',
-        href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;600;700;800&display=swap',
       },
       { rel: 'stylesheet', href: appCss },
     ],
   }),
   component: RootComponent,
+  notFoundComponent: NotFound,
 });
+
+function NotFound(): ReactElement {
+  return (
+    <main className="centred">
+      <section className="centred-card">
+        <ProtonMark size={34} />
+
+        <h1 style={{ marginTop: 16 }}>Page not found</h1>
+        <p>There’s no page at this address.</p>
+
+        <Link
+          to="/"
+          className="button button-primary button-lg button-block"
+          style={{ marginTop: 20 }}
+        >
+          Back to the site
+        </Link>
+      </section>
+    </main>
+  );
+}
 
 function RootComponent(): ReactElement {
   const queryClient = useQueryClient();

@@ -29,21 +29,23 @@ export const CATEGORY_LABEL: Record<LogCategory, string> = {
   proton: 'Proton',
 };
 
-export const CATEGORY_CONTENTS: Record<LogCategory, string> = {
-  server: 'Server settings, onboarding, server guide, command permissions and monetization',
-  channels: 'Channels, threads and channel permissions',
-  roles: 'Roles created, updated and deleted',
-  members: 'Joins, leaves, Membership Screening, nicknames and role changes',
-  messages: 'Edits, deletions, bulk deletions and pins',
-  voice: 'Voice joins and leaves, moves, disconnects, server mute and server deafen',
-  moderation: 'Bans, unbans, kicks, prunes, timeouts and bots added',
-  invites: 'Invites created and deleted',
-  integrations: 'Webhooks and integrations',
-  expressions: 'Emoji, stickers and soundboard sounds',
-  events: 'Scheduled events and stages',
-  automod: 'Discord AutoMod rules and the messages they act on',
+export const CATEGORY_CONTENTS: Partial<Record<LogCategory, string>> = {
+  server: 'Server settings, onboarding, the server guide, command permissions and monetization.',
+  channels: 'Channels, threads and channel permissions.',
+  roles:
+    'Roles created, changed and deleted. Roles given to or taken from members are logged under Members.',
+  members: 'Joins, leaves, Membership Screening, nickname changes and roles given or taken.',
+  messages:
+    'Edits, deletions, bulk deletions and pins. Discord doesn’t send a message’s old text, so it only shows if Logging remembers recent message text.',
+  voice:
+    'Voice joins and leaves, members moved or disconnected by moderators, and server mutes and deafens.',
+  moderation:
+    'Bans, unbans, kicks, timeouts, warnings, purges, slowmode and channel locks, done in Discord or through Proton, plus prunes, bots added and user reports.',
+  integrations: 'Webhooks and integrations.',
+  expressions: 'Emoji, stickers and soundboard sounds.',
+  automod: 'Discord’s own AutoMod rules, and the messages and members they act on.',
   proton:
-    'Module settings, modules enabled or off, Proton’s moderation actions, security triggers, giveaways and tickets',
+    'Module and command settings, modules and commands turned on or off, Anti-Nuke, Anti-Raid and Honeypot triggers, giveaways, tickets and other actions Proton took.',
 };
 
 export const LOG_SPECS: readonly LogEventSpec[] = LOG_EVENT_KEYS.flatMap((key) => {
@@ -173,9 +175,5 @@ export function ChannelRef({ id, channels }: { id: string; channels: ChannelInde
 
   if (channels.pending) return <Spinner label="Loading channel" />;
 
-  return (
-    <span className="mono" title="Proton cannot find this channel. It may have been deleted.">
-      {id}
-    </span>
-  );
+  return <span className="mono">{id}</span>;
 }

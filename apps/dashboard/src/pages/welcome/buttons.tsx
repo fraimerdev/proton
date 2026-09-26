@@ -127,7 +127,7 @@ export function LinkButtonRowEditor({
         })}
       </PresenceList>
 
-      <div className="inline inline-8">
+      <div className="inline inline-8 inline-wrap">
         <Button
           size="sm"
           icon="plus"

@@ -49,11 +49,9 @@ export const SOURCE_OPTIONS = COUNTER_SOURCES.map((source) => ({
   label: SOURCE_LABEL[source],
 }));
 
-export const EMPTY_TEMPLATE = 'A counter needs a name template. It becomes the channel name.';
+export const EMPTY_TEMPLATE = 'Enter a name template. It becomes the channel name.';
 
-export const CHANNEL_TAKEN =
-  'two counters cannot share a channel — they would rename it in turn and each one would spend ' +
-  'the other’s rename allowance.';
+export const CHANNEL_TAKEN = 'Another counter already uses this channel. Choose a different one.';
 
 export const NEW_COUNTER_PATH = 'counters.0.template';
 
@@ -79,7 +77,8 @@ function sampleCount(source: CounterSource): string {
 
 const SAMPLE_NOTE =
   `Sample server with ${sampleCount('members')} members, ${sampleCount('roles')} roles and ` +
-  `${sampleCount('channels')} channels. Proton fills in your server’s numbers every 10 minutes.`;
+  `${sampleCount('channels')} channels. Proton uses your server’s real numbers, refreshed every ` +
+  '10 minutes.';
 
 const EMPTY_NAME =
   'Empty with the sample numbers. Proton never renames a channel to an empty name.';
@@ -194,7 +193,10 @@ export function useTemplateField({
     autocomplete,
     diagnostics,
     diagnosticsId,
-    describedBy: visibleDiagnostics(diagnostics).shown.length > 0 ? diagnosticsId : undefined,
+    describedBy:
+      visibleDiagnostics(diagnostics, autocomplete.pending).shown.length > 0
+        ? diagnosticsId
+        : undefined,
     invalid: error !== undefined || report.blocking.some((issue) => issue.path === path),
     error: listed ? undefined : error,
   };

@@ -143,7 +143,7 @@ function ButtonView({ button }: { button: MessageButton }): ReactElement {
   return (
     <span className={`dc-button ${tone}${button.disabled ? ' disabled' : ''}`}>
       <EmojiGlyph emoji={button.emoji} />
-      {button.label}
+      {button.label ? <span className="dc-button-label">{button.label}</span> : null}
       {button.style === 'link' ? <Icon name="arrow-square-out" size={13} /> : null}
     </span>
   );
@@ -152,7 +152,7 @@ function ButtonView({ button }: { button: MessageButton }): ReactElement {
 function SelectView({ select }: { select: MessageSelect }): ReactElement {
   return (
     <span className="dc-select">
-      <span>{select.placeholder ?? 'Make a selection'}</span>
+      <span className="dc-select-label">{select.placeholder ?? 'Make a selection'}</span>
       <Icon name="caret-down" size={13} weight="fill" className="dc-select-chevron" />
     </span>
   );

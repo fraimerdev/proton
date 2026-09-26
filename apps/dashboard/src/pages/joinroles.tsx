@@ -23,6 +23,7 @@ import { SaveBar } from '../components/ui/savebar.tsx';
 import { SegmentedTabLinks } from '../components/ui/tabs.tsx';
 import type { GuildRole } from '../lib/discord.ts';
 import { rolesQuery } from '../lib/queries.ts';
+import { SyncArea } from './joinroles/sync.tsx';
 
 type Form = ModuleForm<JoinrolesConfig>;
 
@@ -40,14 +41,13 @@ interface RoleIssue {
   reason: string;
 }
 
-const SWITCHED_OFF = 'Settings are saved, but nothing runs until you switch it on.';
+const SWITCHED_OFF = 'Settings are saved, but nothing runs until you turn it on.';
 
-const SCREENING_INTRO =
-  'If enabled, members get their roles after they pass Membership Screening instead of when they ' +
-  'join.';
+const SCREENING_DESCRIPTION =
+  'Give roles once a member passes Membership Screening, instead of the moment they join.';
 
 function configuredButOff(count: number): string {
-  return `${count} ${count === 1 ? 'role is' : 'roles are'} set to be given on join, but Join Roles is disabled, so none are given.`;
+  return `${count} ${count === 1 ? 'role is' : 'roles are'} set to be given on join, but none are given until you turn it on.`;
 }
 
 function useRoleIndex(guildId: string): RoleIndex {
@@ -70,19 +70,19 @@ function grantIssue(
 ): string | undefined {
   // fetchGuildRoles drops @everyone, so it has to be recognised by id before the lookup below
   // decides it no longer exists.
-  if (roleId === guildId) return 'It is @everyone, which Discord gives every member automatically.';
+  if (roleId === guildId) return 'It’s @everyone, which every member already has.';
 
   const role = byId.get(roleId);
   if (!role) return 'It no longer exists.';
 
   if (role.managed) {
-    return 'It is managed by Discord or an integration, so it cannot be given by hand.';
+    return 'It’s managed by Discord or an integration, so Proton can’t give it.';
   }
 
   if (!role.assignable) {
     return (
-      'It is above Proton’s role, and Discord does not let a bot give roles above its own. Drag ' +
-      'Proton’s role above it in Server Settings → Roles.'
+      'It’s above Proton’s highest role, so Proton can’t give it. Drag Proton’s role above it in ' +
+      'Server Settings → Roles.'
     );
   }
 
@@ -320,7 +320,11 @@ function StickyArea({
   return (
     <Section label="Returning members">
       <Rows>
-        <SettingRow title="Restore roles on rejoin" error={form.errorAt('stickyEnabled')}>
+        <SettingRow
+          title="Restore roles on rejoin"
+          help="Proton saves a member’s roles whenever they change while this is on. A member whose roles haven’t changed since then has nothing to restore yet."
+          error={form.errorAt('stickyEnabled')}
+        >
           <Switch
             label="Restore roles on rejoin"
             checked={form.value.stickyEnabled}
@@ -346,10 +350,11 @@ function StickyArea({
 
 function OptionsArea({ form }: { form: Form }): ReactElement {
   return (
-    <Section label="Timing" intro={SCREENING_INTRO}>
+    <Section label="Timing">
       <Rows>
         <SettingRow
           title="Wait for Membership Screening"
+          description={SCREENING_DESCRIPTION}
           error={form.errorAt('grantWhenScreeningPasses')}
         >
           <Switch
@@ -377,22 +382,10 @@ export default function JoinRolesPage({
   const granted = form.value.memberRoleIds.length + form.value.botRoleIds.length;
 
   const notices =
-    toggle.failure !== null || !enabled ? (
-      <>
-        {toggle.failure !== null ? (
-          <StatusBanner tone="danger" live="assertive" onDismiss={toggle.dismiss}>
-            {toggle.failure}
-          </StatusBanner>
-        ) : null}
-
-        {!enabled ? (
-          <StatusBanner tone={granted > 0 ? 'warning' : 'neutral'}>
-            {granted > 0
-              ? configuredButOff(granted)
-              : `${meta.label} is disabled. ${SWITCHED_OFF}`}
-          </StatusBanner>
-        ) : null}
-      </>
+    toggle.failure !== null ? (
+      <StatusBanner tone="danger" live="assertive" onDismiss={toggle.dismiss}>
+        {toggle.failure}
+      </StatusBanner>
     ) : undefined;
 
   return (
@@ -414,6 +407,8 @@ export default function JoinRolesPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote={granted > 0 ? configuredButOff(granted) : SWITCHED_OFF}
+        offTone={granted > 0 ? 'warning' : 'neutral'}
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -440,6 +435,8 @@ export default function JoinRolesPage({
         {area === 'bots' ? <BotsArea form={form} guildId={guildId} index={index} /> : null}
 
         {area === 'sticky' ? <StickyArea form={form} guildId={guildId} index={index} /> : null}
+
+        {area === 'sync' ? <SyncArea form={form} guildId={guildId} enabled={enabled} /> : null}
 
         {area === 'options' ? <OptionsArea form={form} /> : null}
       </LoadingBoundary>

@@ -1,7 +1,11 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { MODULE_ICON_NAMES, RECORD_ICON_NAMES } from '../src/lib/modules/catalogue.ts';
+import {
+  MODULE_ICON_NAMES,
+  PAGE_ICON_NAMES,
+  RECORD_ICON_NAMES,
+} from '../src/lib/modules/catalogue.ts';
 
 const ROOT = join(import.meta.dir, '..');
 const SRC = join(ROOT, 'src');
@@ -26,7 +30,7 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 }
 
 export function renderableNames(): string[] {
-  const names = new Set<string>([...MODULE_ICON_NAMES, ...RECORD_ICON_NAMES]);
+  const names = new Set<string>([...MODULE_ICON_NAMES, ...RECORD_ICON_NAMES, ...PAGE_ICON_NAMES]);
 
   for (const file of sourceFiles(SRC)) {
     if (file === GENERATED_PATH) continue;

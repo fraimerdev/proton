@@ -80,7 +80,7 @@ function Rule({
         )}{' '}
         {config.boardChannelId === undefined ? (
           <span className={enabled ? 'text-warning' : 'text-muted'}>
-            is not posted until a board channel is set.
+            isn’t posted until you set a board channel.
           </span>
         ) : (
           <>
@@ -96,7 +96,7 @@ function Rule({
       <p className="starboard-rule-note">
         {config.selfStarAllowed
           ? 'The author’s own star counts toward that total.'
-          : 'The author’s own star does not count toward that total.'}
+          : 'The author’s own star doesn’t count toward that total.'}
         {skips === null ? null : ` ${skips}`}
       </p>
     </div>
@@ -166,9 +166,8 @@ export default function StarboardPage({ guildId, meta, summary }: ModulePageProp
         <Rows>
           <SettingRow
             title="Board channel"
-            description="Where Proton posts starred messages."
+            help="Messages in the board channel itself can’t be starred."
             error={form.errorAt('boardChannelId')}
-            note="Messages in the board channel are never starred."
           >
             <ChannelPicker
               guildId={guildId}
@@ -208,9 +207,8 @@ export default function StarboardPage({ guildId, meta, summary }: ModulePageProp
 
           <SettingRow
             title="Stars needed"
-            description="How many stars a message needs to be posted to the board."
             error={form.errorAt('threshold')}
-            note="If a message drops below this, Proton deletes its board post."
+            note="If a message drops below this, Proton deletes its board post. That needs Manage Messages in the board channel."
           >
             <NumberStepper
               label="Stars needed"
@@ -228,8 +226,8 @@ export default function StarboardPage({ guildId, meta, summary }: ModulePageProp
 
           <SettingRow
             title="Count self-stars"
+            description="Count the author’s own star toward the total."
             error={form.errorAt('selfStarAllowed')}
-            note="If off, Proton reads who reacted so the author’s own star is not counted."
           >
             <Switch
               label="Count self-stars"
@@ -270,8 +268,8 @@ export default function StarboardPage({ guildId, meta, summary }: ModulePageProp
 
           <SettingRow
             title="Ignore bot messages"
+            help="Webhook messages count as bot messages."
             error={form.errorAt('ignoreBots')}
-            note="Webhook messages count as bot messages."
           >
             <Switch
               label="Ignore bot messages"

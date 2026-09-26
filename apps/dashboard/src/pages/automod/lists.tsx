@@ -215,7 +215,7 @@ export function PatternField({
             </div>
 
             {!verdict.native ? (
-              <p className="automod-note">Proton only — {verdict.reason}</p>
+              <p className="automod-note">Only Proton runs this: {verdict.reason}.</p>
             ) : null}
             {issue !== undefined ? <p className="text-sm text-danger">{issue}</p> : null}
           </div>

@@ -47,16 +47,22 @@ const AFK_CHANNEL_TYPES = [CHANNEL_TYPE.voice, CHANNEL_TYPE.stage] as const;
 
 const NO_MESSAGE_XP = 'Minimum and maximum are both 0, so messages earn no XP.';
 
-const COOLDOWN_NOTE = 'Members earn XP for at most one message in each cooldown.';
+const COOLDOWN_NOTE = 'Members earn XP for at most one message per cooldown.';
 
-const NO_VOICE_XP = 'Set to 0, so time in voice earns no XP and is not tracked.';
+const VOICE_HELP =
+  'Proton adds voice XP when the member leaves the channel. Deafened members earn none, whether ' +
+  'they deafened themselves or a moderator did.';
 
-const AFK_NOTE =
-  'Members do not earn voice XP in this channel, or while deafened, whether by themselves or a ' +
-  'moderator.';
+const NO_VOICE_XP = 'Set to 0, so time in voice earns no XP and isn’t tracked.';
 
-const EXCLUSIONS_INTRO =
-  'Only ordinary messages and replies earn XP. Bot and webhook messages never do, in any channel.';
+const AFK_HELP =
+  'Your server’s own AFK channel from Discord’s Server Settings never earns voice XP either.';
+
+const EXCLUSIONS_HELP =
+  'Only regular messages and replies earn XP. Bot and webhook messages never do, in any channel.';
+
+const EXCLUDED_ROLES_HELP =
+  'Their voice XP isn’t affected. To stop all XP for a role, give it a ×0 multiplier instead.';
 
 const CHANNELS_FULL = `You can add up to ${EXCLUSION_MAX} channels. Remove one to add another.`;
 
@@ -64,7 +70,8 @@ const MULTIPLIER_RULE =
   'When several multipliers apply, the highest wins. ×0 always wins, so it blocks XP.';
 
 const MULTIPLIER_SCOPE =
-  'Multipliers apply to message XP and voice XP. A running XP event counts as one more multiplier.';
+  'Multipliers apply to message and voice XP, not to XP given with /xp or by Achievements. A ' +
+  'running XP event counts as one more multiplier.';
 
 const NO_ROLE_MULTIPLIERS = 'Give a role a multiplier to scale the XP its members earn.';
 
@@ -79,9 +86,9 @@ const ROLE_TAKEN = 'That role already has a multiplier. Change it in its row ins
 
 const CHANNEL_TAKEN = 'That channel already has a multiplier. Change it in its row instead.';
 
-const ROLE_MISSING = 'Proton cannot find this role — it may have been deleted.';
+const ROLE_MISSING = 'Can’t find this role. It may have been deleted.';
 
-const CHANNEL_MISSING = 'Proton cannot find this channel — it may have been deleted.';
+const CHANNEL_MISSING = 'Can’t find this channel. It may have been deleted.';
 
 const DEFAULT_MULTIPLIER = 2;
 
@@ -232,7 +239,7 @@ function ComposerRung({
             Cancel
           </Button>
           <Button tone="primary" size="sm" disabled={!canAdd || taken} onClick={onAdd}>
-            Add
+            Add multiplier
           </Button>
         </span>
       </div>
@@ -611,7 +618,7 @@ export function EarningArea({
         <Rows>
           <SettingRow
             title="Minimum XP per message"
-            description="Each message earns a random amount of XP between the minimum and maximum."
+            description="Each message earns a random amount between the minimum and maximum."
             error={minError}
           >
             <NumberStepper
@@ -662,7 +669,8 @@ export function EarningArea({
         <Rows>
           <SettingRow
             title="Voice XP"
-            description="XP earned for each minute in voice. Proton adds it when the member leaves the channel."
+            description="XP earned for each minute in voice."
+            help={VOICE_HELP}
             error={voiceError}
             note={config.voiceXpPerMinute === 0 ? NO_VOICE_XP : undefined}
           >
@@ -681,7 +689,12 @@ export function EarningArea({
             />
           </SettingRow>
 
-          <SettingRow title="AFK channel" error={form.errorAt('afkChannelId')} note={AFK_NOTE}>
+          <SettingRow
+            title="AFK channel"
+            description="Time in this channel earns no voice XP."
+            help={AFK_HELP}
+            error={form.errorAt('afkChannelId')}
+          >
             <ChannelPicker
               guildId={guildId}
               label="AFK channel"
@@ -697,7 +710,7 @@ export function EarningArea({
         </Rows>
       </Section>
 
-      <Section label="Exclusions" intro={EXCLUSIONS_INTRO}>
+      <Section label="Exclusions" help={EXCLUSIONS_HELP}>
         <Rows>
           <SettingRow
             title="Excluded channels"
@@ -718,6 +731,7 @@ export function EarningArea({
           <SettingRow
             title="Excluded roles"
             description="Members with any of these roles earn no XP from messages."
+            help={EXCLUDED_ROLES_HELP}
             stacked
             error={form.errorAt('excludedRoleIds')}
           >
@@ -734,13 +748,11 @@ export function EarningArea({
         </Rows>
       </Section>
 
-      <Section label="Multipliers" intro={MULTIPLIER_RULE}>
+      <Section label="Multipliers" intro={MULTIPLIER_RULE} help={MULTIPLIER_SCOPE}>
         <div className="stack stack-20">
           <RoleMultipliers guildId={guildId} form={form} />
           <ChannelMultipliers guildId={guildId} form={form} />
         </div>
-
-        <p className="leveling-note">{MULTIPLIER_SCOPE}</p>
       </Section>
     </>
   );

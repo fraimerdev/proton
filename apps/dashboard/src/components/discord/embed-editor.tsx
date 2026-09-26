@@ -68,6 +68,8 @@ const LINK_MISSING = 'Enter a complete http:// or https:// link.';
 const AUTHOR_EMPTY = 'An author needs a name, or remove it.';
 const FOOTER_EMPTY = 'A footer needs text, or remove it.';
 
+const TOO_LONG = /^too big: expected string to have <=(\d+) characters?$/i;
+
 // Discord's own grey beside an embed with no colour, so adding one changes nothing until one is picked.
 const NO_COLOUR = 0x4e5058;
 
@@ -83,6 +85,11 @@ export function sentence(message: string): string {
 
   const capital = `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
   return /[.!?]$/.test(capital) ? capital : `${capital}.`;
+}
+
+export function limitIssue(label: string, reported: string | undefined): string | undefined {
+  const max = reported === undefined ? undefined : TOO_LONG.exec(reported.trim())?.[1];
+  return max === undefined ? undefined : `${label} can be up to ${max} characters.`;
 }
 
 export function linkIssue(value: string, reported: string | undefined): string | undefined {
@@ -127,6 +134,19 @@ function embedLinks(embed: Embed): ReadonlyArray<readonly [string, string | unde
   ];
 }
 
+function embedTexts(embed: Embed): ReadonlyArray<readonly [string, string]> {
+  return [
+    ['title', 'Embed title'],
+    ['description', 'Embed description'],
+    ['author.name', 'Author name'],
+    ['footer.text', 'Footer text'],
+    ...(embed.fields ?? []).flatMap((_, index) => [
+      [`fields.${index}.name`, `Field ${index + 1} name`] as const,
+      [`fields.${index}.value`, `Field ${index + 1} text`] as const,
+    ]),
+  ];
+}
+
 export function embedIssue(embed: Embed, errors: ConfigErrors, path: string): string | undefined {
   const exact = errors.at(path);
   if (exact !== undefined) return sentence(exact);
@@ -136,6 +156,11 @@ export function embedIssue(embed: Embed, errors: ConfigErrors, path: string): st
 
   for (const [key, value] of embedLinks(embed)) {
     const issue = linkIssue(value ?? '', errors.at(`${path}.${key}`));
+    if (issue !== undefined) return issue;
+  }
+
+  for (const [key, label] of embedTexts(embed)) {
+    const issue = limitIssue(label, errors.at(`${path}.${key}`));
     if (issue !== undefined) return issue;
   }
 
@@ -202,11 +227,12 @@ export function MessageField({
     const issue =
       error === undefined || explained
         ? undefined
-        : link
-          ? linkIssue(value, error)
-          : empty === null && value.trim() === ''
-            ? undefined
-            : textIssue(value, error, empty ?? undefined);
+        : (limitIssue(label, error) ??
+          (link
+            ? linkIssue(value, error)
+            : empty === null && value.trim() === ''
+              ? undefined
+              : textIssue(value, error, empty ?? undefined)));
 
     const common = {
       'aria-label': label,
@@ -284,7 +310,7 @@ export function OptionalColour({
     <span className="inline inline-8">
       <ColourPicker label={label} value={value} onChange={onChange} />
       <Button tone="ghost" size="sm" onClick={() => onChange(undefined)}>
-        Clear
+        Remove colour
       </Button>
     </span>
   );
@@ -356,7 +382,7 @@ function EmbedFields({
             maxLength={EMBED_DESCRIPTION_MAX}
             value={embed.description ?? ''}
             error={errors.at(`${path}.description`)}
-            note={`${(embed.description ?? '').length} / ${EMBED_DESCRIPTION_MAX} · Supports Discord markdown`}
+            note={`${(embed.description ?? '').length} / ${EMBED_DESCRIPTION_MAX}`}
             onChange={(next) => onChange({ ...embed, description: blank(next) })}
           />
         </DetailField>
@@ -390,7 +416,7 @@ function EmbedFields({
         <MessageField
           placeholders={placeholders}
           path={`${path}.imageUrl`}
-          label="Embed image address"
+          label="Embed image link"
           link
           width="lg"
           placeholder="https://…"
@@ -405,7 +431,7 @@ function EmbedFields({
         <MessageField
           placeholders={placeholders}
           path={`${path}.thumbnailUrl`}
-          label="Embed thumbnail address"
+          label="Embed thumbnail link"
           link
           width="lg"
           placeholder="https://…"
@@ -454,7 +480,7 @@ function EmbedFields({
               <MessageField
                 placeholders={placeholders}
                 path={`${path}.author.iconUrl`}
-                label="Author icon address"
+                label="Author icon link"
                 link
                 width="md"
                 placeholder="https://…"
@@ -501,7 +527,7 @@ function EmbedFields({
               <MessageField
                 placeholders={placeholders}
                 path={`${path}.footer.iconUrl`}
-                label="Footer icon address"
+                label="Footer icon link"
                 link
                 width="md"
                 placeholder="https://…"
@@ -643,7 +669,7 @@ export function EmbedEditor({
         <span className="inline inline-8">
           {full ? (
             <span className="text-xs text-muted">
-              Discord allows up to {EMBEDS_PER_MESSAGE_MAX} embeds on a message.
+              Discord allows up to {EMBEDS_PER_MESSAGE_MAX} embeds per message.
             </span>
           ) : null}
           <Button

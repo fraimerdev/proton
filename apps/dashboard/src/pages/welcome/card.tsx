@@ -27,8 +27,8 @@ const KINDS: readonly SegmentedOption<CardGreeting>[] = [
 const CARD_BACKGROUND_MAX = 2048;
 
 const OFF_HOST =
-  'Only images hosted on Discord’s CDN load. This address is not on cdn.discordapp.com or ' +
-  'media.discordapp.net, so the card will render without it.';
+  'This address isn’t on cdn.discordapp.com or media.discordapp.net, so the card renders ' +
+  'without it.';
 
 function renderableBackground(url: string | undefined): string | undefined {
   return url !== undefined && cardImageHostAllowed(url) ? url : undefined;
@@ -115,7 +115,7 @@ export function CardArea({
             <CardPreview guildId={guildId} options={options} alt={`The ${kind} card`} />
           </>
         ) : (
-          <p className="section-intro">No card is attached. Attach one to preview it here.</p>
+          <p className="section-intro">Attach a card to preview it here.</p>
         )}
       </div>
 
@@ -123,7 +123,8 @@ export function CardArea({
         <Rows>
           <SettingRow
             title="Attach a card"
-            description="Goes with welcome and goodbye messages, never boosts. Costs an extra image render each time a member joins or leaves."
+            description="Goes with welcome and goodbye messages, never boosts."
+            help="Proton renders the image each time a member joins or leaves, so the message takes a moment longer to appear."
             error={errors.at('card')}
           >
             <Switch

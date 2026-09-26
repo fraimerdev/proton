@@ -1,9 +1,10 @@
+import type { BadgeIconId, BadgeShape } from '@proton/cards/design';
 import type { ReactElement } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { LoadingArea } from '../ui/feedback.tsx';
 import { Icon } from '../ui/icon.tsx';
 
-export type CardKind = 'rank' | 'welcome' | 'goodbye';
+export type CardKind = 'rank' | 'welcome' | 'goodbye' | 'badge';
 
 export interface CardPreviewOptions {
   kind: CardKind;
@@ -15,6 +16,12 @@ export interface CardPreviewOptions {
   showPercent?: boolean | undefined;
   showTotalXp?: boolean | undefined;
   showMemberCount?: boolean | undefined;
+  showBadges?: boolean | undefined;
+
+  shape?: BadgeShape | undefined;
+  icon?: BadgeIconId | undefined;
+  colour?: number | undefined;
+  assetId?: string | undefined;
 
   // Set by a simulation, which knows the real member and the real counts; left out by the settings
   // preview, where the route's own sample is what an admin wants to see.

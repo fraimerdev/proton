@@ -14,9 +14,9 @@ export async function generate(): Promise<Uint8Array> {
     displayName: 'Rin',
     level: 42,
     rank: 3,
-    totalXp: 221_487,
-    xpIntoLevel: 3_180,
-    xpForNextLevel: 4_600,
+    totalXp: 48_771,
+    xpIntoLevel: 1_521,
+    xpForNextLevel: 2_200,
   });
 }
 

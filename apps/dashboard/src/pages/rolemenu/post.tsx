@@ -7,13 +7,11 @@ import { AsyncOperationStatus, type AsyncPhase } from '../../components/ui/feedb
 import { saveFailure } from '../../lib/errors.ts';
 import { postModulePanel } from '../../server/modules.ts';
 
-const MODULE_OFF =
-  'Role menus is disabled in this server, so posting this would put a message nobody can use ' +
-  'in a channel. Switch it on first.';
+const MODULE_OFF = 'Role Menus is off, so a posted menu wouldn’t work. Turn it on first.';
 
 const UNSAVED = 'Save your changes first. Posting uses the last saved version.';
 
-const NEVER_SAVED = 'Save this role menu first. Nothing is saved to post yet.';
+const NEVER_SAVED = 'Save this role menu before posting it.';
 
 export function reactionInsteadOfPost(menuId: string): string {
   return `Use /rolemenu menu:${menuId} in Discord to add the reactions.`;
@@ -38,7 +36,7 @@ export function postRefusal({
 }): string | undefined {
   if (!enabled) return MODULE_OFF;
   if (menu.channelId === '') {
-    return `'${menu.id}' has no channel to go in yet. Pick one and save, then post it.`;
+    return `Choose a channel for '${menu.id}' and save, then post it.`;
   }
   if (broken) return 'Fix the marked settings before posting.';
   if (dirty) return UNSAVED;
@@ -100,7 +98,7 @@ export function PostAction({
           post.error
             ? saveFailure(
                 post.error,
-                refreshing ? 'Role menu was not updated' : 'Role menu was not posted',
+                refreshing ? 'Couldn’t update the role menu' : 'Couldn’t post the role menu',
               )
             : undefined
         }

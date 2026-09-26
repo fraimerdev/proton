@@ -672,7 +672,7 @@ describe('status copy', () => {
       });
     }
 
-    expect(copy(statusOf('off', MODERN))?.text).toBe('Applies when Branding is enabled');
+    expect(copy(statusOf('off', MODERN))?.text).toBe('Applies when Branding is on');
     expect(copy(statusOf('none', null), { saved: null, draft: null })).toBeNull();
     expect(copy(statusOf('unavailable', JOURNAL), { saved: JOURNAL, draft: JOURNAL })).toEqual({
       text: 'Journal is not available for apps yet. Choose another font.',

@@ -4,6 +4,12 @@ import type {
   BlockedMemberQuery,
   CaseQuery,
   CaseSearchResult,
+  CommandCatalogueView,
+  CommandEnabledBody,
+  CommandIssue,
+  CommandUpdateBody,
+  CommandUpdateResult,
+  CommandView,
   GuildOverview,
   GuildPresence,
   LeaderboardQuery,
@@ -17,8 +23,13 @@ import type {
 import {
   blockedMemberListSchema,
   botInviteSchema,
+  commandCatalogueViewSchema,
+  commandIssueSchema,
+  commandUpdateResultSchema,
+  commandViewSchema,
   guildOverviewSchema,
   guildPresenceSchema,
+  type JoinrolesRunKind,
   liftBlockResultSchema,
   moduleConfigViewSchema,
   moduleIndexSchema,
@@ -31,14 +42,63 @@ import {
   verificationRequestResultSchema,
 } from '@proton/core';
 import {
+  type AchievementsOverview,
+  achievementsOverviewSchema,
+  type JobQueued,
+  type JobRequest,
+  jobQueuedSchema,
+  type MemberDetail,
+  memberDetailSchema,
+  type ResetRequest,
+  type ResetResult,
+  type RewardListQuery,
+  type RewardListResult,
+  type RewardRetryOutcome,
+  type RewardRetryRequest,
+  resetResultSchema,
+  rewardListResultSchema,
+  rewardRetryOutcomeSchema,
+  type UnlockListQuery,
+  type UnlockListResult,
+  unlockListResultSchema,
+} from '@proton/module-achievements/view';
+import {
   type NameStyleStatus,
   nameStyleStatusSchema,
 } from '@proton/module-branding/name-style-status';
+import {
+  type JoinRolesSyncStatus,
+  type SyncStartResult,
+  syncStartResultSchema,
+  syncStatusSchema,
+} from '@proton/module-joinroles/sync-view';
+import {
+  type AutomationRunList,
+  automationRunListSchema,
+  automationRunQuerySchema,
+  type CaseEvidenceView,
+  caseEvidenceViewSchema,
+  type ReportActionBody,
+  type ReportActionResult,
+  type ReportDetail,
+  type ReportListResult,
+  type ReportSummaryCounts,
+  reportActionResultSchema,
+  reportDetailSchema,
+  reportListResultSchema,
+  reportQuerySchema,
+  reportSummaryCountsSchema,
+} from '@proton/module-moderation/reports-view';
 import type { TagQuery, TagSearchResult } from '@proton/module-tags/query';
 import type { TicketQuery, TicketSearchResult } from '@proton/module-tickets/query';
 import type { z } from 'zod';
 import { z as zod } from 'zod';
 import type { AuditStamp } from '../server/audit.ts';
+import { COMMAND_CHANGED } from './errors.ts';
+
+const commandIssuesSchema = zod.array(commandIssueSchema).min(1);
+const commandEnabledResultSchema = zod.object({ command: commandViewSchema });
+const acknowledgedSchema = zod.object({ ok: zod.literal(true) });
 
 const maintenanceViewSchema = zod.object({
   window: zod
@@ -55,6 +115,18 @@ const maintenanceViewSchema = zod.object({
 
 export type MaintenanceView = zod.infer<typeof maintenanceViewSchema>;
 
+export const reportListQuerySchema = reportQuerySchema.extend({
+  close: zod.enum(['problem']).optional(),
+});
+
+export type ReportListQuery = zod.infer<typeof reportListQuerySchema>;
+
+export const automationRunListQuerySchema = automationRunQuerySchema.extend({
+  status: zod.union([zod.literal('problem'), automationRunQuerySchema.shape.status]),
+});
+
+export type AutomationRunListQuery = zod.infer<typeof automationRunListQuerySchema>;
+
 function queryString(query: Record<string, unknown>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
@@ -62,6 +134,25 @@ function queryString(query: Record<string, unknown>): string {
   }
 
   return params.toString();
+}
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code: string | undefined;
+  readonly issues: CommandIssue[] | undefined;
+
+  constructor(
+    status: number,
+    code: string | undefined,
+    message: string,
+    issues?: CommandIssue[] | undefined,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.issues = issues;
+  }
 }
 
 export class ApiClient {
@@ -84,14 +175,22 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const body = (await response.json().catch(() => ({}))) as { message?: string };
+      const body = (await response.json().catch(() => ({}))) as {
+        error?: unknown;
+        message?: string;
+        issues?: unknown;
+      };
+      const issues = commandIssuesSchema.safeParse(body.issues);
 
       // Neutral about reads and writes, because the callers supply that half ("Could not save: …").
       // A gateway error or an HTML error page used to reach the admin as "api returned 502".
-      throw new Error(
+      throw new ApiError(
+        response.status,
+        typeof body.error === 'string' ? body.error : undefined,
         body.message ??
-          `Proton's API did not answer (HTTP ${response.status}). Nothing was changed — try again, ` +
-            `and if it keeps happening the API is the part that is down, not Discord.`,
+          `Proton's API did not answer (HTTP ${response.status}). Nothing was changed. Try again ` +
+            `in a moment.`,
+        issues.success ? issues.data : undefined,
       );
     }
 
@@ -110,7 +209,7 @@ export class ApiClient {
 
     if (!parsed.success) {
       throw new Error(
-        `the api answered ${path} with a shape this dashboard does not understand — ` +
+        `the api answered ${path} with a shape this dashboard does not understand: ` +
           `${parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ')}`,
       );
     }
@@ -216,6 +315,57 @@ export class ApiClient {
     );
   }
 
+  searchReports(
+    guildId: string,
+    query: ReportListQuery,
+    viewerId: string,
+  ): Promise<ReportListResult> {
+    return this.#parsed(
+      `/guilds/${guildId}/moderation/reports?${queryString({ ...query, viewerId })}`,
+      reportListResultSchema,
+    );
+  }
+
+  getReportSummary(guildId: string, viewerId: string): Promise<ReportSummaryCounts> {
+    return this.#parsed(
+      `/guilds/${guildId}/moderation/reports/summary?${queryString({ viewerId })}`,
+      reportSummaryCountsSchema,
+    );
+  }
+
+  getReport(guildId: string, reportId: string, viewerId: string): Promise<ReportDetail> {
+    const path = `/guilds/${guildId}/moderation/reports/${encodeURIComponent(reportId)}`;
+    return this.#parsed(`${path}?${queryString({ viewerId })}`, reportDetailSchema);
+  }
+
+  listReportAutomationRuns(
+    guildId: string,
+    query: AutomationRunListQuery,
+    viewerId: string,
+  ): Promise<AutomationRunList> {
+    const path = `/guilds/${guildId}/moderation/reports/automation/runs`;
+    return this.#parsed(`${path}?${queryString({ ...query, viewerId })}`, automationRunListSchema);
+  }
+
+  actOnReport(
+    guildId: string,
+    reportId: string,
+    body: ReportActionBody,
+  ): Promise<ReportActionResult> {
+    return this.#parsed(
+      `/guilds/${guildId}/moderation/reports/${encodeURIComponent(reportId)}/actions`,
+      reportActionResultSchema,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  }
+
+  getCaseEvidence(guildId: string, caseId: string): Promise<CaseEvidenceView> {
+    return this.#parsed(
+      `/guilds/${guildId}/cases/${encodeURIComponent(caseId)}/evidence`,
+      caseEvidenceViewSchema,
+    );
+  }
+
   searchTags(guildId: string, query: TagQuery): Promise<TagSearchResult> {
     return this.#request(`/guilds/${guildId}/tags?${queryString(query)}`);
   }
@@ -238,6 +388,69 @@ export class ApiClient {
 
   getNameStyleStatus(guildId: string): Promise<NameStyleStatus> {
     return this.#parsed(`/guilds/${guildId}/branding/name-style/status`, nameStyleStatusSchema);
+  }
+
+  getJoinRolesSync(guildId: string): Promise<JoinRolesSyncStatus> {
+    return this.#parsed(`/guilds/${guildId}/joinroles/sync`, syncStatusSchema);
+  }
+
+  startJoinRolesSync(
+    guildId: string,
+    body: AuditStamp & { kind: JoinrolesRunKind },
+  ): Promise<SyncStartResult> {
+    return this.#parsed(`/guilds/${guildId}/joinroles/sync`, syncStartResultSchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  getCommands(guildId: string): Promise<CommandCatalogueView> {
+    return this.#parsed(`/guilds/${guildId}/commands`, commandCatalogueViewSchema);
+  }
+
+  // A result, not a throw: only an Error's message crosses a server function, never its issues.
+  async updateCommand(
+    guildId: string,
+    key: string,
+    body: CommandUpdateBody,
+  ): Promise<CommandUpdateResult> {
+    try {
+      return await this.#parsed(
+        `/guilds/${guildId}/commands/${encodeURIComponent(key)}`,
+        commandUpdateResultSchema,
+        { method: 'PUT', body: JSON.stringify(body) },
+      );
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+      if (error.code === 'invalid_command' && error.issues !== undefined) {
+        return { ok: false, issues: error.issues };
+      }
+      if (error.code === 'command_changed') {
+        throw new ApiError(error.status, error.code, COMMAND_CHANGED);
+      }
+      throw error;
+    }
+  }
+
+  async setCommandEnabled(
+    guildId: string,
+    key: string,
+    body: CommandEnabledBody,
+  ): Promise<CommandView> {
+    const { command } = await this.#parsed(
+      `/guilds/${guildId}/commands/${encodeURIComponent(key)}/enabled`,
+      commandEnabledResultSchema,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+
+    return command;
+  }
+
+  async ackLostCommandPermissions(guildId: string, body: AuditStamp): Promise<void> {
+    await this.#parsed(`/guilds/${guildId}/commands/lost-permissions/ack`, acknowledgedSchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   }
 
   brandingAsset(guildId: string, kind: string): Promise<Response> {
@@ -267,6 +480,74 @@ export class ApiClient {
     return fetch(`${this.#baseUrl}/guilds/${guildId}/branding/${kind}`, {
       method: 'DELETE',
       headers: { 'x-proton-secret': this.#secret, 'x-proton-actor': actorId },
+    });
+  }
+
+  getAchievementsOverview(guildId: string): Promise<AchievementsOverview> {
+    return this.#parsed(`/guilds/${guildId}/achievements/overview`, achievementsOverviewSchema);
+  }
+
+  getAchievementMember(guildId: string, userId: string): Promise<MemberDetail> {
+    return this.#parsed(
+      `/guilds/${guildId}/achievements/members/${encodeURIComponent(userId)}`,
+      memberDetailSchema,
+    );
+  }
+
+  listAchievementUnlocks(guildId: string, query: UnlockListQuery): Promise<UnlockListResult> {
+    return this.#parsed(
+      `/guilds/${guildId}/achievements/unlocks?${queryString(query)}`,
+      unlockListResultSchema,
+    );
+  }
+
+  listAchievementRewards(guildId: string, query: RewardListQuery): Promise<RewardListResult> {
+    return this.#parsed(
+      `/guilds/${guildId}/achievements/rewards?${queryString(query)}`,
+      rewardListResultSchema,
+    );
+  }
+
+  retryAchievementRewards(
+    guildId: string,
+    body: RewardRetryRequest & AuditStamp,
+  ): Promise<RewardRetryOutcome> {
+    return this.#parsed(`/guilds/${guildId}/achievements/rewards/retry`, rewardRetryOutcomeSchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  resetAchievements(guildId: string, body: ResetRequest & AuditStamp): Promise<ResetResult> {
+    return this.#parsed(`/guilds/${guildId}/achievements/resets`, resetResultSchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  requestAchievementJob(guildId: string, body: JobRequest & AuditStamp): Promise<JobQueued> {
+    return this.#parsed(`/guilds/${guildId}/achievements/jobs`, jobQueuedSchema, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  }
+
+  achievementBadge(guildId: string, assetId: string): Promise<Response> {
+    return fetch(
+      `${this.#baseUrl}/guilds/${guildId}/achievements/badges/${encodeURIComponent(assetId)}`,
+      { headers: { 'x-proton-secret': this.#secret } },
+    );
+  }
+
+  uploadAchievementBadge(guildId: string, bytes: ArrayBuffer, actorId: string): Promise<Response> {
+    return fetch(`${this.#baseUrl}/guilds/${guildId}/achievements/badges`, {
+      method: 'PUT',
+      headers: {
+        'x-proton-secret': this.#secret,
+        'x-proton-actor': actorId,
+        'content-type': 'application/octet-stream',
+      },
+      body: bytes,
     });
   }
 

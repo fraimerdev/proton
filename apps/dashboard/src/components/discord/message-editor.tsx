@@ -29,6 +29,7 @@ import {
   type PlaceholderField,
   type PlaceholderKit,
   type PlaceholderSlot,
+  sentence,
 } from './embed-editor.tsx';
 import { EmojiPicker } from './emoji-picker.tsx';
 import { ColourPicker, DEFAULT_EMBED_COLOUR } from './inputs.tsx';
@@ -91,13 +92,15 @@ function PlaceholderAutocompleteField({
     path: field.path,
     onChange: field.onChange,
   });
-  const listed = visibleDiagnostics(diagnostics).shown.length > 0;
+  const listed = visibleDiagnostics(diagnostics, autocomplete.pending).shown.length > 0;
 
   return render({
     field: autocomplete.field,
     suggestions: <PlaceholderSuggestions autocomplete={autocomplete} />,
     describedBy: listed ? id : undefined,
-    diagnostics: listed ? <TemplateDiagnostics id={id} diagnostics={diagnostics} /> : undefined,
+    diagnostics: listed ? (
+      <TemplateDiagnostics id={id} diagnostics={diagnostics} autocomplete={autocomplete} />
+    ) : undefined,
     diagnosticMessages: diagnostics.map(({ message }) => message),
   });
 }
@@ -164,7 +167,7 @@ function SingleEmbedEditor({
           />
         </SettingRow>
 
-        <SettingRow title="Description" description="Supports Discord markdown." stacked>
+        <SettingRow title="Description" stacked>
           <MessageField
             placeholders={placeholders}
             path={`${path}.description`}
@@ -179,7 +182,7 @@ function SingleEmbedEditor({
           />
         </SettingRow>
 
-        <SettingRow title="Colour" description="The bar down the left edge of the embed.">
+        <SettingRow title="Colour">
           <ColourPicker
             label="Embed colour"
             value={embed.color ?? DEFAULT_EMBED_COLOUR}
@@ -206,7 +209,7 @@ function SingleEmbedEditor({
           <MessageField
             placeholders={placeholders}
             path={`${path}.imageUrl`}
-            label="Embed image URL"
+            label="Embed image link"
             link
             width="lg"
             placeholder="https://…"
@@ -221,7 +224,7 @@ function SingleEmbedEditor({
           <MessageField
             placeholders={placeholders}
             path={`${path}.thumbnailUrl`}
-            label="Embed thumbnail URL"
+            label="Embed thumbnail link"
             link
             width="lg"
             placeholder="https://…"
@@ -269,9 +272,9 @@ function SingleEmbedEditor({
                     onChange={(next) => setField(index, { ...field, name: next })}
                   />
                   <span className="push-right inline inline-8">
-                    <span className="text-xs text-muted">Inline</span>
+                    <span className="text-xs text-muted">Side by side</span>
                     <Switch
-                      label={`Field ${index + 1} inline`}
+                      label={`Field ${index + 1} side by side`}
                       checked={field.inline === true}
                       onChange={(next) => setField(index, { ...field, inline: next })}
                     />
@@ -292,7 +295,7 @@ function SingleEmbedEditor({
                 <MessageField
                   placeholders={placeholders}
                   path={`${path}.fields.${index}.value`}
-                  label={`Field ${index + 1} value`}
+                  label={`Field ${index + 1} text`}
                   rows={2}
                   layout="wide"
                   maxLength={EMBED_FIELD_VALUE_MAX}
@@ -406,9 +409,10 @@ function ButtonRowEditor({
               />
             ) : button.action ? (
               <p className="row-note">
-                Proton handles this button
-                {button.action.kind === 'role' ? ' — it changes a role' : ' — it replies'}. Only its
-                module can change what it does.
+                {button.action.kind === 'role'
+                  ? 'Pressing this button changes a role.'
+                  : 'Pressing this button sends a reply.'}{' '}
+                Only the module that added it can change what it does.
               </p>
             ) : null}
           </div>
@@ -517,8 +521,7 @@ function SelectRowEditor({
 
       <div className="row">
         <span className="text-xs text-muted">
-          Proton handles every option, so only the module that owns this dropdown can add one.
-          Options can be renamed here.
+          Only the module that added this dropdown can add options. You can rename them here.
         </span>
         <span className="push-right">
           <Button tone="ghost" size="sm" icon="trash" onClick={onRemove}>
@@ -547,6 +550,7 @@ export function MessageEditor({
 
   const content = value.content ?? '';
   const embed = value.embeds[0];
+  const embedError = errorFor(`${prefix}embeds.0`) ?? errorFor(`${prefix}embeds`);
 
   const replaceRow = (index: number, next: ActionRow): void =>
     onChange({
@@ -581,6 +585,11 @@ export function MessageEditor({
       {allow?.embed !== false ? (
         embed ? (
           <Section label="Embed">
+            {embedError !== undefined ? (
+              <p className="row-error" role="alert">
+                {sentence(embedError)}
+              </p>
+            ) : null}
             <SingleEmbedEditor
               embed={embed}
               path={`${prefix}embeds.0`}
@@ -594,10 +603,7 @@ export function MessageEditor({
         ) : (
           <Section label="Embed">
             <Rows>
-              <SettingRow
-                title="No embed"
-                description="Show a block with a title, colour, fields and images below the text."
-              >
+              <SettingRow title="No embed">
                 <Button
                   size="sm"
                   icon="plus"
@@ -690,7 +696,7 @@ export function MessageEditor({
       {allow?.mentions !== false ? (
         <Section
           label="Mentions"
-          intro="Choose who this message can ping. Mentions that are off still show but do not notify anyone."
+          help="A mention that’s off still shows in the message but doesn’t notify anyone."
         >
           <Rows>
             <SettingRow title="@everyone and @here">

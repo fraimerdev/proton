@@ -52,7 +52,7 @@ function argsOf(options: readonly RawOption[] | undefined): CommandArg[] {
 
 // permissionLabels, not the API names spaced out: Discord's own client calls MANAGE_GUILD
 // "Manage Server", which is the spelling an admin is looking for and the one the landing page uses.
-function permissionOf(data: RawCommand): string | null {
+function permissionOf(data: Pick<RawCommand, 'default_member_permissions'>): string | null {
   const mask = data.default_member_permissions;
   if (!mask || mask === '0') return null;
 
@@ -86,9 +86,18 @@ function expand(moduleId: string, data: RawCommand) {
 }
 
 export function collect(): CommandEntry[] {
-  return MODULES.flatMap((manifest) =>
-    (manifest.commands ?? []).flatMap((command) => expand(manifest.id, command.data as RawCommand)),
-  ).sort((a, b) => a.usage.localeCompare(b.usage));
+  return MODULES.flatMap((manifest) => [
+    ...(manifest.commands ?? []).flatMap((command) =>
+      expand(manifest.id, command.data as RawCommand),
+    ),
+    ...(manifest.contextMenus ?? []).map((menu) => ({
+      usage: `Apps › ${menu.name}`,
+      description: menu.description,
+      args: [],
+      module: manifest.id,
+      permission: permissionOf(menu.data),
+    })),
+  ]).sort((a, b) => a.usage.localeCompare(b.usage));
 }
 
 function lit(value: string): string {

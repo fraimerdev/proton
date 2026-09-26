@@ -91,6 +91,30 @@ function ModuleNavItem({
   );
 }
 
+function CommandsLink({
+  guildId,
+  hint,
+}: {
+  guildId: string;
+  hint?: string | undefined;
+}): ReactElement {
+  return (
+    <Link
+      to="/dashboard/$guildId/commands"
+      params={{ guildId }}
+      search={{}}
+      className="sidebar-item"
+      activeOptions={{ includeSearch: false }}
+    >
+      <Icon name="terminal-window" size={16} className="sidebar-item-icon" />
+      <span className="sidebar-item-label">
+        Commands
+        {hint !== undefined ? <span className="text-muted text-xs"> · {hint}</span> : null}
+      </span>
+    </Link>
+  );
+}
+
 export function Sidebar({
   guildId,
   modules,
@@ -123,7 +147,17 @@ export function Sidebar({
   }, []);
 
   useEffect(() => {
-    if (open) search.current?.focus({ preventScroll: true });
+    if (!open) return;
+    if (window.matchMedia('(pointer: fine)').matches) {
+      search.current?.focus({ preventScroll: true });
+      return;
+    }
+
+    const nav = search.current?.closest('nav');
+    const item =
+      nav?.querySelector<HTMLElement>('.sidebar-item[aria-current="page"]') ??
+      nav?.querySelector<HTMLElement>('.sidebar-item');
+    item?.focus({ preventScroll: true });
   }, [open]);
 
   const grouped = useMemo(() => {
@@ -175,10 +209,17 @@ export function Sidebar({
         <div className="sidebar-scroll scroll-y">
           {searching ? (
             <>
-              {hits.modules.length === 0 && hits.records.length === 0 ? (
-                <p className="sidebar-empty">
-                  No matching modules or settings for “{query.trim()}”
-                </p>
+              {hits.pages.length === 0 && hits.modules.length === 0 && hits.records.length === 0 ? (
+                <p className="sidebar-empty">No results for “{query.trim()}”</p>
+              ) : null}
+
+              {hits.pages.length > 0 ? (
+                <div className="sidebar-group">
+                  <p className="sidebar-group-label">Pages</p>
+                  {hits.pages.map((hit) => (
+                    <CommandsLink key={hit.link.id} guildId={guildId} hint={hit.hint} />
+                  ))}
+                </div>
               ) : null}
 
               {hits.modules.length > 0 ? (
@@ -229,6 +270,7 @@ export function Sidebar({
                   <Icon name="squares-four" size={16} className="sidebar-item-icon" />
                   <span className="sidebar-item-label">Overview</span>
                 </Link>
+                <CommandsLink guildId={guildId} />
               </div>
 
               {NAV_GROUPS.filter((group) => group.id !== 'records').map((group) => (

@@ -17,7 +17,7 @@ export function CamouflageArea({ form }: { form: HoneypotForm }): ReactElement {
       <Rows>
         <SettingRow
           title="Keep channels active"
-          description="Post a short message in bait channels once a day so they do not look abandoned."
+          description="Post a short message in bait channels once a day so they don’t look abandoned."
         >
           <Switch
             label="Keep channels active"
@@ -31,6 +31,7 @@ export function CamouflageArea({ form }: { form: HoneypotForm }): ReactElement {
         <SettingRow
           title="Rename channels daily"
           description="Change the ending of each bait channel’s name every day, such as -notes or -archive."
+          help="Proton needs the Manage Channels permission to rename them."
         >
           <Switch
             label="Rename channels daily"

@@ -17,19 +17,26 @@ import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AppealTokenRouteImport } from './routes/appeal/$token'
+import { Route as ApplyIndexRouteImport } from './routes/apply/index'
 import { Route as DashboardIndexRouteImport } from './routes/dashboard/index'
 import { Route as DashboardGuildIdRouteImport } from './routes/dashboard/$guildId'
 import { Route as VerifyTokenRouteImport } from './routes/verify/$token'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as ApplicationsGuildIdApplicationIdRouteImport } from './routes/applications/$guildId/$applicationId'
+import { Route as ApplyGuildIdIndexRouteImport } from './routes/apply/$guildId/index'
+import { Route as ApplyGuildIdFormIdRouteImport } from './routes/apply/$guildId/$formId'
 import { Route as DashboardGuildIdIndexRouteImport } from './routes/dashboard/$guildId/index'
+import { Route as DashboardGuildIdAchievementsRouteImport } from './routes/dashboard/$guildId/achievements'
 import { Route as DashboardGuildIdAfkRouteImport } from './routes/dashboard/$guildId/afk'
 import { Route as DashboardGuildIdAntinukeRouteImport } from './routes/dashboard/$guildId/antinuke'
 import { Route as DashboardGuildIdAntiraidRouteImport } from './routes/dashboard/$guildId/antiraid'
 import { Route as DashboardGuildIdAppealsRouteImport } from './routes/dashboard/$guildId/appeals'
+import { Route as DashboardGuildIdApplicationsRouteImport } from './routes/dashboard/$guildId/applications'
 import { Route as DashboardGuildIdAutomodRouteImport } from './routes/dashboard/$guildId/automod'
 import { Route as DashboardGuildIdBackupRouteImport } from './routes/dashboard/$guildId/backup'
 import { Route as DashboardGuildIdBrandingRouteImport } from './routes/dashboard/$guildId/branding'
 import { Route as DashboardGuildIdCasesRouteImport } from './routes/dashboard/$guildId/cases'
+import { Route as DashboardGuildIdCommandsRouteImport } from './routes/dashboard/$guildId/commands'
 import { Route as DashboardGuildIdCountersRouteImport } from './routes/dashboard/$guildId/counters'
 import { Route as DashboardGuildIdGiveawaysRouteImport } from './routes/dashboard/$guildId/giveaways'
 import { Route as DashboardGuildIdHoneypotRouteImport } from './routes/dashboard/$guildId/honeypot'
@@ -49,8 +56,13 @@ import { Route as DashboardGuildIdTempvcRouteImport } from './routes/dashboard/$
 import { Route as DashboardGuildIdTicketsRouteImport } from './routes/dashboard/$guildId/tickets'
 import { Route as DashboardGuildIdVerificationRouteImport } from './routes/dashboard/$guildId/verification'
 import { Route as DashboardGuildIdWelcomeRouteImport } from './routes/dashboard/$guildId/welcome'
+import { Route as ReviewGuildIdIndexRouteImport } from './routes/review/$guildId/index'
+import { Route as ReviewGuildIdApplicationIdRouteImport } from './routes/review/$guildId/$applicationId'
 import { Route as ApiAuthSigninDiscordRouteImport } from './routes/api/auth/signin/discord'
+import { Route as ApiGuildsGuildIdAchievementBadgesRouteImport } from './routes/api/guilds/$guildId/achievement-badges'
+import { Route as ApiGuildsGuildIdApplicationsExportRouteImport } from './routes/api/guilds/$guildId/applications-export'
 import { Route as ApiGuildsGuildIdCardPreviewRouteImport } from './routes/api/guilds/$guildId/card-preview'
+import { Route as ApiGuildsGuildIdAchievementBadgesAssetIdRouteImport } from './routes/api/guilds/$guildId/achievement-badges.$assetId'
 import { Route as ApiGuildsGuildIdBrandingKindRouteImport } from './routes/api/guilds/$guildId/branding.$kind'
 
 const IndexRoute = IndexRouteImport.update({
@@ -93,6 +105,11 @@ const AppealTokenRoute = AppealTokenRouteImport.update({
   path: '/appeal/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplyIndexRoute = ApplyIndexRouteImport.update({
+  id: '/apply/',
+  path: '/apply/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardIndexRoute = DashboardIndexRouteImport.update({
   id: '/dashboard/',
   path: '/dashboard/',
@@ -113,11 +130,33 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplicationsGuildIdApplicationIdRoute =
+  ApplicationsGuildIdApplicationIdRouteImport.update({
+    id: '/applications/$guildId/$applicationId',
+    path: '/applications/$guildId/$applicationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApplyGuildIdIndexRoute = ApplyGuildIdIndexRouteImport.update({
+  id: '/apply/$guildId/',
+  path: '/apply/$guildId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplyGuildIdFormIdRoute = ApplyGuildIdFormIdRouteImport.update({
+  id: '/apply/$guildId/$formId',
+  path: '/apply/$guildId/$formId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardGuildIdIndexRoute = DashboardGuildIdIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DashboardGuildIdRoute,
 } as any)
+const DashboardGuildIdAchievementsRoute =
+  DashboardGuildIdAchievementsRouteImport.update({
+    id: '/achievements',
+    path: '/achievements',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
 const DashboardGuildIdAfkRoute = DashboardGuildIdAfkRouteImport.update({
   id: '/afk',
   path: '/afk',
@@ -140,6 +179,12 @@ const DashboardGuildIdAppealsRoute = DashboardGuildIdAppealsRouteImport.update({
   path: '/appeals',
   getParentRoute: () => DashboardGuildIdRoute,
 } as any)
+const DashboardGuildIdApplicationsRoute =
+  DashboardGuildIdApplicationsRouteImport.update({
+    id: '/applications',
+    path: '/applications',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
 const DashboardGuildIdAutomodRoute = DashboardGuildIdAutomodRouteImport.update({
   id: '/automod',
   path: '/automod',
@@ -161,6 +206,12 @@ const DashboardGuildIdCasesRoute = DashboardGuildIdCasesRouteImport.update({
   path: '/cases',
   getParentRoute: () => DashboardGuildIdRoute,
 } as any)
+const DashboardGuildIdCommandsRoute =
+  DashboardGuildIdCommandsRouteImport.update({
+    id: '/commands',
+    path: '/commands',
+    getParentRoute: () => DashboardGuildIdRoute,
+  } as any)
 const DashboardGuildIdCountersRoute =
   DashboardGuildIdCountersRouteImport.update({
     id: '/counters',
@@ -270,16 +321,45 @@ const DashboardGuildIdWelcomeRoute = DashboardGuildIdWelcomeRouteImport.update({
   path: '/welcome',
   getParentRoute: () => DashboardGuildIdRoute,
 } as any)
+const ReviewGuildIdIndexRoute = ReviewGuildIdIndexRouteImport.update({
+  id: '/review/$guildId/',
+  path: '/review/$guildId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewGuildIdApplicationIdRoute =
+  ReviewGuildIdApplicationIdRouteImport.update({
+    id: '/review/$guildId/$applicationId',
+    path: '/review/$guildId/$applicationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthSigninDiscordRoute = ApiAuthSigninDiscordRouteImport.update({
   id: '/api/auth/signin/discord',
   path: '/api/auth/signin/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGuildsGuildIdAchievementBadgesRoute =
+  ApiGuildsGuildIdAchievementBadgesRouteImport.update({
+    id: '/api/guilds/$guildId/achievement-badges',
+    path: '/api/guilds/$guildId/achievement-badges',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiGuildsGuildIdApplicationsExportRoute =
+  ApiGuildsGuildIdApplicationsExportRouteImport.update({
+    id: '/api/guilds/$guildId/applications-export',
+    path: '/api/guilds/$guildId/applications-export',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiGuildsGuildIdCardPreviewRoute =
   ApiGuildsGuildIdCardPreviewRouteImport.update({
     id: '/api/guilds/$guildId/card-preview',
     path: '/api/guilds/$guildId/card-preview',
     getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiGuildsGuildIdAchievementBadgesAssetIdRoute =
+  ApiGuildsGuildIdAchievementBadgesAssetIdRouteImport.update({
+    id: '/$assetId',
+    path: '/$assetId',
+    getParentRoute: () => ApiGuildsGuildIdAchievementBadgesRoute,
   } as any)
 const ApiGuildsGuildIdBrandingKindRoute =
   ApiGuildsGuildIdBrandingKindRouteImport.update({
@@ -299,16 +379,22 @@ export interface FileRoutesByFullPath {
   '/appeal/$token': typeof AppealTokenRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/verify/$token': typeof VerifyTokenRoute
+  '/apply/': typeof ApplyIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/applications/$guildId/$applicationId': typeof ApplicationsGuildIdApplicationIdRoute
+  '/apply/$guildId/$formId': typeof ApplyGuildIdFormIdRoute
+  '/dashboard/$guildId/achievements': typeof DashboardGuildIdAchievementsRoute
   '/dashboard/$guildId/afk': typeof DashboardGuildIdAfkRoute
   '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
   '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
   '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
+  '/dashboard/$guildId/applications': typeof DashboardGuildIdApplicationsRoute
   '/dashboard/$guildId/automod': typeof DashboardGuildIdAutomodRoute
   '/dashboard/$guildId/backup': typeof DashboardGuildIdBackupRoute
   '/dashboard/$guildId/branding': typeof DashboardGuildIdBrandingRoute
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
+  '/dashboard/$guildId/commands': typeof DashboardGuildIdCommandsRoute
   '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
   '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
   '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
@@ -328,9 +414,15 @@ export interface FileRoutesByFullPath {
   '/dashboard/$guildId/tickets': typeof DashboardGuildIdTicketsRoute
   '/dashboard/$guildId/verification': typeof DashboardGuildIdVerificationRoute
   '/dashboard/$guildId/welcome': typeof DashboardGuildIdWelcomeRoute
+  '/review/$guildId/$applicationId': typeof ReviewGuildIdApplicationIdRoute
+  '/apply/$guildId/': typeof ApplyGuildIdIndexRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
+  '/review/$guildId/': typeof ReviewGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
+  '/api/guilds/$guildId/achievement-badges': typeof ApiGuildsGuildIdAchievementBadgesRouteWithChildren
+  '/api/guilds/$guildId/applications-export': typeof ApiGuildsGuildIdApplicationsExportRoute
   '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
+  '/api/guilds/$guildId/achievement-badges/$assetId': typeof ApiGuildsGuildIdAchievementBadgesAssetIdRoute
   '/api/guilds/$guildId/branding/$kind': typeof ApiGuildsGuildIdBrandingKindRoute
 }
 export interface FileRoutesByTo {
@@ -343,16 +435,22 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/appeal/$token': typeof AppealTokenRoute
   '/verify/$token': typeof VerifyTokenRoute
+  '/apply': typeof ApplyIndexRoute
   '/dashboard': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/applications/$guildId/$applicationId': typeof ApplicationsGuildIdApplicationIdRoute
+  '/apply/$guildId/$formId': typeof ApplyGuildIdFormIdRoute
+  '/dashboard/$guildId/achievements': typeof DashboardGuildIdAchievementsRoute
   '/dashboard/$guildId/afk': typeof DashboardGuildIdAfkRoute
   '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
   '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
   '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
+  '/dashboard/$guildId/applications': typeof DashboardGuildIdApplicationsRoute
   '/dashboard/$guildId/automod': typeof DashboardGuildIdAutomodRoute
   '/dashboard/$guildId/backup': typeof DashboardGuildIdBackupRoute
   '/dashboard/$guildId/branding': typeof DashboardGuildIdBrandingRoute
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
+  '/dashboard/$guildId/commands': typeof DashboardGuildIdCommandsRoute
   '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
   '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
   '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
@@ -372,9 +470,15 @@ export interface FileRoutesByTo {
   '/dashboard/$guildId/tickets': typeof DashboardGuildIdTicketsRoute
   '/dashboard/$guildId/verification': typeof DashboardGuildIdVerificationRoute
   '/dashboard/$guildId/welcome': typeof DashboardGuildIdWelcomeRoute
+  '/review/$guildId/$applicationId': typeof ReviewGuildIdApplicationIdRoute
+  '/apply/$guildId': typeof ApplyGuildIdIndexRoute
   '/dashboard/$guildId': typeof DashboardGuildIdIndexRoute
+  '/review/$guildId': typeof ReviewGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
+  '/api/guilds/$guildId/achievement-badges': typeof ApiGuildsGuildIdAchievementBadgesRouteWithChildren
+  '/api/guilds/$guildId/applications-export': typeof ApiGuildsGuildIdApplicationsExportRoute
   '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
+  '/api/guilds/$guildId/achievement-badges/$assetId': typeof ApiGuildsGuildIdAchievementBadgesAssetIdRoute
   '/api/guilds/$guildId/branding/$kind': typeof ApiGuildsGuildIdBrandingKindRoute
 }
 export interface FileRoutesById {
@@ -389,16 +493,22 @@ export interface FileRoutesById {
   '/appeal/$token': typeof AppealTokenRoute
   '/dashboard/$guildId': typeof DashboardGuildIdRouteWithChildren
   '/verify/$token': typeof VerifyTokenRoute
+  '/apply/': typeof ApplyIndexRoute
   '/dashboard/': typeof DashboardIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/applications/$guildId/$applicationId': typeof ApplicationsGuildIdApplicationIdRoute
+  '/apply/$guildId/$formId': typeof ApplyGuildIdFormIdRoute
+  '/dashboard/$guildId/achievements': typeof DashboardGuildIdAchievementsRoute
   '/dashboard/$guildId/afk': typeof DashboardGuildIdAfkRoute
   '/dashboard/$guildId/antinuke': typeof DashboardGuildIdAntinukeRoute
   '/dashboard/$guildId/antiraid': typeof DashboardGuildIdAntiraidRoute
   '/dashboard/$guildId/appeals': typeof DashboardGuildIdAppealsRoute
+  '/dashboard/$guildId/applications': typeof DashboardGuildIdApplicationsRoute
   '/dashboard/$guildId/automod': typeof DashboardGuildIdAutomodRoute
   '/dashboard/$guildId/backup': typeof DashboardGuildIdBackupRoute
   '/dashboard/$guildId/branding': typeof DashboardGuildIdBrandingRoute
   '/dashboard/$guildId/cases': typeof DashboardGuildIdCasesRoute
+  '/dashboard/$guildId/commands': typeof DashboardGuildIdCommandsRoute
   '/dashboard/$guildId/counters': typeof DashboardGuildIdCountersRoute
   '/dashboard/$guildId/giveaways': typeof DashboardGuildIdGiveawaysRoute
   '/dashboard/$guildId/honeypot': typeof DashboardGuildIdHoneypotRoute
@@ -418,9 +528,15 @@ export interface FileRoutesById {
   '/dashboard/$guildId/tickets': typeof DashboardGuildIdTicketsRoute
   '/dashboard/$guildId/verification': typeof DashboardGuildIdVerificationRoute
   '/dashboard/$guildId/welcome': typeof DashboardGuildIdWelcomeRoute
+  '/review/$guildId/$applicationId': typeof ReviewGuildIdApplicationIdRoute
+  '/apply/$guildId/': typeof ApplyGuildIdIndexRoute
   '/dashboard/$guildId/': typeof DashboardGuildIdIndexRoute
+  '/review/$guildId/': typeof ReviewGuildIdIndexRoute
   '/api/auth/signin/discord': typeof ApiAuthSigninDiscordRoute
+  '/api/guilds/$guildId/achievement-badges': typeof ApiGuildsGuildIdAchievementBadgesRouteWithChildren
+  '/api/guilds/$guildId/applications-export': typeof ApiGuildsGuildIdApplicationsExportRoute
   '/api/guilds/$guildId/card-preview': typeof ApiGuildsGuildIdCardPreviewRoute
+  '/api/guilds/$guildId/achievement-badges/$assetId': typeof ApiGuildsGuildIdAchievementBadgesAssetIdRoute
   '/api/guilds/$guildId/branding/$kind': typeof ApiGuildsGuildIdBrandingKindRoute
 }
 export interface FileRouteTypes {
@@ -436,16 +552,22 @@ export interface FileRouteTypes {
     | '/appeal/$token'
     | '/dashboard/$guildId'
     | '/verify/$token'
+    | '/apply/'
     | '/dashboard/'
     | '/api/auth/$'
+    | '/applications/$guildId/$applicationId'
+    | '/apply/$guildId/$formId'
+    | '/dashboard/$guildId/achievements'
     | '/dashboard/$guildId/afk'
     | '/dashboard/$guildId/antinuke'
     | '/dashboard/$guildId/antiraid'
     | '/dashboard/$guildId/appeals'
+    | '/dashboard/$guildId/applications'
     | '/dashboard/$guildId/automod'
     | '/dashboard/$guildId/backup'
     | '/dashboard/$guildId/branding'
     | '/dashboard/$guildId/cases'
+    | '/dashboard/$guildId/commands'
     | '/dashboard/$guildId/counters'
     | '/dashboard/$guildId/giveaways'
     | '/dashboard/$guildId/honeypot'
@@ -465,9 +587,15 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/tickets'
     | '/dashboard/$guildId/verification'
     | '/dashboard/$guildId/welcome'
+    | '/review/$guildId/$applicationId'
+    | '/apply/$guildId/'
     | '/dashboard/$guildId/'
+    | '/review/$guildId/'
     | '/api/auth/signin/discord'
+    | '/api/guilds/$guildId/achievement-badges'
+    | '/api/guilds/$guildId/applications-export'
     | '/api/guilds/$guildId/card-preview'
+    | '/api/guilds/$guildId/achievement-badges/$assetId'
     | '/api/guilds/$guildId/branding/$kind'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -480,16 +608,22 @@ export interface FileRouteTypes {
     | '/terms'
     | '/appeal/$token'
     | '/verify/$token'
+    | '/apply'
     | '/dashboard'
     | '/api/auth/$'
+    | '/applications/$guildId/$applicationId'
+    | '/apply/$guildId/$formId'
+    | '/dashboard/$guildId/achievements'
     | '/dashboard/$guildId/afk'
     | '/dashboard/$guildId/antinuke'
     | '/dashboard/$guildId/antiraid'
     | '/dashboard/$guildId/appeals'
+    | '/dashboard/$guildId/applications'
     | '/dashboard/$guildId/automod'
     | '/dashboard/$guildId/backup'
     | '/dashboard/$guildId/branding'
     | '/dashboard/$guildId/cases'
+    | '/dashboard/$guildId/commands'
     | '/dashboard/$guildId/counters'
     | '/dashboard/$guildId/giveaways'
     | '/dashboard/$guildId/honeypot'
@@ -509,9 +643,15 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/tickets'
     | '/dashboard/$guildId/verification'
     | '/dashboard/$guildId/welcome'
+    | '/review/$guildId/$applicationId'
+    | '/apply/$guildId'
     | '/dashboard/$guildId'
+    | '/review/$guildId'
     | '/api/auth/signin/discord'
+    | '/api/guilds/$guildId/achievement-badges'
+    | '/api/guilds/$guildId/applications-export'
     | '/api/guilds/$guildId/card-preview'
+    | '/api/guilds/$guildId/achievement-badges/$assetId'
     | '/api/guilds/$guildId/branding/$kind'
   id:
     | '__root__'
@@ -525,16 +665,22 @@ export interface FileRouteTypes {
     | '/appeal/$token'
     | '/dashboard/$guildId'
     | '/verify/$token'
+    | '/apply/'
     | '/dashboard/'
     | '/api/auth/$'
+    | '/applications/$guildId/$applicationId'
+    | '/apply/$guildId/$formId'
+    | '/dashboard/$guildId/achievements'
     | '/dashboard/$guildId/afk'
     | '/dashboard/$guildId/antinuke'
     | '/dashboard/$guildId/antiraid'
     | '/dashboard/$guildId/appeals'
+    | '/dashboard/$guildId/applications'
     | '/dashboard/$guildId/automod'
     | '/dashboard/$guildId/backup'
     | '/dashboard/$guildId/branding'
     | '/dashboard/$guildId/cases'
+    | '/dashboard/$guildId/commands'
     | '/dashboard/$guildId/counters'
     | '/dashboard/$guildId/giveaways'
     | '/dashboard/$guildId/honeypot'
@@ -554,9 +700,15 @@ export interface FileRouteTypes {
     | '/dashboard/$guildId/tickets'
     | '/dashboard/$guildId/verification'
     | '/dashboard/$guildId/welcome'
+    | '/review/$guildId/$applicationId'
+    | '/apply/$guildId/'
     | '/dashboard/$guildId/'
+    | '/review/$guildId/'
     | '/api/auth/signin/discord'
+    | '/api/guilds/$guildId/achievement-badges'
+    | '/api/guilds/$guildId/applications-export'
     | '/api/guilds/$guildId/card-preview'
+    | '/api/guilds/$guildId/achievement-badges/$assetId'
     | '/api/guilds/$guildId/branding/$kind'
   fileRoutesById: FileRoutesById
 }
@@ -571,9 +723,17 @@ export interface RootRouteChildren {
   AppealTokenRoute: typeof AppealTokenRoute
   DashboardGuildIdRoute: typeof DashboardGuildIdRouteWithChildren
   VerifyTokenRoute: typeof VerifyTokenRoute
+  ApplyIndexRoute: typeof ApplyIndexRoute
   DashboardIndexRoute: typeof DashboardIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApplicationsGuildIdApplicationIdRoute: typeof ApplicationsGuildIdApplicationIdRoute
+  ApplyGuildIdFormIdRoute: typeof ApplyGuildIdFormIdRoute
+  ReviewGuildIdApplicationIdRoute: typeof ReviewGuildIdApplicationIdRoute
+  ApplyGuildIdIndexRoute: typeof ApplyGuildIdIndexRoute
+  ReviewGuildIdIndexRoute: typeof ReviewGuildIdIndexRoute
   ApiAuthSigninDiscordRoute: typeof ApiAuthSigninDiscordRoute
+  ApiGuildsGuildIdAchievementBadgesRoute: typeof ApiGuildsGuildIdAchievementBadgesRouteWithChildren
+  ApiGuildsGuildIdApplicationsExportRoute: typeof ApiGuildsGuildIdApplicationsExportRoute
   ApiGuildsGuildIdCardPreviewRoute: typeof ApiGuildsGuildIdCardPreviewRoute
   ApiGuildsGuildIdBrandingKindRoute: typeof ApiGuildsGuildIdBrandingKindRoute
 }
@@ -636,6 +796,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppealTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apply/': {
+      id: '/apply/'
+      path: '/apply'
+      fullPath: '/apply/'
+      preLoaderRoute: typeof ApplyIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/': {
       id: '/dashboard/'
       path: '/dashboard'
@@ -664,11 +831,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/applications/$guildId/$applicationId': {
+      id: '/applications/$guildId/$applicationId'
+      path: '/applications/$guildId/$applicationId'
+      fullPath: '/applications/$guildId/$applicationId'
+      preLoaderRoute: typeof ApplicationsGuildIdApplicationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply/$guildId/': {
+      id: '/apply/$guildId/'
+      path: '/apply/$guildId'
+      fullPath: '/apply/$guildId/'
+      preLoaderRoute: typeof ApplyGuildIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apply/$guildId/$formId': {
+      id: '/apply/$guildId/$formId'
+      path: '/apply/$guildId/$formId'
+      fullPath: '/apply/$guildId/$formId'
+      preLoaderRoute: typeof ApplyGuildIdFormIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard/$guildId/': {
       id: '/dashboard/$guildId/'
       path: '/'
       fullPath: '/dashboard/$guildId/'
       preLoaderRoute: typeof DashboardGuildIdIndexRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/achievements': {
+      id: '/dashboard/$guildId/achievements'
+      path: '/achievements'
+      fullPath: '/dashboard/$guildId/achievements'
+      preLoaderRoute: typeof DashboardGuildIdAchievementsRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
     '/dashboard/$guildId/afk': {
@@ -699,6 +894,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardGuildIdAppealsRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
+    '/dashboard/$guildId/applications': {
+      id: '/dashboard/$guildId/applications'
+      path: '/applications'
+      fullPath: '/dashboard/$guildId/applications'
+      preLoaderRoute: typeof DashboardGuildIdApplicationsRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
     '/dashboard/$guildId/automod': {
       id: '/dashboard/$guildId/automod'
       path: '/automod'
@@ -725,6 +927,13 @@ declare module '@tanstack/react-router' {
       path: '/cases'
       fullPath: '/dashboard/$guildId/cases'
       preLoaderRoute: typeof DashboardGuildIdCasesRouteImport
+      parentRoute: typeof DashboardGuildIdRoute
+    }
+    '/dashboard/$guildId/commands': {
+      id: '/dashboard/$guildId/commands'
+      path: '/commands'
+      fullPath: '/dashboard/$guildId/commands'
+      preLoaderRoute: typeof DashboardGuildIdCommandsRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
     '/dashboard/$guildId/counters': {
@@ -860,11 +1069,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardGuildIdWelcomeRouteImport
       parentRoute: typeof DashboardGuildIdRoute
     }
+    '/review/$guildId/': {
+      id: '/review/$guildId/'
+      path: '/review/$guildId'
+      fullPath: '/review/$guildId/'
+      preLoaderRoute: typeof ReviewGuildIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/review/$guildId/$applicationId': {
+      id: '/review/$guildId/$applicationId'
+      path: '/review/$guildId/$applicationId'
+      fullPath: '/review/$guildId/$applicationId'
+      preLoaderRoute: typeof ReviewGuildIdApplicationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/signin/discord': {
       id: '/api/auth/signin/discord'
       path: '/api/auth/signin/discord'
       fullPath: '/api/auth/signin/discord'
       preLoaderRoute: typeof ApiAuthSigninDiscordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/guilds/$guildId/achievement-badges': {
+      id: '/api/guilds/$guildId/achievement-badges'
+      path: '/api/guilds/$guildId/achievement-badges'
+      fullPath: '/api/guilds/$guildId/achievement-badges'
+      preLoaderRoute: typeof ApiGuildsGuildIdAchievementBadgesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/guilds/$guildId/applications-export': {
+      id: '/api/guilds/$guildId/applications-export'
+      path: '/api/guilds/$guildId/applications-export'
+      fullPath: '/api/guilds/$guildId/applications-export'
+      preLoaderRoute: typeof ApiGuildsGuildIdApplicationsExportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/guilds/$guildId/card-preview': {
@@ -873,6 +1110,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/guilds/$guildId/card-preview'
       preLoaderRoute: typeof ApiGuildsGuildIdCardPreviewRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/guilds/$guildId/achievement-badges/$assetId': {
+      id: '/api/guilds/$guildId/achievement-badges/$assetId'
+      path: '/$assetId'
+      fullPath: '/api/guilds/$guildId/achievement-badges/$assetId'
+      preLoaderRoute: typeof ApiGuildsGuildIdAchievementBadgesAssetIdRouteImport
+      parentRoute: typeof ApiGuildsGuildIdAchievementBadgesRoute
     }
     '/api/guilds/$guildId/branding/$kind': {
       id: '/api/guilds/$guildId/branding/$kind'
@@ -885,14 +1129,17 @@ declare module '@tanstack/react-router' {
 }
 
 interface DashboardGuildIdRouteChildren {
+  DashboardGuildIdAchievementsRoute: typeof DashboardGuildIdAchievementsRoute
   DashboardGuildIdAfkRoute: typeof DashboardGuildIdAfkRoute
   DashboardGuildIdAntinukeRoute: typeof DashboardGuildIdAntinukeRoute
   DashboardGuildIdAntiraidRoute: typeof DashboardGuildIdAntiraidRoute
   DashboardGuildIdAppealsRoute: typeof DashboardGuildIdAppealsRoute
+  DashboardGuildIdApplicationsRoute: typeof DashboardGuildIdApplicationsRoute
   DashboardGuildIdAutomodRoute: typeof DashboardGuildIdAutomodRoute
   DashboardGuildIdBackupRoute: typeof DashboardGuildIdBackupRoute
   DashboardGuildIdBrandingRoute: typeof DashboardGuildIdBrandingRoute
   DashboardGuildIdCasesRoute: typeof DashboardGuildIdCasesRoute
+  DashboardGuildIdCommandsRoute: typeof DashboardGuildIdCommandsRoute
   DashboardGuildIdCountersRoute: typeof DashboardGuildIdCountersRoute
   DashboardGuildIdGiveawaysRoute: typeof DashboardGuildIdGiveawaysRoute
   DashboardGuildIdHoneypotRoute: typeof DashboardGuildIdHoneypotRoute
@@ -916,14 +1163,17 @@ interface DashboardGuildIdRouteChildren {
 }
 
 const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
+  DashboardGuildIdAchievementsRoute: DashboardGuildIdAchievementsRoute,
   DashboardGuildIdAfkRoute: DashboardGuildIdAfkRoute,
   DashboardGuildIdAntinukeRoute: DashboardGuildIdAntinukeRoute,
   DashboardGuildIdAntiraidRoute: DashboardGuildIdAntiraidRoute,
   DashboardGuildIdAppealsRoute: DashboardGuildIdAppealsRoute,
+  DashboardGuildIdApplicationsRoute: DashboardGuildIdApplicationsRoute,
   DashboardGuildIdAutomodRoute: DashboardGuildIdAutomodRoute,
   DashboardGuildIdBackupRoute: DashboardGuildIdBackupRoute,
   DashboardGuildIdBrandingRoute: DashboardGuildIdBrandingRoute,
   DashboardGuildIdCasesRoute: DashboardGuildIdCasesRoute,
+  DashboardGuildIdCommandsRoute: DashboardGuildIdCommandsRoute,
   DashboardGuildIdCountersRoute: DashboardGuildIdCountersRoute,
   DashboardGuildIdGiveawaysRoute: DashboardGuildIdGiveawaysRoute,
   DashboardGuildIdHoneypotRoute: DashboardGuildIdHoneypotRoute,
@@ -949,6 +1199,21 @@ const DashboardGuildIdRouteChildren: DashboardGuildIdRouteChildren = {
 const DashboardGuildIdRouteWithChildren =
   DashboardGuildIdRoute._addFileChildren(DashboardGuildIdRouteChildren)
 
+interface ApiGuildsGuildIdAchievementBadgesRouteChildren {
+  ApiGuildsGuildIdAchievementBadgesAssetIdRoute: typeof ApiGuildsGuildIdAchievementBadgesAssetIdRoute
+}
+
+const ApiGuildsGuildIdAchievementBadgesRouteChildren: ApiGuildsGuildIdAchievementBadgesRouteChildren =
+  {
+    ApiGuildsGuildIdAchievementBadgesAssetIdRoute:
+      ApiGuildsGuildIdAchievementBadgesAssetIdRoute,
+  }
+
+const ApiGuildsGuildIdAchievementBadgesRouteWithChildren =
+  ApiGuildsGuildIdAchievementBadgesRoute._addFileChildren(
+    ApiGuildsGuildIdAchievementBadgesRouteChildren,
+  )
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CommandsRoute: CommandsRoute,
@@ -960,9 +1225,19 @@ const rootRouteChildren: RootRouteChildren = {
   AppealTokenRoute: AppealTokenRoute,
   DashboardGuildIdRoute: DashboardGuildIdRouteWithChildren,
   VerifyTokenRoute: VerifyTokenRoute,
+  ApplyIndexRoute: ApplyIndexRoute,
   DashboardIndexRoute: DashboardIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApplicationsGuildIdApplicationIdRoute: ApplicationsGuildIdApplicationIdRoute,
+  ApplyGuildIdFormIdRoute: ApplyGuildIdFormIdRoute,
+  ReviewGuildIdApplicationIdRoute: ReviewGuildIdApplicationIdRoute,
+  ApplyGuildIdIndexRoute: ApplyGuildIdIndexRoute,
+  ReviewGuildIdIndexRoute: ReviewGuildIdIndexRoute,
   ApiAuthSigninDiscordRoute: ApiAuthSigninDiscordRoute,
+  ApiGuildsGuildIdAchievementBadgesRoute:
+    ApiGuildsGuildIdAchievementBadgesRouteWithChildren,
+  ApiGuildsGuildIdApplicationsExportRoute:
+    ApiGuildsGuildIdApplicationsExportRoute,
   ApiGuildsGuildIdCardPreviewRoute: ApiGuildsGuildIdCardPreviewRoute,
   ApiGuildsGuildIdBrandingKindRoute: ApiGuildsGuildIdBrandingKindRoute,
 }

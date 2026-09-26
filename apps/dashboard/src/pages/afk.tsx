@@ -135,7 +135,7 @@ export default function AfkPage({ guildId, meta, summary }: ModulePageProps): Re
 
       <Section
         label="When someone pings them"
-        intro="Proton answers by replying to the message, so it needs Send Messages and Read Message History in the channel. Without them it posts nothing."
+        help="Proton answers by replying to the message, so it needs Send Messages and Read Message History in that channel. Without them it posts nothing."
       >
         <Rows>
           <SettingRow
@@ -153,7 +153,8 @@ export default function AfkPage({ guildId, meta, summary }: ModulePageProps): Re
           {config.tidyReplies || tidyError !== undefined ? (
             <SettingRow
               title="Delete after"
-              description={`How long a reply stays, from ${humaniseDuration(TIDY_MIN)} to ${humaniseDuration(TIDY_MAX)}. Proton deletes replies in batches, so one can stay a little longer.`}
+              description={`How long a reply stays, from ${humaniseDuration(TIDY_MIN)} to ${humaniseDuration(TIDY_MAX)}.`}
+              help="Proton deletes replies in batches, so one can stay a little longer."
               note="Proton needs Manage Messages in the channel. Without it, the reply stays."
               error={tidyError}
             >
@@ -172,7 +173,8 @@ export default function AfkPage({ guildId, meta, summary }: ModulePageProps): Re
           <SettingRow
             stacked
             title="Channels without AFK replies"
-            description="Proton posts no AFK notices or welcome-back notes in these channels, including threads and posts inside them. Pings there still count toward the away member’s recap."
+            description="No AFK notices or welcome-back notes here, including in threads and posts."
+            help="Pings in these channels still count toward the away member’s recap."
             badge={
               config.ignoredChannelIds.length > 0 ? (
                 <LimitCounter
@@ -203,8 +205,20 @@ export default function AfkPage({ guildId, meta, summary }: ModulePageProps): Re
         <Rows>
           <SettingRow
             title="Add [AFK] tag"
-            description="Put [AFK] in front of a member’s nickname while they’re away. Proton puts their old nickname back when they return, unless they changed it in the meantime."
-            note="Proton needs Manage Nicknames. Discord never lets bots rename the server owner or anyone ranked at or above Proton, so Proton tells those members it couldn’t add the tag."
+            description="Put [AFK] in front of a member’s nickname while they’re away."
+            help={
+              <>
+                <p>
+                  Proton puts the old nickname back when they return, unless they changed it in the
+                  meantime.
+                </p>
+                <p>
+                  Discord never lets a bot rename the server owner, or anyone ranked at or above
+                  Proton. Those members are told the tag couldn’t be added.
+                </p>
+              </>
+            }
+            note="Proton needs Manage Nicknames."
             error={form.errorAt('nicknameTag')}
           >
             <Switch
@@ -230,7 +244,7 @@ export default function AfkPage({ guildId, meta, summary }: ModulePageProps): Re
           <SettingRow
             title="Recap by DM"
             description={`DM members up to ${RECAP_MAX} of the pings they missed, each with a link to the message.`}
-            note="Sent only when members come back themselves. If their DMs are closed, the welcome-back note says the list couldn’t be sent."
+            help="Sent only when members come back by themselves. If their DMs are closed, the welcome-back note says the list couldn’t be sent."
             error={form.errorAt('recap')}
           >
             <Switch

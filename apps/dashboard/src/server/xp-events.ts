@@ -56,8 +56,8 @@ async function callApi<TSchema extends z.ZodType>(
     throw new Error(
       refusal.success
         ? refusal.data.message
-        : `Proton's API did not answer (HTTP ${response.status}). Nothing was changed — try ` +
-            'again, and if it keeps happening the API is the part that is down, not Discord.',
+        : `Proton's API did not answer (HTTP ${response.status}). Nothing was changed. Try ` +
+            'again in a moment.',
     );
   }
 
@@ -65,8 +65,8 @@ async function callApi<TSchema extends z.ZodType>(
 
   if (!parsed.success) {
     throw new Error(
-      `the api answered ${path} with a shape this dashboard does not understand — ` +
-        `${parsed.error.issues.map((i) => `${i.path.join('.') || 'body'}: ${i.message}`).join('; ')}`,
+      `Proton's API sent a reply this page couldn't read. Reload the page and try again. (${path}: ` +
+        `${parsed.error.issues.map((i) => `${i.path.join('.') || 'body'} ${i.message}`).join('; ')})`,
     );
   }
 

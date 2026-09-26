@@ -6,7 +6,7 @@ import {
 } from '@proton/module-antinuke/config';
 import type { ReactElement } from 'react';
 import { CHANNEL_TYPE, ChannelPicker } from '../components/discord/channel-picker.tsx';
-import { DurationInput, humaniseDuration } from '../components/discord/inputs.tsx';
+import { DurationInput } from '../components/discord/inputs.tsx';
 import { useModuleForm } from '../components/module/form.ts';
 import {
   ModuleBanners,
@@ -84,12 +84,10 @@ const AFTER_STRIP_OPTIONS = AFTER_STRIP_ACTIONS.map((value) => ({
 }));
 
 const AFTER_STRIP_OUTCOME: Record<AfterStripAction, string> = {
-  none: 'Roles are removed and moderators are alerted. Nothing irreversible happens.',
+  none: 'Roles are removed and moderators are alerted.',
   kick: 'Roles are removed, then the member is kicked.',
   ban: 'Roles are removed, then the member is banned.',
 };
-
-
 
 export default function AntinukePage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: antinukeConfigSchema });
@@ -117,6 +115,7 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="No protection is in place, and no alerts are sent."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -127,23 +126,17 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
           </StatusBanner>
         ) : null}
 
-        {!enabled ? (
-          <StatusBanner tone="warning">
-            {meta.label} is disabled. No protection is in place, and no alerts are sent.
-          </StatusBanner>
-        ) : null}
-
         <ProtectionState guildId={guildId} enabled={enabled} />
       </ModuleBanners>
 
       <Section
         label="Maintenance mode"
-        intro="Maintenance mode pauses Anti-Nuke for a set time during bulk changes."
+        intro="Pause Anti-Nuke for a set time while you make bulk changes."
       >
         <Rows>
           <SettingRow
             title="Longest maintenance window"
-            description="Maintenance mode leaves the server unprotected for up to this long."
+            description="The server is unprotected for up to this long."
             error={form.errorAt('maintenanceMaxDuration')}
           >
             <DurationInput
@@ -160,6 +153,7 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
 
       <Section
         label="Thresholds"
+        help="Each member is counted separately, and Proton’s own actions never count."
       >
         <div className="matrix">
           <div className="antinuke-threshold antinuke-threshold-head" aria-hidden="true">
@@ -221,12 +215,12 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
 
       <Section
         label="Response"
-        intro="Proton removes all of the member’s roles, highest first. Each removal is recorded as a case with the full role list, so the roles can be restored exactly. If the server owner reaches a limit, Proton only reports it."
+        intro="Proton removes all of the member’s roles, highest first."
+        help="Each removal is recorded as a case with the full role list, so the roles can be restored exactly. If the server owner reaches a limit, Proton can only report it."
       >
         <Rows>
           <SettingRow
             title="After stripping roles"
-            description="Roles are always removed first, whatever this is set to."
             error={form.errorAt('afterStrip')}
             note={AFTER_STRIP_OUTCOME[config.afterStrip]}
           >
@@ -247,17 +241,14 @@ export default function AntinukePage({ guildId, meta, summary }: ModulePageProps
         </Rows>
       </Section>
 
-      <Section
-        label="Alerts"
-        intro="Proton posts one alert each time Anti-Nuke is triggered: what it detected, whose roles it removed, what it did next and anything that failed."
-      >
+      <Section label="Alerts">
         <Rows>
           <SettingRow
             title="Alert channel"
             error={form.errorAt('alertChannelId')}
             note={
               config.alertChannelId === undefined
-                ? 'No alert channel is set, so Anti-Nuke actions are recorded only in Proton’s logs.'
+                ? 'No alert channel is set, so no one is alerted when Anti-Nuke acts.'
                 : undefined
             }
           >

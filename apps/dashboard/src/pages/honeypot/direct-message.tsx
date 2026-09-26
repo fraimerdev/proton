@@ -13,8 +13,8 @@ import { configErrors, dmOffersAppeal, dmPreview, type HoneypotForm } from './sh
 const INVITE_URL_MAX = 512;
 
 const PLACEHOLDERS =
-  'Placeholders are filled in when the message is sent. Type { in a text or link to add one. ' +
-  'Proton adds recovery advice and any buttons below.';
+  'Type { in any text or link to add a placeholder. Proton adds account recovery advice and any ' +
+  'buttons below your layout.';
 
 const APPEAL_ADDRESS = 'The Appeal button gets a separate link for each caught member.';
 
@@ -23,13 +23,13 @@ const APPEAL_FROM_ESCALATION =
 
 const EMPTY = 'This layout sends nothing. Discord refuses an empty message.';
 
-const REFUSED = 'Once its placeholders are filled in, this message cannot be sent.';
+const REFUSED = 'With its placeholders filled in, this message can’t be sent.';
 
 const BUILT_IN =
-  'Once its placeholders are filled in, this layout cannot be sent, so Proton sends its own ' +
-  'wording instead, shown here. Check the links, and any text that could come out empty.';
+  'With its placeholders filled in, this layout can’t be sent, so Proton sends its own wording ' +
+  'instead (shown here). Check the links, and any text that could come out empty.';
 
-const NOT_SENT = 'The direct message is disabled. This layout is kept, but nothing is sent.';
+const NOT_SENT = 'The DM is off. Your layout is kept, but nothing is sent.';
 
 const FREE_TIER =
   'On the Free plan, Proton sends its own wording. Yours is saved and used once the server is on ' +
@@ -68,18 +68,21 @@ export function DirectMessageArea({
           <Section label="Delivery">
             <Rows>
               <SettingRow
-                title="Send a direct message"
+                title="Send a DM"
                 description="Sent just before Proton acts, while the member is still in the server."
               >
                 <Switch
-                  label="Send a direct message"
+                  label="Send a DM"
                   checked={config.sendDirectMessage}
                   onChange={(next) => form.setValue((c) => ({ ...c, sendDirectMessage: next }))}
                 />
               </SettingRow>
 
               {config.sendDirectMessage ? (
-                <SettingRow title="Offer a way back in">
+                <SettingRow
+                  title="Offer a way back in"
+                  description="Add a Rejoin button with your server invite."
+                >
                   <Switch
                     label="Offer a way back in"
                     checked={config.offerWayBackIn}
@@ -91,7 +94,7 @@ export function DirectMessageArea({
               {config.sendDirectMessage && config.offerWayBackIn ? (
                 <SettingRow
                   title="Invite link"
-                  description="The server invite behind the Rejoin button. Proton cannot create one."
+                  description="The server invite behind the Rejoin button. Proton can’t create one for you."
                   stacked
                   error={form.errorAt('inviteUrl')}
                 >

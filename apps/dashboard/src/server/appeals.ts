@@ -2,7 +2,7 @@ import { type AppealLinkClaims, readAppealLink } from '@proton/core';
 import type { AppealView } from '@proton/module-appeals/web';
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { ApiClient } from '../lib/api-client.ts';
+import { ApiClient, ApiError } from '../lib/api-client.ts';
 import { getDiscordUserId } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { requireSession } from '../middleware/guild-access.ts';
@@ -13,12 +13,11 @@ const api = new ApiClient(env.API_URL, env.API_SHARED_SECRET);
 // Expired, forged, malformed and signed-for-another-deployment all read the same to whoever holds
 // the link. Which one it is goes to the server log; telling the browser would help nobody but a
 // forger narrowing down a signature.
-const STALE =
-  'This appeal link is no longer valid. If a moderator sent you a newer one, open that instead.';
+const STALE = 'This appeal link has expired or is no longer valid.';
 
 const NOT_YOURS =
-  'This appeal link was issued to a different Discord account. Sign out, sign back in with the ' +
-  'account the link was sent to, and open it again.';
+  'This appeal link was sent to a different Discord account. Sign out, sign in with the account ' +
+  'that got the link, and open it again.';
 
 export type AppealOutcome =
   | { ok: true; guildId: string; view: AppealView }
@@ -64,10 +63,14 @@ export const openAppeal = createServerFn({ method: 'POST' })
       const { view, guildId } = await api.getAppealForm(read.claims);
       return { ok: true, guildId, view: view as AppealView };
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'guild_left') {
+        return { ok: false, reason: error.message };
+      }
+
       console.error(
         `an appeal form could not be read: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return { ok: false, reason: 'Proton could not reach this server. Try again in a moment.' };
+      return { ok: false, reason: 'Proton couldn’t load this appeal. Try again in a moment.' };
     }
   });
 
@@ -92,6 +95,17 @@ export const submitAppeal = createServerFn({ method: 'POST' })
       const reason = error instanceof Error ? error.message : String(error);
 
       console.warn(`an appeal was refused: ${reason}`);
-      return { ok: false, reason: `Your appeal was not sent. ${reason}` };
+
+      if (error instanceof ApiError && error.code === 'bus_unavailable') {
+        return { ok: false, reason };
+      }
+
+      return {
+        ok: false,
+        reason:
+          error instanceof ApiError && error.code !== undefined
+            ? `Your appeal wasn’t sent. ${reason}`
+            : 'Your appeal wasn’t sent, because Proton couldn’t be reached. Try again in a moment.',
+      };
     }
   });

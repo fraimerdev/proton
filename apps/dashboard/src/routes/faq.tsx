@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router';
-import type { ReactElement } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import type { ReactElement, ReactNode } from 'react';
 import { SitePage } from '../components/site/chrome.tsx';
 import { documentTitle } from '../lib/document-title.ts';
 
@@ -10,7 +10,7 @@ export const Route = createFileRoute('/faq')({
 
 const GROUPS: readonly {
   title: string;
-  items: readonly { question: string; answer: string }[];
+  items: readonly { question: string; answer: ReactNode }[];
 }[] = [
   {
     title: 'Getting started',
@@ -18,17 +18,17 @@ const GROUPS: readonly {
       {
         question: 'What permissions does Proton ask for?',
         answer:
-          'The invite asks for exactly the union of what the installed modules need, computed from the modules themselves rather than a hardcoded list. If a module needs a permission Proton does not have, its page says which one and where to grant it, instead of failing quietly.',
+          'The permissions its modules need between them, and nothing more. If a module can’t run because Proton is missing a permission, the module’s page says which one and where to grant it.',
       },
       {
         question: 'Which privileged intents does it need?',
         answer:
-          'Server Members and Message Content. Server Members is how join roles, verification and welcome messages see anybody arriving. Message Content is how automod, the phishing filter and the honeypot read a message to decide whether to act. Presence is not used.',
+          'Server Members and Message Content. Server Members lets modules like Join Roles, Verification and Welcomer see members arrive, and Message Content lets Automod and Phishing read a message to decide whether to act. Presence isn’t used.',
       },
       {
-        question: 'Nothing happened when I switched a module on.',
+        question: 'Nothing happened when I turned a module on.',
         answer:
-          'Open that module in the dashboard. If Proton cannot run it, a banner at the top of the page names the missing intent or permission and where it is missing. The server overview marks it Cannot run.',
+          'Open the module in the dashboard. If Proton can’t run it, a banner at the top of the page names the missing permission or intent and where it’s missing, and the server overview marks it Can’t run.',
       },
     ],
   },
@@ -38,17 +38,27 @@ const GROUPS: readonly {
       {
         question: 'Does Proton actually perform destructive actions?',
         answer:
-          'Yes. Every action is performed for real in every environment. The only preview is the one you ask for: restoring a backup shows you the exact changes and waits for you to confirm.',
+          'Yes. Bans, kicks, timeouts, and channel and role changes all happen for real. The only preview is when you restore a backup: Proton shows the exact changes and waits for you to confirm.',
       },
       {
         question: 'How do warnings turn into a timeout or a ban?',
         answer:
-          'Moderation has a warn escalation ladder. You set the rungs — three warnings becomes a one hour timeout, five becomes a day, and so on — and Proton counts within the window you choose. The ladder only acts while Moderation is enabled.',
+          'Through Moderation’s warn escalation. You choose how many warnings lead to a timeout, kick or ban and how far back they count, for example a 1 hour timeout at 3 warnings and a 1 day timeout at 5. It only acts while Moderation is on.',
       },
       {
         question: 'Can members appeal?',
         answer:
-          'Yes. Appeals are forms you build: your own questions, your own eligibility window, delivered to a review channel. A member gets a link rather than having to DM a moderator.',
+          'Members banned by Honeypot can. Its ban DM can link to an appeal form you build, and appeals arrive in a review channel where staff accept or turn them down.',
+      },
+      {
+        question: 'How do I set up user reports?',
+        answer:
+          'In the dashboard, open Moderation → User reports and choose Set up user reports. Five steps cover how members report, where reports go, reasons and evidence, and who can report and review. Nothing is turned on until the last step.',
+      },
+      {
+        question: 'Which permissions do user reports and punish settings need?',
+        answer:
+          'View Channel, Send Messages and Embed Links in the report channel, and Timeout Members, Kick Members or Ban Members for the punishments you use. Some options need more, such as Manage Messages to remove report reactions or to delete a reported message.',
       },
     ],
   },
@@ -57,13 +67,20 @@ const GROUPS: readonly {
     items: [
       {
         question: 'Does Proton store our messages?',
-        answer:
-          'Only if you switch it on. Message logging and ticket transcripts are off by default, and anything stored is deleted after 30 days. Reading a message to filter it does not store it.',
+        answer: (
+          <>
+            Only for features you turn on, such as message logs and ticket message capture, which
+            keep message text for 30 days. Incoming events, message text included, clear out of
+            Proton’s queue within about a day, or about a week if they fail to process. The{' '}
+            <Link to="/privacy">privacy policy</Link> lists what each feature keeps and for how
+            long.
+          </>
+        ),
       },
       {
         question: 'Who can see what changed in the dashboard?',
         answer:
-          'Every dashboard change is written to an audit record with who made it, when, and the before and after values.',
+          'Every change is recorded, but the record isn’t shown in the dashboard. Turn on Server Logs to post settings changes, and modules being turned on or off, to a channel you choose, with who made each one.',
       },
     ],
   },
@@ -73,10 +90,7 @@ function Faq(): ReactElement {
   return (
     <SitePage>
       <div className="site-section" style={{ paddingTop: 56, paddingBottom: 72 }}>
-        <h1 className="site-heading">Questions</h1>
-        <p className="site-lede">
-          The things administrators ask before and just after adding Proton.
-        </p>
+        <h1 className="site-heading">Frequently asked questions</h1>
 
         {GROUPS.map((group) => (
           <section className="section" key={group.title}>
@@ -86,7 +100,10 @@ function Faq(): ReactElement {
                 <div className="row stacked" key={item.question}>
                   <div className="row-main">
                     <h3 className="row-title">{item.question}</h3>
-                    <p className="row-description" style={{ maxWidth: '78ch', marginTop: 5 }}>
+                    <p
+                      className="row-description faq-answer"
+                      style={{ maxWidth: '78ch', marginTop: 5 }}
+                    >
                       {item.answer}
                     </p>
                   </div>

@@ -24,6 +24,12 @@ describe('searchModules', () => {
     expect(hit?.area).toBeUndefined();
   });
 
+  test('finds the Commands page by its name and by what it does', () => {
+    expect(searchModules('commands', []).pages.map((hit) => hit.link.id)).toEqual(['commands']);
+    expect(searchModules('rename', []).pages[0]?.hint).toBe('rename command');
+    expect(searchModules('captcha', []).pages).toEqual([]);
+  });
+
   test('keeps no area for an alias match', () => {
     const hit = hitFor('captcha', 'verification');
 

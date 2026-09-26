@@ -41,8 +41,9 @@ function Commands(): ReactElement {
       <div className="site-section" style={{ paddingTop: 56, paddingBottom: 72 }}>
         <h1 className="site-heading">Commands</h1>
         <p className="site-lede">
-          Every slash command Proton registers, generated from the modules themselves. A command
-          only appears in your server once its module is enabled.
+          Every slash command and Apps menu entry, grouped by module. A command appears in your
+          server once its module is on, and you can rename commands or turn them off on the
+          dashboard’s Commands page. /help stays available even with every module off.
         </p>
 
         <div style={{ margin: '24px 0 20px', maxWidth: 360 }}>
@@ -54,7 +55,7 @@ function Commands(): ReactElement {
         </div>
 
         {groups.length === 0 ? (
-          <EmptyState icon="magnifying-glass" title="No command matches that" inset />
+          <EmptyState icon="magnifying-glass" title="No commands match your search" inset />
         ) : null}
 
         {groups.map(([moduleId, commands]) => {

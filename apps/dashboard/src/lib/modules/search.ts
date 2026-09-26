@@ -1,5 +1,12 @@
 import type { ModuleSummary } from '@proton/core';
-import { MODULE_BY_ID, type ModuleMeta, RECORD_LINKS, type RecordLink } from './catalogue.ts';
+import {
+  MODULE_BY_ID,
+  type ModuleMeta,
+  PAGE_LINKS,
+  type PageLink,
+  RECORD_LINKS,
+  type RecordLink,
+} from './catalogue.ts';
 
 export interface ModuleHit {
   meta: ModuleMeta;
@@ -10,6 +17,12 @@ export interface ModuleHit {
 
 export interface RecordHit {
   link: RecordLink;
+  score: number;
+}
+
+export interface PageHit {
+  link: PageLink;
+  hint?: string | undefined;
   score: number;
 }
 
@@ -33,9 +46,25 @@ function score(haystack: string, needle: string): number {
 export function searchModules(
   query: string,
   summaries: readonly ModuleSummary[],
-): { modules: ModuleHit[]; records: RecordHit[] } {
+): { pages: PageHit[]; modules: ModuleHit[]; records: RecordHit[] } {
   const needle = normalise(query);
-  if (needle === '') return { modules: [], records: [] };
+  if (needle === '') return { pages: [], modules: [], records: [] };
+
+  const pages: PageHit[] = [];
+  for (const link of PAGE_LINKS) {
+    let best = score(normalise(link.label), needle);
+    let hint: string | undefined;
+
+    for (const alias of link.aliases) {
+      const aliasScore = score(normalise(alias), needle) - 5;
+      if (aliasScore > best) {
+        best = aliasScore;
+        hint = alias;
+      }
+    }
+
+    if (best > 0) pages.push({ link, hint, score: best });
+  }
 
   const byId = new Map(summaries.map((summary) => [summary.id, summary]));
   const modules: ModuleHit[] = [];
@@ -87,8 +116,9 @@ export function searchModules(
     if (best > 0) records.push({ link, score: best });
   }
 
+  pages.sort((a, b) => b.score - a.score);
   modules.sort((a, b) => b.score - a.score || a.meta.label.localeCompare(b.meta.label));
   records.sort((a, b) => b.score - a.score);
 
-  return { modules, records };
+  return { pages, modules, records };
 }

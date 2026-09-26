@@ -24,7 +24,7 @@ const ATTRIBUTION_OPTIONS: readonly SegmentedOption<Attribution>[] = [
 
 function outcome(config: SuggestionsConfig): string {
   return config.anonymous
-    ? 'Suggestions do not show who wrote them.'
+    ? 'Suggestions don’t show who wrote them.'
     : 'Suggestions show who wrote them.';
 }
 
@@ -32,7 +32,6 @@ function consequences(config: SuggestionsConfig): string[] {
   if (!config.anonymous) {
     return [
       'The post reads “Suggested by @member.”',
-      'Everyone who can see the channel can see who wrote each suggestion.',
       'Suggestions posted while this was Anonymous show their author after the next vote or ' +
         'decision.',
     ];
@@ -40,7 +39,7 @@ function consequences(config: SuggestionsConfig): string[] {
 
   const points = [
     'The post reads “Suggested anonymously.” instead of “Suggested by @member.”',
-    'Proton still stores the author and can tell staff on request.',
+    'Proton still stores who wrote each suggestion.',
     `Nothing in the channel${config.createThread ? ', the discussion thread' : ''} or this ` +
       'dashboard names the author.',
     'Suggestions posted before this change keep the author’s name until the next vote or ' +
@@ -48,7 +47,9 @@ function consequences(config: SuggestionsConfig): string[] {
   ];
 
   if (!config.allowSelfVote) {
-    points.push('Self-votes are still refused, because Proton knows who wrote each suggestion.');
+    points.push(
+      'Members still can’t vote on their own suggestions, because Proton knows who wrote them.',
+    );
   }
 
   return points;
@@ -131,7 +132,7 @@ export default function SuggestionsPage({ guildId, meta, summary }: ModulePagePr
             note={
               noChannel ? (
                 <span className="text-warning">
-                  No suggestion channel is set, so /suggest cannot post anything.
+                  No suggestion channel is set, so /suggest can’t post anything.
                 </span>
               ) : undefined
             }
@@ -151,7 +152,7 @@ export default function SuggestionsPage({ guildId, meta, summary }: ModulePagePr
 
           <SettingRow
             title="Create discussion threads"
-            description="Also needs Create Public Threads in the suggestion channel."
+            description="Open a thread under each suggestion. Needs Create Public Threads in the suggestion channel."
             error={form.errorAt('createThread')}
           >
             <Switch
@@ -170,7 +171,7 @@ export default function SuggestionsPage({ guildId, meta, summary }: ModulePagePr
         <Rows>
           <SettingRow
             title="Let members vote on their own suggestion"
-            description="If off, an author’s vote on their own suggestion is not counted, and Proton tells them so."
+            description="When off, Proton doesn’t count an author’s vote on their own suggestion."
             error={form.errorAt('allowSelfVote')}
           >
             <Switch

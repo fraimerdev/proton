@@ -21,8 +21,7 @@ import type { HoneypotForm } from './shape.ts';
 
 const BAIT_TYPES = [CHANNEL_TYPE.text, CHANNEL_TYPE.announcement] as const;
 
-const DUPLICATE =
-  'This channel is already a honeypot. Edit the row above instead of adding it twice.';
+const DUPLICATE = 'This channel is already a bait channel.';
 
 const UNKNOWN_CHANNEL = 'Channel not found. It may have been deleted or hidden from Proton.';
 
@@ -99,7 +98,7 @@ export function TrapsArea({
         ) : null}
 
         {config.channels.length === 0 ? (
-          <EmptyState icon="bug" title="No bait channels" inset>
+          <EmptyState icon="bug" title="No bait channels yet" inset>
             {EMPTY}
           </EmptyState>
         ) : (

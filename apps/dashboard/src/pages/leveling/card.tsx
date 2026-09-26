@@ -14,11 +14,11 @@ import { humaniseOption } from '../../lib/enum-labels.ts';
 const BACKGROUND_MAX = 2048;
 
 const OFF_HOST =
-  'Only images hosted on Discord’s CDN load. This address is not on cdn.discordapp.com or ' +
-  'media.discordapp.net, so the card will render without it.';
+  'This address isn’t on cdn.discordapp.com or media.discordapp.net, so the card won’t show it.';
 
-const RENDER_BUDGET =
-  'If the card takes longer than 2 seconds to render, /rank replies with plain numbers instead.';
+const RANK_CARD_OFF = 'While this is off, /rank can’t show anyone’s rank.';
+
+const BADGES_NOTE = 'Badges come from the Achievements module, when it’s on.';
 
 function PresetChoice({
   value,
@@ -85,6 +85,7 @@ export function RankCardArea({
       showRank: config.cardShowRank,
       showPercent: config.cardShowPercent,
       showTotalXp: config.cardShowTotalXp,
+      showBadges: config.cardShowBadges,
     }),
     [
       config.cardPreset,
@@ -93,6 +94,7 @@ export function RankCardArea({
       config.cardShowRank,
       config.cardShowPercent,
       config.cardShowTotalXp,
+      config.cardShowBadges,
     ],
   );
 
@@ -101,8 +103,9 @@ export function RankCardArea({
       <Rows>
         <SettingRow
           title="Rank card"
-          description="Reply to /rank with an image instead of plain numbers."
+          description="The image /rank replies with."
           error={form.errorAt('rankCard')}
+          note={config.rankCard ? undefined : RANK_CARD_OFF}
         >
           <Switch
             label="Rank card"
@@ -183,11 +186,23 @@ export function RankCardArea({
                 }
               />
             </SettingRow>
+
+            <SettingRow
+              title="Show achievement badges"
+              note={BADGES_NOTE}
+              error={form.errorAt('cardShowBadges')}
+            >
+              <Switch
+                label="Show achievement badges"
+                checked={config.cardShowBadges}
+                onChange={(cardShowBadges) =>
+                  form.setValue((current) => ({ ...current, cardShowBadges }))
+                }
+              />
+            </SettingRow>
           </>
         ) : null}
       </Rows>
-
-      {config.rankCard ? <p className="leveling-note">{RENDER_BUDGET}</p> : null}
     </Section>
   );
 

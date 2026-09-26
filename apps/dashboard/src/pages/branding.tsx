@@ -194,7 +194,7 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
       const body = (await saved.json()) as { hash?: unknown };
       if (typeof body.hash !== 'string') {
         throw new Error(
-          'The image was saved, but Proton did not confirm it. Reload the page to see it.',
+          'The image was saved, but Proton didn’t confirm it. Reload the page to see it.',
         );
       }
 
@@ -219,20 +219,14 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
   const nicknameNotes: string[] = [];
   if (impersonation !== null) {
     nicknameNotes.push(
-      `Proton will not use this nickname because ${impersonation}. Saving still applies everything else.`,
+      `Proton won’t use this nickname because ${impersonation}. Saving still applies everything else.`,
     );
   } else if (nickname !== '') {
     nicknameNotes.push(`${nickname.length} / ${NICKNAME_MAX}`);
   }
 
   const bio = config.bio ?? '';
-  const bioNotes =
-    bio === ''
-      ? []
-      : [
-          `${bio.length} / ${BIO_MAX}`,
-          `Discord documents no maximum for a server bio. ${BIO_MAX} characters is what its own app allows.`,
-        ];
+  const bioNotes = bio === '' ? [] : [`${bio.length} / ${BIO_MAX}`];
 
   return (
     <>
@@ -270,12 +264,12 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
           <>
             <Section
               label="Identity"
-              intro="Only the nickname and display name style need Change Nickname. The avatar, banner and bio still apply without it."
+              help="Only the nickname and display name style need Change Nickname. The avatar, banner and bio still apply without it."
             >
               <Rows>
                 <SettingRow
                   title="Server nickname"
-                  description={`Leave empty to use Proton’s own name. Up to ${NICKNAME_MAX} characters.`}
+                  description="Leave empty to use Proton’s own name."
                   error={form.errorAt('nickname')}
                   note={notes(nicknameNotes)}
                 >
@@ -300,7 +294,8 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
 
                 <SettingRow
                   title="Server bio"
-                  description={`Shown as “About me” on Proton’s profile. Up to ${BIO_MAX} characters.`}
+                  description="Shown as “About me” on Proton’s profile."
+                  help={`Discord doesn’t publish a limit for server bios. ${BIO_MAX} characters is what its app allows.`}
                   stacked
                   error={form.errorAt('bio')}
                   note={notes(bioNotes)}
@@ -374,16 +369,16 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
               </Rows>
             </Section>
 
-            <Section label="Switching off">
+            <Section label="Turning Branding off">
               <Rows>
                 <SettingRow
-                  title="Reset when disabled"
+                  title="Reset when turned off"
                   description="Remove the server nickname, avatar, banner, bio and display name style."
+                  help="Uploaded images and the display name style are kept, and applied again when Branding goes back on."
                   error={form.errorAt('restoreOnDisable')}
-                  note="Uploaded images and the display name style are kept and applied again when Branding is switched back on."
                 >
                   <Switch
-                    label="Reset when disabled"
+                    label="Reset when turned off"
                     checked={config.restoreOnDisable}
                     onChange={(next) =>
                       form.setValue((current) => ({ ...current, restoreOnDisable: next }))
@@ -428,30 +423,32 @@ export default function BrandingPage({ guildId, meta, summary }: ModulePageProps
 
       <ConfirmDialog
         open={clearing === 'avatar'}
+        icon="trash"
         danger
         title="Remove avatar?"
-        confirmLabel="Remove"
+        confirmLabel="Remove avatar"
         onClose={() => setClearing(null)}
         onConfirm={() => {
           setClearing(null);
           asset.mutate({ kind: 'avatar', file: null });
         }}
       >
-        The avatar is removed from Proton’s profile in Discord now.
+        This removes the avatar from Proton’s profile in Discord right away.
       </ConfirmDialog>
 
       <ConfirmDialog
         open={clearing === 'banner'}
+        icon="trash"
         danger
         title="Remove banner?"
-        confirmLabel="Remove"
+        confirmLabel="Remove banner"
         onClose={() => setClearing(null)}
         onConfirm={() => {
           setClearing(null);
           asset.mutate({ kind: 'banner', file: null });
         }}
       >
-        The banner is removed from Proton’s profile in Discord now.
+        This removes the banner from Proton’s profile in Discord right away.
       </ConfirmDialog>
     </>
   );

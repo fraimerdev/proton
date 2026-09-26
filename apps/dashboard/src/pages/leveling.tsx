@@ -20,9 +20,6 @@ import { LevelUpArea } from './leveling/levelup.tsx';
 import { RewardsArea } from './leveling/rewards.tsx';
 import { EarningArea } from './leveling/xp.tsx';
 
-const switchedOff = (name: string): string =>
-  `${name} is not enabled. You can turn it on using the switch at the top of the page.`;
-
 export default function LevelingPage({
   guildId,
   meta,
@@ -60,6 +57,7 @@ export default function LevelingPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but no one earns XP until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -69,8 +67,6 @@ export default function LevelingPage({
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {enabled ? null : <StatusBanner tone="neutral">{switchedOff(meta.label)}</StatusBanner>}
       </ModuleBanners>
 
       <LoadingBoundary key={area} label={`Loading ${meta.label}`} minHeight={320}>

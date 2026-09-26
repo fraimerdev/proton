@@ -50,7 +50,7 @@ export const KIND_LABEL: Record<Kind, string> = {
   text: 'Text',
   separator: 'Divider',
   gallery: 'Images',
-  section: 'Text with an accessory',
+  section: 'Text with image or button',
   row: 'Link buttons',
   container: 'Container',
 };
@@ -86,7 +86,7 @@ export const TOP_KINDS: readonly Kind[] = [
 export const CHILD_KINDS: readonly ChildKind[] = ['text', 'separator', 'gallery', 'section', 'row'];
 
 const SELECT_REFUSAL =
-  'This row is a dropdown, and Proton does not respond to a choice made in this message. Remove it.';
+  'This row is a dropdown, and Proton doesn’t respond to dropdowns in this message. Remove it.';
 
 export interface OverriddenText {
   content: string;
@@ -163,7 +163,7 @@ export function summariseComponent(component: V2Component): string | undefined {
         ? `${component.row.buttons.length} button${component.row.buttons.length === 1 ? '' : 's'}`
         : 'A dropdown';
     case 'container':
-      return `${component.children.length} inside`;
+      return `${component.children.length} item${component.children.length === 1 ? '' : 's'}`;
     case 'separator':
       return component.divider ? 'A line' : 'Blank space';
   }
@@ -408,12 +408,12 @@ function GalleryFields({
           <div
             // biome-ignore lint/suspicious/noArrayIndexKey: an image's position in the gallery is its identity
             key={index}
-            className={cx('inline inline-8 message-field-row', recent.enter(index))}
+            className={cx('inline inline-8 inline-wrap message-field-row', recent.enter(index))}
           >
             <MessageField
               placeholders={placeholders}
               path={`${at}.url`}
-              label={`Image ${index + 1} address`}
+              label={`Image ${index + 1} link`}
               link
               layout="grow"
               placeholder="https://…"
@@ -421,25 +421,27 @@ function GalleryFields({
               error={errors.at(`${at}.url`)}
               onChange={(next) => set(index, { ...item, url: next })}
             />
-            <MessageField
-              placeholders={placeholders}
-              path={`${at}.description`}
-              label={`Image ${index + 1} description`}
-              placeholder="Alt text"
-              width="md"
-              maxLength={MEDIA_DESCRIPTION_MAX}
-              value={item.description ?? ''}
-              error={errors.at(`${at}.description`)}
-              onChange={(next) => set(index, { ...item, description: blank(next) })}
-            />
-            <IconButton
-              icon="trash"
-              tone="ghost"
-              size="sm"
-              label={`Remove image ${index + 1}`}
-              disabled={items.length <= 1}
-              onClick={() => onChange(items.filter((_, position) => position !== index))}
-            />
+            <div className="inline inline-8 inline-wrap message-field-row">
+              <MessageField
+                placeholders={placeholders}
+                path={`${at}.description`}
+                label={`Image ${index + 1} description`}
+                placeholder="Alt text"
+                width="md"
+                maxLength={MEDIA_DESCRIPTION_MAX}
+                value={item.description ?? ''}
+                error={errors.at(`${at}.description`)}
+                onChange={(next) => set(index, { ...item, description: blank(next) })}
+              />
+              <IconButton
+                icon="trash"
+                tone="ghost"
+                size="sm"
+                label={`Remove image ${index + 1}`}
+                disabled={items.length <= 1}
+                onClick={() => onChange(items.filter((_, position) => position !== index))}
+              />
+            </div>
           </div>
         );
       })}
@@ -479,7 +481,7 @@ function AccessoryFields({
   return (
     <div className="stack stack-10 message-detail-wide">
       <SegmentedControl
-        label="Accessory"
+        label="Beside the text"
         value={accessory.kind}
         options={ACCESSORY}
         onChange={(next) => {
@@ -495,12 +497,12 @@ function AccessoryFields({
       {accessory.kind === 'thumbnail' ? (
         <div
           key="thumbnail"
-          className={cx('inline inline-8 message-field-row', switched && 'motion-fade')}
+          className={cx('inline inline-8 inline-wrap message-field-row', switched && 'motion-fade')}
         >
           <MessageField
             placeholders={placeholders}
             path={`${at}.url`}
-            label="Accessory image address"
+            label="Image link"
             link
             layout="grow"
             placeholder="https://…"
@@ -511,7 +513,7 @@ function AccessoryFields({
           <MessageField
             placeholders={placeholders}
             path={`${at}.description`}
-            label="Accessory image description"
+            label="Image description"
             placeholder="Alt text"
             width="md"
             maxLength={MEDIA_DESCRIPTION_MAX}
@@ -525,7 +527,7 @@ function AccessoryFields({
           <div className="inline inline-8 inline-wrap message-field-row">
             <EmojiPicker
               guildId={guildId}
-              label="Accessory button emoji"
+              label="Button emoji"
               value={accessory.button.emoji ?? null}
               onChange={(emoji) =>
                 onChange({
@@ -537,7 +539,7 @@ function AccessoryFields({
             <MessageField
               placeholders={placeholders}
               path={`${at}.button.label`}
-              label="Accessory button label"
+              label="Button label"
               placeholder="Label"
               width="md"
               maxLength={BUTTON_LABEL_MAX}
@@ -551,7 +553,7 @@ function AccessoryFields({
           <MessageField
             placeholders={placeholders}
             path={`${at}.button.url`}
-            label="Accessory button link"
+            label="Button link"
             link
             placeholder="https://…"
             maxLength={BUTTON_URL_MAX}
@@ -637,9 +639,9 @@ function ChildFields({
           />
         </div>
         <div className="row-detail-field">
-          <span className="row-detail-label">Space</span>
+          <span className="row-detail-label">Spacing</span>
           <SegmentedControl
-            label="Space"
+            label="Spacing"
             value={child.spacing}
             options={SPACING}
             onChange={(next) => onChange({ ...child, spacing: next })}
@@ -782,7 +784,7 @@ export function LayoutBuilder({
 
     return (
       <div className="stack stack-10 message-detail-wide">
-        <div className="inline inline-8">
+        <div className="inline inline-8 inline-wrap">
           <span className="row-detail-label">Edge colour</span>
           <OptionalColour
             label="Container edge colour"
@@ -848,7 +850,7 @@ export function LayoutBuilder({
         </div>
 
         <AddMenu
-          label="Add inside"
+          label="Add to container"
           kinds={CHILD_KINDS}
           onAdd={(kind) => {
             recent.mark(`${index}:${children.length}`);
@@ -865,6 +867,7 @@ export function LayoutBuilder({
         <Rows>
           {value.map((component, index) => {
             const error = errors.under(`${prefix}.${index}`);
+            const label = KIND_LABEL[component.kind];
 
             return (
               <ExpandableRow
@@ -872,7 +875,7 @@ export function LayoutBuilder({
                 key={index}
                 className={recent.enter(index, 'part')}
                 icon={KIND_ICON[component.kind]}
-                title={KIND_LABEL[component.kind]}
+                title={label}
                 defaultOpen={value.length === 1 || recent.has(index)}
                 description={
                   error !== undefined ? (
@@ -887,7 +890,7 @@ export function LayoutBuilder({
                       icon="caret-up"
                       tone="ghost"
                       size="sm"
-                      label="Move up"
+                      label={`Move ${label} up`}
                       disabled={index === 0}
                       onClick={() => onChange(moveItem(value, index, index - 1))}
                     />
@@ -895,7 +898,7 @@ export function LayoutBuilder({
                       icon="caret-down"
                       tone="ghost"
                       size="sm"
-                      label="Move down"
+                      label={`Move ${label} down`}
                       disabled={index === value.length - 1}
                       onClick={() => onChange(moveItem(value, index, index + 1))}
                     />
@@ -903,7 +906,7 @@ export function LayoutBuilder({
                       icon="trash"
                       tone="ghost"
                       size="sm"
-                      label="Remove"
+                      label={`Remove ${label}`}
                       onClick={() => onChange(value.filter((_, at) => at !== index))}
                     />
                   </>

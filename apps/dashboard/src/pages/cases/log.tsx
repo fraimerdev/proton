@@ -1,7 +1,16 @@
-import { ACTION_KINDS, type ActionKind, type CaseRecord, caseIdSchema } from '@proton/core';
+import {
+  ACTION_KINDS,
+  type ActionKind,
+  AUTO_REVERSAL_ACTOR,
+  type CaseRecord,
+  type CaseScope,
+  caseIdSchema,
+  MODERATION_ACTION_KINDS,
+} from '@proton/core';
 import { useQuery } from '@tanstack/react-query';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PROTON_AVATAR } from '../../components/discord/identity.tsx';
 import { MemberCell, MemberProvider, useMember } from '../../components/discord/member.tsx';
 import { useModuleNavigate, useModuleSearch } from '../../components/module/route.tsx';
 import {
@@ -10,32 +19,43 @@ import {
   Field,
   SearchField,
   Select,
+  type SelectOption,
   TextInput,
 } from '../../components/ui/controls.tsx';
 import { Spinner, StatusBanner } from '../../components/ui/feedback.tsx';
 import { Pair, Pairs } from '../../components/ui/layout.tsx';
-import { Dialog } from '../../components/ui/overlay.tsx';
+import { Dialog, useHydrated } from '../../components/ui/overlay.tsx';
 import { type Column, DataTable, Pagination } from '../../components/ui/table.tsx';
+import { SegmentedTabs } from '../../components/ui/tabs.tsx';
 import { readFailure } from '../../lib/errors.ts';
+import { MODULE_BY_ID } from '../../lib/modules/catalogue.ts';
 import { MEMBER_LOOKUP_MAX, membersQuery } from '../../lib/queries.ts';
-import { caseLinkFilter, casesQuery, DEFAULT_PAGE_SIZE, PAGE_SIZES } from './queries.ts';
+import { CaseEvidence } from './evidence.tsx';
+import {
+  CASE_LOCAL_DEFAULTS,
+  caseFilter,
+  caseLinkFilter,
+  caseStatus,
+  casesQuery,
+  PAGE_SIZES,
+} from './queries.ts';
 
 const SNOWFLAKE = /^\d{17,20}$/;
 
-// snowflakeSchema's own message, so the dashboard and the api refuse a bad id in the same words.
-const NOT_A_SNOWFLAKE = 'must be a Discord snowflake';
+const NOT_A_SNOWFLAKE = 'Enter a Discord user ID: a number of 17 to 20 digits.';
 
-// caseQuerySchema's refine, which reports against `from`.
-const RANGE_BACKWARDS = 'the start of the date range must not be after its end';
+const RANGE_BACKWARDS = 'Must be on or before the To date.';
 
 const KIND_LABELS: Record<ActionKind, string> = {
   send: 'Message sent',
   edit_message: 'Message edited',
   delete_message: 'Message deleted',
   add_reaction: 'Reaction added',
+  remove_reaction: 'Reaction removed',
   interaction_reply: 'Command reply',
   interaction_followup: 'Command follow-up',
-  warn: 'Warn',
+  interaction_edit_original: 'Command reply edited',
+  warn: 'Warning',
   unwarn: 'Warning removed',
   ban: 'Ban',
   unban: 'Unban',
@@ -64,27 +84,13 @@ const KIND_LABELS: Record<ActionKind, string> = {
   automod_rule_update: 'AutoMod rule updated',
   automod_rule_delete: 'AutoMod rule deleted',
   giveaway_draw: 'Giveaway drawn',
-  create_dm: 'Direct message opened',
+  create_dm: 'DM opened',
   set_bot_nickname: 'Proton nickname changed',
   set_bot_profile: 'Proton profile changed',
   set_bot_name_style: 'Proton name style changed',
 };
 
-const MODERATION_KINDS: readonly ActionKind[] = [
-  'warn',
-  'unwarn',
-  'ban',
-  'unban',
-  'kick',
-  'timeout',
-  'untimeout',
-];
-
 const CHANNEL_KINDS: readonly ActionKind[] = [
-  'slowmode',
-  'lockdown',
-  'unlock',
-  'purge',
   'create_channel',
   'edit_channel',
   'delete_channel',
@@ -105,27 +111,48 @@ const MESSAGE_KINDS: readonly ActionKind[] = [
 ];
 
 const NAMED = new Set<ActionKind>([
-  ...MODERATION_KINDS,
+  ...MODERATION_ACTION_KINDS,
   ...CHANNEL_KINDS,
   ...ROLE_KINDS,
   ...MESSAGE_KINDS,
 ]);
 
 const TYPE_GROUPS: readonly { label: string; kinds: readonly ActionKind[] }[] = [
-  { label: 'Moderation', kinds: MODERATION_KINDS },
+  { label: 'Moderation', kinds: MODERATION_ACTION_KINDS },
   { label: 'Channels', kinds: CHANNEL_KINDS },
   { label: 'Roles', kinds: ROLE_KINDS },
   { label: 'Messages', kinds: MESSAGE_KINDS },
   { label: 'Other', kinds: ACTION_KINDS.filter((kind) => !NAMED.has(kind)) },
 ];
 
+const TYPE_OPTIONS: Record<CaseScope, readonly SelectOption[]> = {
+  moderation: [
+    { value: '', label: 'Any moderation action' },
+    ...MODERATION_ACTION_KINDS.map((kind) => ({ value: kind, label: KIND_LABELS[kind] })),
+  ],
+  all: [
+    { value: '', label: 'Any action' },
+    ...TYPE_GROUPS.flatMap((group) =>
+      group.kinds.map((kind) => ({ value: kind, label: KIND_LABELS[kind], group: group.label })),
+    ),
+  ],
+};
+
+const SCOPE_TABS: readonly { id: CaseScope; label: string }[] = [
+  { id: 'moderation', label: 'Moderation' },
+  { id: 'all', label: 'All actions' },
+];
+
 const SEVERE = new Set<string>(['ban', 'kick']);
 const MARKED = new Set<string>(['warn', 'ban', 'kick', 'timeout']);
 
-const NOTHING_RECORDED = 'No cases';
+const NOTHING_RECORDED = 'No cases yet';
+const NO_MODERATION = 'No moderation cases yet';
 const NO_MATCH = 'No cases match these filters';
 
-const REHEARSAL = 'Discord was not called — the case was recorded as a rehearsal.';
+const REHEARSAL = 'Yes. Discord wasn’t called, so nothing changed in the server.';
+
+const MINUTE_MS = 60_000;
 
 function span(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000));
@@ -138,11 +165,32 @@ function span(ms: number): string {
   return `${Math.floor(seconds / 31_536_000)}y`;
 }
 
+function useNow(fetchedAt: number): number {
+  const hydrated = useHydrated();
+  const [now, setNow] = useState(Date.now);
+
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), MINUTE_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Not Date.now() while hydrating: the server may have read another minute, and React throws.
+  return hydrated ? now : fetchedAt;
+}
+
+function useLocalTime(iso: string | null): string | undefined {
+  const hydrated = useHydrated();
+  // The server renders in its own time zone; the viewer's is only known once hydrated.
+  return hydrated && iso !== null ? new Date(iso).toLocaleString() : undefined;
+}
+
 function When({ iso, now }: { iso: string; now: number }): ReactElement {
+  const title = useLocalTime(iso);
   const ms = now - Date.parse(iso);
 
   return (
-    <time dateTime={iso} title={new Date(iso).toLocaleString()}>
+    <time dateTime={iso} title={title}>
       {ms < -60_000 ? `in ${span(-ms)}` : ms < 60_000 ? 'just now' : `${span(ms)} ago`}
     </time>
   );
@@ -155,7 +203,9 @@ function caseIdIssue(value: string): string | undefined {
   return parsed.success ? undefined : parsed.error.issues[0]?.message;
 }
 
-function state(row: CaseRecord, now: number): ReactNode {
+function CaseState({ row, now }: { row: CaseRecord; now: number }): ReactElement | null {
+  const title = useLocalTime(row.expiresAt);
+
   if (row.revertedAt !== null) return <Badge tone="info">Reverted</Badge>;
   if (row.dryRun) return <Badge tone="neutral">Rehearsal</Badge>;
   if (row.expiresAt === null) return null;
@@ -165,10 +215,57 @@ function state(row: CaseRecord, now: number): ReactNode {
   if (at <= now) return <span className="text-muted">Expired</span>;
 
   return (
-    <time dateTime={row.expiresAt} title={new Date(at).toLocaleString()}>
-      Expires in {span(at - now)}
+    <time dateTime={row.expiresAt} title={title}>
+      {`Expires in ${span(at - now)}`}
     </time>
   );
+}
+
+function moduleLabel(moduleId: string): string {
+  return MODULE_BY_ID.get(moduleId)?.label ?? moduleId;
+}
+
+function isMember(id: string | null): id is string {
+  return id !== null && SNOWFLAKE.test(id);
+}
+
+export function moderatorOf(row: CaseRecord): string | null {
+  if (row.moderatorId !== null) return row.moderatorId;
+
+  // The api names every member who acted, so one it left out only set a duration that ran out.
+  return isMember(row.actorId) ? AUTO_REVERSAL_ACTOR : row.actorId;
+}
+
+export function requesterOf(row: CaseRecord): string | null {
+  const { actorId } = row;
+  const moderator = moderatorOf(row);
+
+  return isMember(actorId) && isMember(moderator) && actorId !== moderator ? actorId : null;
+}
+
+function Proton({ moduleId }: { moduleId: string }): ReactElement {
+  return (
+    <span className="user-cell">
+      <img className="user-avatar" src={PROTON_AVATAR} alt="" width={22} height={22} />
+      <span className="user-name">{`Proton · ${moduleLabel(moduleId)}`}</span>
+    </span>
+  );
+}
+
+function Actor({
+  id,
+  moduleId,
+  pending,
+  absent,
+}: {
+  id: string | null;
+  moduleId: string;
+  pending: boolean;
+  absent: string;
+}): ReactElement {
+  if (id !== null && !SNOWFLAKE.test(id)) return <Proton moduleId={moduleId} />;
+
+  return <Who id={id} pending={pending} absent={absent} />;
 }
 
 function Who({
@@ -183,7 +280,7 @@ function Who({
   const member = useMember(id);
 
   if (id === null) return <span className="text-muted">{absent}</span>;
-  // A pseudo-actor (proton:rules) is not a member: MemberCell would show it as one who has left.
+  // Not a member id: MemberCell would show it as someone who has left.
   if (!SNOWFLAKE.test(id)) return <span className="mono text-xs">{id}</span>;
   if (member === undefined && pending) return <Spinner label="Loading member" />;
 
@@ -263,31 +360,27 @@ export function CaseLogArea({
   const from = useTextFilter(() => true, resetPage);
   const to = useTextFilter(() => true, resetPage);
 
-  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [pageSize, setPageSize] = useState<number>(CASE_LOCAL_DEFAULTS.pageSize);
 
   const backwards =
     from.value !== undefined && to.value !== undefined && from.value > to.value
       ? RANGE_BACKWARDS
       : undefined;
 
-  const query = useQuery(
-    casesQuery(guildId, {
-      caseId,
-      type,
-      moderatorId: moderator.value,
-      targetId: target.value,
-      from: backwards === undefined ? from.value : undefined,
-      to: backwards === undefined ? to.value : undefined,
-      sort,
-      direction,
-      page,
-      pageSize,
-    }),
-  );
+  const filter = caseFilter(search, {
+    moderatorId: moderator.value,
+    targetId: target.value,
+    from: backwards === undefined ? from.value : undefined,
+    to: backwards === undefined ? to.value : undefined,
+    pageSize,
+  });
+  const { scope } = filter;
+
+  const query = useQuery(casesQuery(guildId, filter));
 
   const rows = query.data?.cases ?? [];
   const total = query.data?.total ?? 0;
-  const now = Date.now();
+  const now = useNow(query.dataUpdatedAt);
 
   const selected = rows.find((row) => row.id === search.id);
 
@@ -300,7 +393,7 @@ export function CaseLogArea({
 
     for (const row of rows) {
       add(row.targetId);
-      add(row.moderatorId);
+      add(moderatorOf(row));
     }
 
     if (selected !== undefined) {
@@ -329,7 +422,12 @@ export function CaseLogArea({
     target.clear();
     from.clear();
     to.clear();
-    go({ q: undefined, status: undefined, page: undefined });
+    go({ q: undefined, status: caseStatus({ scope, type: undefined }), page: undefined });
+  };
+
+  const showScope = (next: CaseScope): void => {
+    setIdDraft('');
+    go({ q: undefined, status: caseStatus({ scope: next, type }), page: undefined, id: undefined });
   };
 
   const columns: Column<CaseRecord>[] = [
@@ -359,20 +457,22 @@ export function CaseLogArea({
       header: 'Member',
       primary: true,
       width: 190,
-      cell: (row) => <Who id={row.targetId} pending={resolving} absent="—" />,
+      cell: (row) => <Who id={row.targetId} pending={resolving} absent="None" />,
     },
     {
       id: 'moderator',
       header: 'Moderator',
       width: 190,
-      cell: (row) => <Who id={row.moderatorId} pending={resolving} absent="—" />,
+      cell: (row) => (
+        <Actor id={moderatorOf(row)} moduleId={row.moduleId} pending={resolving} absent="Unknown" />
+      ),
     },
     {
       id: 'reason',
       header: 'Reason',
       cell: (row) =>
         row.reason === null ? (
-          <span className="text-muted">—</span>
+          <span className="text-muted">None</span>
         ) : (
           <span className="cases-reason" title={row.reason}>
             {row.reason}
@@ -383,7 +483,7 @@ export function CaseLogArea({
       id: 'module',
       header: 'Module',
       width: 116,
-      cell: (row) => <span className="text-muted">{row.moduleId}</span>,
+      cell: (row) => <span className="text-muted">{moduleLabel(row.moduleId)}</span>,
     },
     {
       id: 'createdAt',
@@ -396,7 +496,7 @@ export function CaseLogArea({
       id: 'state',
       header: 'Status',
       width: 132,
-      cell: (row) => state(row, now),
+      cell: (row) => <CaseState row={row} now={now} />,
     },
   ];
 
@@ -405,6 +505,12 @@ export function CaseLogArea({
       {/* biome-ignore lint/complexity/noUselessFragments: MemberProvider takes ReactElement, not a list that may hold nulls */}
       <>
         <div className="table-toolbar">
+          <SegmentedTabs
+            label="Actions shown"
+            items={SCOPE_TABS}
+            value={scope}
+            onChange={showScope}
+          />
           <SearchField
             className="cases-search"
             value={idDraft}
@@ -428,19 +534,13 @@ export function CaseLogArea({
                 {...props}
                 width="md"
                 value={type ?? ''}
-                options={[
-                  { value: '', label: 'Any type' },
-                  ...TYPE_GROUPS.flatMap((group) =>
-                    group.kinds.map((kind) => ({
-                      value: kind,
-                      label: KIND_LABELS[kind],
-                      group: group.label,
-                    })),
-                  ),
-                ]}
+                options={TYPE_OPTIONS[scope]}
                 onChange={(value) =>
                   go({
-                    status: value === '' ? undefined : value,
+                    status: caseStatus({
+                      scope,
+                      type: ACTION_KINDS.find((kind) => kind === value),
+                    }),
                     page: undefined,
                   })
                 }
@@ -476,30 +576,32 @@ export function CaseLogArea({
             )}
           </Field>
 
-          <Field label="From" error={backwards}>
-            {(props) => (
-              <TextInput
-                {...props}
-                type="date"
-                width="sm"
-                invalid={backwards !== undefined}
-                value={from.draft}
-                onChange={(event) => from.set(event.currentTarget.value)}
-              />
-            )}
-          </Field>
+          <div className="cases-range">
+            <Field label="From" error={backwards}>
+              {(props) => (
+                <TextInput
+                  {...props}
+                  type="date"
+                  width="sm"
+                  invalid={backwards !== undefined}
+                  value={from.draft}
+                  onChange={(event) => from.set(event.currentTarget.value)}
+                />
+              )}
+            </Field>
 
-          <Field label="To">
-            {(props) => (
-              <TextInput
-                {...props}
-                type="date"
-                width="sm"
-                value={to.draft}
-                onChange={(event) => to.set(event.currentTarget.value)}
-              />
-            )}
-          </Field>
+            <Field label="To">
+              {(props) => (
+                <TextInput
+                  {...props}
+                  type="date"
+                  width="sm"
+                  value={to.draft}
+                  onChange={(event) => to.set(event.currentTarget.value)}
+                />
+              )}
+            </Field>
+          </div>
         </div>
 
         {memberIds.length > MEMBER_LOOKUP_MAX ? (
@@ -536,7 +638,17 @@ export function CaseLogArea({
                       </Button>
                     ),
                   }
-                : { icon: 'clipboard-text', title: NOTHING_RECORDED }
+                : scope === 'moderation'
+                  ? {
+                      icon: 'clipboard-text',
+                      title: NO_MODERATION,
+                      body: (
+                        <Button size="sm" onClick={() => showScope('all')}>
+                          Show all actions
+                        </Button>
+                      ),
+                    }
+                  : { icon: 'clipboard-text', title: NOTHING_RECORDED }
             }
             footer={
               <>
@@ -549,7 +661,7 @@ export function CaseLogArea({
                 />
                 <Select
                   aria-label="Cases per page"
-                  width="xs"
+                  width="sm"
                   value={String(pageSize)}
                   options={PAGE_SIZES.map((size) => ({
                     value: String(size),
@@ -566,6 +678,7 @@ export function CaseLogArea({
         )}
 
         <CaseDialog
+          guildId={guildId}
           row={selected}
           now={now}
           pending={resolving}
@@ -577,24 +690,33 @@ export function CaseLogArea({
 }
 
 function CaseDialog({
-  row,
+  guildId,
+  row: current,
   now,
   pending,
   onClose,
 }: {
+  guildId: string;
   row: CaseRecord | undefined;
   now: number;
   pending: boolean;
   onClose: () => void;
 }): ReactElement | null {
+  const [kept, setKept] = useState(current);
+  if (current !== undefined && current !== kept) setKept(current);
+
+  const row = current ?? kept;
   if (!row) return null;
+
+  const requester = requesterOf(row);
 
   return (
     <Dialog
-      open
+      open={current !== undefined}
       onClose={onClose}
       title={`Case #${row.caseNumber}`}
-      size="wide"
+      size="large"
+      icon="clipboard-text"
       footer={<Button onClick={onClose}>Close</Button>}
     >
       <Pairs>
@@ -613,16 +735,18 @@ function CaseDialog({
           </span>
         </Pair>
         <Pair label="Type">{KIND_LABELS[row.type as ActionKind] ?? row.type}</Pair>
-        <Pair label="Module">{row.moduleId}</Pair>
+        <Pair label="Module">{moduleLabel(row.moduleId)}</Pair>
         <Pair label="Member">
           <Who id={row.targetId} pending={pending} absent="None" />
         </Pair>
         <Pair label="Moderator">
-          <Who id={row.moderatorId} pending={pending} absent="None" />
+          <Actor id={moderatorOf(row)} moduleId={row.moduleId} pending={pending} absent="Unknown" />
         </Pair>
-        <Pair label="Requested by">
-          <Who id={row.actorId} pending={pending} absent="—" />
-        </Pair>
+        {requester !== null ? (
+          <Pair label="Requested by">
+            <Who id={requester} pending={pending} absent="Unknown" />
+          </Pair>
+        ) : null}
         <Pair label="Reason">
           {row.reason === null ? (
             <span className="text-muted">No reason given</span>
@@ -647,11 +771,17 @@ function CaseDialog({
             <When iso={row.revertedAt} now={now} />
           )}
         </Pair>
-        <Pair label="Reverted by">
-          <Who id={row.revertedBy} pending={pending} absent="—" />
-        </Pair>
+        {row.revertedAt !== null ? (
+          <Pair label="Reverted by">
+            <Actor id={row.revertedBy} moduleId={row.moduleId} pending={pending} absent="Unknown" />
+          </Pair>
+        ) : null}
         <Pair label="Rehearsal">{row.dryRun ? REHEARSAL : 'No'}</Pair>
       </Pairs>
+
+      {MARKED.has(row.type) ? (
+        <CaseEvidence guildId={guildId} caseId={row.id} createdAt={row.createdAt} now={now} />
+      ) : null}
     </Dialog>
   );
 }

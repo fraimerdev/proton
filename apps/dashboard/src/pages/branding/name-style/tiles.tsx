@@ -3,6 +3,14 @@ import { useRef } from 'react';
 import { cx } from '../../../components/ui/controls.tsx';
 import { tileMove } from './shape.ts';
 
+function renderedColumns(tile: HTMLElement, fallback: number): number {
+  const grid = tile.parentElement;
+  if (grid === null) return fallback;
+
+  const tracks = getComputedStyle(grid).gridTemplateColumns;
+  return tracks === 'none' ? fallback : tracks.split(' ').length;
+}
+
 export function RadioTiles<T extends string | number>({
   labelledBy,
   options,
@@ -63,7 +71,13 @@ export function RadioTiles<T extends string | number>({
               if (!off) onChange(option);
             }}
             onKeyDown={(event) => {
-              const next = tileMove(index, event.key, options.length, columns, blocked);
+              const next = tileMove(
+                index,
+                event.key,
+                options.length,
+                renderedColumns(event.currentTarget, columns),
+                blocked,
+              );
               const target = next === null ? undefined : options[next];
               if (next === null || target === undefined) return;
 

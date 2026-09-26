@@ -18,8 +18,8 @@ import { NativeArea } from './automod/native.tsx';
 import { ResponseArea } from './automod/response.tsx';
 
 const SWITCHED_OFF =
-  'Settings are saved, but nothing runs until you switch it on. Proton has deleted the Discord ' +
-  'AutoMod rules it created.';
+  'Settings are saved, but messages aren’t checked until you turn it on. Proton’s Discord AutoMod ' +
+  'rules are removed while it’s off.';
 
 export default function AutomodPage({
   guildId,
@@ -33,18 +33,10 @@ export default function AutomodPage({
   const enabled = summary?.enabled ?? form.view.enabled;
 
   const notices =
-    toggle.failure !== null || !enabled ? (
-      <>
-        {toggle.failure !== null ? (
-          <StatusBanner tone="danger" live="assertive" onDismiss={toggle.dismiss}>
-            {toggle.failure}
-          </StatusBanner>
-        ) : null}
-
-        {!enabled ? (
-          <StatusBanner tone="neutral">{`${meta.label} is disabled. ${SWITCHED_OFF}`}</StatusBanner>
-        ) : null}
-      </>
+    toggle.failure !== null ? (
+      <StatusBanner tone="danger" live="assertive" onDismiss={toggle.dismiss}>
+        {toggle.failure}
+      </StatusBanner>
     ) : undefined;
 
   return (
@@ -68,6 +60,7 @@ export default function AutomodPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote={SWITCHED_OFF}
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -78,7 +71,7 @@ export default function AutomodPage({
       <LoadingBoundary key={area} label={`Loading ${meta.label}`} minHeight={320}>
         {area === 'checks' ? <ChecksArea form={form} /> : null}
         {area === 'response' ? <ResponseArea form={form} guildId={guildId} /> : null}
-        {area === 'native' ? <NativeArea form={form} guildId={guildId} enabled={enabled} /> : null}
+        {area === 'native' ? <NativeArea form={form} /> : null}
         {area === 'exemptions' ? <ExemptionsArea form={form} guildId={guildId} /> : null}
       </LoadingBoundary>
 

@@ -14,7 +14,7 @@ import {
   StatusBanner,
 } from '../../components/ui/feedback.tsx';
 import { Rows, Section } from '../../components/ui/layout.tsx';
-import { Dialog, MenuButton } from '../../components/ui/overlay.tsx';
+import { ConfirmDialog, Dialog, MenuButton } from '../../components/ui/overlay.tsx';
 import type { GuildChannel } from '../../lib/discord.ts';
 import { saveFailure } from '../../lib/errors.ts';
 import { ceilingNote, listCeiling } from '../../lib/limits.ts';
@@ -33,26 +33,23 @@ import {
 const NAME_MAX = 64;
 const SELECT_TYPES_MAX = 25;
 
-const EMPTY = 'Create a panel for members to open tickets from.';
-
-const ID_HINT = 'Letters, digits, dots, dashes and underscores. It cannot be changed later.';
+const ID_HINT =
+  'Lowercase letters, numbers, dots, dashes and underscores. It can’t be changed later.';
 
 const ID_TAKEN = 'Another panel already has this ID.';
 
 const ID_SHAPE =
-  'a panel id is letters, digits, dots, dashes and underscores, starting with a letter or digit.';
+  'A panel ID can use lowercase letters, numbers, dots, dashes and underscores, and must start ' +
+  'with a letter or number.';
 
 const SLUG = /^[a-z0-9][a-z0-9._-]*$/;
 
 const DIRTY = 'Save your changes first. Posting uses the last saved version.';
 
-const MODULE_OFF =
-  'Tickets is disabled in this server, so posting this would put a message nobody can use in ' +
-  'a channel. Switch it on first.';
+const MODULE_OFF = 'Tickets is off, so no one could use this panel. Turn Tickets on first.';
 
 const ASKED =
-  'Asked Proton to post it. Check the channel in Discord to confirm it appeared. Each post adds a ' +
-  'new message.';
+  'Asked Proton to post it. Check the channel in Discord. Each post adds a new message.';
 
 export function PanelsArea({
   form,
@@ -112,9 +109,16 @@ export function PanelsArea({
       ) : null}
 
       {config.panels.length === 0 ? (
-        <EmptyState icon="megaphone" title="No panels" inset>
-          {EMPTY}
-        </EmptyState>
+        <EmptyState
+          icon="megaphone"
+          title="No panels yet"
+          inset
+          actions={
+            <Button tone="primary" icon="plus" disabled={full} onClick={() => setCreating(true)}>
+              Create panel
+            </Button>
+          }
+        />
       ) : (
         <Rows>
           {config.panels.map((panel, index) => (
@@ -127,11 +131,7 @@ export function PanelsArea({
               moduleId={moduleId}
               enabled={enabled}
               overLimitReason={overLimit.ok ? undefined : overLimit.humanReason}
-              idError={
-                clashes.has(index)
-                  ? 'two panels cannot share an id — a button would not know which one it meant.'
-                  : form.errorAt(`panels.${index}.id`)
-              }
+              idError={clashes.has(index) ? ID_TAKEN : form.errorAt(`panels.${index}.id`)}
               channel={byId.get(panel.channelId)}
               onEdit={() => go({ id: panel.id })}
               onDuplicate={() => duplicate(panel)}
@@ -159,35 +159,25 @@ export function PanelsArea({
         }}
       />
 
-      {deleting !== null ? (
-        <Dialog
-          open
-          onClose={() => setDeleting(null)}
-          title={`Delete ${deleting.name}?`}
-          footer={
-            <>
-              <Button onClick={() => setDeleting(null)}>Cancel</Button>
-              <Button
-                tone="danger"
-                onClick={() => {
-                  setPanels(
-                    form,
-                    config.panels.filter((candidate) => candidate.id !== deleting.id),
-                  );
-                  setDeleting(null);
-                }}
-              >
-                Delete
-              </Button>
-            </>
-          }
-        >
-          <p className="text-secondary text-sm">
-            Messages already posted from this panel stay in their channels, but their buttons stop
-            working. Delete them in Discord.
-          </p>
-        </Dialog>
-      ) : null}
+      <ConfirmDialog
+        open={deleting !== null}
+        danger
+        icon="trash"
+        title={`Delete ${deleting?.name ?? 'panel'}?`}
+        confirmLabel="Delete panel"
+        onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          if (deleting === null) return;
+          setPanels(
+            form,
+            config.panels.filter((candidate) => candidate.id !== deleting.id),
+          );
+          setDeleting(null);
+        }}
+      >
+        Messages already posted from this panel stay in their channels, but their buttons stop
+        working. Delete those messages in Discord.
+      </ConfirmDialog>
     </Section>
   );
 }
@@ -233,7 +223,7 @@ function PanelRow({
   const refusal = !enabled
     ? MODULE_OFF
     : panel.channelId === ''
-      ? `'${panel.name}' has no channel to go in yet. Pick one and save, then post it.`
+      ? `${panel.name} has no channel yet. Choose one and save, then post it.`
       : carried.length === 0
         ? noTypesReason(panel)
         : overLimitReason !== undefined
@@ -281,7 +271,9 @@ function PanelRow({
               phase={phase}
               workingLabel="Posting…"
               requestedLabel={ASKED}
-              failedLabel={post.error ? saveFailure(post.error, 'Panel was not posted') : undefined}
+              failedLabel={
+                post.error ? saveFailure(post.error, 'Couldn’t post the panel') : undefined
+              }
             />
             <Button
               size="sm"
@@ -333,17 +325,17 @@ function CreatePanelDialog({
   const [id, setId] = useState('');
   const [touchedId, setTouchedId] = useState(false);
 
-  if (!open) return null;
-
   const proposed = touchedId ? id : slugify(name, PANEL_ID_MAX);
   const idError = !SLUG.test(proposed) ? ID_SHAPE : taken.has(proposed) ? ID_TAKEN : undefined;
   const nameError = name.trim() === '' ? 'Panel needs a name.' : undefined;
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       title="Create panel"
+      size="compact"
+      icon="megaphone"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -352,42 +344,42 @@ function CreatePanelDialog({
             disabled={idError !== undefined || nameError !== undefined}
             onClick={() => onCreate(proposed, name.trim())}
           >
-            Create
+            Create panel
           </Button>
         </>
       }
     >
-      <div className="stack stack-16">
-        <Field label="Name" error={nameError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              autoFocus
-              maxLength={NAME_MAX}
-              invalid={nameError !== undefined}
-              value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
-            />
-          )}
-        </Field>
+      <Field label="Name" error={nameError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            autoFocus
+            width="lg"
+            maxLength={NAME_MAX}
+            invalid={nameError !== undefined}
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        )}
+      </Field>
 
-        <Field label="ID" hint={ID_HINT} error={idError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              className="mono"
-              spellCheck={false}
-              maxLength={PANEL_ID_MAX}
-              invalid={idError !== undefined}
-              value={proposed}
-              onChange={(event) => {
-                setTouchedId(true);
-                setId(event.currentTarget.value);
-              }}
-            />
-          )}
-        </Field>
-      </div>
+      <Field label="ID" hint={ID_HINT} error={idError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            className="mono"
+            width="lg"
+            spellCheck={false}
+            maxLength={PANEL_ID_MAX}
+            invalid={idError !== undefined}
+            value={proposed}
+            onChange={(event) => {
+              setTouchedId(true);
+              setId(event.currentTarget.value);
+            }}
+          />
+        )}
+      </Field>
     </Dialog>
   );
 }

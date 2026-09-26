@@ -123,7 +123,7 @@ export function EmojiPicker({
             role="tab"
             className={cx('emoji-tab')}
             aria-selected={tab === 'server'}
-            title="Server emoji"
+            aria-label="Server emoji"
             onClick={() => setTab('server')}
           >
             <Icon name="users-three" size={15} />
@@ -133,7 +133,7 @@ export function EmojiPicker({
             role="tab"
             className="emoji-tab"
             aria-selected={tab === 'unicode'}
-            title="Standard emoji"
+            aria-label="Standard emoji"
             onClick={() => setTab('unicode')}
           >
             <Icon name="smiley" size={15} />
@@ -145,7 +145,7 @@ export function EmojiPicker({
               style={{ width: 'auto' }}
               onClick={() => pick(null)}
             >
-              Clear
+              Remove emoji
             </button>
           ) : null}
         </div>
@@ -160,7 +160,7 @@ export function EmojiPicker({
               <p className="picker-note">{readFailure(error, 'this server’s emoji')}</p>
             ) : server.length === 0 ? (
               <p className="picker-note">
-                {needle === '' ? 'No custom emoji.' : 'No matching emoji'}
+                {needle === '' ? 'This server has no custom emoji.' : 'No matching emoji'}
               </p>
             ) : (
               <div className="emoji-grid">
@@ -169,7 +169,6 @@ export function EmojiPicker({
                     key={emoji.id}
                     type="button"
                     className="emoji-cell"
-                    title={`:${emoji.name}:`}
                     onClick={() =>
                       pick({ id: emoji.id, name: emoji.name, animated: emoji.animated })
                     }

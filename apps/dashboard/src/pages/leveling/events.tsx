@@ -36,14 +36,17 @@ const TICK_MS = 15_000;
 const DEFAULT_EVENT_MULTIPLIER = 2;
 const DURATION_UNITS = ['m', 'h', 'd'] as const;
 
-const NO_EVENTS = 'Start one now, or schedule one for later.';
+const NO_EVENTS = 'Boost the XP everyone earns for a set time, starting now or later.';
+
+const MULTIPLIER_HELP =
+  'An event counts as one more multiplier. If a member’s role or channel has a higher one, that ' +
+  'wins, and ×0 still blocks XP.';
 
 const EVENTS_FULL =
   `This server has ${XP_EVENT_MAX_PENDING} XP events running or scheduled, the most it can ` +
   'have. End or cancel one to start another.';
 
-const SWITCHED_OFF =
-  'Leveling is disabled, so an XP event changes nothing until it is enabled.';
+const SWITCHED_OFF = 'Leveling is off, so an XP event changes nothing until you turn it on.';
 
 const MULTIPLIER_RANGE = `Enter a multiplier from ${XP_EVENT_MULTIPLIER_MIN} to ${XP_EVENT_MULTIPLIER_MAX}, in steps of 0.1.`;
 
@@ -134,7 +137,7 @@ function EventRow({
     onSuccess: () => onFailure(null),
     onError: (error: Error) =>
       onFailure(
-        refusal(error, running ? 'The XP event was not ended' : 'The XP event was not cancelled'),
+        refusal(error, running ? 'Couldn’t end the XP event' : 'Couldn’t cancel the XP event'),
       ),
   });
 
@@ -230,7 +233,7 @@ function Composer({
       setFailure(
         refusal(
           error,
-          mode === 'now' ? 'The XP event was not started' : 'The XP event was not scheduled',
+          mode === 'now' ? 'Couldn’t start the XP event' : 'Couldn’t schedule the XP event',
         ),
       ),
   });
@@ -298,7 +301,8 @@ function Composer({
     <Rows>
       <SettingRow
         title="Multiplier"
-        description="Every member earns this many times their usual XP while the event runs."
+        description="Members earn this many times their usual XP while the event runs."
+        help={MULTIPLIER_HELP}
         error={multiplierError}
       >
         <MultiplierStepper

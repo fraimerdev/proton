@@ -40,14 +40,14 @@ import {
 
 const NAME_MAX = 64;
 
-const EMPTY = 'Create a ticket type, then add it to a panel.';
-
-const ID_HINT = 'Letters, digits, dots, dashes and underscores. It cannot be changed later.';
+const ID_HINT =
+  'Lowercase letters, numbers, dots, dashes and underscores. It can’t be changed later.';
 
 const ID_TAKEN = 'Another ticket type already has this ID.';
 
 const ID_SHAPE =
-  'a ticket type id is letters, digits, dots, dashes and underscores, starting with a letter or digit.';
+  'A ticket type ID can use lowercase letters, numbers, dots, dashes and underscores, and must ' +
+  'start with a letter or number.';
 
 const SLUG = /^[a-z0-9][a-z0-9._-]*$/;
 
@@ -168,9 +168,16 @@ export function TypesArea({
       ) : null}
 
       {config.types.length === 0 ? (
-        <EmptyState icon="ticket" title="No ticket types" inset>
-          {EMPTY}
-        </EmptyState>
+        <EmptyState
+          icon="ticket"
+          title="No ticket types yet"
+          inset
+          actions={
+            <Button tone="primary" icon="plus" disabled={full} onClick={() => setCreating(true)}>
+              Create ticket type
+            </Button>
+          }
+        />
       ) : shown.length === 0 ? (
         <EmptyState icon="magnifying-glass" title="No matching ticket types" inset />
       ) : (
@@ -182,9 +189,7 @@ export function TypesArea({
             const category = type.categoryId === undefined ? undefined : byId.get(type.categoryId);
             const emoji = parseComponentEmoji(type.emoji);
             const clash = clashes.has(index);
-            const idError = clash
-              ? 'two ticket types cannot share an id — a button would not know which one it meant.'
-              : form.errorAt(`types.${index}.id`);
+            const idError = clash ? ID_TAKEN : form.errorAt(`types.${index}.id`);
 
             return (
               <div key={type.id}>
@@ -288,17 +293,17 @@ function CreateTypeDialog({
   const [id, setId] = useState('');
   const [touchedId, setTouchedId] = useState(false);
 
-  if (!open) return null;
-
   const proposed = touchedId ? id : slugify(name, TYPE_ID_MAX);
   const idError = !SLUG.test(proposed) ? ID_SHAPE : taken.has(proposed) ? ID_TAKEN : undefined;
   const nameError = name.trim() === '' ? 'Ticket type needs a name.' : undefined;
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       title="Create ticket type"
+      size="compact"
+      icon="ticket"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -307,42 +312,42 @@ function CreateTypeDialog({
             disabled={idError !== undefined || nameError !== undefined}
             onClick={() => onCreate(proposed, name.trim())}
           >
-            Create
+            Create ticket type
           </Button>
         </>
       }
     >
-      <div className="stack stack-16">
-        <Field label="Name" error={nameError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              autoFocus
-              maxLength={NAME_MAX}
-              invalid={nameError !== undefined}
-              value={name}
-              onChange={(event) => setName(event.currentTarget.value)}
-            />
-          )}
-        </Field>
+      <Field label="Name" error={nameError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            autoFocus
+            width="lg"
+            maxLength={NAME_MAX}
+            invalid={nameError !== undefined}
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+          />
+        )}
+      </Field>
 
-        <Field label="ID" hint={ID_HINT} error={idError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              className="mono"
-              spellCheck={false}
-              maxLength={TYPE_ID_MAX}
-              invalid={idError !== undefined}
-              value={proposed}
-              onChange={(event) => {
-                setTouchedId(true);
-                setId(event.currentTarget.value);
-              }}
-            />
-          )}
-        </Field>
-      </div>
+      <Field label="ID" hint={ID_HINT} error={idError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            className="mono"
+            width="lg"
+            spellCheck={false}
+            maxLength={TYPE_ID_MAX}
+            invalid={idError !== undefined}
+            value={proposed}
+            onChange={(event) => {
+              setTouchedId(true);
+              setId(event.currentTarget.value);
+            }}
+          />
+        )}
+      </Field>
     </Dialog>
   );
 }
@@ -358,34 +363,38 @@ function DeleteTypeDialog({
   onClose: () => void;
   onConfirm: (type: TicketType) => void;
 }): ReactElement | null {
-  if (type === null) return null;
-
   return (
     <Dialog
-      open
+      open={type !== null}
       onClose={onClose}
-      title={`Delete ${type.name}?`}
+      title={`Delete ${type?.name ?? 'ticket type'}?`}
+      size="compact"
+      icon="trash"
+      tone="danger"
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button tone="danger" onClick={() => onConfirm(type)}>
-            Delete
+          <Button
+            tone="danger"
+            onClick={() => {
+              if (type !== null) onConfirm(type);
+            }}
+          >
+            Delete ticket type
           </Button>
         </>
       }
     >
-      <div className="stack stack-12">
-        <p className="text-secondary text-sm">
-          Tickets already opened with this type are kept, and the queue shows the type’s ID instead
-          of its name.
+      <p className="text-secondary text-sm">
+        Tickets already opened with this type are kept, and the queue shows the type’s ID instead of
+        its name.
+      </p>
+      {panelNames.length > 0 ? (
+        <p className="text-warning text-sm">
+          Still offered on {panelNames.length} panel{panelNames.length === 1 ? '' : 's'}:{' '}
+          {panelNames.join(', ')}. It disappears from each one the next time that panel is posted.
         </p>
-        {panelNames.length > 0 ? (
-          <p className="text-warning text-sm">
-            Still offered on {panelNames.length} panel{panelNames.length === 1 ? '' : 's'}:{' '}
-            {panelNames.join(', ')}. It disappears from each one the next time that panel is posted.
-          </p>
-        ) : null}
-      </div>
+      ) : null}
     </Dialog>
   );
 }

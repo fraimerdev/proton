@@ -41,20 +41,20 @@ const CONTENT_MAX = 2000;
 const SLUG = /^[a-z0-9][a-z0-9._-]*$/;
 
 const ID_SHAPE =
-  'a quick response id is letters, digits, dots, dashes and underscores, starting with a letter or digit.';
+  'A quick response ID can use lowercase letters, numbers, dots, dashes and underscores, and must ' +
+  'start with a letter or number.';
 
-const ID_CLASH =
-  'two quick responses cannot share an id — a button would not know which one it meant.';
+const ID_CLASH = 'Another quick response already has this ID.';
 
-const NO_NAME = 'Quick response needs a name. Staff choose it by name in /ticket response.';
+const NO_NAME = 'Give this quick response a name. Staff pick it by name in /ticket response.';
 
-const NO_MESSAGE = 'Quick response needs a message.';
+const NO_MESSAGE = 'Give this quick response a message.';
 
 const EMPTY = 'Save replies staff can post in a ticket with /ticket response.';
 
 const MENTIONS_NOTE =
-  'Posted as a normal message. @everyone, @here and role mentions in it do not notify anyone, but ' +
-  'a mention of the ticket’s owner does.';
+  '@everyone, @here and role mentions in it don’t notify anyone, but a mention of the ticket’s ' +
+  'owner does.';
 
 const ID_NOTE = 'Staff can also type the ID in /ticket response. Changing it is safe.';
 
@@ -111,7 +111,16 @@ export function ResponsesArea({ form }: { form: TicketsForm }): ReactElement {
       />
 
       {config.responses.length === 0 ? (
-        <EmptyState icon="chat-centered-text" title="No quick responses" inset>
+        <EmptyState
+          icon="chat-centered-text"
+          title="No quick responses yet"
+          inset
+          actions={
+            <Button tone="primary" icon="plus" disabled={full} onClick={add}>
+              Create quick response
+            </Button>
+          }
+        >
           {EMPTY}
         </EmptyState>
       ) : shown.length === 0 ? (
@@ -265,7 +274,11 @@ function ResponseDetail({
             }
           />
           <PlaceholderSuggestions autocomplete={message.autocomplete} />
-          <TemplateDiagnostics id={message.diagnosticsId} diagnostics={message.diagnostics} />
+          <TemplateDiagnostics
+            id={message.diagnosticsId}
+            diagnostics={message.diagnostics}
+            autocomplete={message.autocomplete}
+          />
         </div>
       </DetailField>
       <p className={message.error === undefined ? 'row-note tickets-detail-note' : 'row-error'}>

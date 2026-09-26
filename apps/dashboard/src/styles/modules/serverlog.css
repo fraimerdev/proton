@@ -4,6 +4,14 @@
   flex-wrap: wrap;
 }
 
+.serverlog-route-row .matrix-row-main {
+  flex-basis: 0;
+}
+
+.serverlog-route-row .matrix-row-name {
+  flex: none;
+}
+
 .serverlog-route-row .matrix-row-control {
   width: 340px;
   gap: 10px;
@@ -21,6 +29,18 @@
   width: 250px;
   gap: 8px;
   align-items: center;
+}
+
+.serverlog-event-row .matrix-row-hint {
+  flex-shrink: 1000;
+}
+
+.serverlog-toolbar .search-field {
+  flex-basis: 200px;
+}
+
+.serverlog-toolbar > .select-trigger {
+  flex: none;
 }
 
 .serverlog-caret {
@@ -50,4 +70,25 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  .serverlog-route-row .matrix-row-control,
+  .serverlog-event-row .matrix-row-control {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .serverlog-chip-field {
+    min-width: min(252px, 100%);
+  }
+
+  .serverlog-toolbar .search-field {
+    flex-basis: 100%;
+  }
+
+  .serverlog-toolbar > .select-trigger {
+    flex: 1 1 calc(50% - 4px);
+  }
 }

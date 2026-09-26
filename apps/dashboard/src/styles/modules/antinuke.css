@@ -93,6 +93,19 @@
   }
 }
 
+@media (max-width: 640px) {
+  .antinuke-threshold-controls {
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    row-gap: 6px;
+    min-width: 0;
+  }
+
+  .antinuke-threshold-controls > .antinuke-threshold-cell:first-child {
+    max-width: calc(100% - 38px);
+  }
+}
+
 .antinuke-commands {
   display: flex;
   flex-direction: column;

@@ -94,6 +94,23 @@ function serverErrors(message: string): Map<string, string> {
   return errors;
 }
 
+export function unfixedIssues(
+  issues: Map<string, string>,
+  from: Record<string, unknown>,
+  next: Record<string, unknown>,
+): Map<string, string> {
+  if (issues.size === 0) return issues;
+
+  const fixed = [...issues.keys()].filter(
+    (path) => !sameJson(getAtPath(from, path), getAtPath(next, path)),
+  );
+  if (fixed.length === 0) return issues;
+
+  const kept = new Map(issues);
+  for (const path of fixed) kept.delete(path);
+  return kept;
+}
+
 interface Options<S extends z.ZodType> {
   guildId: string;
   moduleId: string;
@@ -130,19 +147,25 @@ export function useModuleForm<S extends z.ZodType>({
   const dirty = draft !== null && !sameJson(draft, baseline.current);
   const changedElsewhere = draft !== null && !sameJson(baseline.current, server);
 
+  // setValue is handed a whole config, so the paths it changed are a diff against this.
+  const latest = useRef<T>(value);
+  latest.current = value;
+
   const setValue = useCallback((next: T | ((current: T) => T)) => {
-    setDraft((current) => {
-      const from = current ?? baseline.current;
-      const resolved = typeof next === 'function' ? (next as (c: T) => T)(from) : next;
-      // Edited back to the baseline, the draft goes: a clean form has to adopt the server's copy.
-      return sameJson(resolved, baseline.current) ? null : resolved;
-    });
+    const from = latest.current;
+    const resolved = typeof next === 'function' ? (next as (c: T) => T)(from) : next;
+    latest.current = resolved;
+
+    // Edited back to the baseline, the draft goes: a clean form has to adopt the server's copy.
+    setDraft(sameJson(resolved, baseline.current) ? null : resolved);
+    setServerIssues((issues) => unfixedIssues(issues, from, resolved));
     setSaveError(null);
   }, []);
 
   const rebase = useCallback(
     (patch: (current: T) => T) => {
       baseline.current = patch(baseline.current);
+      latest.current = patch(latest.current);
       queryClient.setQueryData<ModuleConfigView>(
         queryKeys.moduleConfig(guildId, moduleId),
         (current) =>
@@ -225,11 +248,12 @@ export function useModuleForm<S extends z.ZodType>({
 
       // A save can change whether a module can run, and the overview and banners read the index.
       void queryClient.invalidateQueries({ queryKey: queryKeys.modules(guildId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.commands(guildId) });
     },
 
     onError: (error: Error) => {
       setServerIssues(serverErrors(error.message));
-      setSaveError(saveFailure(error, 'Your changes were not saved'));
+      setSaveError(saveFailure(error, 'Couldn’t save your changes'));
       setFailures((count) => count + 1);
     },
   });

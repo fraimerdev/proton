@@ -78,25 +78,138 @@ export function ChatCodeBlock({ children }: { children: ReactNode }): ReactEleme
   return <div className="dc-codeblock">{children}</div>;
 }
 
-export function ChatSeparator(): ReactElement {
-  return <div className="dc-separator" />;
+export function ChatSeparator({
+  invisible = false,
+  small = false,
+}: {
+  invisible?: boolean | undefined;
+  small?: boolean | undefined;
+}): ReactElement {
+  return <div className={cx('dc-separator', invisible && 'invisible', small && 'small')} />;
+}
+
+export function ChatImage({
+  src,
+  width,
+  height,
+}: {
+  src: string;
+  width: number;
+  height: number;
+}): ReactElement {
+  return <img className="landing-attachment" src={src} width={width} height={height} alt="" />;
+}
+
+const STATUS = {
+  success: { colour: '#57f287', emoji: '1543940009923448904', name: 'checkmark' },
+  error: { colour: '#ed4245', emoji: '1543940060506751106', name: 'xmark' },
+} as const;
+
+export type StatusKind = keyof typeof STATUS;
+
+export function StatusEmbed({
+  kind,
+  children,
+}: {
+  kind: StatusKind;
+  children: ReactNode;
+}): ReactElement {
+  const status = STATUS[kind];
+
+  return (
+    <ChatEmbed
+      color={status.colour}
+      description={
+        <>
+          <img
+            className="landing-status-emoji"
+            src={`https://cdn.discordapp.com/emojis/${status.emoji}.webp?size=44`}
+            alt={`:${status.name}:`}
+            width={22}
+            height={22}
+            loading="lazy"
+          />{' '}
+          {children}
+        </>
+      }
+    />
+  );
+}
+
+export function ChatThinking(): ReactElement {
+  return (
+    <div className="dc-content landing-thinking">
+      Proton is thinking
+      <span className="landing-thinking-dots" aria-hidden>
+        <span />
+        <span />
+        <span />
+      </span>
+    </div>
+  );
+}
+
+function Ephemeral({ onDismiss }: { onDismiss?: (() => void) | undefined }): ReactElement {
+  return (
+    <div className="landing-ephemeral">
+      <Icon name="eye" size={16} />
+      Only you can see this •
+      {onDismiss ? (
+        <button type="button" className="landing-ephemeral-dismiss" onClick={onDismiss}>
+          Dismiss message
+        </button>
+      ) : (
+        <span className="landing-ephemeral-dismiss">Dismiss message</span>
+      )}
+    </div>
+  );
+}
+
+function MemberAvatar({
+  name,
+  tone,
+  src,
+  size = 'full',
+}: {
+  name: string;
+  tone: AvatarTone;
+  src?: string | undefined;
+  size?: 'full' | 'mini' | undefined;
+}): ReactElement {
+  if (src === undefined) return <Avatar name={name} tone={tone} size={size} />;
+
+  const pixels = size === 'full' ? 40 : 16;
+
+  return (
+    <img
+      className={size === 'full' ? 'dc-avatar' : 'landing-avatar-mini landing-avatar-image'}
+      src={src}
+      alt=""
+      width={pixels}
+      height={pixels}
+    />
+  );
 }
 
 export function ChatMessage({
   author = '',
   tone = 'blurple',
+  avatar,
   proton = false,
   continued = false,
   time = '',
   command,
+  ephemeral,
   children,
 }: {
   author?: string | undefined;
   tone?: AvatarTone | undefined;
+  avatar?: string | undefined;
   proton?: boolean | undefined;
   continued?: boolean | undefined;
   time?: string | undefined;
-  command?: { user: string; name: string; tone: AvatarTone } | undefined;
+  command?: { user: string; name: string; tone: AvatarTone; avatar?: string } | undefined;
+  ephemeral?: boolean | { onDismiss: () => void } | undefined;
   children: ReactNode;
 }): ReactElement {
   if (continued) {
@@ -113,7 +226,14 @@ export function ChatMessage({
         <CommandLine
           user={command.user}
           command={command.name}
-          avatar={<Avatar name={command.user} tone={command.tone} size="mini" />}
+          avatar={
+            <MemberAvatar
+              name={command.user}
+              tone={command.tone}
+              src={command.avatar}
+              size="mini"
+            />
+          }
         />
       ) : null}
 
@@ -121,7 +241,7 @@ export function ChatMessage({
         {proton ? (
           <img className="dc-avatar" src={PROTON_AVATAR} alt="" width={40} height={40} />
         ) : (
-          <Avatar name={author} tone={tone} />
+          <MemberAvatar name={author} tone={tone} src={avatar} />
         )}
 
         <div className="dc-body">
@@ -131,6 +251,9 @@ export function ChatMessage({
             <span className="dc-timestamp">{time}</span>
           </div>
           {children}
+          {ephemeral ? (
+            <Ephemeral onDismiss={ephemeral === true ? undefined : ephemeral.onDismiss} />
+          ) : null}
         </div>
       </div>
     </div>
@@ -202,18 +325,30 @@ export function ChatRow({ children }: { children: ReactNode }): ReactElement {
 export function ChatButton({
   tone,
   emoji,
+  onPress,
   children,
 }: {
   tone?: 'secondary' | 'success' | 'danger' | undefined;
   emoji?: string | undefined;
+  onPress?: (() => void) | undefined;
   children: ReactNode;
 }): ReactElement {
-  return (
-    <span className={cx('dc-button', tone)}>
+  const face = (
+    <>
       {emoji !== undefined ? <span className="dc-button-emoji">{emoji}</span> : null}
       {children}
-    </span>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <button type="button" className={cx('dc-button', 'landing-press', tone)} onClick={onPress}>
+        {face}
+      </button>
+    );
+  }
+
+  return <span className={cx('dc-button', tone)}>{face}</span>;
 }
 
 export function ChatHeader({ channel, topic }: { channel: string; topic?: string }): ReactElement {

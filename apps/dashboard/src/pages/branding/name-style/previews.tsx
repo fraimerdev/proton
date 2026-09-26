@@ -54,7 +54,7 @@ function notesFor(
 
   if (failed) {
     notes.push(
-      `Proton could not load the ${face.drawnIn} file, so this preview uses its fallback font.`,
+      `Proton couldn’t load the ${face.drawnIn} file, so this preview uses its fallback font.`,
     );
   }
 
@@ -67,7 +67,7 @@ function notesFor(
 
     notes.push(
       face.status === 'bundled'
-        ? `${face.drawnIn} has no ${listOf(glyphs)}, so Discord draws ${one ? 'it' : 'them'} in a different font and ${one ? 'it' : 'they'} will not match.`
+        ? `${face.drawnIn} has no ${listOf(glyphs)}, so Discord draws ${one ? 'it' : 'them'} in a different font and ${one ? 'it' : 'they'} won’t match.`
         : `${face.drawnIn} has no ${listOf(glyphs)}, so this preview draws ${one ? 'it' : 'them'} in a fallback font.`,
     );
   }

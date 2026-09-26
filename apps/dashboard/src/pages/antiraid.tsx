@@ -22,9 +22,9 @@ import {
 } from '../components/module/page.tsx';
 import type { ModulePageProps } from '../components/module/registry.ts';
 import { useModuleToggle } from '../components/module/toggle.ts';
-import { Badge, NumberStepper, Select } from '../components/ui/controls.tsx';
+import { NumberStepper, Select } from '../components/ui/controls.tsx';
 import { StatusBanner } from '../components/ui/feedback.tsx';
-import { Panel, Rows, Section, SettingRow } from '../components/ui/layout.tsx';
+import { Rows, Section, SettingRow } from '../components/ui/layout.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
 import { ACTION_LABELS } from '../lib/enum-labels.ts';
 
@@ -42,20 +42,20 @@ const RESPONSE_OUTCOMES: Record<RaidResponse, string> = {
   kick: 'kicked',
 };
 
-const RESPONSE_ACTIVE: Record<RaidResponse, string> = {
-  verify: 'gives them the verification role',
-  quarantine: 'quarantines them for moderators to review',
-  kick: 'kicks them',
-};
-
 const ROLE_UNSET: Record<'verify' | 'quarantine', string> = {
   verify:
-    'No verification role is set, so Proton cannot act on flagged members. Set one, or choose an ' +
-    'action that needs no role.',
+    'No verification role is set, so Proton can’t act on flagged members. Set one, or choose an ' +
+    'action that doesn’t need a role.',
   quarantine:
-    'No quarantine role is set, so Proton cannot act on flagged members. Set one, or choose an ' +
-    'action that needs no role.',
+    'No quarantine role is set, so Proton can’t act on flagged members. Set one, or choose an ' +
+    'action that doesn’t need a role.',
 };
+
+const SCORE_HELP =
+  `Joining during a raid adds ${SIGNAL_WEIGHTS.joinBurst}, a brand-new account ` +
+  `${SIGNAL_WEIGHTS.brandNewAccount}, a new account ${SIGNAL_WEIGHTS.newAccount}, and no avatar ` +
+  `${SIGNAL_WEIGHTS.avatarless}. The lowest setting is ${MIN_ACTIONABLE_SCORE}, so one signal ` +
+  'alone is never enough.';
 
 const AGE_RANK = { older: 0, new: 1, brandNew: 2 } as const;
 
@@ -104,33 +104,6 @@ function minimalPaths(threshold: number): JoinProfile[] {
     .sort((a, b) => profileScore(a) - profileScore(b) || Number(b.burst) - Number(a.burst));
 }
 
-interface ScoreTerm {
-  label: string;
-  weight: number;
-}
-
-function pathTerms(profile: JoinProfile, brandNewAge: string, newAge: string): ScoreTerm[] {
-  const terms: ScoreTerm[] = [];
-
-  if (profile.burst) terms.push({ label: 'During a raid', weight: SIGNAL_WEIGHTS.joinBurst });
-
-  if (profile.age === 'brandNew') {
-    terms.push({
-      label: `Account under ${brandNewAge} old`,
-      weight: SIGNAL_WEIGHTS.brandNewAccount,
-    });
-  } else if (profile.age === 'new') {
-    terms.push({ label: `Account under ${newAge} old`, weight: SIGNAL_WEIGHTS.newAccount });
-  }
-
-  if (profile.avatarless) terms.push({ label: 'No avatar', weight: SIGNAL_WEIGHTS.avatarless });
-
-  return terms;
-}
-
-const profileKey = (profile: JoinProfile): string =>
-  `${profile.burst}-${profile.age}-${profile.avatarless}`;
-
 export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: antiraidConfigSchema });
   const toggle = useModuleToggle(guildId, summary);
@@ -144,8 +117,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
 
   const ageConflict =
     brandNewMs !== null && newMs !== null && brandNewMs > newMs
-      ? `must not be longer than the new-account age (${config.newAccountAge}) — brand-new ` +
-        'accounts are a subset of new ones, and the heavier score belongs to the younger set'
+      ? `Brand-new account age can’t be longer than the new account age (${config.newAccountAge}).`
       : undefined;
 
   const brandNewAge = humaniseDuration(config.brandNewAccountAge);
@@ -155,9 +127,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
   const burstOnly = paths.every((profile) => profile.burst);
 
   const ageError =
-    ageConflict !== undefined
-      ? `Brand-new account age ${ageConflict}.`
-      : (form.errorAt('brandNewAccountAge') ?? form.errorAt('newAccountAge'));
+    ageConflict ?? form.errorAt('brandNewAccountAge') ?? form.errorAt('newAccountAge');
   const rateError = form.errorAt('joinThreshold') ?? form.errorAt('joinWindow');
 
   return (
@@ -179,6 +149,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but new members aren’t checked until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -188,20 +159,13 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {!enabled ? (
-          <StatusBanner tone="neutral">
-            {meta.label} is disabled. Settings are saved, but nothing runs until you switch it
-            on.
-          </StatusBanner>
-        ) : null}
       </ModuleBanners>
 
       <Section label="Detection">
         <Rows>
           <SettingRow
             title="Join rate"
-            description={`How many joins within the window count as a raid.`}
+            description="How many joins within the window count as a raid."
             stacked
             error={rateError}
           >
@@ -290,11 +254,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
             </div>
           </SettingRow>
 
-          <SettingRow
-            title="Score to act"
-            description={`The minimum is ${MIN_ACTIONABLE_SCORE}, so one signal alone is never enough.`}
-            error={form.errorAt('scoreThreshold')}
-          >
+          <SettingRow title="Score to act" help={SCORE_HELP} error={form.errorAt('scoreThreshold')}>
             <NumberStepper
               label="Score to act"
               value={config.scoreThreshold}
@@ -314,11 +274,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
         intro={`Members who score ${config.scoreThreshold} or higher are ${RESPONSE_OUTCOMES[config.response]}${burstOnly ? '' : ', even outside a raid'}.`}
       >
         <Rows>
-          <SettingRow
-            title="Action"
-            description="What Proton does to members who reach the score to act."
-            error={form.errorAt('response')}
-          >
+          <SettingRow title="Action" error={form.errorAt('response')}>
             <Select
               aria-label="Action"
               width="lg"
@@ -392,7 +348,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
 
       <Section
         label="Alerts"
-        intro="Proton posts one alert when a raid starts, and no more until the join window has passed."
+        help="Proton posts one alert when a raid starts, and no more until the join window has passed."
       >
         <Rows>
           <SettingRow
@@ -400,7 +356,7 @@ export default function AntiraidPage({ guildId, meta, summary }: ModulePageProps
             error={form.errorAt('alertChannelId')}
             note={
               config.alertChannelId === undefined
-                ? 'No alert channel is set, so raids are recorded only in Proton’s logs.'
+                ? 'No alert channel is set, so no one is alerted when a raid starts.'
                 : undefined
             }
           >

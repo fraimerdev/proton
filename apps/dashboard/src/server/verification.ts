@@ -1,7 +1,7 @@
 import { readVerifyLink } from '@proton/core';
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { ApiClient } from '../lib/api-client.ts';
+import { ApiClient, ApiError } from '../lib/api-client.ts';
 import { getDiscordUserId } from '../lib/discord-token.ts';
 import { loadEnv } from '../lib/env.ts';
 import { requireSession } from '../middleware/guild-access.ts';
@@ -13,12 +13,12 @@ const api = new ApiClient(env.API_URL, env.API_SHARED_SECRET);
 // the link. Which one it is goes to the server log; telling the browser would help nobody but a
 // forger narrowing down a signature.
 const STALE =
-  'This verification link is no longer valid. Head back to the server and press Verify again to ' +
-  'get a fresh one.';
+  'This link has expired or isn’t valid. Go back to the server and press the verify button ' +
+  'again to get a new one.';
 
 const NOT_YOURS =
-  'This verification link was issued to a different Discord account. Sign out, sign back in with ' +
-  'the account you are verifying, and open the link again.';
+  'This link was made for a different Discord account. Sign out, sign in with the account you’re ' +
+  'verifying, and open the link again.';
 
 export type VerificationOutcome = { ok: true; guildId: string } | { ok: false; reason: string };
 
@@ -51,6 +51,10 @@ export const completeWebVerification = createServerFn({ method: 'POST' })
     try {
       await api.recordVerificationPass(guildId, { userId, jti });
     } catch (error) {
+      if (error instanceof ApiError && error.code === 'guild_left') {
+        return { ok: false, reason: error.message };
+      }
+
       console.error(
         `${userId} passed verification on the website but Proton could not be told: ` +
           `${error instanceof Error ? error.message : String(error)}`,
@@ -58,8 +62,8 @@ export const completeWebVerification = createServerFn({ method: 'POST' })
       return {
         ok: false,
         reason:
-          'You are verified, but Proton could not reach the server to hand out your role. Try ' +
-          'the link again in a moment, or tell a moderator.',
+          'Proton couldn’t give you access right now. Try the link again in a moment, or tell a ' +
+          'moderator.',
       };
     }
 

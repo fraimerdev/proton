@@ -26,19 +26,14 @@ import {
 
 const EMPTY = 'Add a role for members to pick.';
 
-const AT_LIMIT = `Discord allows up to ${MAX_BINDINGS_PER_MENU} roles on one message.`;
+const AT_LIMIT = `A role menu can have up to ${MAX_BINDINGS_PER_MENU} roles.`;
 
 const COUNTER_FROM = 12;
 
-function budgetNote(menuId: string): string {
-  const budget = keyBudget(menuId);
-  return `With the menu ID '${menuId}', each key can be up to ${budget} character${budget === 1 ? '' : 's'}. Discord allows 100 behind a button.`;
-}
-
 function manualEmojiWarning(keys: readonly string[]): string {
   return (
-    `Proton cannot add ${keys.length} custom emoji (${keys.join(', ')}) itself: it stores only ` +
-    'their IDs, and Discord needs an emoji’s name to react with it. React to the message once ' +
+    `Proton can’t add ${keys.length} custom emoji (${keys.join(', ')}) itself, because Discord ` +
+    'needs each emoji’s name to react and Proton only has its ID. React to the message once ' +
     'with each, and members can then use them.'
   );
 }
@@ -116,8 +111,6 @@ export function BindingLadder({
         }
       />
 
-      {!reaction ? <p className="rolemenu-budget-note">{budgetNote(menu.id)}</p> : null}
-
       {manual.length > 0 ? (
         <StatusBanner tone="info" title="Some emoji need adding by hand">
           {manualEmojiWarning(manual)}
@@ -131,7 +124,7 @@ export function BindingLadder({
       ) : null}
 
       {menu.bindings.length === 0 ? (
-        <EmptyState icon="list-checks" title="No roles" inset>
+        <EmptyState icon="list-checks" title="No roles yet" inset>
           {EMPTY}
         </EmptyState>
       ) : (

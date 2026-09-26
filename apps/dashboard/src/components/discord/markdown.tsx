@@ -126,7 +126,6 @@ function emoji(token: string): ReactElement {
     <img
       src={`https://cdn.discordapp.com/emojis/${id}.${animated ? 'gif' : 'webp'}?size=44`}
       alt={`:${name}:`}
-      title={`:${name}:`}
       style={{ display: 'inline-block', width: '1.375em', height: '1.375em', verticalAlign: -4 }}
     />
   );
@@ -186,7 +185,6 @@ function tokenNode(kind: TokenKind, token: string, key: string, options: InlineO
         <span
           key={key}
           style={{ background: 'var(--dc-bg-tertiary)', borderRadius: 3, color: 'transparent' }}
-          title="Spoiler"
         >
           {token.slice(2, -2)}
         </span>

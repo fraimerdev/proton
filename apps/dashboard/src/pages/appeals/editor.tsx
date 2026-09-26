@@ -1,6 +1,7 @@
 import type { AppealPanel, ApproveAction } from '@proton/module-appeals/config';
 import { reviewChannelFor } from '@proton/module-appeals/config';
 import { APPEAL_DECISION_SURFACE } from '@proton/module-appeals/placeholders';
+import { dayCount, NOT_TAKING_APPEALS } from '@proton/module-appeals/web';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { useId } from 'react';
@@ -79,7 +80,7 @@ function DecisionField({
 
   const error = form.errorAt(path);
   const explained = error !== undefined && diagnostics.some(({ message }) => message === error);
-  const listed = visibleDiagnostics(diagnostics).shown.length > 0;
+  const listed = visibleDiagnostics(diagnostics, autocomplete.pending).shown.length > 0;
 
   return (
     <SettingRow stacked title={title} error={explained ? undefined : error}>
@@ -95,7 +96,9 @@ function DecisionField({
           onChange={(event) => change(event.currentTarget.value)}
         />
         <PlaceholderSuggestions autocomplete={autocomplete} />
-        {listed ? <TemplateDiagnostics id={id} diagnostics={diagnostics} /> : null}
+        {listed ? (
+          <TemplateDiagnostics id={id} diagnostics={diagnostics} autocomplete={autocomplete} />
+        ) : null}
         <Counter used={value.length} ceiling={MESSAGE_MAX} />
       </div>
     </SettingRow>
@@ -152,7 +155,7 @@ export function PanelEditor({
 
             <SettingRow
               title="ID"
-              description="Honeypot points at this form by its ID. It cannot be changed, because appeal links already sent would stop working."
+              description="Honeypot links to this form by its ID. It can’t be changed, because links already sent would stop working."
               error={form.errorAt(`${path}.id`)}
             >
               <span className="inline inline-6">
@@ -168,16 +171,12 @@ export function PanelEditor({
             </SettingRow>
 
             <SettingRow
-              title="Enabled"
-              description="Switch off to close this form without deleting it."
-              note={
-                panel.enabled
-                  ? undefined
-                  : 'Members who open its link see: “This server is not taking appeals at the moment.”'
-              }
+              title="Accepting appeals"
+              description="Turn off to close this form without deleting it."
+              note={panel.enabled ? undefined : `Unused links now show “${NOT_TAKING_APPEALS}”`}
             >
               <Switch
-                label="Enabled"
+                label="Accepting appeals"
                 checked={panel.enabled}
                 onChange={(next) => patch((current) => ({ ...current, enabled: next }))}
               />
@@ -208,12 +207,12 @@ export function PanelEditor({
 
         <QuestionsSection form={form} panel={panel} index={index} />
 
-        <Section label="Timing">
+        <Section label="Timing" help="An appeal link stops working 30 days after it’s sent.">
           <Rows>
             <SettingRow
               title="Appeals close after"
-              description="How long after the action a member can still appeal, counted from when the link was sent."
-              note={`After that, the page shows: “Appeals close ${panel.windowDays} days after the action, and that has passed.”`}
+              description="How long after the action someone can still appeal, counted from when the link was sent."
+              help={`After that, the appeal page says “Appeals close ${dayCount(panel.windowDays)} after the action, and that time has passed.”`}
               error={form.errorAt(`${path}.windowDays`)}
             >
               <NumberStepper
@@ -232,11 +231,11 @@ export function PanelEditor({
 
             <SettingRow
               title="Appeal cooldown"
-              description="How long a member must wait after a decision before appealing again. Set to 0 for no cooldown."
-              note={
+              description="How long someone must wait after a decision before they can appeal again. Set to 0 for no cooldown."
+              help={
                 panel.cooldownDays === 0
                   ? undefined
-                  : `During the cooldown, the page shows: “You appealed recently. You can appeal again in ${panel.cooldownDays} days.”`
+                  : `During the cooldown, the appeal page says how long is left, such as “You appealed recently. You can appeal again in ${dayCount(panel.cooldownDays)}.”`
               }
               error={form.errorAt(`${path}.cooldownDays`)}
             >
@@ -265,10 +264,6 @@ export function PanelEditor({
               />
             </SettingRow>
           </Rows>
-
-          <p className="appeals-note">
-            An appeal link lasts 30 days, so no appeal can be sent after that.
-          </p>
         </Section>
 
         <Section label="Review">
@@ -330,7 +325,7 @@ export function PanelEditor({
               title="Lift Proton’s block"
               description={
                 <>
-                  Remove the member from{' '}
+                  Take the member off{' '}
                   <ModuleLink
                     guildId={guildId}
                     moduleId={'moderation'}
@@ -338,8 +333,8 @@ export function PanelEditor({
                   >
                     Blocked members
                   </ModuleLink>
-                  , with the accepted appeal as the reason. This does not remove a ban or timeout on
-                  its own.
+                  , with the accepted appeal as the reason. This doesn’t lift a ban or timeout by
+                  itself.
                 </>
               }
             >
@@ -373,7 +368,11 @@ export function PanelEditor({
           </Rows>
         </Section>
 
-        <Section label="Direct messages" intro="Type { to add a placeholder.">
+        <Section
+          label="Decision messages"
+          intro="Type { to add a placeholder."
+          help="Proton sends the decision by DM and shows it on the appeal page. The DM only arrives if they still share a server with Proton."
+        >
           <Rows>
             <DecisionField
               form={form}

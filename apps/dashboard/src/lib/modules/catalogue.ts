@@ -57,7 +57,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'joinroles',
     label: 'Join Roles',
-    description: 'Give roles to new members and bots, and restore roles on rejoin.',
+    description: 'Give roles to new members and bots, and restore roles when someone rejoins.',
     icon: 'user-plus',
     group: 'joining',
     aliases: ['autorole', 'auto role', 'auto roles', 'join role', 'sticky roles', 'on join'],
@@ -66,6 +66,7 @@ export const MODULES: readonly ModuleMeta[] = [
       { id: 'people', label: 'Members' },
       { id: 'bots', label: 'Bots' },
       { id: 'sticky', label: 'Sticky roles' },
+      { id: 'sync', label: 'Sync' },
       { id: 'options', label: 'Settings' },
     ],
   },
@@ -151,7 +152,7 @@ export const MODULES: readonly ModuleMeta[] = [
       { id: 'consequences', label: 'Response' },
       { id: 'exemptions', label: 'Exemptions' },
       { id: 'warning', label: 'Warning message' },
-      { id: 'dm', label: 'Direct message' },
+      { id: 'dm', label: 'DM' },
       { id: 'escalation', label: 'Follow-up' },
     ],
   },
@@ -159,7 +160,8 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'moderation',
     label: 'Moderation',
-    description: 'Warn, time out, kick or ban members and escalate repeat warnings.',
+    description:
+      'Warn, time out, kick or ban members, escalate repeat warnings and review user reports.',
     icon: 'gavel',
     group: 'people',
     aliases: [
@@ -175,12 +177,35 @@ export const MODULES: readonly ModuleMeta[] = [
       'escalation',
       'ladder',
       'warn escalation',
+      'report',
+      'reports',
+      'user reports',
+      'report user',
+      'report message',
+      'flag',
+      'punish',
+      'punishment',
+      'immune',
+      'hierarchy',
+      'dm',
+      'notify',
+      'reasons',
+      'alias',
     ],
     // Not tabs: the page reaches these through its own rows, and a link can still land on either.
     areas: [
       { id: 'policy', label: 'Policy' },
       { id: 'escalation', label: 'Warn escalation' },
       { id: 'blocked', label: 'Blocked members' },
+      { id: 'punishments', label: 'Punish settings' },
+      { id: 'immunity', label: 'Immunity' },
+      { id: 'notifications', label: 'Member notifications' },
+      { id: 'reasons', label: 'Predefined reasons' },
+      { id: 'reports', label: 'User reports' },
+      { id: 'reports-queue', label: 'Report queue' },
+      { id: 'reports-settings', label: 'Report settings' },
+      { id: 'reports-automation', label: 'Report automation' },
+      { id: 'reports-messages', label: 'Report messages' },
     ],
   },
   {
@@ -195,7 +220,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'appeals',
     label: 'Appeals',
-    description: 'Create ban appeal forms and review submissions in a channel.',
+    description: 'Create appeal forms and review submissions in a channel.',
     icon: 'scales',
     group: 'people',
     aliases: ['appeal', 'unban request', 'appeal form'],
@@ -228,6 +253,30 @@ export const MODULES: readonly ModuleMeta[] = [
       { id: 'types', label: 'Ticket types' },
       { id: 'panels', label: 'Panels' },
       { id: 'responses', label: 'Quick responses' },
+      { id: 'settings', label: 'Settings' },
+    ],
+  },
+  {
+    id: 'applications',
+    label: 'Applications',
+    description: 'Collect staff, team and partner applications and review them together.',
+    icon: 'identification-card',
+    group: 'members',
+    aliases: [
+      'apply',
+      'application',
+      'staff application',
+      'recruitment',
+      'partnership',
+      'event signup',
+      'forms',
+      'review queue',
+    ],
+    areaStyle: T,
+    areas: [
+      { id: 'submissions', label: 'Submissions' },
+      { id: 'forms', label: 'Forms' },
+      { id: 'panels', label: 'Panels' },
       { id: 'settings', label: 'Settings' },
     ],
   },
@@ -294,6 +343,22 @@ export const MODULES: readonly ModuleMeta[] = [
     ],
   },
   {
+    id: 'achievements',
+    label: 'Achievements',
+    description:
+      'Award badges for milestones like messages, voice time and levels, with role and XP rewards.',
+    icon: 'trophy',
+    group: 'members',
+    aliases: ['achievement', 'badges', 'milestones', 'awards', 'trophies', 'tiers', 'unlocks'],
+    areaStyle: T,
+    areas: [
+      { id: 'list', label: 'Achievements' },
+      { id: 'announcements', label: 'Announcements' },
+      { id: 'members', label: 'Members' },
+      { id: 'settings', label: 'Settings' },
+    ],
+  },
+  {
     id: 'giveaways',
     label: 'Giveaways',
     description: 'Run giveaways with requirements and bonus entries.',
@@ -348,7 +413,7 @@ export const MODULES: readonly ModuleMeta[] = [
   {
     id: 'reminders',
     label: 'Reminders',
-    description: 'Let members schedule a message that pings them later.',
+    description: 'Let members set reminders that ping them later.',
     icon: 'alarm',
     group: 'members',
     aliases: ['remind', 'remindme', 'reminder'],
@@ -467,6 +532,14 @@ export const RECORD_LINKS: readonly RecordLink[] = [
     aliases: ['blocklist', 'blocked', 'proton block', 'security block'],
   },
   {
+    id: 'report-queue',
+    label: 'Report queue',
+    icon: 'flag',
+    moduleId: 'moderation',
+    area: 'reports-queue',
+    aliases: ['reports', 'user reports', 'open reports', 'reported', 'flagged'],
+  },
+  {
     id: 'ticket-queue',
     label: 'Ticket queue',
     icon: 'list',
@@ -474,10 +547,44 @@ export const RECORD_LINKS: readonly RecordLink[] = [
     area: 'queue',
     aliases: ['open tickets', 'support queue', 'unclaimed'],
   },
+  {
+    id: 'application-queue',
+    label: 'Application queue',
+    icon: 'list-checks',
+    moduleId: 'applications',
+    area: 'submissions',
+    aliases: ['applications', 'submissions', 'applicants', 'pending applications'],
+  },
+];
+
+export interface PageLink {
+  id: 'commands';
+  label: string;
+  icon: IconName;
+  aliases: readonly string[];
+}
+
+export const PAGE_LINKS: readonly PageLink[] = [
+  {
+    id: 'commands',
+    label: 'Commands',
+    icon: 'terminal-window',
+    aliases: [
+      'slash commands',
+      'rename command',
+      'command names',
+      'command descriptions',
+      'hide command',
+      'switch off command',
+      'apps menu',
+      'respond privately',
+    ],
+  },
 ];
 
 export const MODULE_ICON_NAMES: readonly IconName[] = MODULES.map((module) => module.icon);
 export const RECORD_ICON_NAMES: readonly IconName[] = RECORD_LINKS.map((link) => link.icon);
+export const PAGE_ICON_NAMES: readonly IconName[] = PAGE_LINKS.map((link) => link.icon);
 
 export function areaMeta(module: ModuleMeta, areaId: string | undefined): AreaMeta | undefined {
   if (!module.areas) return undefined;

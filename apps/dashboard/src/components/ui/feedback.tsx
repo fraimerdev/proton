@@ -82,7 +82,7 @@ export type AsyncPhase = 'idle' | 'requested' | 'working' | 'completed' | 'faile
 
 export function AsyncOperationStatus({
   phase,
-  requestedLabel = 'Asked Proton to post it. Check the channel in Discord to confirm it appeared.',
+  requestedLabel = 'Asked Proton to post it. Check the channel in Discord.',
   workingLabel = 'Posting…',
   completedLabel = 'Posted',
   failedLabel,

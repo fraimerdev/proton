@@ -1,5 +1,18 @@
 import type { QueryClient } from '@tanstack/react-query';
-import { channelsQuery, moduleConfigQuery, rolesQuery } from '../queries.ts';
+import { channelsQuery, guildCommandsQuery, moduleConfigQuery, rolesQuery } from '../queries.ts';
+
+export function loadCommands(
+  queryClient: QueryClient,
+  guildId: string,
+  preload: boolean,
+): Promise<unknown> | undefined {
+  const options = guildCommandsQuery(guildId);
+  const cached = queryClient.getQueryData(options.queryKey) !== undefined;
+  const commands = queryClient.prefetchQuery(options);
+
+  if (typeof document === 'undefined') return commands;
+  return preload || !cached ? commands : undefined;
+}
 
 // prefetchQuery: a failed fetch must not fail the loader; ModuleRoute throws it to the shell.
 export function loadModule(

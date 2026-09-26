@@ -79,24 +79,24 @@ function VerifyPage(): ReactElement {
           </a>
         }
       >
-        Sign in with Discord so Proton can confirm this link belongs to you. Proton reads your
-        account name and the servers you are in, and nothing else.
+        Sign in with Discord so Proton can check that this link is yours. Proton only sees your
+        Discord user ID, name, avatar and the servers you’re in.
       </LinkCard>
     );
   }
 
   if (!state.ok) {
     return (
-      <LinkCard title="That did not work" tone="danger">
+      <LinkCard title="That didn’t work" tone="danger">
         {state.reason}
       </LinkCard>
     );
   }
 
   return (
-    <LinkCard title="You are verified" tone="success">
-      Your access is being applied and should appear in Discord within a few seconds. You can close
-      this page.
+    <LinkCard title="You’re verified" tone="success">
+      Proton is giving you access now. It should show up in Discord within a few seconds, and you
+      can close this page.
     </LinkCard>
   );
 }

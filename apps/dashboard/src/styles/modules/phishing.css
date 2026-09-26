@@ -12,17 +12,6 @@
   width: 200px;
 }
 
-.phishing-help {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-  color: var(--text-muted);
-  font-size: var(--text-secondary-size);
-  line-height: 1.46;
-  max-width: 72ch;
-}
-
 .phishing-domain {
   transition: background var(--motion-fast) var(--ease-standard);
 }
@@ -61,6 +50,12 @@
   min-width: 0;
   font-family: var(--font-mono);
   font-size: 0.9285em;
+}
+
+@media (pointer: coarse) {
+  .phishing-domain-input {
+    font-size: 16px;
+  }
 }
 
 .phishing-domain-error {

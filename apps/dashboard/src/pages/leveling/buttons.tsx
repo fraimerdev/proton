@@ -15,9 +15,8 @@ import { EmojiPicker } from '../../components/discord/emoji-picker.tsx';
 import { Button, IconButton } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 
-const BUTTONS_INTRO =
-  'Only link buttons work here. Proton does not respond to presses on level-up messages, so any ' +
-  'other button would do nothing.';
+const BUTTONS_HELP =
+  'Proton doesn’t respond to presses on level-up messages, so only link buttons work here.';
 
 function takenKeys(rows: readonly ActionRow[]): Set<string> {
   const keys = new Set<string>();
@@ -142,7 +141,7 @@ export function LinkButtonRows({
   return (
     <Section
       label="Link buttons"
-      intro={BUTTONS_INTRO}
+      help={BUTTONS_HELP}
       note={`${rows.length} / ${ACTION_ROWS_MAX} rows`}
       actions={
         <Button
@@ -197,7 +196,7 @@ export function LinkButtonRows({
                   />
                 ))}
 
-                <div className="inline inline-8">
+                <div className="inline inline-8 inline-wrap">
                   <Button
                     size="sm"
                     icon="plus"
@@ -225,7 +224,7 @@ export function LinkButtonRows({
               <Rows key={`select-${row.select.key}`}>
                 <SettingRow
                   title="Dropdown on this message"
-                  description="Level-up messages can only carry link buttons, so this message will not save until the dropdown is removed."
+                  description="Level-up messages can only have link buttons, so this message won’t save until you remove the dropdown."
                 >
                   <Button tone="danger-quiet" size="sm" icon="trash" onClick={() => drop(index)}>
                     Remove dropdown

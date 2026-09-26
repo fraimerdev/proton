@@ -1,6 +1,6 @@
 import { normaliseDomain } from '@proton/core';
 import type { AutomodCheck, AutomodConfig, Severity } from '@proton/module-automod/config';
-import { AUTOMOD_CHECKS, automodConfigSchema, severityOf } from '@proton/module-automod/config';
+import { automodConfigSchema, severityOf } from '@proton/module-automod/config';
 import type { ReactElement, ReactNode } from 'react';
 import { useMemo } from 'react';
 import { DurationInput, humaniseDuration } from '../../components/discord/inputs.tsx';
@@ -29,7 +29,7 @@ const SEVERITY_OPTIONS: readonly SegmentedOption<Severity>[] = [
 interface CheckMeta {
   check: AutomodCheck;
   label: string;
-  description: string;
+  description?: string;
 }
 
 const FLOOD: CheckMeta = {
@@ -41,7 +41,6 @@ const FLOOD: CheckMeta = {
 const DUPLICATE: CheckMeta = {
   check: 'duplicate',
   label: 'Duplicate messages',
-  description: 'Detect repeated messages.',
 };
 
 const MENTIONS: CheckMeta = {
@@ -53,13 +52,11 @@ const MENTIONS: CheckMeta = {
 const INVITES: CheckMeta = {
   check: 'invites',
   label: 'Invite links',
-  description: 'Detect Discord invite links.',
 };
 
 const LINKS: CheckMeta = {
   check: 'links',
   label: 'Blocked links',
-  description: 'Detect links to blocked domains.',
 };
 
 const ATTACHMENTS: CheckMeta = {
@@ -83,7 +80,6 @@ const CAPS: CheckMeta = {
 const EMOJI: CheckMeta = {
   check: 'emoji',
   label: 'Emoji spam',
-  description: 'Detect messages with too many emoji.',
 };
 
 const WALLS: CheckMeta = {
@@ -98,10 +94,6 @@ const ZALGO: CheckMeta = {
   description: 'Detect messages with stacked combining marks.',
 };
 
-function activeChecks(config: AutomodConfig): number {
-  return AUTOMOD_CHECKS.filter((check) => severityOf(config, check) !== 'off').length;
-}
-
 function domainIssues(entries: readonly string[], allow: readonly string[]): TokenIssue[] {
   const allowed = new Set(
     allow.map(normaliseDomain).filter((domain): domain is string => domain !== null),
@@ -111,7 +103,7 @@ function domainIssues(entries: readonly string[], allow: readonly string[]): Tok
     const normalised = normaliseDomain(entry);
 
     if (normalised === null) {
-      return [{ token: entry, text: 'is not a domain Proton can read, so it never matches.' }];
+      return [{ token: entry, text: 'isn’t a domain Proton can read, so it never matches.' }];
     }
 
     if (allowed.has(normalised)) {
@@ -136,7 +128,7 @@ function allowIssues(entries: readonly string[]): TokenIssue[] {
     const normalised = normaliseDomain(entry);
 
     if (normalised === null) {
-      return [{ token: entry, text: 'is not a domain Proton can read, so it never matches.' }];
+      return [{ token: entry, text: 'isn’t a domain Proton can read, so it never matches.' }];
     }
 
     if (normalised !== entry) {
@@ -306,8 +298,8 @@ export function ChecksArea({ form }: { form: Form }): ReactElement {
                 </DetailField>
                 <DetailExplain>
                   Acts when one member sends the same message {config.duplicateCount} times within{' '}
-                  {humaniseDuration(config.duplicateWindow)}. Messages shorter than 8 characters are
-                  not counted.
+                  {humaniseDuration(config.duplicateWindow)}. Messages shorter than 8 characters
+                  aren’t counted.
                 </DetailExplain>
               </>
             )}
@@ -490,7 +482,7 @@ export function ChecksArea({ form }: { form: Form }): ReactElement {
                 </DetailField>
                 <DetailExplain>
                   Acts when {config.capsRatio}% or more of a message is capital letters. Messages
-                  with fewer than 12 letters are not counted, and links, custom emoji and mentions
+                  with fewer than 12 letters aren’t counted, and links, custom emoji and mentions
                   are ignored.
                 </DetailExplain>
               </>

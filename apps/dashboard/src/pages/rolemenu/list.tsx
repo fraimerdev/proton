@@ -23,7 +23,7 @@ import {
 } from '../../components/ui/controls.tsx';
 import { EmptyState, LoadingArea } from '../../components/ui/feedback.tsx';
 import { Rows, Section } from '../../components/ui/layout.tsx';
-import { Dialog, MenuButton } from '../../components/ui/overlay.tsx';
+import { ConfirmDialog, Dialog, MenuButton } from '../../components/ui/overlay.tsx';
 import type { GuildChannel } from '../../lib/discord.ts';
 import { channelsQuery, rolesQuery } from '../../lib/queries.ts';
 import { PostAction, postRefusal, reactionInsteadOfPost } from './post.tsx';
@@ -48,11 +48,9 @@ const SEARCH_FROM = 8;
 
 const FULL = `You can add up to ${MAX_MENUS} role menus. Delete one to add another.`;
 
-const EMPTY = 'Create a menu, add its roles, then post it.';
-
 const ID_TAKEN = 'Another role menu already has this ID.';
 
-const NEW_MENU_MODE = 'New role menus start in Toggle mode.';
+const NEXT_STEPS = 'Choose its channel and roles next; it starts in Toggle mode.';
 
 export function MenuList({
   form,
@@ -149,16 +147,14 @@ export function MenuList({
       {menus.length === 0 ? (
         <EmptyState
           icon="list-checks"
-          title="No role menus"
+          title="No role menus yet"
           inset
           actions={
             <Button tone="primary" icon="plus" onClick={() => setCreating(true)}>
               Create role menu
             </Button>
           }
-        >
-          {EMPTY}
-        </EmptyState>
+        />
       ) : shown.length === 0 && searchable && rolesPending ? (
         <LoadingArea label="Loading roles" minHeight={160} />
       ) : shown.length === 0 ? (
@@ -316,8 +312,6 @@ function CreateMenuDialog({
   const [id, setId] = useState('');
   const [kind, setKind] = useState<RolemenuKind>('button');
 
-  if (!open) return null;
-
   const trimmed = id.trim();
   const idError =
     trimmed === ''
@@ -330,11 +324,12 @@ function CreateMenuDialog({
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       title="Create role menu"
-      description="Choose its channel and roles next."
-      footerNote={NEW_MENU_MODE}
+      size="compact"
+      icon="list-checks"
+      description={NEXT_STEPS}
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
@@ -346,38 +341,37 @@ function CreateMenuDialog({
               onCreate(trimmed, kind);
             }}
           >
-            Create
+            Create role menu
           </Button>
         </>
       }
     >
-      <div className="stack stack-16">
-        <Field label="Menu ID" hint={MENU_ID_HELP} error={idError}>
-          {(props) => (
-            <TextInput
-              {...props}
-              autoFocus
-              className="mono"
-              spellCheck={false}
-              maxLength={MENU_ID_MAX}
-              invalid={idError !== undefined}
-              value={id}
-              onChange={(event) => setId(event.currentTarget.value)}
-            />
-          )}
-        </Field>
-
-        <div className="field">
-          <span className="field-label">Style</span>
-          <SegmentedControl
-            label="Style"
-            options={KIND_OPTIONS}
-            value={kind}
-            onChange={setKind}
-            block
+      <Field label="Menu ID" hint={MENU_ID_HELP} error={idError}>
+        {(props) => (
+          <TextInput
+            {...props}
+            autoFocus
+            className="mono"
+            width="lg"
+            spellCheck={false}
+            maxLength={MENU_ID_MAX}
+            invalid={idError !== undefined}
+            value={id}
+            onChange={(event) => setId(event.currentTarget.value)}
           />
-          <span className="field-hint">{KIND_HELP[kind]}</span>
-        </div>
+        )}
+      </Field>
+
+      <div className="field">
+        <span className="field-label">Style</span>
+        <SegmentedControl
+          label="Style"
+          options={KIND_OPTIONS}
+          value={kind}
+          onChange={setKind}
+          block
+        />
+        <span className="field-hint">{KIND_HELP[kind]}</span>
       </div>
     </Dialog>
   );
@@ -394,28 +388,22 @@ function DeleteMenuDialog({
   onClose: () => void;
   onDelete: () => void;
 }): ReactElement | null {
-  if (!menu) return null;
-
   const where = channel ? `#${channel.name}` : 'its channel';
 
   return (
-    <Dialog
-      open
+    <ConfirmDialog
+      open={menu !== undefined}
+      danger
+      icon="trash"
+      title={`Delete ${menu === undefined || menu.id === '' ? 'Unnamed menu' : menu.id}?`}
+      confirmLabel="Delete role menu"
       onClose={onClose}
-      title={`Delete ${menu.id === '' ? 'Unnamed menu' : menu.id}?`}
-      footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button tone="danger" onClick={onDelete}>
-            Delete
-          </Button>
-        </>
-      }
+      onConfirm={onDelete}
     >
-      <p className="text-secondary text-sm">
-        The message in {where} stays. Members who use its buttons or dropdown are told the menu no
-        longer exists.
-      </p>
-    </Dialog>
+      {menu?.kind === 'reaction'
+        ? `The message in ${where} stays, but reacting to it no longer gives roles.`
+        : `The message in ${where} stays. Members who use its buttons or dropdown are told ` +
+          'the menu no longer exists.'}
+    </ConfirmDialog>
   );
 }

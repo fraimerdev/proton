@@ -110,7 +110,7 @@ export function HubList({
       {hubs.length === 0 ? (
         <EmptyState
           icon="speaker-high"
-          title="No creator channels"
+          title="No creator channels yet"
           inset
           actions={
             <Button tone="primary" icon="plus" onClick={() => setAdding(true)}>
@@ -193,8 +193,6 @@ function AddHubDialog({
 }): ReactElement | null {
   const [picked, setPicked] = useState<string | null>(null);
 
-  if (!open) return null;
-
   const duplicate = picked !== null && taken.has(picked);
 
   const close = (): void => {
@@ -204,10 +202,11 @@ function AddHubDialog({
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={close}
       title="Add creator channel"
-      description="Nothing is saved until you save changes."
+      size="compact"
+      icon="speaker-high"
       footer={
         <>
           <Button onClick={close}>Cancel</Button>
@@ -220,7 +219,7 @@ function AddHubDialog({
               onAdd(picked);
             }}
           >
-            Add
+            Add creator channel
           </Button>
         </>
       }
@@ -234,7 +233,6 @@ function AddHubDialog({
           types={[CHANNEL_TYPE.voice]}
           allowNone={false}
           invalid={duplicate}
-          width="100%"
           value={picked}
           onChange={setPicked}
         />

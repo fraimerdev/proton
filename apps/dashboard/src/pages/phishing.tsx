@@ -33,14 +33,12 @@ const ALERT_CHANNEL_TYPES = [
 const ACTION_OPTIONS = PHISHING_ACTIONS.map((value) => ({ value, label: ACTION_LABELS[value] }));
 
 const RESPONSE_INTRO =
-  'Proton never deletes the message itself. A ban also deletes the member’s messages from the ' +
-  'last 24 hours.';
+  'Proton doesn’t delete the message itself, but a ban also deletes the member’s messages from ' +
+  'the last 24 hours.';
 
 const NO_ALERT_CHANNEL =
-  'No alert channel is set, so Proton still acts on the member, but nobody is told where the ' +
-  'link was posted or which message is still up.';
-
-const SWITCHED_OFF = 'Settings are saved, but no links are checked until you switch it on.';
+  'No alert channel is set. Proton still acts on the member, but nobody is told about the link, ' +
+  'and the message stays up.';
 
 export default function PhishingPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: phishingConfigSchema });
@@ -71,6 +69,7 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but no links are checked until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -80,17 +79,13 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {!enabled ? (
-          <StatusBanner tone="neutral">{`${meta.label} is disabled. ${SWITCHED_OFF}`}</StatusBanner>
-        ) : null}
       </ModuleBanners>
 
       <Section label="Response" intro={RESPONSE_INTRO}>
         <Rows>
           <SettingRow
             title="Action"
-            description="What action to take against the member who posted the link."
+            description="What happens to the member who posted the link."
             error={form.errorAt('action')}
           >
             <Select
@@ -113,7 +108,7 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
               title="Timeout duration"
               description="Discord caps timeouts at 28 days."
               error={form.errorAt('timeoutDuration')}
-              note={clamped ? 'Discord applies anything longer as 28 days.' : undefined}
+              note={clamped ? 'Anything longer is applied as 28 days.' : undefined}
             >
               <DurationInput
                 label="Timeout duration"
@@ -128,7 +123,7 @@ export default function PhishingPage({ guildId, meta, summary }: ModulePageProps
 
           <SettingRow
             title="Alert channel"
-            description="Where Proton reports Phishing actions."
+            description="Where Proton posts an alert for each phishing link it finds."
             error={form.errorAt('alertChannel')}
             note={config.alertChannel === undefined ? NO_ALERT_CHANNEL : undefined}
           >

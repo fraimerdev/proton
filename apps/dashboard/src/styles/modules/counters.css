@@ -2,7 +2,7 @@
 
 .counter-token {
   background: var(--badge-brand-bg);
-  border-radius: var(--radius-xs);
+  border-radius: 4px;
   color: var(--badge-brand-text);
   font-family: var(--font-mono);
   font-size: var(--text-micro);

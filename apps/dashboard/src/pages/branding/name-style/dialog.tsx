@@ -172,7 +172,7 @@ export function NameStyleDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      size="wide"
+      size="large"
       title={NAME_STYLE_DIALOG_TITLE}
       description={NAME_STYLE_DIALOG_DESCRIPTION}
       footer={

@@ -6,8 +6,8 @@ import { db } from './db.ts';
 export class MissingDiscordTokenError extends Error {
   constructor(detail: string) {
     super(
-      `Could not read your Discord access token (${detail}). ` +
-        'Sign out and sign in again to reconnect your Discord account.',
+      `Couldn't read your Discord access token (${detail}). ` +
+        'Sign out, then sign in again to reconnect your Discord account.',
     );
     this.name = 'MissingDiscordTokenError';
   }
@@ -16,7 +16,7 @@ export class MissingDiscordTokenError extends Error {
 export class MissingDiscordAccountError extends Error {
   constructor() {
     super(
-      'Could not read your Discord user id. Sign out and sign in again to reconnect your ' +
+      "Couldn't read your Discord user ID. Sign out, then sign in again to reconnect your " +
         'Discord account.',
     );
     this.name = 'MissingDiscordAccountError';

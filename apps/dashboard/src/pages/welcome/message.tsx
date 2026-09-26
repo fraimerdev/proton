@@ -15,6 +15,7 @@ import {
   type ConfigErrors,
   EmbedEditor,
   MessageField,
+  sentence,
 } from '../../components/discord/embed-editor.tsx';
 import {
   LayoutBuilder,
@@ -175,7 +176,9 @@ export function GreetingMessageEditor({
       >
         {layout ? (
           <>
-            {layoutError !== undefined ? <p className="row-error">{layoutError}</p> : null}
+            {layoutError !== undefined ? (
+              <p className="row-error">{sentence(layoutError)}</p>
+            ) : null}
             <LayoutBuilder
               guildId={guildId}
               value={value.v2}
@@ -188,10 +191,7 @@ export function GreetingMessageEditor({
           </>
         ) : (
           <Rows>
-            <SettingRow
-              title="Text"
-              stacked
-            >
+            <SettingRow title="Text" stacked>
               <MessageField
                 placeholders={placeholders}
                 path={`${prefix}.content`}
@@ -240,12 +240,12 @@ export function GreetingMessageEditor({
             </Button>
           }
         >
-          {rowsError !== undefined ? <p className="row-error">{rowsError}</p> : null}
+          {rowsError !== undefined ? <p className="row-error">{sentence(rowsError)}</p> : null}
 
           {value.components.length === 0 ? (
             <p className="section-intro">
-              No link buttons. This message can carry link buttons only, because Proton does not
-              respond to presses on it.
+              No link buttons yet. Only link buttons work here, because Proton doesn’t respond to
+              presses on this message.
             </p>
           ) : (
             <div className="stack stack-10">
@@ -275,8 +275,10 @@ export function GreetingMessageEditor({
                     key={index}
                   >
                     <span className="text-sm text-danger">
-                      {errors.at(`${prefix}.components.${index}`) ??
-                        'This row is a dropdown, which this message cannot carry.'}
+                      {sentence(
+                        errors.at(`${prefix}.components.${index}`) ??
+                          'This row is a dropdown, which this message can’t have.',
+                      )}
                     </span>
                     <span className="push-right">
                       <IconButton
@@ -297,7 +299,7 @@ export function GreetingMessageEditor({
 
       <Section
         label="Mentions"
-        intro="Choose who this message can ping. Mentions that are off still show but do not notify anyone."
+        help="A mention that’s off still shows in the message but doesn’t notify anyone."
       >
         <Rows>
           <SettingRow title="@everyone and @here">
@@ -332,15 +334,16 @@ export function GreetingMessageEditor({
 
       <ConfirmDialog
         open={confirmDrop}
+        icon="trash"
         danger
         title="Remove layout?"
-        confirmLabel="Remove"
+        confirmLabel="Remove layout"
         onClose={() => setConfirmDrop(false)}
         onConfirm={dropLayout}
       >
-        Text from the layout moves into the message. The {value.v2.length} component
-        {value.v2.length === 1 ? '' : 's'} in the layout will be removed, including any dividers,
-        images and link buttons.
+        Text from the layout moves into the message. Its {value.v2.length} component
+        {value.v2.length === 1 ? '' : 's'}, including any dividers, images and link buttons, are
+        removed.
       </ConfirmDialog>
     </>
   );

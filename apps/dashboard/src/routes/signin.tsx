@@ -35,16 +35,13 @@ function SignIn(): ReactElement {
         <ProtonMark size={34} />
 
         <h1 style={{ marginTop: 16 }}>Sign in</h1>
-        <p>
-          Proton asks Discord who you are and which servers you manage, and nothing else. The exact
-          scopes are listed below.
-        </p>
+        <p>Proton asks Discord who you are and which servers you’re in, and nothing else.</p>
 
         {error ? (
           <div style={{ marginTop: 16 }}>
             <StatusBanner tone="danger" live="assertive">
-              Discord did not finish signing you in, so nothing was shared
-              {description ? `: ${description.replace(/\.$/, '')}` : ''}. Try again. If it keeps
+              Discord didn’t finish signing you in, so nothing was shared
+              {description ? `: ${description.replace(/\.$/, '')}` : ''}. Try again, and if it keeps
               failing, check which Discord account this browser is signed in to.
             </StatusBanner>
           </div>

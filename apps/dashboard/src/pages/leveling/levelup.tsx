@@ -35,16 +35,23 @@ const ANNOUNCEMENT_CHANNEL_TYPES = [
 ] as const;
 
 const OWN_CHANNEL_NOTE =
-  'No level-up channel is set, so Proton announces in the channel the member was talking in.';
+  'No channel is set, so Proton announces in the channel the member was chatting in. Level-ups ' +
+  'from voice aren’t announced.';
 
-const SILENT_NOTE = 'This message is empty, so nothing is posted when a member levels up.';
+const SILENT_NOTE =
+  'This message is empty, so nothing is posted when a member levels up. To stop level-up ' +
+  'messages, turn off Announce level-ups instead.';
+
+const QUIET_NOTE =
+  'Members still earn XP, level up and get their role rewards. Nothing is posted, and your ' +
+  'message is kept for when you turn this back on.';
 
 const PREVIEW_EMPTY = 'This message is empty, so nothing is posted.';
 
 const CONTENT_DESCRIPTION = 'Supports Discord markdown and placeholders. Type { to add one.';
 
 const PREVIEW_REFUSED =
-  'Filled in for this sample, the message could not be posted, so nothing would appear. The ' +
+  'With the sample filled in, this message couldn’t be posted, so nothing would appear. The ' +
   'preview shows it as written.';
 
 const LAYOUT_NOTE =
@@ -88,7 +95,7 @@ function Mentions({
   return (
     <Section
       label="Mentions"
-      intro="Choose who this message can ping. Mentions that are off still show but do not notify anyone."
+      help="A mention that’s off still shows in the message, but doesn’t notify anyone."
     >
       <Rows>
         <SettingRow title="@everyone and @here">
@@ -168,13 +175,36 @@ export function LevelUpArea({
   // where nothing is wrong. Both branches have to show it or the message cannot be fixed.
   const componentsError = form.errorAt('levelUpMessage.components');
 
+  const announceRow = (
+    <SettingRow
+      title="Announce level-ups"
+      description={config.levelUpAnnounce ? undefined : QUIET_NOTE}
+    >
+      <Switch
+        label="Announce level-ups"
+        checked={config.levelUpAnnounce}
+        onChange={(levelUpAnnounce) =>
+          form.setValue((current) => ({ ...current, levelUpAnnounce }))
+        }
+      />
+    </SettingRow>
+  );
+
+  if (!config.levelUpAnnounce) {
+    return (
+      <Section label="Posting">
+        <Rows>{announceRow}</Rows>
+      </Section>
+    );
+  }
+
   const editor = (
     <>
       <Section label="Posting">
         <Rows>
+          {announceRow}
           <SettingRow
             title="Level-up channel"
-            description="Where Proton announces new levels. Voice level-ups are announced only when a channel is set."
             error={form.errorAt('levelUpChannelId')}
             note={config.levelUpChannelId === undefined ? OWN_CHANNEL_NOTE : undefined}
           >

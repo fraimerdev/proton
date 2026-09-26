@@ -1,8 +1,36 @@
-import type { ReactElement } from 'react';
+import { type ReactElement, type RefObject, useLayoutEffect } from 'react';
 import type { AreaMeta } from '../../lib/modules/catalogue.ts';
 import { ModuleLink } from '../module/route.tsx';
 import { cx, useSlidingIndicator } from './controls.tsx';
 import { Icon, type IconName } from './icon.tsx';
+
+function useSelectedInView(track: RefObject<HTMLElement | null>, selected: string): void {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new selection is the trigger to bring it into view, not an input
+  useLayoutEffect(() => {
+    const strip = track.current;
+    if (!strip) return;
+
+    const reveal = (): void => {
+      const tab = strip.querySelector<HTMLElement>('[aria-current="page"], [aria-selected="true"]');
+      if (!tab) return;
+      const start = tab.offsetLeft;
+      const end = start + tab.offsetWidth;
+      if (start >= strip.scrollLeft && end <= strip.scrollLeft + strip.clientWidth) return;
+      // scrollLeft, not scrollIntoView: that scrolls the document as well as the strip.
+      strip.scrollLeft = start - (strip.clientWidth - tab.offsetWidth) / 2;
+    };
+
+    reveal();
+    let width = strip.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (strip.clientWidth === width) return;
+      width = strip.clientWidth;
+      reveal();
+    });
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [track, selected]);
+}
 
 export function AreaTabs({
   guildId,
@@ -21,6 +49,7 @@ export function AreaTabs({
     areas.findIndex((area) => area.id === current),
     areas.map((area) => area.id).join(' '),
   );
+  useSelectedInView(track, `${moduleId}:${current}`);
 
   return (
     <nav ref={track} className="area-tabs" aria-label="Sections">
@@ -63,6 +92,7 @@ export function SegmentedTabs<T extends string>({
     items.findIndex((item) => item.id === value),
     items.map((item) => item.id).join(' '),
   );
+  useSelectedInView(track, value);
 
   return (
     <div ref={track} role="tablist" aria-label={label} className={cx('segmented', className)}>
@@ -99,6 +129,7 @@ export function SegmentedTabLinks({
     areas.findIndex((area) => area.id === current),
     areas.map((area) => area.id).join(' '),
   );
+  useSelectedInView(track, `${moduleId}:${current}`);
 
   return (
     <nav ref={track} aria-label="Sections" className="segmented">

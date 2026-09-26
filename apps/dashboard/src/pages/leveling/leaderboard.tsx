@@ -11,8 +11,6 @@ import { LEADERBOARD_PAGE_SIZE, leaderboardQuery } from './queries.ts';
 
 const NOBODY_YET = 'Members appear here once they earn XP.';
 
-const DERIVED_LEVEL = 'Levels are worked out from current XP, so they are always up to date.';
-
 // No sortField on any column and no onSortChange: the api orders xp DESC, userId and takes no
 // sort parameter, so a header that looked sortable would silently do nothing.
 const COLUMNS: readonly Column<LeaderboardRow>[] = [
@@ -74,8 +72,6 @@ export function LeaderboardArea({ guildId }: { guildId: string }): ReactElement 
             }
           />
         )}
-
-        <p className="leveling-note">{DERIVED_LEVEL}</p>
       </>
     </MemberProvider>
   );

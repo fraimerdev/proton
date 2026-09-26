@@ -1,18 +1,8 @@
-import {
-  clampCacheTtl,
-  formatDuration,
-  MESSAGE_CACHE_MAX_TTL_MS,
-  MESSAGE_CACHE_MIN_TTL_MS,
-  tryParseDuration,
-} from '@proton/core';
-import {
-  loggingConfigSchema,
-  MESSAGE_CACHE_FALLBACK_TTL_MS,
-  MESSAGE_LOG_RETENTION_DAYS,
-} from '@proton/module-logging/config';
-import type { ReactElement, ReactNode } from 'react';
+import { MESSAGE_CACHE_MAX_TTL_MS, MESSAGE_CACHE_MIN_TTL_MS } from '@proton/core';
+import { loggingConfigSchema, MESSAGE_LOG_RETENTION_DAYS } from '@proton/module-logging/config';
+import type { ReactElement } from 'react';
 import { CHANNEL_TYPE, ChannelMultiPicker } from '../components/discord/channel-picker.tsx';
-import { DurationInput, humaniseDuration } from '../components/discord/inputs.tsx';
+import { DurationInput } from '../components/discord/inputs.tsx';
 import { useModuleForm } from '../components/module/form.ts';
 import {
   ModuleBanners,
@@ -23,9 +13,8 @@ import {
 import type { ModulePageProps } from '../components/module/registry.ts';
 import { useModuleToggle } from '../components/module/toggle.ts';
 import { LimitCounter } from '../components/ui/collection.tsx';
-import { cx, Switch } from '../components/ui/controls.tsx';
+import { Switch } from '../components/ui/controls.tsx';
 import { StatusBanner } from '../components/ui/feedback.tsx';
-import { Icon } from '../components/ui/icon.tsx';
 import { Rows, Section, SettingRow } from '../components/ui/layout.tsx';
 import { SaveBar } from '../components/ui/savebar.tsx';
 
@@ -37,42 +26,6 @@ const LOGGABLE_CHANNEL_TYPES = [
   CHANNEL_TYPE.publicThread,
   CHANNEL_TYPE.privateThread,
 ];
-
-function Store({
-  name,
-  figure,
-  keeping,
-  lede,
-  children,
-}: {
-  name: string;
-  figure: string;
-  keeping: boolean;
-  lede: ReactNode;
-  children?: ReactNode;
-}): ReactElement {
-  return (
-    <div className="logging-store">
-      <div className="logging-store-rail">
-        <span className="logging-store-name">{name}</span>
-        <span className={cx('logging-store-figure', !keeping && 'empty')}>{figure}</span>
-      </div>
-      <div className="logging-store-body">
-        <p className="logging-store-lede">{lede}</p>
-        {children !== undefined ? <ul className="logging-outcomes">{children}</ul> : null}
-      </div>
-    </div>
-  );
-}
-
-function Outcome({ kept, children }: { kept: boolean; children: ReactNode }): ReactElement {
-  return (
-    <li className={cx('logging-outcome', kept ? 'kept' : 'muted')}>
-      <Icon name={kept ? 'check' : 'minus'} size={13} />
-      <span>{children}</span>
-    </li>
-  );
-}
 
 function IgnoredChannels({
   guildId,
@@ -103,15 +56,6 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
   const config = form.value;
   const retentionError = form.errorAt('cacheRetention');
 
-  const requested = tryParseDuration(config.cacheRetention);
-  const heldMs = requested === null ? MESSAGE_CACHE_FALLBACK_TTL_MS : clampCacheTtl(requested);
-  const held = humaniseDuration(formatDuration(heldMs));
-  const clamped = requested !== null && requested !== heldMs;
-
-  const writing = enabled && (config.logEdits || config.logDeletes);
-  const remembering = enabled && config.cacheMessageContent;
-  const ignored = config.ignoredChannels.length;
-
   return (
     <>
       <ModuleHeader
@@ -131,6 +75,7 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but no new messages are stored until you turn it on."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -142,19 +87,13 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
         ) : null}
       </ModuleBanners>
 
-      <Section
-        label="Recent message text"
-        intro={
-          <>
-            Enable to remember the text of recent messages, for up to {MESSAGE_LOG_RETENTION_DAYS} days
-          </>
-        }
-      >
+      <Section label="Recent message text">
         <Rows>
           <SettingRow
             title="Remember recent message text"
-            description={`Stores the text of recent messages in memory for up to ${MESSAGE_LOG_RETENTION_DAYS} days.`}
-            note="Switching this off deletes everything already remembered when you save."
+            description="Stores the text, author and attachment links of recent messages, so edit and delete logs can show what changed and who wrote it."
+            help="Discord doesn’t send the old text of an edited message, or the text and author of a deleted one. Without this, logs can’t show them."
+            note="Turning this off deletes everything already remembered when you save."
             error={form.errorAt('cacheMessageContent')}
           >
             <Switch
@@ -169,7 +108,8 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
           {config.cacheMessageContent ? (
             <SettingRow
               title="Remember for"
-              description="How long each message is remembered, from 1 hour to 7 days. Anything outside that range uses the nearest limit."
+              description="From 1 hour to 7 days."
+              help="Anything outside that range uses the nearest limit. With Server Logs on, an edited message is remembered for a day from its latest edit."
               error={retentionError}
             >
               <DurationInput
@@ -188,7 +128,7 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
         </Rows>
       </Section>
 
-      <Section label="Archive">
+      <Section label="Archive" note={`Kept for ${MESSAGE_LOG_RETENTION_DAYS} days`}>
         <Rows>
           <SettingRow
             title="Log edits"
@@ -204,7 +144,7 @@ export default function LoggingPage({ guildId, meta, summary }: ModulePageProps)
 
           <SettingRow
             title="Log deletions"
-            description="Archive deleted messages, including bulk deletions."
+            description="Archive each deleted message, including bulk deletions, with its text while Proton still remembers it."
             error={form.errorAt('logDeletes')}
           >
             <Switch

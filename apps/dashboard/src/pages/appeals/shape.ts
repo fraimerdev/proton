@@ -23,7 +23,8 @@ export const PLACEHOLDER_MAX = 100;
 export const REVIEW_CHANNEL_TYPES = [0, 5, 11, 12] as const;
 
 export const KEY_SHAPE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
-export const KEY_SHAPE_MESSAGE = 'letters, digits, hyphens and underscores only';
+export const KEY_SHAPE_MESSAGE =
+  'Start with a letter or number, and use only letters, numbers, hyphens and underscores.';
 
 export const OUTCOME_OPTIONS: readonly { value: ApproveAction; label: string }[] = [
   { value: 'unban', label: 'Unban' },
@@ -105,7 +106,7 @@ export function newPanel(id: string, name: string): AppealPanel {
 export function newQuestion(taken: ReadonlySet<string>): AppealQuestion {
   return appealQuestionSchema.parse({
     key: uniqueId('answer', taken, QUESTION_KEY_MAX),
-    label: 'Anything else the moderators should know?',
+    label: 'Anything else staff should know?',
   });
 }
 

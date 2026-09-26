@@ -9,6 +9,7 @@ import {
   EmbedEditor,
   embedFieldIssue,
   embedIssue,
+  limitIssue,
   linkIssue,
   type PlaceholderSlot,
   sentence,
@@ -25,10 +26,12 @@ mock.module('../src/lib/queries.ts', () => ({
 
 const { LayoutBuilder, moveItem, newLinkButton, seedComponent, summariseComponent, takenKeys } =
   await import('../src/components/discord/layout-builder.tsx');
+const { MessageEditor } = await import('../src/components/discord/message-editor.tsx');
 
 const LINK_MISSING = 'Enter a complete http:// or https:// link.';
 const SCHEMA_LINK = 'must be a complete http:// or https:// link';
 const TOO_SMALL = 'Too small: expected string to have >=1 characters';
+const TOO_BIG = 'Too big: expected string to have <=256 characters';
 
 function errorsOf(entries: Record<string, string>): ConfigErrors {
   const errors = new Map(Object.entries(entries));
@@ -111,6 +114,13 @@ describe('field wording', () => {
     expect(linkIssue('not a link', undefined)).toBeUndefined();
   });
 
+  test('names the field and its limit when the schema says the text is too long', () => {
+    expect(limitIssue('Embed title', TOO_BIG)).toBe('Embed title can be up to 256 characters.');
+    expect(limitIssue('Embed title', 'too big')).toBeUndefined();
+    expect(limitIssue('Embed title', TOO_SMALL)).toBeUndefined();
+    expect(limitIssue('Embed title', undefined)).toBeUndefined();
+  });
+
   test('names an empty required text and otherwise keeps the reported message', () => {
     const empty = 'An author needs a name, or remove it.';
 
@@ -162,6 +172,16 @@ describe('embed rows', () => {
       'An author needs a name, or remove it.',
     );
     expect(embedIssue(embed, errorsOf({ 'p.0.title': 'too big' }), 'p.0')).toBe('Too big.');
+    expect(embedIssue(embed, errorsOf({ 'p.0.title': TOO_BIG }), 'p.0')).toBe(
+      'Embed title can be up to 256 characters.',
+    );
+    expect(
+      embedIssue(
+        { fields: [{ name: 'Rules', value: 'Be kind' }] },
+        errorsOf({ 'p.0.fields.0.name': TOO_BIG }),
+        'p.0',
+      ),
+    ).toBe('Field 1 name can be up to 256 characters.');
     expect(embedIssue(embed, errorsOf({ 'p.1.imageUrl': SCHEMA_LINK }), 'p.0')).toBeUndefined();
     expect(embedIssue(embed, NONE, 'p.0')).toBeUndefined();
   });
@@ -326,7 +346,7 @@ describe('layout helpers', () => {
     expect(summariseComponent({ kind: 'gallery', items: [{ url: 'https://a.example' }] })).toBe(
       '1 image',
     );
-    expect(summariseComponent(CONTAINER)).toBe('5 inside');
+    expect(summariseComponent(CONTAINER)).toBe('5 items');
     expect(summariseComponent({ kind: 'separator', divider: false, spacing: 'small' })).toBe(
       'Blank space',
     );
@@ -418,5 +438,30 @@ describe('LayoutBuilder', () => {
     );
 
     expect(html).toContain('This row is a dropdown');
+  });
+});
+
+describe('MessageEditor', () => {
+  test('names an issue with the embed itself above it, once the form reports it', () => {
+    const render = (errors: Record<string, string>): string =>
+      markup(
+        <MessageEditor
+          guildId="1"
+          value={{
+            content: '',
+            embeds: [{ description: '' }],
+            components: [],
+            mentions: { everyone: false, roles: false, users: false },
+          }}
+          errorAt={(path) => errors[path]}
+          pathPrefix="m"
+          onChange={() => undefined}
+        />,
+      );
+
+    expect(render({})).not.toContain('This embed has nothing in it.');
+    expect(render({ 'm.embeds.0': 'this embed has nothing in it' })).toContain(
+      '<p class="row-error" role="alert">This embed has nothing in it.</p>',
+    );
   });
 });

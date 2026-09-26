@@ -1,3 +1,7 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
 @import "./styles/tokens.css";
 @import "./styles/base.css";
 @import "./styles/shell.css";
@@ -7,6 +11,8 @@
 @import "./styles/discord.css";
 @import "./styles/simulation.css";
 @import "./styles/site.css";
+@import "./styles/apply.css";
 @import "./styles/landing.css";
 @import "./styles/overview.css";
+@import "./styles/commands.css";
 @import "./styles/modules.css";

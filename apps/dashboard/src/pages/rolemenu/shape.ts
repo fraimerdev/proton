@@ -59,14 +59,19 @@ export const MODE_LABEL: Record<RolemenuMode, string> = {
   unique: 'One at a time',
 };
 
-export const MODE_HELP: Record<RolemenuMode, string> = {
-  toggle: 'Picking a role again removes it.',
-  'add-only': 'Proton never removes a role. Picking it again does nothing.',
-  unique: 'Picking a role removes the other roles in this menu.',
-};
+export function modeHelp(mode: RolemenuMode, kind: RolemenuKind): string {
+  if (mode === 'toggle') {
+    return kind === 'reaction'
+      ? 'Removing the reaction removes the role.'
+      : 'Picking a role again removes it.';
+  }
+  return mode === 'add-only'
+    ? 'Proton never removes a role. Picking it again does nothing.'
+    : 'Picking a role removes the other roles in this menu.';
+}
 
 export const SELECT_UNPICK_NOTE =
-  'Discord only tells Proton what was picked, never what was unpicked, so picking a role the ' +
+  'Discord only tells Proton what was picked, not what was unpicked, so picking a role the ' +
   'member already has counts as picking it again.';
 
 export const RENAME_WARNING =
@@ -80,24 +85,23 @@ export const CHANNEL_HELP = 'Where Proton posts the menu, or where the reaction 
 export const MESSAGE_ID_HELP =
   'Leave empty to post a new message, or enter the ID of a menu Proton posted to update it.';
 
+export const REACTION_MESSAGE_HELP =
+  'The message members react to. In Discord, turn on Developer Mode, then right-click the ' +
+  'message and choose Copy Message ID.';
+
 export const REACTION_MESSAGE_REQUIRED =
-  'a reaction menu needs the id of the message it reacts to — a reaction only tells Proton the ' +
-  'channel, the message and the emoji, so without it the menu can never be recognised. Turn on ' +
-  'Developer Mode in Discord and copy the message id.';
+  'A reaction menu needs the ID of the message members react to.';
 
 export const MENU_ID_SHAPE =
   'must start with a letter or digit and contain only letters, digits, hyphens and underscores';
 
-export const SEPARATOR_IN_KEY =
-  `must not contain '${CUSTOM_ID_SEPARATOR}' — Proton reserves it to tell choices apart, and a ` +
-  'key containing one would resolve to the wrong role';
+export const SEPARATOR_IN_KEY = `can’t contain '${CUSTOM_ID_SEPARATOR}', which Proton uses to tell choices apart`;
 
-export const RESERVED_KEY = `'${SELECT_BINDING_KEY}' is reserved — Proton uses it for the dropdown itself`;
+export const RESERVED_KEY = `can’t be '${SELECT_BINDING_KEY}', which is reserved for the dropdown itself`;
 
 const MENU_ID_EMPTY = 'Role menu needs an ID.';
 
-const NO_CHANNEL =
-  'Choose a channel. Proton cannot post the menu or read its reactions without one.';
+const NO_CHANNEL = 'Choose a channel.';
 
 const BAD_MESSAGE_ID =
   'A message ID is 17 to 20 digits. Turn on Developer Mode in Discord, then copy the message ID.';
@@ -121,9 +125,8 @@ export function keyBudget(menuId: string): number {
 
 export function tooLongReason(menuId: string, key: string, length: number): string {
   return (
-    `menu id '${menuId}' and key '${key}' need ${length} characters together with Proton's ` +
-    `prefix, and Discord only allows ${MAX_CUSTOM_ID_LENGTH} behind a button. Shorten the menu ` +
-    'id or the key.'
+    `The menu ID '${menuId}' and the key '${key}' come to ${length} characters with Proton's ` +
+    `prefix, and Discord allows ${MAX_CUSTOM_ID_LENGTH}. Shorten the menu ID or the key.`
   );
 }
 
@@ -141,10 +144,7 @@ export function liveProblems(config: RolemenuConfig): Problems {
     } else if (!MENU_ID_PATTERN.test(menu.id) || menu.id.length > MENU_ID_MAX) {
       problems.set(`${base}.id`, MENU_ID_SHAPE);
     } else if (seenIds.has(menu.id)) {
-      problems.set(
-        `${base}.id`,
-        `duplicate menu id '${menu.id}' — a button cannot say which of the two it means`,
-      );
+      problems.set(`${base}.id`, `Another role menu already has the ID '${menu.id}'.`);
     }
     seenIds.add(menu.id);
 
@@ -173,10 +173,7 @@ export function liveProblems(config: RolemenuConfig): Problems {
       } else if (binding.key === SELECT_BINDING_KEY) {
         problems.set(keyPath, RESERVED_KEY);
       } else if (seenKeys.has(binding.key)) {
-        problems.set(
-          keyPath,
-          `duplicate binding key '${binding.key}' — only the first would ever be reachable`,
-        );
+        problems.set(keyPath, `Another role in this menu already uses '${binding.key}'.`);
       } else if (length > MAX_CUSTOM_ID_LENGTH) {
         problems.set(keyPath, tooLongReason(menu.id, binding.key, length));
       }

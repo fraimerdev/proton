@@ -21,11 +21,11 @@ import {
   KIND_OPTIONS,
   MENU_ID_HELP,
   MESSAGE_ID_HELP,
-  MODE_HELP,
   MODE_OPTIONS,
   menuHasProblem,
+  modeHelp,
   type Problems,
-  REACTION_MESSAGE_REQUIRED,
+  REACTION_MESSAGE_HELP,
   RENAME_WARNING,
   type RolemenuForm,
   SELECT_UNPICK_NOTE,
@@ -99,7 +99,7 @@ export function MenuEditor({
       title="Menu ID"
       description={MENU_ID_HELP}
       error={at('id')}
-      note={menu.messageId !== undefined ? RENAME_WARNING : undefined}
+      note={menu.messageId !== undefined && menu.kind !== 'reaction' ? RENAME_WARNING : undefined}
     >
       <TextInput
         className="mono"
@@ -132,7 +132,7 @@ export function MenuEditor({
   const messageField = (
     <SettingRow
       title="Message ID"
-      description={menu.kind === 'reaction' ? REACTION_MESSAGE_REQUIRED : MESSAGE_ID_HELP}
+      description={menu.kind === 'reaction' ? REACTION_MESSAGE_HELP : MESSAGE_ID_HELP}
       error={at('messageId')}
     >
       <TextInput
@@ -186,8 +186,8 @@ export function MenuEditor({
 
             <SettingRow
               title="Mode"
-              description={MODE_HELP[menu.mode]}
-              note={menu.kind === 'select' ? SELECT_UNPICK_NOTE : undefined}
+              description={modeHelp(menu.mode, menu.kind)}
+              help={menu.kind === 'select' ? SELECT_UNPICK_NOTE : undefined}
               stacked
             >
               <SegmentedControl
@@ -237,19 +237,19 @@ export function MenuEditor({
         {posted ? <p className="rolemenu-preview-note">{AFTER_FIRST_POST}</p> : null}
       </div>
 
-      {pendingKind !== null ? (
-        <ConfirmDialog
-          open
-          title="Change style?"
-          confirmLabel="Change"
-          onClose={() => setPendingKind(null)}
-          onConfirm={() => commitKind(pendingKind)}
-        >
-          Reaction menus match each role to an emoji; buttons and dropdowns match it to a key.
-          Changing between them clears the emoji or key on all {menu.bindings.length}{' '}
-          {menu.bindings.length === 1 ? 'role' : 'roles'}, but keeps the roles.
-        </ConfirmDialog>
-      ) : null}
+      <ConfirmDialog
+        open={pendingKind !== null}
+        title="Change style?"
+        confirmLabel="Change style"
+        onClose={() => setPendingKind(null)}
+        onConfirm={() => {
+          if (pendingKind !== null) commitKind(pendingKind);
+        }}
+      >
+        Reaction menus match each role to an emoji; buttons and dropdowns match it to a key.
+        Changing between them clears the emoji or key on all {menu.bindings.length}{' '}
+        {menu.bindings.length === 1 ? 'role' : 'roles'}, but keeps the roles.
+      </ConfirmDialog>
     </div>
   );
 }

@@ -119,11 +119,15 @@ export function LimitCounter({
   const atLimit = used >= ceiling;
 
   return (
-    <span
-      className={cx('limit-counter', atLimit && 'at-limit')}
-      title={label !== undefined ? `${used} of ${ceiling} ${label}` : undefined}
-    >
-      {used} / {ceiling}
+    <span className={cx('limit-counter', atLimit && 'at-limit')}>
+      <span aria-hidden={label !== undefined ? true : undefined}>
+        {used} / {ceiling}
+      </span>
+      {label !== undefined ? (
+        <span className="visually-hidden">
+          {used} of {ceiling} {label}
+        </span>
+      ) : null}
     </span>
   );
 }

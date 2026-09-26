@@ -6,7 +6,7 @@ import { ChannelPicker, useChannelIndex } from '../../components/discord/channel
 import type { ModuleForm } from '../../components/module/form.ts';
 import { Button, Switch } from '../../components/ui/controls.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
-import { Dialog } from '../../components/ui/overlay.tsx';
+import { Dialog, HelpTip } from '../../components/ui/overlay.tsx';
 import {
   CATEGORY_CONTENTS,
   CATEGORY_LABEL,
@@ -16,12 +16,8 @@ import {
 } from './shared.tsx';
 
 const CHAIN =
-  'A log goes to its own channel if it has one, otherwise its category’s, otherwise this one. ' +
-  'With none of the three set, nothing is posted.';
-
-const AUDIT =
-  'Proton needs View Audit Log to receive audit entries at all. Without it most of this catalogue ' +
-  'is silent.';
+  'Each log goes to its event’s own channel if it has one, then to its category’s channel, then ' +
+  'to the default log channel. If none is set, it isn’t posted.';
 
 export function Categories({
   guildId,
@@ -48,7 +44,7 @@ export function Categories({
 
   return (
     <>
-      <Section label="Log channels" intro={CHAIN}>
+      <Section label="Log channels" help={CHAIN}>
         <Rows>
           <SettingRow
             title="Default log channel"
@@ -72,8 +68,7 @@ export function Categories({
 
       <Section
         label="Categories"
-        note="Messages and Voice are off by default because they are the busiest."
-        intro={AUDIT}
+        note="Messages and Voice start off because they’re the busiest."
         actions={
           <Button
             size="sm"
@@ -103,21 +98,19 @@ export function Categories({
         open={setAllOpen}
         onClose={() => setSetAllOpen(false)}
         title="Set channel for all categories"
-        description="Applies to all 13 categories. Events with their own channel keep it."
+        size="compact"
+        description={`Replaces the channel on all ${LOG_CATEGORIES.length} categories; events with their own channel keep it.`}
         footer={
           <>
             <Button onClick={() => setSetAllOpen(false)}>Cancel</Button>
             <Button tone="primary" onClick={applyToAll}>
-              Apply
+              Set channel
             </Button>
           </>
         }
       >
-        <SettingRow
-          stacked
-          title="Channel"
-          description="Replaces the channel set on each category."
-        >
+        <div className="field">
+          <span className="field-label">Channel</span>
           <ChannelPicker
             guildId={guildId}
             label="Channel for all categories"
@@ -128,7 +121,7 @@ export function Categories({
             value={setAllChannel}
             onChange={setSetAllChannel}
           />
-        </SettingRow>
+        </div>
       </Dialog>
     </>
   );
@@ -156,13 +149,15 @@ function CategoryRow({
   const channelError = form.errorAt(`categoryChannels.${category}`);
   const toggleError = form.errorAt(`categories.${category}`);
   const error = channelError ?? toggleError;
+  const contents = CATEGORY_CONTENTS[category];
 
   return (
     <div className="matrix-row serverlog-route-row">
       <div className="matrix-row-main">
-        <span className="matrix-row-name" title={CATEGORY_CONTENTS[category]}>
-          {CATEGORY_LABEL[category]}
-        </span>
+        <span className="matrix-row-name">{CATEGORY_LABEL[category]}</span>
+        {contents !== undefined ? (
+          <HelpTip label={CATEGORY_LABEL[category]}>{contents}</HelpTip>
+        ) : null}
         <span className="matrix-row-hint">
           {keys.length} events ·{' '}
           {destination === '' ? 'no channel' : <ChannelRef id={destination} channels={channels} />}

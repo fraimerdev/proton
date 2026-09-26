@@ -20,17 +20,15 @@ const NEW_RUNG_DURATION = '1h';
 
 // escalationLadderSchema's two refines, verbatim: the same words the save would come back with.
 const OUT_OF_ORDER =
-  'rungs must be ordered by atWarnings, strictly increasing — two rungs at the same warning ' +
-  'count would both fire on it.';
+  'Each step needs a higher warning count than the one before it. Two steps at the same count ' +
+  'would both run.';
 
-const NEEDS_DURATION =
-  "a 'timeout' rung needs a duration, e.g. 1h — Discord timeouts are an expiry, not a flag.";
+const NEEDS_DURATION = 'A timeout step needs a duration, like 1h.';
 
 const LADDER_INTRO =
-  'A step runs when a member reaches its warning count within the escalation window. Steps are ' +
-  'ordered by warning count, so change the count to move a step.';
+  'A step runs when a member reaches its warning count within the escalation window.';
 
-const NO_RUNGS = 'Warnings are still recorded, but nothing happens until a step is added.';
+const NO_RUNGS = 'Warnings are still recorded, but nothing happens until you add a step.';
 
 const ACTION_LABELS: Record<EscalationAction, string> = {
   timeout: 'Timeout',
@@ -259,7 +257,7 @@ function Rung({
       <p className="moderation-rung-reason">
         Case reason:{' '}
         <span>
-          Warning {rung.atWarnings} within {escalationWindow} — automatic escalation
+          Warning {rung.atWarnings} within {escalationWindow} (automatic escalation)
         </span>
       </p>
     </div>

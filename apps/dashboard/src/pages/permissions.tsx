@@ -17,8 +17,8 @@ import { CommandMatrix } from './permissions/matrix.tsx';
 
 const MIGRATION_NOTE =
   '/untimeout, /unquarantine and /unlock are now part of /timeout, /quarantine and /lockdown. ' +
-  'Their roles moved to those commands, except where a command already had its own. Proton ' +
-  'already applies them this way. Save to store them in the current format.';
+  'Their roles moved to those commands, except where a command already had its own. Check ' +
+  'them, then save.';
 
 export default function PermissionsPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: permissionsConfigSchema });

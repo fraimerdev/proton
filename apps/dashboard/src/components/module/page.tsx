@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Children } from 'react';
 import type { ModuleMeta } from '../../lib/modules/catalogue.ts';
 import { Button, cx, Switch } from '../ui/controls.tsx';
-import { StatusBanner } from '../ui/feedback.tsx';
+import { type BannerTone, StatusBanner } from '../ui/feedback.tsx';
 import { Icon } from '../ui/icon.tsx';
 
 export type ModuleState = 'on' | 'off' | 'attention';
@@ -76,14 +76,9 @@ export function ModuleSwitch({
           state === 'attention' ? 'text-warning' : enabled ? 'text-secondary' : 'text-muted',
         )}
       >
-        {state === 'attention' ? 'Cannot run' : enabled ? 'On' : 'Off'}
+        {state === 'attention' ? 'Can’t run' : enabled ? 'On' : 'Off'}
       </span>
-      <Switch
-        checked={enabled}
-        disabled={busy || pending}
-        onChange={onToggle}
-        label={`${name} enabled`}
-      />
+      <Switch checked={enabled} disabled={busy || pending} onChange={onToggle} label={name} />
     </span>
   );
 }
@@ -92,6 +87,8 @@ export function ModuleBanners({
   moduleName,
   status,
   enabled,
+  offNote,
+  offTone = 'neutral',
   migrated,
   migrationNote,
   changedElsewhere,
@@ -101,6 +98,8 @@ export function ModuleBanners({
   moduleName: string;
   status?: ModuleStatusView | null | undefined;
   enabled: boolean;
+  offNote?: ReactNode;
+  offTone?: BannerTone | undefined;
   migrated?: boolean | undefined;
   migrationNote?: ReactNode;
   changedElsewhere?: boolean | undefined;
@@ -109,9 +108,11 @@ export function ModuleBanners({
 }): ReactElement | null {
   const blocked = enabled && status && !status.enabled ? status.disabledReason : undefined;
   const hasChildren = Children.toArray(children).length > 0;
+  const off = !enabled && offNote !== undefined;
 
   const anything =
     blocked !== undefined ||
+    off ||
     migrated === true ||
     changedElsewhere === true ||
     (saveError !== null && saveError !== undefined) ||
@@ -124,7 +125,7 @@ export function ModuleBanners({
       {blocked ? (
         <StatusBanner
           tone="warning"
-          title={`Proton cannot run ${moduleName}`}
+          title={`Proton can’t run ${moduleName}`}
           actions={
             <Button
               tone="secondary"
@@ -140,22 +141,27 @@ export function ModuleBanners({
         </StatusBanner>
       ) : null}
 
+      {off ? (
+        <StatusBanner tone={offTone}>
+          {moduleName} is off. {offNote}
+        </StatusBanner>
+      ) : null}
+
       {migrated === true ? (
         <StatusBanner tone="info" title="Settings from an older version">
           {migrationNote ??
-            'These settings were saved by an older version of Proton, and some may have changed. Check them, then save to store them in the current format.'}
+            'Some of these were saved by an older version of Proton and may have changed. Check them, then save.'}
         </StatusBanner>
       ) : null}
 
       {changedElsewhere === true ? (
-        <StatusBanner tone="warning" title="Someone else saved changes">
-          These settings changed while this page was open. Saving now replaces their changes with
-          yours. Reset to load theirs instead.
+        <StatusBanner tone="warning" title="These settings changed while you were editing">
+          Saving now replaces those changes with yours. Reset to load them instead.
         </StatusBanner>
       ) : null}
 
       {saveError !== null && saveError !== undefined ? (
-        <StatusBanner tone="danger" live="assertive" title="Save failed">
+        <StatusBanner tone="danger" live="assertive">
           {saveError}
         </StatusBanner>
       ) : null}

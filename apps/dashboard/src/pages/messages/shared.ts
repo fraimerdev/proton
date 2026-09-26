@@ -51,12 +51,12 @@ export const ROLE_MODE_HELP: Readonly<Record<string, string>> = {
 };
 
 export const NEEDS_MANAGE_ROLES =
-  'Giving or removing a role needs Manage Roles, which the Messages module does not require. ' +
-  'Without it, the message still posts but the role does not change.';
+  'Proton needs Manage Roles, and its highest role must be above this one. Without that, members ' +
+  'are told the role couldn’t be changed.';
 
 export const V2_PRESS_UNROUTABLE =
-  'The message still posts, but Proton cannot act on a button or dropdown inside a layout. Use a ' +
-  'link button, or move the button out of the layout.';
+  'The message still posts, but Proton can’t act on buttons or dropdowns inside a layout. Only ' +
+  'link buttons work there.';
 
 // Renaming changes the URL's name on every keystroke; a plain lookup would close the editor mid-word.
 export function useHeldIndex(id: string | undefined, keys: readonly string[]): number {
@@ -177,11 +177,11 @@ export function mentionCaption(policy: MentionPolicy): string {
   if (policy.users) on.push('members');
   if (policy.everyone) on.push('@everyone', '@here');
 
-  if (on.length === 0) return 'Mentions still show but do not notify anyone.';
+  if (on.length === 0) return 'Mentions still show but don’t notify anyone.';
 
   return policy.roles && policy.users && policy.everyone
     ? `Can ping ${joinWords(on)}.`
-    : `Can ping ${joinWords(on)}. Other mentions still show but do not notify anyone.`;
+    : `Can ping ${joinWords(on)}. Other mentions still show but don’t notify anyone.`;
 }
 
 export function templateContents(template: SavedMessage): string[] {
@@ -205,9 +205,11 @@ export function scheduleSummary(
 
   const where = channelName === undefined ? 'its channel' : `#${channelName}`;
 
-  return schedule.mode === 'repeat'
-    ? `Every ${schedule.every ?? '—'}, from ${schedule.at} in ${where}`
-    : `Once, ${schedule.at} in ${where}`;
+  if (schedule.mode === 'once') return `Once, ${schedule.at} in ${where}`;
+
+  return schedule.every === undefined
+    ? `Repeats from ${schedule.at} in ${where}, no interval set`
+    : `Every ${schedule.every}, from ${schedule.at} in ${where}`;
 }
 
 export function startHasPassed(schedule: TemplateSchedule | undefined): boolean {

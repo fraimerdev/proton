@@ -41,6 +41,19 @@
   color: var(--warning);
 }
 
+.joinroles-sync-notgiven {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.joinroles-sync-notgiven > svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--warning);
+}
+
 .joinroles-issues {
   display: flex;
   flex-direction: column;
@@ -69,4 +82,38 @@
 .joinroles-issue-role {
   color: var(--text-secondary);
   font-weight: var(--weight-medium);
+}
+
+.joinroles-sync-value {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.joinroles-sync-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.joinroles-sync-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.45;
+  max-width: 72ch;
+}
+
+.joinroles-sync-lines {
+  margin-top: 8px;
+}
+
+.row-note.joinroles-sync-stalled {
+  color: var(--warning);
 }

@@ -29,13 +29,12 @@ import { priorityHex, STATUS_LABELS, type TicketsForm } from './shape.ts';
 const PAGE_SIZES = [25, 50, 100] as const;
 
 const SEARCH_HELP =
-  'Search looks at the subject, which is the first answer to the ticket’s questions. Tickets with ' +
-  'no answers have no subject and never match.';
+  'Search matches ticket subjects: the subject a member gave, or their first form answer.';
 
 const NO_TYPES = 'Create a ticket type so members can open tickets.';
 
 const READ_ONLY =
-  'Form answers, participants and messages are not shown here. Find them in the ticket channel or ' +
+  'Form answers, participants and messages aren’t shown here. Find them in the ticket channel or ' +
   'its transcript.';
 
 const SORT_LABELS: Record<TicketSortField, string> = {
@@ -72,10 +71,10 @@ function When({ iso, now }: { iso: string | null; now: number }): ReactElement {
     () => undefined,
   );
 
-  if (iso === null) return <span className="text-muted">—</span>;
+  if (iso === null) return <span className="text-muted">Not closed</span>;
 
   return (
-    <time dateTime={iso} title={title} suppressHydrationWarning>
+    <time className="tickets-when" dateTime={iso} title={title} suppressHydrationWarning>
       {relative(iso, now)}
     </time>
   );
@@ -171,9 +170,9 @@ export function QueueArea({
       primary: true,
       cell: (row) =>
         row.subject === null ? (
-          <span className="text-muted">—</span>
+          <span className="text-muted">No subject</span>
         ) : (
-          <span className="truncate" title={row.subject}>
+          <span className="truncate tickets-subject" title={row.subject}>
             {row.subject}
           </span>
         ),
@@ -222,7 +221,7 @@ export function QueueArea({
               name="user-plus"
               size={13}
               className="text-muted"
-              label="Transferred from the member who raised it"
+              label="Transferred from the member who opened it"
             />
           ) : null}
         </span>
@@ -232,7 +231,7 @@ export function QueueArea({
       id: 'claimed',
       header: 'Claimed by',
       width: 176,
-      cell: (row) => <MemberCell userId={row.claimedById} fallback="—" />,
+      cell: (row) => <MemberCell userId={row.claimedById} fallback="No one" />,
     },
     {
       id: 'messages',
@@ -320,8 +319,8 @@ export function QueueArea({
         ),
       }
     : config.types.length === 0
-      ? { icon: 'ticket' as const, title: 'No tickets', body: NO_TYPES }
-      : { icon: 'ticket' as const, title: 'No tickets' };
+      ? { icon: 'ticket' as const, title: 'No tickets yet', body: NO_TYPES }
+      : { icon: 'ticket' as const, title: 'No tickets yet' };
 
   return (
     <MemberProvider guildId={guildId} userIds={memberIds}>
@@ -469,7 +468,8 @@ function TicketDetail({
   now: number;
   onClose: () => void;
 }): ReactElement | null {
-  if (!ticket) return null;
+  // A closed Dialog rather than null, so the panel fades out still showing this ticket.
+  if (!ticket) return <Dialog open={false} onClose={onClose} title="" size="medium" />;
 
   const type = typeFor(config, ticket.typeId);
 
@@ -477,9 +477,9 @@ function TicketDetail({
     <Dialog
       open
       onClose={onClose}
-      size="wide"
+      size="medium"
+      icon="ticket"
       title={`Ticket #${ticket.number}`}
-      description={ticket.subject ?? 'No subject.'}
       footer={
         <>
           <a
@@ -502,20 +502,20 @@ function TicketDetail({
           ) : null}
         </>
       }
-      footerNote={READ_ONLY}
     >
+      {ticket.subject !== null ? <p className="tickets-detail-subject">{ticket.subject}</p> : null}
       <Pairs>
         <Pair label="Status">{STATUS_LABELS[ticket.status]}</Pair>
         <Pair label="Priority">{PRIORITY_LABELS[ticket.priority]}</Pair>
         <Pair label="Type">{type?.name ?? <span className="mono">{ticket.typeId}</span>}</Pair>
         <Pair label="Panel">
-          <span className="mono">{ticket.panelId === '' ? '—' : ticket.panelId}</span>
+          {ticket.panelId === '' ? 'None' : <span className="mono">{ticket.panelId}</span>}
         </Pair>
         <Pair label="Owner">
           <MemberCell userId={ticket.ownerId} />
         </Pair>
         {ticket.openerId !== ticket.ownerId ? (
-          <Pair label="Raised by">
+          <Pair label="Opened by">
             <MemberCell userId={ticket.openerId} />
           </Pair>
         ) : null}
@@ -540,13 +540,12 @@ function TicketDetail({
             <MemberCell userId={ticket.closedBy} />
           </Pair>
         ) : null}
-        {ticket.closeReason !== null ? (
-          <Pair label="Close reason">{ticket.closeReason}</Pair>
-        ) : null}
+        {ticket.closeReason !== null ? <Pair label="Reason">{ticket.closeReason}</Pair> : null}
         <Pair label="Ticket ID">
           <span className="mono">{ticket.id}</span>
         </Pair>
       </Pairs>
+      <p className="text-muted text-sm">{READ_ONLY}</p>
     </Dialog>
   );
 }

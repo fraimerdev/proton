@@ -17,16 +17,18 @@ import {
 import { EmptyState, Spinner } from '../../components/ui/feedback.tsx';
 import { Section } from '../../components/ui/layout.tsx';
 import { SegmentedTabs } from '../../components/ui/tabs.tsx';
-import { rolesQuery } from '../../lib/queries.ts';
+import { guildCommandsQuery, rolesQuery } from '../../lib/queries.ts';
 import {
   buildGroups,
   type CommandGroup,
   type CommandRow,
+  displayNamesOf,
   filterGroups,
   foldRetired,
   isShowFilter,
   type Overrides,
   refusalSentence,
+  rowHint,
   type ShowFilter,
 } from './commands.ts';
 
@@ -38,11 +40,11 @@ const SHOW_TABS: readonly { id: ShowFilter; label: string }[] = [
 
 const OPEN_NOTE =
   'Unrestricted commands have no Proton override. Discord’s own command permissions still apply, ' +
-  'and the dashboard cannot read them, so unrestricted does not mean anyone can use a command.';
+  'and the dashboard can’t show them, so unrestricted doesn’t mean everyone can use a command.';
 
 const OFF_NOTE =
-  'Permissions is disabled. Settings are saved, but nothing runs until you switch it on. ' +
-  'Discord’s own command permissions apply instead.';
+  'Permissions is off. Overrides are saved, but only Discord’s own command permissions apply ' +
+  'until you turn it on.';
 
 export function CommandMatrix({
   guildId,
@@ -76,8 +78,13 @@ export function CommandMatrix({
   const show: ShowFilter = isShowFilter(search.status) ? search.status : 'all';
 
   const { setValue } = form;
+  const catalogue = useQuery(guildCommandsQuery(guildId)).data;
+  const displayNames = useMemo(() => displayNamesOf(catalogue?.commands), [catalogue]);
   const folded = useMemo(() => foldRetired(form.value.overrides), [form.value.overrides]);
-  const groups = useMemo(() => buildGroups(modules, folded), [modules, folded]);
+  const groups = useMemo(
+    () => buildGroups(modules, folded, displayNames),
+    [modules, folded, displayNames],
+  );
 
   const moduleFilter = groups.some((group) => group.id === search.id && group.id !== '')
     ? search.id
@@ -246,7 +253,7 @@ export function CommandMatrix({
               disabled={bulkRoles.length === 0}
               onClick={() => applyBulk('replace')}
             >
-              Replace
+              Replace roles
             </Button>
           </div>
         </div>
@@ -260,7 +267,7 @@ export function CommandMatrix({
 
       {total === 0 ? (
         <EmptyState icon="lock" title="No commands" inset>
-          No module in this server has slash commands.
+          No module in this server has commands.
         </EmptyState>
       ) : visible.length === 0 ? (
         <EmptyState
@@ -346,17 +353,6 @@ function MatrixGroup({
   );
 }
 
-function rowHint(row: CommandRow): string | null {
-  if (row.inheritedFrom !== undefined) {
-    return `/${row.inheritedFrom} is now part of /${row.name}, and its roles moved here.`;
-  }
-  if (row.orphan) {
-    return `No module in this server has /${row.name}, so this override does nothing.`;
-  }
-  if (row.roles.length === 0) return 'No override. Discord’s own command permissions apply.';
-  return null;
-}
-
 function MatrixRow({
   guildId,
   row,
@@ -380,13 +376,13 @@ function MatrixRow({
     <div className="matrix-row permissions-row">
       <Checkbox
         checked={selected}
-        label={`Select /${row.name}`}
+        label={`Select /${row.displayName}`}
         onChange={() => onToggle(row.name)}
       />
 
       <div className="permissions-row-main">
         <div className="permissions-row-head">
-          <span className="matrix-row-name mono">/{row.name}</span>
+          <span className="matrix-row-name mono">/{row.displayName}</span>
           {hint !== null ? <span className="matrix-row-hint">{hint}</span> : null}
         </div>
 
@@ -395,7 +391,7 @@ function MatrixRow({
             {rolesPending ? (
               <Spinner label="Loading roles" />
             ) : (
-              refusalSentence(row.name, row.roles, roleName)
+              refusalSentence(row.displayName, row.roles, roleName)
             )}
           </p>
         ) : null}
@@ -405,7 +401,7 @@ function MatrixRow({
         <RoleMultiPicker
           guildId={guildId}
           value={row.roles}
-          label={`Roles that can use /${row.name}`}
+          label={`Roles that can use /${row.displayName}`}
           onChange={(next) => onSetRoles(row.name, next)}
         />
       </div>
@@ -416,7 +412,11 @@ function MatrixRow({
             icon="x"
             tone="ghost"
             size="sm"
-            label={row.orphan ? `Remove override on /${row.name}` : `Clear roles on /${row.name}`}
+            label={
+              row.orphan
+                ? `Remove override on /${row.displayName}`
+                : `Clear roles on /${row.displayName}`
+            }
             onClick={() => onSetRoles(row.name, [])}
           />
         ) : null}

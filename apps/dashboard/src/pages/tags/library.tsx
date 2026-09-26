@@ -16,7 +16,7 @@ import { type Column, DataTable, Pagination } from '../../components/ui/table.ts
 import { readFailure } from '../../lib/errors.ts';
 import { libraryFilter, TAG_SEARCH_MAX, tagsQuery } from './queries.ts';
 
-const SEARCH_TOO_LONG = `Search is capped at ${TAG_SEARCH_MAX} characters.`;
+const SEARCH_TOO_LONG = `Search can be up to ${TAG_SEARCH_MAX} characters.`;
 
 const AUTHORED_IN_DISCORD = 'Use /tags in Discord to create, edit and delete tags.';
 
@@ -133,10 +133,10 @@ export function TagLibraryArea({
         ? { icon: 'magnifying-glass', title: 'No matching tags', body: NO_MATCH_BODY }
         : {
             icon: 'tag',
-            title: 'No tags',
+            title: 'No tags yet',
             body: (
               <>
-                Create the first one with <span className="mono">/tags create</span>.
+                Create one with <span className="mono">/tags create</span> in Discord.
               </>
             ),
           };
@@ -190,7 +190,7 @@ export function TagLibraryArea({
       width: 210,
       cell: (row) =>
         row.updatedAt === row.createdAt ? (
-          <span className="text-muted">—</span>
+          <span className="text-muted">Never</span>
         ) : (
           <span className="inline inline-6">
             <When iso={row.updatedAt} now={now} />
@@ -228,7 +228,7 @@ export function TagLibraryArea({
 
         {!tooLong && dashed !== undefined ? (
           <p className="tags-note text-muted text-xs">
-            Tag names have no spaces — try <span className="mono">{dashed}</span>.
+            Tag names have no spaces. Try <span className="mono">{dashed}</span>.
           </p>
         ) : null}
 
@@ -281,7 +281,8 @@ function TagDialog({
   // Keyed to the tag, not cleared in an effect, so a newly opened tag never shows another's copy.
   const [copied, setCopied] = useState<{ name: string; what: string } | null>(null);
 
-  if (!tag) return null;
+  // A closed Dialog rather than null, so the panel fades out still showing this tag.
+  if (!tag) return <Dialog open={false} onClose={onClose} title="" size="medium" />;
 
   const note = copied?.name === tag.name ? `${copied.what} copied` : undefined;
 
@@ -295,7 +296,8 @@ function TagDialog({
       open
       onClose={onClose}
       title={tag.name}
-      size="wide"
+      size="medium"
+      icon="tag"
       footerNote={note}
       footer={
         <>
@@ -307,36 +309,34 @@ function TagDialog({
         </>
       }
     >
-      <div className="stack stack-16">
-        <p className="mono text-sm tags-command">{tagCommand(tag.name)}</p>
+      <p className="mono text-sm tags-command">{tagCommand(tag.name)}</p>
 
-        <DiscordPreview
-          message={{ content: tag.content }}
-          command={{ user: SAMPLE_INVOKER, name: 'tag' }}
-        />
+      <DiscordPreview
+        message={{ content: tag.content }}
+        command={{ user: SAMPLE_INVOKER, name: 'tag' }}
+      />
 
-        <Pairs>
-          <Pair label="Created by">
-            <MemberCell userId={tag.createdBy} />
-          </Pair>
-          <Pair label="Created">
-            <When iso={tag.createdAt} now={now} />
-          </Pair>
-          <Pair label="Last edited by">
-            <MemberCell userId={tag.updatedBy} fallback="None" />
-          </Pair>
-          <Pair label="Last edited">
-            {tag.updatedAt === tag.createdAt ? (
-              <span className="text-muted">Never edited</span>
-            ) : (
-              <When iso={tag.updatedAt} now={now} />
-            )}
-          </Pair>
-          <Pair label="Uses">
-            {tag.uses} time{tag.uses === 1 ? '' : 's'}
-          </Pair>
-        </Pairs>
-      </div>
+      <Pairs>
+        <Pair label="Created by">
+          <MemberCell userId={tag.createdBy} />
+        </Pair>
+        <Pair label="Created">
+          <When iso={tag.createdAt} now={now} />
+        </Pair>
+        <Pair label="Last edited by">
+          <MemberCell userId={tag.updatedBy} fallback="None" />
+        </Pair>
+        <Pair label="Last edited">
+          {tag.updatedAt === tag.createdAt ? (
+            <span className="text-muted">Never edited</span>
+          ) : (
+            <When iso={tag.updatedAt} now={now} />
+          )}
+        </Pair>
+        <Pair label="Uses">
+          {tag.uses} time{tag.uses === 1 ? '' : 's'}
+        </Pair>
+      </Pairs>
     </Dialog>
   );
 }

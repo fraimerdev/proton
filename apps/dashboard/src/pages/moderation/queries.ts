@@ -72,7 +72,14 @@ export function caseCountQuery(guildId: string) {
     queryKey: [...queryKeys.guild(guildId), 'cases', 'count'] as const,
     queryFn: () =>
       searchCases({
-        data: { guildId, page: 1, pageSize: 1, sort: 'createdAt', direction: 'desc' },
+        data: {
+          guildId,
+          scope: 'moderation',
+          page: 1,
+          pageSize: 1,
+          sort: 'createdAt',
+          direction: 'desc',
+        },
       }),
     staleTime: STALE.browse,
     ...LIVE,

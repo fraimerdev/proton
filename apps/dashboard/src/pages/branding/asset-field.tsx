@@ -14,15 +14,16 @@ export function assetSource(guildId: string, kind: AssetKind, hash: string): str
 
 // A courtesy only: the server sniffs magic bytes and is the authority, so these are its sentences.
 export function refuseLocally(file: File, kind: AssetKind): string | null {
-  if (file.size === 0) return 'That image was not saved: that file is empty.';
+  if (file.size === 0) return 'That image wasn’t saved: that file is empty.';
 
   const cap = maxBytesFor(kind);
   if (file.size > cap) {
-    return `That image was not saved: that image is ${kilobytes(file.size)}, and a ${kind} may be at most ${kilobytes(cap)}.`;
+    const article = kind === 'avatar' ? 'an avatar' : 'a banner';
+    return `That image wasn’t saved: that image is ${kilobytes(file.size)}, and ${article} can be at most ${kilobytes(cap)}.`;
   }
 
   if (!(ACCEPTED_TYPES as readonly string[]).includes(file.type)) {
-    return 'That image was not saved: that file is not a PNG, JPEG or GIF. Discord accepts no other format.';
+    return 'That image wasn’t saved: that file isn’t a PNG, JPEG or GIF, the only formats Discord accepts.';
   }
 
   return null;

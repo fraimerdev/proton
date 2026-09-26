@@ -20,7 +20,7 @@ import {
 } from '../../components/ui/controls.tsx';
 import { EmptyState } from '../../components/ui/feedback.tsx';
 import { Icon } from '../../components/ui/icon.tsx';
-import { Section, SettingRow } from '../../components/ui/layout.tsx';
+import { Section } from '../../components/ui/layout.tsx';
 import {
   ConfirmDialog,
   Dialog,
@@ -219,10 +219,12 @@ export function Events({
   };
 
   const openSpec = openRow === null ? undefined : LOG_SPECS.find((spec) => spec.key === openRow);
+  const [shownSpec, setShownSpec] = useState(openSpec);
+  if (openSpec !== undefined && openSpec !== shownSpec) setShownSpec(openSpec);
 
   return (
-    <Section label="Overrides" note="On still applies when the category is disabled.">
-      <div className="matrix-toolbar">
+    <Section label="Overrides" note="On still applies when the category is off.">
+      <div className="matrix-toolbar serverlog-toolbar">
         <SearchField
           value={draft}
           onChange={setDraft}
@@ -243,18 +245,19 @@ export function Events({
           value={state}
           onChange={(value) => go({ status: value === '' ? undefined : value })}
         />
-        <Button
-          size="sm"
-          className="push-right"
-          disabled={visibleKeys.length === 0}
-          onClick={() => {
-            setRouteAllChannel(null);
-            setRouteAllOpen(true);
-          }}
-        >
-          Set channel for all
-        </Button>
-        <MenuButton label="Bulk actions" actions={actions} />
+        <div className="inline inline-8 push-right">
+          <Button
+            size="sm"
+            disabled={visibleKeys.length === 0}
+            onClick={() => {
+              setRouteAllChannel(null);
+              setRouteAllOpen(true);
+            }}
+          >
+            Set channel for all
+          </Button>
+          <MenuButton label="Bulk actions" actions={actions} />
+        </div>
       </div>
 
       {groups.length === 0 ? (
@@ -325,6 +328,7 @@ export function Events({
         open={routeAllOpen}
         onClose={() => setRouteAllOpen(false)}
         title="Set channel for all"
+        size="compact"
         description={`Applies to the ${visibleKeys.length} event${visibleKeys.length === 1 ? '' : 's'} matching the current filters.`}
         footer={
           <>
@@ -342,16 +346,13 @@ export function Events({
                 setRouteAllOpen(false);
               }}
             >
-              Apply
+              Set channel
             </Button>
           </>
         }
       >
-        <SettingRow
-          stacked
-          title="Channel"
-          description="Post these events here instead of in their category or default channel."
-        >
+        <div className="field">
+          <span className="field-label">Channel</span>
           <ChannelPicker
             guildId={guildId}
             label="Channel for these events"
@@ -362,7 +363,10 @@ export function Events({
             value={routeAllChannel}
             onChange={setRouteAllChannel}
           />
-        </SettingRow>
+          <span className="field-hint">
+            Post these events here instead of in their category or default channel.
+          </span>
+        </div>
       </Dialog>
 
       <ConfirmDialog
@@ -370,17 +374,18 @@ export function Events({
         onClose={() => setConfirmReset(false)}
         onConfirm={resetVisible}
         title="Reset these overrides?"
-        confirmLabel="Reset"
+        confirmLabel="Reset overrides"
         danger
       >
-        {storedCount} events go back to Follow and lose their own channels. Category settings do not
+        {storedCount} events go back to Follow and lose their own channels. Category settings don’t
         change.
       </ConfirmDialog>
 
-      {openSpec ? (
+      {shownSpec ? (
         <RouteDialog
+          open={openSpec !== undefined}
           guildId={guildId}
-          spec={openSpec}
+          spec={openSpec ?? shownSpec}
           config={config}
           channels={channels}
           onChange={setRowChannel}
@@ -457,6 +462,7 @@ function eventHint(spec: LogEventSpec, config: ServerlogConfig, channels: Channe
 }
 
 function RouteDialog({
+  open,
   guildId,
   spec,
   config,
@@ -464,6 +470,7 @@ function RouteDialog({
   onChange,
   onClose,
 }: {
+  open: boolean;
   guildId: string;
   spec: LogEventSpec;
   config: ServerlogConfig;
@@ -482,22 +489,20 @@ function RouteDialog({
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       title={spec.label}
-      description={<span className="mono">{spec.key}</span>}
+      size="compact"
+      icon="hash"
+      description="Post this event here instead of in its category or default channel."
       footer={
         <Button tone="secondary" onClick={onClose}>
           Done
         </Button>
       }
     >
-      <SettingRow
-        stacked
-        title="Channel"
-        description="Post this event here instead of in its category or default channel."
-        note={<CurrentChain spec={spec} config={config} channels={channels} />}
-      >
+      <div className="field">
+        <span className="field-label">Channel</span>
         <ChannelPicker
           guildId={guildId}
           label={`Channel for ${spec.label}`}
@@ -508,7 +513,10 @@ function RouteDialog({
           value={override?.channelId || null}
           onChange={(id) => onChange(spec.key, id)}
         />
-      </SettingRow>
+        <span className="field-hint">
+          <CurrentChain spec={spec} config={config} channels={channels} />
+        </span>
+      </div>
     </Dialog>
   );
 }
@@ -523,7 +531,7 @@ function CurrentChain({
   channels: ChannelIndex;
 }): ReactElement {
   const destination = destinationOf(config, spec.key, spec.category);
-  if (destination === null) return <>Currently not posted.</>;
+  if (destination === null) return <>Nothing is posted.</>;
 
   const source = config.events[spec.key]?.channelId
     ? 'own channel'

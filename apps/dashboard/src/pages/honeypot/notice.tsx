@@ -16,27 +16,25 @@ import {
   quietNoticeBody,
 } from './shape.ts';
 
-const SAVE_RECONCILES = 'Saving deletes the warning message from paused and removed bait channels.';
+const SAVE_RECONCILES = 'Saving removes the warning message from paused and removed bait channels.';
 
 const OVERRIDDEN =
-  '“Hide channel purpose” is enabled, so this text replaces your paragraph when the warning ' +
+  '“Hide channel purpose” is on, so this text replaces your paragraph when the warning ' +
   'message is posted.';
 
-const PLACEHOLDERS =
-  'Placeholders are filled in when the warning message is posted. Type { in a text or link to ' +
-  'add one.';
+const PLACEHOLDERS = 'Type { in any text or link to add a placeholder.';
 
 const OWN_COUNT = 'In Discord, each bait channel’s counter shows its own count.';
 
 const EMPTY = 'This layout posts nothing. Discord refuses an empty message.';
 
 const REFUSED =
-  'Once its placeholders are filled in, this layout cannot be posted. Check the links, and any ' +
-  'text that could come out empty.';
+  'With its placeholders filled in, this layout can’t be posted. Check the links, and any text ' +
+  'that could come out empty.';
 
 const NOT_POSTED =
-  'The warning message is disabled. This layout is kept, and saving deletes any warning ' +
-  'messages already posted in bait channels.';
+  'The warning message is off. Your layout is kept, and saving removes any warning messages ' +
+  'already posted.';
 
 const FREE_TIER =
   'On the Free plan, Proton posts its own wording. Yours is saved and used once the server is on ' +
@@ -81,7 +79,7 @@ export function NoticeArea({
             <Rows>
               <SettingRow
                 title="Post a warning message"
-                description="Shown in every armed bait channel to warn members away."
+                description="Posted in every armed bait channel to warn members away."
               >
                 <Switch
                   label="Post a warning message"

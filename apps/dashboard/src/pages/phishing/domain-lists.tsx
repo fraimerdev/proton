@@ -25,15 +25,14 @@ const LIST_LABEL: Record<ListKey, string> = {
   allowDomains: 'Allowed domains',
 };
 
-const LIST_CAPTION: Record<ListKey, string | undefined> = {
-  blockDomains: undefined,
-  allowDomains: 'Ignore links to these domains, even when the community blocklist includes them.',
-};
+const LISTS_HELP =
+  'Extra blocked domains are checked alongside the community blocklist. Links to allowed domains ' +
+  'are never acted on, even when a blocklist includes them.';
 
 const LIST_EMPTY: Record<ListKey, string> = {
   blockDomains:
     'No extra blocked domains. Links are still checked against the community blocklist.',
-  allowDomains: 'No allowed domains. Add one if Proton blocks a domain it should not.',
+  allowDomains: 'No allowed domains. Add one if Proton blocks a domain it shouldn’t.',
 };
 
 const NOT_A_DOMAIN = 'Not a domain Proton can read. Use a hostname such as example.com.';
@@ -61,8 +60,8 @@ function shadowReason(domain: string, allowed: ReadonlySet<string>): string | nu
   if (shadow === null) return null;
 
   return shadow === host
-    ? 'Also in Allowed domains, which wins, so this entry has no effect.'
-    : `Covered by ${shadow} in Allowed domains, which wins, so this entry has no effect.`;
+    ? 'Also in Allowed domains, so this entry has no effect.'
+    : `Covered by ${shadow} in Allowed domains, so this entry has no effect.`;
 }
 
 function DomainEditor({
@@ -194,7 +193,6 @@ export function DomainLists({
   }, [list, query]);
 
   const atCeiling = list.length >= LIST_MAX;
-  const caption = LIST_CAPTION[active];
 
   const switchTo = (next: ListKey): void => {
     setActive(next);
@@ -249,7 +247,7 @@ export function DomainLists({
   };
 
   return (
-    <Section label="Domain lists">
+    <Section label="Domain lists" help={LISTS_HELP}>
       <div className="phishing-list-bar">
         <SegmentedTabs
           label="Domain list"

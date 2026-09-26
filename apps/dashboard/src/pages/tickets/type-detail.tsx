@@ -64,11 +64,11 @@ const NAME_PATTERN_MAX = 100;
 const WELCOME_MAX = 2000;
 const STAFF_ROLES_MAX = 20;
 
-const ID_FIXED =
-  'The ID cannot be changed. It is written into the buttons of every posted panel and into every ' +
-  'ticket already opened.';
+const ID_FIXED = 'The ID can’t be changed.';
 
-const DESCRIPTION_NOTE = 'Shown under the name in a dropdown panel. Button panels do not show it.';
+const ID_HELP = 'Posted panels and tickets already opened refer to this ticket type by its ID.';
+
+const DESCRIPTION_NOTE = 'Shown under the name in dropdown panels. Button panels don’t show it.';
 
 const ARCHIVE_NOTE = 'Closed ticket channels move here when Archive on close is on.';
 
@@ -82,50 +82,51 @@ const NO_PLACEHOLDER =
 
 const RESOLVED_ROLES = 'All staff roles for this ticket type:';
 
-const MENTION_NOTE =
-  'The ping is sent as a second message, because a mention inside the opening message does not ' +
+const MENTION_HELP =
+  'Proton pings them in a separate message, because mentions inside the opening message don’t ' +
   'notify anyone.';
 
-const PER_TYPE_LIMIT = 'Checked alongside the limit in Settings. The lower of the two applies.';
+const PER_TYPE_LIMIT =
+  'Applies on top of the limit in Settings, and counts only tickets of this type.';
 
 const PRIORITY_SLOT =
-  'The priority question counts toward Discord’s limit of 5 questions, so the last question below ' +
-  'is not shown.';
+  'Asking for priority uses one of Discord’s 5 form slots, so the form can show 4 other questions.';
 
 const NO_MODAL = 'No form is shown, so the ticket opens straight away.';
 
-const CLAIM_RESTRICT_REFUSAL =
-  'Other staff and the ticket’s owner are told: “Ticket #12 is claimed by @somebody, and this ' +
-  'ticket type limits its controls to whoever claimed it. They can hand it over, or a moderator ' +
-  'can unclaim it.”';
+const CLAIM_RESTRICT =
+  'Only the staff member who claimed a ticket can use its controls until they hand it over.';
+
+const CLAIM_RESTRICT_HELP =
+  'Members with Manage Channels or Manage Server can still use the controls and unclaim the ticket.';
 
 const NO_REOPEN = 'Closed tickets of this type show Transcript and Delete, but no Reopen.';
 
-const RATING_NOTE =
-  'Proton asks the member for a rating from 1 to 5 after the ticket closes. The wording cannot be ' +
-  'changed.';
+const RATING_DESCRIPTION =
+  'After a ticket closes, Proton asks the member to rate the help from 1 to 5.';
+
+const RATING_HELP =
+  'Proton asks by DM, or in the ticket channel if the member’s DMs are closed. The wording can’t ' +
+  'be changed.';
 
 const WARN_NOTE = 'Only sent while the ticket is waiting on the member, not on staff.';
 
-const WARN_TOO_LATE = 'The warning would not arrive before the ticket closes.';
+const WARN_TOO_LATE = 'The warning wouldn’t arrive before the ticket closes.';
 
-const TIMERS_NOTE =
-  'Auto-close and the warning count from the last activity in the ticket, so a new message ' +
-  'restarts both.';
+const AUTO_CLOSE_DESCRIPTION = 'Close tickets that have been quiet for this long.';
 
-const CLOSE_REQUEST_NOTE =
-  'If the member does not answer, Proton closes the ticket with the reason “closed because nobody ' +
-  'answered the request to close it”.';
+const TIMERS_HELP =
+  'Auto-close and the inactivity warning count from the last message in the ticket, so a new ' +
+  'message restarts both.';
 
-const CAPTURE_PRIVACY =
-  'Store every message sent in these tickets for their transcripts. Off by default, because ' +
-  'keeping members’ messages is your decision, not Proton’s.';
+const CLOSE_REQUEST_NOTE = 'If the member doesn’t answer in time, Proton closes the ticket.';
 
-const CAPTURE_RETENTION = 'Captured messages are kept for 30 days, then deleted.';
+const CAPTURE_DESCRIPTION =
+  'Save every message sent in these tickets so transcripts include them. Saved messages are ' +
+  'deleted after 30 days.';
 
-const CAPTURE_TRANSCRIPT =
-  'Transcripts are still created without it. They list participants, answers and events, but no ' +
-  'message text.';
+const CAPTURE_HELP =
+  'Without it, transcripts still list participants, form answers and events, but no messages.';
 
 function OptionalDuration({
   label,
@@ -269,7 +270,7 @@ export function TypeDetail({
     <>
       <Section label="Details">
         <Rows>
-          <SettingRow title="ID" note={ID_FIXED}>
+          <SettingRow title="ID" note={ID_FIXED} help={ID_HELP}>
             <Chip className="mono">{type.id}</Chip>
           </SettingRow>
 
@@ -364,7 +365,7 @@ export function TypeDetail({
               </>
             }
           >
-            <div className="message-field">
+            <div className="message-field tickets-name-field">
               <TextInput
                 {...namePattern.autocomplete.field}
                 width="md"
@@ -381,6 +382,7 @@ export function TypeDetail({
               <TemplateDiagnostics
                 id={namePattern.diagnosticsId}
                 diagnostics={namePattern.diagnostics}
+                autocomplete={namePattern.autocomplete}
               />
             </div>
           </SettingRow>
@@ -391,7 +393,7 @@ export function TypeDetail({
         <Rows>
           <SettingRow
             title="Extra staff roles"
-            description="Roles that can access these tickets, as well as the staff roles in Settings."
+            description="Roles that can see and handle these tickets, on top of the staff roles in Settings."
             error={form.errorAt(`${path}.staffRoleIds`)}
             note={
               resolvedStaff.length === 0
@@ -426,7 +428,11 @@ export function TypeDetail({
           </SettingRow>
 
           {resolvedStaff.length > 0 ? (
-            <SettingRow title="Ping staff roles" note={MENTION_NOTE}>
+            <SettingRow
+              title="Ping staff roles"
+              description="Ping this type’s staff roles when a ticket opens."
+              help={MENTION_HELP}
+            >
               <Switch
                 label="Ping staff roles"
                 checked={type.mentionStaffOnOpen}
@@ -438,7 +444,7 @@ export function TypeDetail({
       </Section>
 
       <Section label="Opening">
-        <div className="editor">
+        <div className="editor tickets-opening">
           <div className="editor-main">
             <Rows>
               <SettingRow
@@ -447,7 +453,7 @@ export function TypeDetail({
                 error={opening.error}
                 stacked
               >
-                <div className="message-field">
+                <div className="message-field grow">
                   <TextArea
                     {...opening.autocomplete.field}
                     aria-label="Opening message"
@@ -462,6 +468,7 @@ export function TypeDetail({
                   <TemplateDiagnostics
                     id={opening.diagnosticsId}
                     diagnostics={opening.diagnostics}
+                    autocomplete={opening.autocomplete}
                   />
                 </div>
               </SettingRow>
@@ -501,7 +508,7 @@ export function TypeDetail({
         <Rows>
           <SettingRow
             title="Default priority"
-            description="The priority a ticket starts with when the member is not asked."
+            description="The priority a ticket starts with when the member isn’t asked."
           >
             <Select
               width="md"
@@ -516,7 +523,8 @@ export function TypeDetail({
 
           <SettingRow
             title="Open tickets per member"
-            note={PER_TYPE_LIMIT}
+            description="How many tickets of this type a member can have open at once."
+            help={PER_TYPE_LIMIT}
             error={form.errorAt(`${path}.maxOpenPerUser`)}
           >
             <NumberStepper
@@ -559,7 +567,8 @@ export function TypeDetail({
           {type.claimMode !== 'off' ? (
             <SettingRow
               title="Limit controls to claimer"
-              note={type.claimRestrictsReplies ? CLAIM_RESTRICT_REFUSAL : undefined}
+              description={CLAIM_RESTRICT}
+              help={CLAIM_RESTRICT_HELP}
             >
               <Switch
                 label="Limit controls to claimer"
@@ -571,7 +580,7 @@ export function TypeDetail({
 
           <SettingRow
             title="Ask before closing"
-            description="When staff press Close, the ticket’s owner must confirm first. /ticket close does not ask."
+            description="When staff press Close, the ticket’s owner must confirm first. /ticket close doesn’t ask."
           >
             <Switch
               label="Ask before closing"
@@ -615,7 +624,7 @@ export function TypeDetail({
             />
           </SettingRow>
 
-          <SettingRow title="Ask for a rating" note={RATING_NOTE}>
+          <SettingRow title="Ask for a rating" description={RATING_DESCRIPTION} help={RATING_HELP}>
             <Switch
               label="Ask for a rating"
               checked={type.askRating}
@@ -625,7 +634,8 @@ export function TypeDetail({
 
           <SettingRow
             title="Auto-close after"
-            note={TIMERS_NOTE}
+            description={AUTO_CLOSE_DESCRIPTION}
+            help={TIMERS_HELP}
             error={form.errorAt(`${path}.autoCloseAfter`)}
           >
             <OptionalDuration
@@ -708,14 +718,8 @@ export function TypeDetail({
 
           <SettingRow
             title="Capture messages"
-            description={CAPTURE_PRIVACY}
-            note={
-              type.captureMessages
-                ? CAPTURE_RETENTION
-                : type.transcript !== 'off'
-                  ? CAPTURE_TRANSCRIPT
-                  : undefined
-            }
+            description={CAPTURE_DESCRIPTION}
+            help={CAPTURE_HELP}
           >
             <Switch
               label="Capture messages"

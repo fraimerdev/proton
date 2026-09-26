@@ -56,17 +56,17 @@ export interface KeyContext {
 }
 
 const DUPLICATE = (key: string, subject: 'message' | 'row'): string =>
-  `two components in this ${subject} are both keyed '${key}'. The key is what a press carries ` +
-  'back, so Proton could not tell which one was pressed.';
+  `The key '${key}' is already used in this ${subject === 'message' ? 'template' : 'row'}. ` +
+  'Each key must be unique so Proton can tell which one was pressed.';
 
-const LINK_KEY_UNUSED = 'Link buttons open their link directly, so this key is not used.';
+const LINK_KEY_UNUSED = 'Link buttons open their link directly, so they don’t use a key.';
 
 const ACTION_KINDS = [
   { value: 'role' as const, label: 'Give or remove a role' },
   { value: 'reply' as const, label: 'Reply' },
 ];
 
-const REPLY_EMPTY = 'Filled in for this sample, the reply is empty, so Proton would send nothing.';
+const REPLY_EMPTY = 'With this sample filled in, the reply is empty, so Proton would send nothing.';
 
 // Not Field: these controls take no id, so its <label for> would point at nothing.
 export function Labelled({

@@ -17,16 +17,13 @@ const LOG_TYPES = [
   CHANNEL_TYPE.privateThread,
 ] as const;
 
-const QUOTE_NOTE =
-  'The message is shown in a code block, with backticks replaced and anything past 900 ' +
-  'characters cut off.';
+const QUOTE_HELP = 'Shown in a code block, and cut off after 900 characters.';
 
-const NO_LOG_CHANNEL =
-  'No incident log is set, so Honeypot reports nothing: no incident embed and no quoted message.';
+const NO_LOG_CHANNEL = 'No incident log is set, so detections aren’t reported anywhere.';
 
-const NO_APPEAL_FORM = 'No appeal form is enabled.';
+const NO_APPEAL_FORM = 'No appeal form is turned on in Appeals.';
 
-const UNREADABLE = 'Proton cannot read this server’s appeal forms, so it cannot offer the list.';
+const UNREADABLE = 'Proton couldn’t load this server’s appeal forms.';
 
 function AppealFormRow({ form, guildId }: { form: HoneypotForm; guildId: string }): ReactElement {
   const appeals = useQuery(moduleConfigQuery(guildId, 'appeals'));
@@ -45,7 +42,7 @@ function AppealFormRow({ form, guildId }: { form: HoneypotForm; guildId: string 
   return (
     <SettingRow
       title="Appeal form"
-      description="Let banned members appeal through this form from the direct message."
+      description="Banned members can appeal through this form from the DM."
       error={form.errorAt('appealPanelId')}
       note={
         appeals.isPending
@@ -79,10 +76,7 @@ function AppealFormRow({ form, guildId }: { form: HoneypotForm; guildId: string 
               ? [
                   {
                     value: chosen,
-                    label:
-                      stored === undefined
-                        ? `${chosen} — no longer a form`
-                        : `${stored.name} — disabled`,
+                    label: stored === undefined ? `${chosen} (deleted)` : `${stored.name} (off)`,
                   },
                 ]
               : []),
@@ -110,7 +104,7 @@ export function EscalationArea({
         <Rows>
           <SettingRow
             title="Block caught members"
-            description="A blocked account cannot pass verification until a moderator lifts it."
+            description="A blocked member can’t pass verification until a moderator lifts the block."
           >
             <Switch
               label="Block caught members"
@@ -122,7 +116,7 @@ export function EscalationArea({
           <SettingRow
             title="Quote the message"
             description="Include the member’s message in the incident log."
-            note={config.quoteMessage ? QUOTE_NOTE : undefined}
+            help={QUOTE_HELP}
           >
             <Switch
               label="Quote the message"

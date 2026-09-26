@@ -1,11 +1,30 @@
 import type { AnimationEvent, ReactElement, ReactNode, RefObject } from 'react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Button, cx } from './controls.tsx';
-import { Icon } from './icon.tsx';
+import { Icon, type IconName } from './icon.tsx';
 
 // useLayoutEffect warns during SSR, and a popover is only ever measured after a click.
 const useIsomorphicLayoutEffect = typeof document === 'undefined' ? useEffect : useLayoutEffect;
+
+const subscribeToNothing = (): (() => void) => () => undefined;
+
+// False on the server and while hydrating: a portal there is markup the server never sent.
+export function useHydrated(): boolean {
+  return useSyncExternalStore(
+    subscribeToNothing,
+    () => true,
+    () => false,
+  );
+}
 
 const EXIT_SLACK_MS = 50;
 
@@ -92,7 +111,8 @@ export function Popover({
   const [style, setStyle] = useState<{
     top: number;
     left: number;
-    width?: number;
+    width?: number | undefined;
+    maxHeight?: number | undefined;
     side: 'top' | 'bottom';
   }>({
     top: -9999,
@@ -101,6 +121,8 @@ export function Popover({
   });
 
   const { present, leaving, generation, onAnimationEnd } = usePresence(open, panel);
+  const hydrated = useHydrated();
+  const mounted = present && hydrated;
 
   useIsomorphicLayoutEffect(() => {
     if (leaving && panel.current?.contains(document.activeElement)) anchor.current?.focus();
@@ -118,36 +140,62 @@ export function Popover({
     if (!trigger || !element) return;
 
     const rect = trigger.getBoundingClientRect();
+    // Measured uncapped: a panel still capped for the cramped side would never flip to the roomier one.
+    const capped = element.style.maxHeight;
+    element.style.maxHeight = '';
     // Offsets, not a rect: the entrance animation scales the panel, and a scaled width shifts an end-aligned one.
     const size = { width: element.offsetWidth, height: element.offsetHeight };
+    element.style.maxHeight = capped;
 
     const width = matchWidth ? rect.width : size.width;
     // The root's client box, not innerWidth: the stable scrollbar gutter sits inside innerWidth.
     const viewport = document.documentElement;
 
-    const below = viewport.clientHeight - rect.bottom;
-    const flip = below < size.height + GAP + EDGE && rect.top > below;
+    const below = viewport.clientHeight - rect.bottom - GAP - EDGE;
+    const above = rect.top - GAP - EDGE;
+    const flip = size.height > below && above > below;
     const side = flip ? 'top' : 'bottom';
+    const room = flip ? above : below;
+    const height = Math.min(size.height, room);
 
-    const top = flip ? Math.max(EDGE, rect.top - size.height - GAP) : rect.bottom + GAP;
+    const top = flip ? Math.max(EDGE, rect.top - height - GAP) : rect.bottom + GAP;
+    const maxHeight = size.height > room ? room : undefined;
 
     const wanted = align === 'end' ? rect.right - width : rect.left;
     const edge = viewport.clientWidth - width - EDGE;
     const left = Math.min(Math.max(EDGE, wanted), Math.max(EDGE, edge));
 
-    setStyle(matchWidth ? { top, left, width: rect.width, side } : { top, left, side });
+    setStyle({ top, left, width: matchWidth ? rect.width : undefined, maxHeight, side });
   }, [anchor, align, matchWidth]);
 
   useIsomorphicLayoutEffect(() => {
-    if (!open) return;
+    if (!open || !hydrated) return;
     place();
-  }, [open, place]);
+  }, [open, hydrated, place]);
+
+  const closeLatest = useRef({ open, onClose });
+  useIsomorphicLayoutEffect(() => {
+    closeLatest.current = { open, onClose };
+  });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: the panel remounts under key={generation}, and the new node has to be observed
   useEffect(() => {
-    if (!present) return;
+    if (!mounted) return;
 
-    const onScrollOrResize = (): void => place();
+    const onScrollOrResize = (): void => {
+      const trigger = anchor.current;
+      const body = trigger?.closest('.dialog-body');
+      if (trigger && body && closeLatest.current.open) {
+        const at = trigger.getBoundingClientRect();
+        const visible = body.getBoundingClientRect();
+        // A trigger scrolled out of a dialog's body would leave its panel floating over the header or footer.
+        if (at.bottom <= visible.top || at.top >= visible.bottom) {
+          closeLatest.current.onClose();
+          return;
+        }
+      }
+      place();
+    };
     // Capture, so a scroll inside any ancestor repositions it rather than leaving it behind.
     window.addEventListener('scroll', onScrollOrResize, true);
     window.addEventListener('resize', onScrollOrResize);
@@ -160,7 +208,7 @@ export function Popover({
       window.removeEventListener('resize', onScrollOrResize);
       observer.disconnect();
     };
-  }, [present, place, generation]);
+  }, [mounted, place, generation]);
 
   useEffect(() => {
     if (!open) return;
@@ -189,7 +237,7 @@ export function Popover({
     };
   }, [open, onClose, anchor]);
 
-  if (!present || typeof document === 'undefined') return null;
+  if (!mounted) return null;
 
   return createPortal(
     <div
@@ -205,13 +253,86 @@ export function Popover({
         top: style.top,
         left: style.left,
         width: style.width,
-        minWidth,
-        maxWidth,
+        maxHeight: style.maxHeight,
+        minWidth: minWidth === undefined ? undefined : `min(${minWidth}px, 100% - ${EDGE * 2}px)`,
+        maxWidth:
+          maxWidth === undefined
+            ? `calc(100% - ${EDGE * 2}px)`
+            : `min(${maxWidth}px, 100% - ${EDGE * 2}px)`,
       }}
     >
       {open ? children : shown.current}
     </div>,
     document.body,
+  );
+}
+
+const HELP_STOPS = 'a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+export function HelpTip({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string | undefined;
+}): ReactElement {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const id = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    panel.current?.focus({ preventScroll: true });
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const inside = panel.current;
+      if (event.key !== 'Tab' || !inside?.contains(document.activeElement)) return;
+
+      const stops = [...inside.querySelectorAll<HTMLElement>(HELP_STOPS)];
+      const at = stops.indexOf(document.activeElement as HTMLElement);
+      const next = event.shiftKey ? at - 1 : at + 1;
+      if (next >= 0 && next < stops.length) return;
+
+      event.preventDefault();
+      setOpen(false);
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  return (
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        className={cx('help-tip', className)}
+        aria-label={`More about ${label}`}
+        aria-expanded={open}
+        aria-controls={open ? id : undefined}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name="question" size={12} weight="fill" />
+      </button>
+      <Popover
+        anchor={anchor}
+        open={open}
+        onClose={() => setOpen(false)}
+        minWidth={200}
+        maxWidth={320}
+        labelledBy={`${id}-label`}
+      >
+        <div ref={panel} id={id} className="help-tip-panel" tabIndex={-1}>
+          <span id={`${id}-label`} className="visually-hidden">
+            {label}
+          </span>
+          {children}
+        </div>
+      </Popover>
+    </>
   );
 }
 
@@ -316,36 +437,53 @@ export function MenuButton({
   );
 }
 
+export type DialogSize = 'compact' | 'medium' | 'large';
+
 interface DialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  size: DialogSize;
+  icon?: IconName | undefined;
+  tone?: 'danger' | undefined;
   description?: ReactNode;
   children?: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'wide' | 'editor' | undefined;
   footerNote?: ReactNode;
+  dismissible?: boolean | undefined;
 }
 
 export function Dialog({
   open,
   onClose,
   title,
+  size,
+  icon,
+  tone,
   description,
   children,
   footer,
-  size = 'sm',
   footerNote,
+  dismissible = true,
 }: DialogProps): ReactElement | null {
   const panel = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const descriptionId = useId();
   const { present, leaving, generation, onAnimationEnd } = usePresence(open, panel);
+  const hydrated = useHydrated();
+  const showing = open && hydrated;
+  // Read through a ref: callers pass a fresh onClose every render, and re-running the effect moves focus.
+  const latest = useRef({ onClose, dismissible });
+  useIsomorphicLayoutEffect(() => {
+    latest.current = { onClose, dismissible };
+  });
 
   useEffect(() => {
-    if (!open) return;
+    if (!showing) return;
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
-        if (!event.defaultPrevented) onClose();
+        if (latest.current.dismissible && !event.defaultPrevented) latest.current.onClose();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -386,20 +524,38 @@ export function Dialog({
       document.body.style.overflow = overflow;
       previous?.focus();
     };
-  }, [open, onClose]);
+  }, [showing]);
 
   const content = (
     <>
       <div className="dialog-head">
-        <div className="dialog-title">
-          {title}
-          {description !== undefined ? <p className="dialog-description">{description}</p> : null}
+        <div className="dialog-heading">
+          {icon !== undefined ? (
+            <span className={cx('dialog-icon', tone === 'danger' && 'danger')} aria-hidden="true">
+              <Icon name={icon} size={16} weight="fill" />
+            </span>
+          ) : null}
+          <h2 id={titleId} className="dialog-title">
+            {title}
+          </h2>
+          <Button
+            tone="ghost"
+            size="sm"
+            aria-label="Close"
+            className="dialog-close"
+            disabled={!dismissible}
+            onClick={onClose}
+          >
+            <Icon name="x" size={16} />
+          </Button>
         </div>
-        <Button tone="ghost" size="sm" aria-label="Close" onClick={onClose}>
-          <Icon name="x" size={15} weight="fill" />
-        </Button>
+        {description !== undefined ? (
+          <div id={descriptionId} className="dialog-description">
+            {description}
+          </div>
+        ) : null}
       </div>
-      {children !== undefined ? <div className="dialog-body">{children}</div> : null}
+      {children !== undefined ? <div className="dialog-body scroll-y">{children}</div> : null}
       {footer !== undefined ? (
         <div className="dialog-foot">
           {footerNote !== undefined ? <span className="dialog-foot-note">{footerNote}</span> : null}
@@ -415,22 +571,23 @@ export function Dialog({
     if (open) shown.current = content;
   });
 
-  if (!present || typeof document === 'undefined') return null;
+  if (!present || !hydrated) return null;
 
   return createPortal(
     <div
       key={generation}
       className={cx('dialog-scrim', leaving && 'leaving')}
       onPointerDown={(event) => {
-        if (!leaving && event.target === event.currentTarget) onClose();
+        if (dismissible && !leaving && event.target === event.currentTarget) onClose();
       }}
     >
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
-        className={cx('dialog', size !== 'sm' && size, leaving && 'leaving')}
+        aria-labelledby={titleId}
+        aria-describedby={description !== undefined ? descriptionId : undefined}
+        className={cx('dialog', size, leaving && 'leaving')}
         inert={leaving}
         onAnimationEnd={onAnimationEnd}
       >
@@ -447,8 +604,10 @@ export function ConfirmDialog({
   onConfirm,
   title,
   confirmLabel,
+  icon,
   danger = false,
   busy = false,
+  dismissible = true,
   children,
 }: {
   open: boolean;
@@ -456,8 +615,10 @@ export function ConfirmDialog({
   onConfirm: () => void;
   title: string;
   confirmLabel: string;
+  icon?: IconName | undefined;
   danger?: boolean | undefined;
   busy?: boolean | undefined;
+  dismissible?: boolean | undefined;
   children: ReactNode;
 }): ReactElement | null {
   return (
@@ -465,6 +626,10 @@ export function ConfirmDialog({
       open={open}
       onClose={onClose}
       title={title}
+      size="compact"
+      icon={icon ?? (danger ? 'warning' : undefined)}
+      tone={danger ? 'danger' : undefined}
+      dismissible={dismissible}
       footer={
         <>
           <Button onClick={onClose} disabled={busy}>

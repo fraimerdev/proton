@@ -23,20 +23,13 @@ import { NoticeArea } from './honeypot/notice.tsx';
 import { armedChannelIds } from './honeypot/shape.ts';
 import { TrapsArea } from './honeypot/traps.tsx';
 
-const SWITCHED_OFF =
-  'Honeypot is disabled. Settings are saved, but nothing runs until you switch it on. ' +
-  'Proton has deleted the warning messages it posted.';
-
 const MIGRATED =
-  'These settings were saved when each bait channel had its own action, message deletion window ' +
-  'and timeout duration. Honeypot now uses one of each for all bait channels, taken from the ' +
-  'first armed one. Check Response before you save.';
+  'Honeypot now uses one action, message deletion window and timeout duration for every bait ' +
+  'channel. Yours were taken from your first armed channel. Check Response before you save.';
 
-const NO_TRAPS = 'Honeypot is enabled, but no bait channel is armed, so nothing is watched.';
+const NO_TRAPS = 'Honeypot is on, but no bait channel is armed, so nothing is being watched.';
 
-const SAVE_NOTE =
-  'Saving also posts, updates or deletes warning messages in bait channels, and restarts the ' +
-  'daily camouflage job.';
+const SAVE_NOTE = 'Saving also posts, updates or removes the warning message in each bait channel.';
 
 export default function HoneypotPage({
   guildId,
@@ -82,6 +75,7 @@ export default function HoneypotPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but bait channels aren’t watched until you turn it on. Its warning messages are taken down while it’s off."
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
       >
@@ -90,8 +84,6 @@ export default function HoneypotPage({
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {!enabled ? <StatusBanner tone="neutral">{SWITCHED_OFF}</StatusBanner> : null}
 
         {form.view.migrated ? (
           <StatusBanner

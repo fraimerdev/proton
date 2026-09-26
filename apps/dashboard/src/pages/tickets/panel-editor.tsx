@@ -47,7 +47,7 @@ const URL_MAX = 2000;
 const PLACEHOLDER_MAX = 150;
 const TYPE_IDS_MAX = 25;
 
-const NO_CHANNEL = 'Choose a channel. A panel without one cannot be posted.';
+const NO_CHANNEL = 'Choose a channel. A panel without one can’t be posted.';
 
 const BAD_URL = 'Use a full link starting with http:// or https://.';
 
@@ -96,7 +96,6 @@ export function PanelEditor({
           <Rows>
             <SettingRow
               title="Channel"
-              description="Where Proton posts this panel."
               error={panel.channelId === '' ? NO_CHANNEL : form.errorAt(`${path}.channelId`)}
               note={POSTS_A_NEW_MESSAGE}
             >

@@ -116,7 +116,10 @@ export function useTemplateField({
     autocomplete,
     diagnostics,
     diagnosticsId,
-    describedBy: visibleDiagnostics(diagnostics).shown.length > 0 ? diagnosticsId : undefined,
+    describedBy:
+      visibleDiagnostics(diagnostics, autocomplete.pending).shown.length > 0
+        ? diagnosticsId
+        : undefined,
     invalid: error !== undefined || report.blocking.some((issue) => issue.path === path),
     error: listed ? undefined : error,
   };

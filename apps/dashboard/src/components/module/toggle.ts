@@ -54,13 +54,14 @@ export function useModuleToggle(guildId: string, summary: ModuleSummary | undefi
       setFailure(
         saveFailure(
           error,
-          `${(summary && MODULE_BY_ID.get(summary.id)?.label) ?? summary?.name ?? 'That module'} was not switched ${enabled ? 'on' : 'off'}`,
+          `Couldn’t turn ${(summary && MODULE_BY_ID.get(summary.id)?.label) ?? summary?.name ?? 'that module'} ${enabled ? 'on' : 'off'}`,
         ),
       );
     },
 
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: modulesKey });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.commands(guildId) });
       if (summary) {
         void queryClient.invalidateQueries({
           queryKey: queryKeys.moduleConfig(guildId, summary.id),

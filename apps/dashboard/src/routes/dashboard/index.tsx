@@ -112,14 +112,13 @@ function ServerPicker(): ReactElement {
         <div className="server-picker">
           <h1 className="server-picker-title">Choose a server</h1>
           <p className="server-picker-lede">
-            Only servers you own or have Manage Server in are listed.
+            Only servers where you have Manage Server are listed.
           </p>
 
           {!presenceKnown ? (
             <div className="server-picker-notice">
-              <StatusBanner tone="warning" title="Proton could not check which servers it is in">
-                Every server you manage shows Manage, including any Proton has not joined, until it
-                can reach Discord again.
+              <StatusBanner tone="warning" title="Proton couldn’t check which servers it’s in">
+                Until it can, every server shows Manage, even ones Proton hasn’t joined.
               </StatusBanner>
             </div>
           ) : null}

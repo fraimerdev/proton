@@ -1,6 +1,7 @@
 import { Link, useLocation } from '@tanstack/react-router';
 import type { ReactElement, ReactNode } from 'react';
 import { createContext, use, useEffect, useId, useRef, useState } from 'react';
+import { SUPPORT_INVITE } from '../../lib/site-meta.ts';
 import { menuItemFor, ProtonMark } from '../shell/topbar.tsx';
 import { useSlidingIndicator } from '../ui/controls.tsx';
 import { Icon } from '../ui/icon.tsx';
@@ -55,7 +56,7 @@ function PrimaryAction({ signedIn }: { signedIn: boolean | null }): ReactElement
   return (
     <Link to="/signin" className="button button-primary site-bar-primary">
       <Icon name="discord-logo" size={15} weight="fill" />
-      Log in with Discord
+      Sign in
     </Link>
   );
 }
@@ -265,15 +266,70 @@ export function SiteHeader(): ReactElement {
 }
 
 export function SiteFooter(): ReactElement {
+  const signedIn = useSignedIn();
+
   return (
     <footer className="site-footer">
       <div className="site-footer-inner">
-        <span>Proton</span>
-        <span className="topbar-spacer" />
-        <Link to="/commands">Commands</Link>
-        <Link to="/faq">FAQ</Link>
-        <Link to="/privacy">Privacy</Link>
-        <Link to="/terms">Terms</Link>
+        <div className="site-footer-brand">
+          <Link to="/" className="topbar-brand">
+            <ProtonMark />
+            Proton
+          </Link>
+          <p className="site-footer-tagline">One bot for the whole server.</p>
+        </div>
+
+        <nav className="site-footer-nav" aria-label="Footer">
+          <div className="site-footer-group">
+            <h2 className="site-footer-label">Product</h2>
+            <ul>
+              <li>
+                <Link to="/" hash="modules">
+                  Modules
+                </Link>
+              </li>
+              <li>
+                <Link to="/commands">Commands</Link>
+              </li>
+              <li>
+                <Link to={signedIn === true ? '/dashboard' : '/signin'}>Dashboard</Link>
+              </li>
+              <li>
+                <a href="/invite">Add to Discord</a>
+              </li>
+            </ul>
+          </div>
+          <div className="site-footer-group">
+            <h2 className="site-footer-label">Support</h2>
+            <ul>
+              <li>
+                <Link to="/faq">FAQ</Link>
+              </li>
+              <li>
+                <a href={SUPPORT_INVITE} target="_blank" rel="noreferrer">
+                  Support server
+                  <Icon name="arrow-square-out" size={13} className="site-footer-external" />
+                  <span className="visually-hidden"> (opens in a new tab)</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <div className="site-footer-group">
+            <h2 className="site-footer-label">Legal</h2>
+            <ul>
+              <li>
+                <Link to="/privacy">Privacy policy</Link>
+              </li>
+              <li>
+                <Link to="/terms">Terms of service</Link>
+              </li>
+            </ul>
+          </div>
+        </nav>
+      </div>
+
+      <div className="site-footer-base">
+        <span>© {new Date().getFullYear()} Proton</span>
       </div>
     </footer>
   );

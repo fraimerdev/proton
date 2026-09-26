@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MemberCell, MemberProvider } from '../../components/discord/member.tsx';
 import { ModuleLink, useModuleNavigate, useModuleSearch } from '../../components/module/route.tsx';
-import { Button, SearchField, TextArea } from '../../components/ui/controls.tsx';
+import { Button, Field, SearchField, TextArea } from '../../components/ui/controls.tsx';
 import { StatusBanner } from '../../components/ui/feedback.tsx';
 import { Icon } from '../../components/ui/icon.tsx';
 import { Pair, Pairs } from '../../components/ui/layout.tsx';
@@ -20,6 +20,7 @@ import {
   blockedQuery,
   MEMBER_ID,
 } from './queries.ts';
+import { useNow, When } from './reports/when.tsx';
 
 const STATE_TABS: readonly { id: BlockedState; label: string }[] = [
   { id: 'live', label: 'Active' },
@@ -28,27 +29,12 @@ const STATE_TABS: readonly { id: BlockedState; label: string }[] = [
 ];
 
 const LIFT_CONSEQUENCE =
-  'The member can pass verification again. This does not remove a ban or timeout.';
+  'The member can pass verification again, but any ban or timeout stays in place.';
 
 const NOBODY_BLOCKED = 'Only Honeypot adds members to this list.';
 
-function relative(iso: string, now: number): string {
-  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
-
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 31_536_000) return `${Math.floor(seconds / 86_400)}d ago`;
-
-  return `${Math.floor(seconds / 31_536_000)}y ago`;
-}
-
-function When({ iso, now }: { iso: string; now: number }): ReactElement {
-  return (
-    <time dateTime={iso} title={new Date(iso).toLocaleString()}>
-      {relative(iso, now)}
-    </time>
-  );
+function instant(iso: string | null): number | null {
+  return iso === null ? null : Date.parse(iso);
 }
 
 function evidenceUrl(guildId: string, evidence: { channelId: string; messageId: string }): string {
@@ -113,7 +99,7 @@ export function BlockedArea({
 
   const rows = query.data?.rows ?? [];
   const total = query.data?.total ?? 0;
-  const now = Date.now();
+  const now = useNow(query.dataUpdatedAt);
 
   const memberIds = useMemo(() => {
     const ids = new Set<string>();
@@ -160,7 +146,7 @@ export function BlockedArea({
       width: 104,
       cell: (row) =>
         row.caseId === null ? (
-          <span className="text-muted">—</span>
+          <span className="text-muted">None</span>
         ) : (
           <CaseLink guildId={guildId} caseId={row.caseId} />
         ),
@@ -171,7 +157,7 @@ export function BlockedArea({
       width: 96,
       cell: (row) =>
         row.evidence === null ? (
-          <span className="text-muted">—</span>
+          <span className="text-muted">None</span>
         ) : (
           <a
             className="moderation-link text-xs"
@@ -190,7 +176,7 @@ export function BlockedArea({
       header: 'Blocked',
       sortField: 'createdAt',
       width: 116,
-      cell: (row) => <When iso={row.createdAt} now={now} />,
+      cell: (row) => <When at={instant(row.createdAt)} now={now} />,
     },
   ];
 
@@ -199,12 +185,7 @@ export function BlockedArea({
       id: 'liftedAt',
       header: 'Lifted',
       width: 116,
-      cell: (row) =>
-        row.liftedAt === null ? (
-          <span className="text-muted">—</span>
-        ) : (
-          <When iso={row.liftedAt} now={now} />
-        ),
+      cell: (row) => <When at={instant(row.liftedAt)} now={now} />,
     });
   }
 
@@ -302,7 +283,7 @@ export function BlockedArea({
 
 function DetailDialog({
   guildId,
-  row,
+  row: current,
   now,
   onClose,
   onLift,
@@ -313,22 +294,28 @@ function DetailDialog({
   onClose: () => void;
   onLift: (row: BlockedMember) => void;
 }): ReactElement | null {
+  const [kept, setKept] = useState(current);
+  if (current !== undefined && current !== kept) setKept(current);
+
+  const row = current ?? kept;
   if (!row) return null;
 
   return (
     <Dialog
-      open
+      open={current !== undefined}
       onClose={onClose}
       title="Blocked member"
-      size="wide"
+      size="medium"
+      icon="prohibit"
       footer={
-        row.liftedAt === null ? (
-          <Button tone="primary" onClick={() => onLift(row)}>
-            Lift block
-          </Button>
-        ) : (
+        <>
           <Button onClick={onClose}>Close</Button>
-        )
+          {row.liftedAt === null ? (
+            <Button tone="primary" onClick={() => onLift(row)}>
+              Lift block
+            </Button>
+          ) : null}
+        </>
       }
     >
       <Pairs>
@@ -346,7 +333,7 @@ function DetailDialog({
         </Pair>
         <Pair label="Module">{row.moduleId}</Pair>
         <Pair label="Blocked">
-          <When iso={row.createdAt} now={now} />
+          <When at={instant(row.createdAt)} now={now} />
         </Pair>
         <Pair label="Case">
           {row.caseId === null ? (
@@ -374,11 +361,11 @@ function DetailDialog({
         {row.liftedAt !== null ? (
           <>
             <Pair label="Lifted">
-              <When iso={row.liftedAt} now={now} />
+              <When at={instant(row.liftedAt)} now={now} />
             </Pair>
             <Pair label="Lifted by">
               {row.liftedBy === null ? (
-                <span className="text-muted">—</span>
+                <span className="text-muted">Unknown</span>
               ) : MEMBER_ID.test(row.liftedBy) ? (
                 <MemberCell userId={row.liftedBy} />
               ) : (
@@ -386,7 +373,7 @@ function DetailDialog({
               )}
             </Pair>
             <Pair label="Lift reason">
-              <span className="moderation-wrap">{row.liftReason ?? '—'}</span>
+              <span className="moderation-wrap">{row.liftReason ?? 'None'}</span>
             </Pair>
           </>
         ) : null}
@@ -397,7 +384,7 @@ function DetailDialog({
 
 function LiftDialog({
   guildId,
-  row,
+  row: current,
   onClose,
 }: {
   guildId: string;
@@ -405,9 +392,12 @@ function LiftDialog({
   onClose: () => void;
 }): ReactElement | null {
   const queryClient = useQueryClient();
+  const [kept, setKept] = useState(current);
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+
+  if (current !== null && current !== kept) setKept(current);
 
   const close = useCallback(() => {
     setReason('');
@@ -425,15 +415,16 @@ function LiftDialog({
       close();
     },
 
-    onError: (error: Error) => setFailure(saveFailure(error, 'The block was not lifted')),
+    onError: (error: Error) => setFailure(saveFailure(error, 'Couldn’t lift the block')),
   });
 
+  const row = current ?? kept;
   if (!row) return null;
 
   const trimmed = reason.trim();
   const error =
     submitted && trimmed === ''
-      ? 'A reason is required. It is saved with the block.'
+      ? 'Add a reason. It’s saved with the block.'
       : trimmed.length > BLOCK_REASON_MAX
         ? `A reason can be at most ${BLOCK_REASON_MAX} characters.`
         : undefined;
@@ -448,9 +439,10 @@ function LiftDialog({
 
   return (
     <Dialog
-      open
+      open={current !== null}
       onClose={close}
       title="Lift block?"
+      size="medium"
       description={LIFT_CONSEQUENCE}
       footerNote={`${trimmed.length} / ${BLOCK_REASON_MAX}`}
       footer={
@@ -459,44 +451,38 @@ function LiftDialog({
             Cancel
           </Button>
           <Button tone="primary" busy={lift.isPending} onClick={submit}>
-            Lift
+            Lift block
           </Button>
         </>
       }
     >
-      <div className="stack stack-12">
-        {failure !== null ? (
-          <StatusBanner tone="danger" live="assertive">
-            {failure}
-          </StatusBanner>
-        ) : null}
+      {failure !== null ? (
+        <StatusBanner tone="danger" live="assertive">
+          {failure}
+        </StatusBanner>
+      ) : null}
 
-        <div className="field">
-          <span className="field-label">Member</span>
-          <MemberCell userId={row.userId} />
-        </div>
+      <div className="field">
+        <span className="field-label">Member</span>
+        <MemberCell userId={row.userId} />
+      </div>
 
-        <div className="field">
-          <label className="field-label" htmlFor="lift-reason">
-            Reason
-          </label>
+      <Field
+        label="Reason"
+        hint="Kept with the block and shown to anyone who can see this list."
+        error={error}
+      >
+        {(props) => (
           <TextArea
-            id="lift-reason"
+            {...props}
             rows={3}
             value={reason}
             maxLength={BLOCK_REASON_MAX}
             invalid={error !== undefined}
             onChange={(event) => setReason(event.currentTarget.value)}
           />
-          {error !== undefined ? (
-            <span className="field-error">{error}</span>
-          ) : (
-            <span className="field-hint">
-              Kept with the block and shown to anyone who can see this list.
-            </span>
-          )}
-        </div>
-      </div>
+        )}
+      </Field>
     </Dialog>
   );
 }

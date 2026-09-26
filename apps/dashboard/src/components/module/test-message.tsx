@@ -7,14 +7,14 @@ import type {
 import { simulationInputDefaults, unresolvedDiagnostics } from '@proton/core';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
-import { useCallback, useEffect, useState } from 'react';
-import { saveFailure } from '../../lib/errors.ts';
+import { useCallback, useEffect, useId, useState } from 'react';
+import { failureKind, saveFailure } from '../../lib/errors.ts';
 import { memberSearchQuery } from '../../lib/queries.ts';
 import { runSimulation } from '../../server/simulations.ts';
 import { ChannelPicker } from '../discord/channel-picker.tsx';
+import { sentence } from '../discord/embed-editor.tsx';
 import { Button, NumberStepper, SearchField, Select, Switch, TextInput } from '../ui/controls.tsx';
 import { Spinner, StatusBanner } from '../ui/feedback.tsx';
-import { Rows, SettingRow } from '../ui/layout.tsx';
 import { Dialog } from '../ui/overlay.tsx';
 
 export interface TestSubject {
@@ -29,6 +29,14 @@ type Mode = 'preview' | 'send';
 
 function newRequestId(): string {
   return `sim-${crypto.randomUUID().replaceAll('-', '')}`.slice(0, 40);
+}
+
+// The api refuses a test in its own sentence (module off, no channel, rate limit); saveFailure would replace it.
+function testFailure(error: Error): string {
+  const said = error.message.trim();
+  return failureKind(error) === 'unknown' && /^[A-Z].*\.$/s.test(said)
+    ? `Couldn’t run the test. ${said}`
+    : saveFailure(error, 'Couldn’t run the test');
 }
 
 function InputControl({
@@ -79,9 +87,27 @@ function InputControl({
       value={typeof value === 'string' ? value : input.fallback}
       maxLength={input.maxLength}
       aria-label={input.label}
-      width="lg"
+      width={input.maxLength > 40 ? 'full' : 'lg'}
       onChange={(event) => onChange(event.target.value)}
     />
+  );
+}
+
+function Labelled({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children: ReactNode;
+}): ReactElement {
+  return (
+    <div className="field">
+      <span className="field-label">{label}</span>
+      {children}
+      {hint === undefined ? null : <span className="field-hint">{hint}</span>}
+    </div>
   );
 }
 
@@ -132,7 +158,7 @@ function SubjectPicker({
       {query.trim() === '' ? null : results.isPending ? (
         <Spinner label="Searching" showLabel />
       ) : (results.data ?? []).length === 0 ? (
-        <p className="text-sm text-muted">Nobody in this server matches that.</p>
+        <p className="text-sm text-muted">No matching members</p>
       ) : (
         <ul className="sim-subject-results">
           {(results.data ?? []).slice(0, 8).map((member) => (
@@ -179,13 +205,13 @@ function Unresolved({ outcome }: { outcome: SimulationOutcome }): ReactElement |
     <div className="sim-unresolved">
       <p className="field-warning">
         {empty.length === 1
-          ? 'One placeholder comes out empty for this example:'
-          : `${empty.length} placeholders come out empty for this example:`}
+          ? '1 placeholder is empty for this example:'
+          : `${empty.length} placeholders are empty for this example:`}
       </p>
       <ul>
         {empty.slice(0, 6).map((diagnostic) => (
           <li key={`${diagnostic.path}:${diagnostic.code}:${diagnostic.message}`}>
-            {diagnostic.message}
+            {sentence(diagnostic.message)}
           </li>
         ))}
       </ul>
@@ -200,19 +226,22 @@ function Sent({ outcome }: { outcome: SimulationOutcome }): ReactElement | null 
 
   return (
     <StatusBanner tone="success" live="polite" icon="check-circle">
-      Discord took it.{' '}
+      Test message sent.{' '}
       {url === null ? (
         outcome.destination.kind === 'dm' ? (
-          'Check your direct messages.'
+          'Check your DMs.'
         ) : (
           'Check the channel in Discord.'
         )
       ) : (
-        <a href={url} target="_blank" rel="noreferrer">
-          Open the message
-        </a>
+        <>
+          <a href={url} target="_blank" rel="noreferrer">
+            Open it in Discord
+          </a>
+          .
+        </>
       )}
-      {markerOmitted === null ? null : ` ${markerOmitted}`}
+      {markerOmitted === null ? null : ` ${sentence(markerOmitted)}`}
     </StatusBanner>
   );
 }
@@ -273,7 +302,7 @@ export function TestMessageDialog({
     },
     onError: (error: Error) => {
       setOutcome(null);
-      setFailure(saveFailure(error, 'That test did not run'));
+      setFailure(testFailure(error));
     },
   });
 
@@ -310,17 +339,15 @@ export function TestMessageDialog({
   const sendable = descriptor.delivery !== 'none';
   const ready = outcome !== null && outcome.error === null;
 
+  const where =
+    descriptor.delivery === 'dm'
+      ? 'Proton DMs you a real message, marked as a test. It never goes to the member it’s about.'
+      : descriptor.delivery === 'none'
+        ? 'This is a channel name, not a message, so there’s nothing to send.'
+        : 'Proton posts a real message here, marked as a test. Nobody is pinged and nothing else changes.';
+
   const destination: ReactNode =
-    descriptor.delivery === 'dm' ? (
-      <p className="text-sm text-muted">
-        Sent to you in a direct message. A real one goes to the member it is about — a test never
-        does.
-      </p>
-    ) : descriptor.delivery === 'none' ? (
-      <p className="text-sm text-muted">
-        This is a name Proton gives a channel, not a message it posts, so there is nothing to send.
-      </p>
-    ) : (
+    descriptor.delivery === 'channel' ? (
       <ChannelPicker
         guildId={guildId}
         label="Test channel"
@@ -329,24 +356,24 @@ export function TestMessageDialog({
         noneLabel="No channel"
         onChange={setChannelId}
       />
-    );
+    ) : undefined;
 
   return (
     <Dialog
       open={open}
       onClose={onClose}
       title={`Test ${descriptor.label.toLowerCase()}`}
+      size="medium"
+      icon="pulse"
       description={descriptor.summary}
       footerNote={
         dirty
-          ? 'Uses the settings on this page, including your unsaved changes. Nothing is saved.'
+          ? 'Uses the settings on this page, including unsaved changes. Nothing is saved.'
           : 'Uses this server’s saved settings.'
       }
       footer={
         <>
-          <Button tone="ghost" onClick={onClose}>
-            Close
-          </Button>
+          <Button onClick={onClose}>Close</Button>
           {sendable ? (
             <Button
               tone="primary"
@@ -363,58 +390,59 @@ export function TestMessageDialog({
         </>
       }
     >
-      <div className="sim-body stack stack-12">
-        {descriptor.note === undefined ? null : (
-          <StatusBanner tone="info" icon="info">
-            {descriptor.note}
-          </StatusBanner>
-        )}
+      {descriptor.note === undefined ? null : (
+        <StatusBanner tone="info" icon="info">
+          {descriptor.note}
+        </StatusBanner>
+      )}
 
-        <Rows>
-          {descriptor.subject ? (
-            <SettingRow
-              title="Example member"
-              description="Nothing happens to them — they are not notified, moved or changed."
-              stacked
-            >
-              <SubjectPicker guildId={guildId} value={subject} onChange={setSubject} />
-            </SettingRow>
+      {descriptor.subject ? (
+        <Labelled
+          label="Example member"
+          hint="Nothing happens to them. They aren’t notified, moved or changed."
+        >
+          <SubjectPicker guildId={guildId} value={subject} onChange={setSubject} />
+        </Labelled>
+      ) : null}
+
+      {shown.map((input) => (
+        <Labelled key={input.key} label={input.label} hint={input.help}>
+          <InputControl
+            input={input}
+            value={values[input.key]}
+            onChange={(next) => setValues((current) => ({ ...current, [input.key]: next }))}
+          />
+        </Labelled>
+      ))}
+
+      {destination === undefined ? (
+        <Labelled label="Where it goes">
+          <p className="text-sm text-secondary">{where}</p>
+        </Labelled>
+      ) : (
+        <Labelled label="Where it goes" hint={where}>
+          {destination}
+        </Labelled>
+      )}
+
+      {failure === null ? null : (
+        <StatusBanner tone="danger" live="polite">
+          {failure}
+        </StatusBanner>
+      )}
+
+      {outcome === null ? null : (
+        <>
+          {mode === 'send' ? <Sent outcome={outcome} /> : null}
+          <Unresolved outcome={outcome} />
+          {descriptor.output === 'text' && outcome.render?.text ? (
+            <p className="sim-name">
+              <span className="text-muted">The channel would be called&nbsp;</span>
+              <span className="mono">{outcome.render.text}</span>
+            </p>
           ) : null}
-
-          {shown.map((input) => (
-            <SettingRow key={input.key} title={input.label} description={input.help}>
-              <InputControl
-                input={input}
-                value={values[input.key]}
-                onChange={(next) => setValues((current) => ({ ...current, [input.key]: next }))}
-              />
-            </SettingRow>
-          ))}
-
-          <SettingRow title="Where it goes" stacked>
-            {destination}
-          </SettingRow>
-        </Rows>
-
-        {failure === null ? null : (
-          <StatusBanner tone="danger" live="polite">
-            {failure}
-          </StatusBanner>
-        )}
-
-        {outcome === null ? null : (
-          <>
-            {mode === 'send' ? <Sent outcome={outcome} /> : null}
-            <Unresolved outcome={outcome} />
-            {descriptor.output === 'text' && outcome.render?.text ? (
-              <p className="sim-name">
-                <span className="text-muted">The channel would be called&nbsp;</span>
-                <span className="mono">{outcome.render.text}</span>
-              </p>
-            ) : null}
-          </>
-        )}
-      </div>
+        </>
+      )}
     </Dialog>
   );
 }
@@ -487,16 +515,26 @@ export function TestMessageButton({
   onOpen: () => void;
   label?: string | undefined;
 }): ReactElement {
+  const reasonId = useId();
+
   return (
-    <Button
-      size="sm"
-      tone="secondary"
-      icon="pulse"
-      disabled={refusal !== undefined}
-      title={refusal ?? `Test ${descriptor.label.toLowerCase()}`}
-      onClick={onOpen}
-    >
-      {label}
-    </Button>
+    <>
+      <Button
+        size="sm"
+        tone="secondary"
+        icon="pulse"
+        disabled={refusal !== undefined}
+        aria-label={label === 'Test' ? `Test ${descriptor.label.toLowerCase()}` : undefined}
+        aria-describedby={refusal !== undefined ? reasonId : undefined}
+        onClick={onOpen}
+      >
+        {label}
+      </Button>
+      {refusal !== undefined ? (
+        <span id={reasonId} className="visually-hidden">
+          {refusal}
+        </span>
+      ) : null}
+    </>
   );
 }

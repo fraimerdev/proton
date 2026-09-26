@@ -1,4 +1,4 @@
-import type { ModuleSummary } from '@proton/core';
+import type { CommandView, ModuleSummary } from '@proton/core';
 import { RETIRED_COMMAND_ALIASES } from '@proton/module-permissions/config';
 import { MODULE_BY_ID, MODULES, NAV_GROUPS } from '../../lib/modules/catalogue.ts';
 
@@ -10,6 +10,7 @@ export type Overrides = Record<string, string[]>;
 
 export interface CommandRow {
   name: string;
+  displayName: string;
   moduleId: string;
   moduleName: string;
   roles: readonly string[];
@@ -57,9 +58,11 @@ function makeRow(
   moduleName: string,
   folded: Folded,
   orphan: boolean,
+  displayNames: ReadonlyMap<string, string>,
 ): CommandRow {
   return {
     name,
+    displayName: displayNames.get(name) ?? name,
     moduleId,
     moduleName,
     roles: folded.overrides[name] ?? [],
@@ -91,9 +94,20 @@ function compareModules(a: ModuleSummary, b: ModuleSummary): number {
   return a.category.localeCompare(b.category) || a.name.localeCompare(b.name);
 }
 
+export function displayNamesOf(
+  commands: readonly Pick<CommandView, 'key' | 'kind' | 'effectiveName'>[] | undefined,
+): ReadonlyMap<string, string> {
+  return new Map(
+    (commands ?? [])
+      .filter((command) => command.kind === 'chat')
+      .map((command) => [command.key, command.effectiveName]),
+  );
+}
+
 export function buildGroups(
   modules: readonly ModuleSummary[],
   folded: Folded,
+  displayNames: ReadonlyMap<string, string> = new Map(),
 ): readonly CommandGroup[] {
   const owning = [...modules].filter((module) => module.commands.length > 0).sort(compareModules);
 
@@ -103,7 +117,7 @@ export function buildGroups(
     const label = MODULE_BY_ID.get(module.id)?.label ?? module.name;
     const rows = [...new Set(module.commands)]
       .sort()
-      .map((name) => makeRow(name, module.id, label, folded, false));
+      .map((name) => makeRow(name, module.id, label, folded, false, displayNames));
 
     return { id: module.id, label, rows, gated: gatedCount(rows) };
   });
@@ -111,7 +125,7 @@ export function buildGroups(
   const orphans = Object.keys(folded.overrides)
     .filter((name) => !owned.has(name))
     .sort()
-    .map((name) => makeRow(name, '', ORPHAN_GROUP, folded, true));
+    .map((name) => makeRow(name, '', ORPHAN_GROUP, folded, true, displayNames));
 
   if (orphans.length > 0) {
     groups.push({ id: '', label: ORPHAN_GROUP, rows: orphans, gated: gatedCount(orphans) });
@@ -130,7 +144,7 @@ export function filterGroups(
   groups: readonly CommandGroup[],
   { term, show, moduleId }: { term: string; show: ShowFilter; moduleId: string | undefined },
 ): readonly CommandGroup[] {
-  const needle = term.trim().toLowerCase();
+  const needle = term.trim().replace(/^\//, '').toLowerCase();
 
   return groups
     .filter((group) => moduleId === undefined || group.id === moduleId)
@@ -139,14 +153,34 @@ export function filterGroups(
         if (show === 'gated' && row.roles.length === 0) return false;
         if (show === 'open' && row.roles.length > 0) return false;
         if (needle === '') return true;
-        return (
-          row.name.toLowerCase().includes(needle) || group.label.toLowerCase().includes(needle)
+        return [row.name, row.displayName, group.label].some((text) =>
+          text.toLowerCase().includes(needle),
         );
       });
 
       return { ...group, rows };
     })
     .filter((group) => group.rows.length > 0);
+}
+
+function stateHint(row: CommandRow): string | null {
+  if (row.inheritedFrom !== undefined) {
+    return `/${row.inheritedFrom} is now part of /${row.displayName}, and its roles moved here.`;
+  }
+  if (row.orphan) {
+    return `No module in this server has /${row.name}, so this override does nothing.`;
+  }
+  if (row.roles.length === 0) return 'No override. Discord’s own command permissions apply.';
+  return null;
+}
+
+export function rowHint(row: CommandRow): string | null {
+  const hints = [
+    row.displayName !== row.name ? `Renamed from /${row.name}` : null,
+    stateHint(row),
+  ].filter((hint): hint is string => hint !== null);
+
+  return hints.length > 0 ? hints.join(' · ') : null;
 }
 
 export function refusalSentence(
@@ -164,7 +198,7 @@ export function refusalSentence(
 
   return (
     `You need ${roles} to use /${commandName} in this server. ` +
-    'This is a Proton command override, not a Discord permission — a server admin can change it ' +
-    `in the dashboard under Permissions → /${commandName}.`
+    'This is a Proton command override, not a Discord permission. A server admin can change it ' +
+    'in the Proton dashboard under Permissions.'
   );
 }

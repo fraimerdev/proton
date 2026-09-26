@@ -1,0 +1,411 @@
+/* achievements page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
+
+.achievements-glyph {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.achievements-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.achievements-status-reason {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.achievements-zone-offset {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+.achievements-note {
+  margin: 12px 0 0;
+  max-width: 72ch;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.achievements-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.achievements-editor-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.achievements-editor-activation {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.achievements-editor-activation:not(:empty) {
+  margin-top: 8px;
+}
+
+.achievements-editor-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Padding, then the negative margin, keep the focus ring inside the scroll box. */
+.achievements-editor-tabs {
+  max-width: 100%;
+  margin: -3px;
+  padding: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.achievements-editor-note {
+  margin: 10px 0 0;
+  max-width: 72ch;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.achievements-editor-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+  max-width: 72ch;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.achievements-editor-job {
+  margin: 12px 0 0;
+}
+
+.achievements-editor-count {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.achievements-editor-time {
+  width: 112px;
+}
+
+.achievements-editor-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+}
+
+.achievements-editor-check > .checkbox {
+  margin-top: 2px;
+}
+
+.achievements-editor-check-follow {
+  padding-left: 27px;
+}
+
+.achievements-editor-icon-trigger {
+  width: 190px;
+}
+
+.achievements-editor-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.achievements-editor-icon-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px 8px;
+  border-radius: calc(var(--radius-md) - 5px);
+  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.achievements-editor-icon-option:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.achievements-editor-icon-option[aria-selected="true"] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.achievements-editor-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: 12px;
+}
+
+.achievements-editor-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+.achievements-editor-badge .card-preview {
+  width: 100%;
+  max-width: 128px;
+}
+
+.achievements-editor-badge .card-preview-pending {
+  aspect-ratio: 1;
+}
+
+@container workspace (max-width: 640px) {
+  .achievements-editor-recount .nav-row {
+    flex-wrap: wrap;
+  }
+
+  .achievements-editor-recount .row-control {
+    flex-basis: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.achievements-req-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 62ch;
+  color: var(--warning);
+}
+
+.achievements-req-warning svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.achievements-req-rung {
+  align-items: flex-start;
+}
+
+.achievements-req-rung > .rung-index {
+  margin-top: 6px;
+}
+
+.achievements-req-rung > .rung-aside {
+  margin-top: 3px;
+}
+
+.achievements-req-rung-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.achievements-req-rung-rewards {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.achievements-req-rung-rewards > .rung-connector {
+  flex: none;
+  line-height: 26px;
+}
+
+.achievements-req-rung-rewards > .stack {
+  min-width: 0;
+}
+
+@media (max-width: 559px) {
+  .achievements-req-rung-main {
+    flex: 1 1 0;
+    min-width: min(calc(100% - 34px), 200px);
+  }
+
+  .achievements-req-rung > .rung-aside {
+    margin-left: auto;
+  }
+}
+
+.achievements-req-tier {
+  min-width: 56px;
+  color: var(--text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.achievements-req-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.achievements-req-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  max-width: 72ch;
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+}
+
+.achievements-req-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.achievements-req-bar {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.achievements-ann-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 38px;
+}
+
+.achievements-settings-since {
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.achievements-settings-failure {
+  margin-bottom: 10px;
+}
+
+.achievements-members-lookup:focus {
+  outline: none;
+}
+
+.achievements-members-toolbar,
+.achievements-members-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.achievements-members-head {
+  margin-bottom: 10px;
+}
+
+.achievements-members-name {
+  margin: 0;
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--text-row-title);
+  font-weight: var(--weight-semibold);
+}
+
+.achievements-members-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.achievements-members-bar {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.achievements-members-announce {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.achievements-members-rewards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.achievements-members-reward {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 72ch;
+}
+
+.achievements-members-reward-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.achievements-members-reward-name {
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-semibold);
+}
+
+.achievements-members-reason {
+  color: var(--text-muted);
+  font-size: var(--text-secondary-size);
+  line-height: 1.46;
+}
+
+td > .achievements-members-reason {
+  display: block;
+  min-width: 220px;
+  max-width: 48ch;
+}
+
+.achievements-members-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+}
+
+.achievements-members-check > .checkbox {
+  margin-top: 2px;
+}
+
+.achievements-members-check-follow {
+  padding-left: 27px;
+}

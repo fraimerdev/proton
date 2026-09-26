@@ -53,12 +53,17 @@ function CardBody({
 function QuickActions({ guildId }: { guildId: string }): ReactElement {
   return (
     <div className="overview-grid overview-grid-actions">
-      <Link to="/commands" className="overview-card">
+      <Link
+        to="/dashboard/$guildId/commands"
+        params={{ guildId }}
+        search={{}}
+        className="overview-card"
+      >
         <CardBody
-          icon="book-open"
+          icon="terminal-window"
           tone="blue"
           title="Commands"
-          description="Every command and what it does."
+          description="Rename commands and choose which ones this server shows."
         />
       </Link>
       <Link to="/faq" className="overview-card">
@@ -129,13 +134,13 @@ function ModuleCard({
         aside={
           <>
             {summary && moduleState(summary) === 'attention' ? (
-              <Badge tone="warning">Cannot run</Badge>
+              <Badge tone="warning">Can’t run</Badge>
             ) : null}
             <Switch
               checked={summary?.enabled ?? false}
               disabled={summary === undefined || toggle.busy}
               onChange={toggle.toggle}
-              label={`${meta.label} enabled`}
+              label={meta.label}
             />
           </>
         }
@@ -163,9 +168,7 @@ function Attention({
     <div className="page-banners">
       <StatusBanner
         tone="warning"
-        title={
-          blocked.length === 1 ? '1 module cannot run' : `${blocked.length} modules cannot run`
-        }
+        title={blocked.length === 1 ? '1 module can’t run' : `${blocked.length} modules can’t run`}
       >
         <div className="stack stack-6" style={{ marginTop: 4 }}>
           {blocked.map((summary) => {
@@ -185,8 +188,8 @@ function Attention({
                   >
                     {name}
                   </ModuleLink>
-                )}{' '}
-                — {summary.status?.disabledReason?.humanReason ?? 'Proton did not say why.'}
+                )}
+                : {summary.status?.disabledReason?.humanReason ?? 'No reason was given.'}
               </div>
             );
           })}

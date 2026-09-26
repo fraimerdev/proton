@@ -90,7 +90,7 @@ export default function ServerlogPage({
           <StatusBanner
             tone="danger"
             live="polite"
-            title="Some overrides are for events that no longer exist"
+            title="Some event overrides can’t be saved"
             actions={
               unknown.length > 1 ? (
                 <Button tone="danger" size="sm" onClick={forgetAll}>
@@ -105,7 +105,7 @@ export default function ServerlogPage({
                   <span className="mono">{key}</span>
                   <span className="text-muted">
                     {form.errorAt(`events.${key}`) ??
-                      'Proton has no event by that name. Saving is refused until it is removed.'}
+                      'Proton doesn’t log this event anymore. Remove it to save your changes.'}
                   </span>
                   <Button tone="danger-quiet" size="sm" onClick={() => forget(key)}>
                     Remove

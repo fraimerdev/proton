@@ -150,7 +150,7 @@
   width: 34px;
   height: 34px;
   margin-bottom: 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--tile-ground);
   color: var(--tile-ink);
   transition:
@@ -234,5 +234,9 @@
 @container workspace (max-width: 460px) {
   .overview-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-grid-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

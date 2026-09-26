@@ -34,7 +34,7 @@ export interface TextPreview {
   now: number;
 }
 
-const YOUR_SERVER_CAPTION = "Sample: your server's name, sample member";
+const YOUR_SERVER_CAPTION = "Sample: your server's name and a sample member";
 
 const MENTION_ID = /\d+/;
 

@@ -45,11 +45,7 @@ const PROTON_MAKES =
   'Proton creates a voice channel at the top of the channel list. Without Manage Roles, the ' +
   'counter still works, but members can join the channel.';
 
-const ID_EXPLAINS =
-  'Proton links the channel it creates for this counter to this ID. Changing the ID would leave ' +
-  'the old channel behind and create a new one.';
-
-const REMOVE_EXPLAINS = 'Proton stops refreshing the channel but does not delete it.';
+const REMOVE_EXPLAINS = 'Proton stops updating the channel but doesn’t delete it.';
 
 export function CounterDetail({
   form,
@@ -156,7 +152,11 @@ export function CounterDetail({
                   onChange={(event) => change({ ...counter, template: event.currentTarget.value })}
                 />
                 <PlaceholderSuggestions autocomplete={name.autocomplete} />
-                <TemplateDiagnostics id={name.diagnosticsId} diagnostics={name.diagnostics} />
+                <TemplateDiagnostics
+                  id={name.diagnosticsId}
+                  diagnostics={name.diagnostics}
+                  autocomplete={name.autocomplete}
+                />
               </div>
 
               <div className="field">
@@ -176,7 +176,7 @@ export function CounterDetail({
         <Rows>
           <SettingRow
             title="Channel"
-            description="Discord changes text channel names to lowercase, with dashes for spaces."
+            help="Discord makes text channel names lowercase, with dashes for spaces."
             error={channelError}
             note={counter.channelId === undefined ? PROTON_MAKES : undefined}
           >
@@ -196,11 +196,7 @@ export function CounterDetail({
 
       <Section label="Identity">
         <Rows>
-          <SettingRow
-            title="Counter ID"
-            description={ID_EXPLAINS}
-            error={issues.get('id') ?? at('id')}
-          >
+          <SettingRow title="Counter ID" error={issues.get('id') ?? at('id')}>
             <CounterId id={counter.id} />
           </SettingRow>
         </Rows>
@@ -210,7 +206,7 @@ export function CounterDetail({
         <Rows>
           <ActionRow title="Remove counter" description={REMOVE_EXPLAINS}>
             <Button tone="danger-quiet" icon="trash" onClick={() => setRemoving(true)}>
-              Remove
+              Remove counter
             </Button>
           </ActionRow>
         </Rows>
@@ -219,8 +215,9 @@ export function CounterDetail({
       <ConfirmDialog
         open={removing}
         danger
+        icon="trash"
         title="Remove counter?"
-        confirmLabel="Remove"
+        confirmLabel="Remove counter"
         onClose={() => setRemoving(false)}
         onConfirm={() => {
           setCounters(

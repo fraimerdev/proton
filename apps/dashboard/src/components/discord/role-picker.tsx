@@ -44,9 +44,9 @@ export function RoleName({
 
 /** Why a role cannot be handed out, said before the save rather than as a 403 days later. */
 function unreachableReason(role: GuildRole): string | undefined {
-  if (role.premiumSubscriber) return 'Discord manages the Booster role — no bot can give it.';
-  if (role.managed) return 'Another integration owns this role, so Proton cannot give it.';
-  if (!role.assignable) return 'Proton cannot give a role that sits above its own.';
+  if (role.premiumSubscriber) return 'Discord manages the Booster role, so no bot can give it.';
+  if (role.managed) return 'An integration manages this role, so Proton can’t give it.';
+  if (!role.assignable) return 'This role is above Proton’s highest role, so Proton can’t give it.';
   return undefined;
 }
 
@@ -98,7 +98,11 @@ function RoleOptions({
   const shown = roles.filter((role) => needle === '' || role.name.toLowerCase().includes(needle));
 
   if (shown.length === 0) {
-    return <p className="picker-note">{needle === '' ? 'No roles.' : 'No matching roles'}</p>;
+    return (
+      <p className="picker-note">
+        {needle === '' ? 'No roles to choose from.' : 'No matching roles'}
+      </p>
+    );
   }
 
   return (
@@ -112,12 +116,18 @@ function RoleOptions({
             type="button"
             role="option"
             aria-selected={isSelected(role.id)}
-            title={reason}
             className={cx('picker-option', reason !== undefined && 'unreachable')}
             onClick={() => onPick(role)}
           >
             <span className="role-swatch" style={{ background: roleColour(role) }} />
-            <span className="truncate">{role.name}</span>
+            {reason !== undefined ? (
+              <span className="picker-option-text">
+                <span className="truncate">{role.name}</span>
+                <span className="picker-option-reason">{reason}</span>
+              </span>
+            ) : (
+              <span className="truncate">{role.name}</span>
+            )}
             {reason !== undefined ? (
               <Icon name="warning" size={12} weight="fill" className="push-right text-warning" />
             ) : isSelected(role.id) ? (
@@ -167,7 +177,7 @@ export function RolePicker({
   const warning = selected && requireAssignable ? unreachableReason(selected) : undefined;
 
   return (
-    <div className="stack stack-4" style={{ width }}>
+    <div className="stack stack-4" style={{ width, maxWidth: '100%' }}>
       <button
         ref={anchor}
         type="button"
@@ -329,7 +339,6 @@ export function RoleMultiPicker({
         aria-expanded={open}
         aria-invalid={invalid ? true : undefined}
         aria-label={atMax ? `${addLabel} (limit reached)` : addLabel}
-        title={atMax ? `You can add up to ${max} roles` : addLabel}
         onClick={() => {
           setQuery('');
           setPopped(null);
@@ -338,6 +347,10 @@ export function RoleMultiPicker({
       >
         <Icon name="plus" size={14} />
       </button>
+
+      {atMax && !disabled ? (
+        <span className="text-xs text-muted">You can add up to {max} roles.</span>
+      ) : null}
 
       <Popover
         anchor={anchor}

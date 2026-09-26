@@ -28,12 +28,12 @@ import { EmojiField } from './emoji.tsx';
 
 // refineVerificationPanel, verbatim: a stored panel can still carry these, and a save refuses them.
 const CARRIES_ROWS =
-  'Proton adds the verify button to this panel itself, so it cannot carry button rows of its own ' +
-  '— a second row would be posted under a button nobody configured.';
+  'Proton adds the verify button to this panel itself, so it can’t have button rows of its own. ' +
+  'Remove them.';
 
 const CARRIES_V2 =
-  'The verification panel is posted with Proton’s own verify button attached, and Discord will ' +
-  'not put a button row on a components layout. Build this panel from text and embeds.';
+  'The verification panel can’t use a layout, because Proton adds its verify button to the panel ' +
+  'and Discord won’t put a button row on a layout. Build it from text and embeds.';
 
 const POST_NOTE = 'Post the panel again if it was deleted in Discord.';
 
@@ -42,11 +42,11 @@ const NO_CHANNEL = 'Choose a panel channel first.';
 const POST_IS_SAVED = 'Save your changes first. Posting uses the last saved version.';
 
 const EMOJI_IS_UNICODE =
-  'Proton sends this to Discord as an emoji character. Choose a server emoji, or paste a single ' +
-  'emoji.';
+  'Proton sends this as an emoji character, so it needs to be a single emoji. Choose a server ' +
+  'emoji, or paste one.';
 
 const MENTIONS_NOTE =
-  'Choose who this panel can ping when Proton updates it. A newly posted panel notifies no one.';
+  'A newly posted panel never pings anyone. These choose who it can ping when Proton edits it.';
 
 const PANEL_CHANNEL_TYPES = [CHANNEL_TYPE.text, CHANNEL_TYPE.announcement] as const;
 
@@ -181,11 +181,7 @@ export function PanelArea({ guildId, moduleId, form }: AreaProps): ReactElement 
           }
         >
           <Rows>
-            <SettingRow
-              title={PANEL_CHANNEL_LABEL}
-              description="Where Proton posts the panel members use to verify."
-              error={form.errorAt('panelChannelId')}
-            >
+            <SettingRow title={PANEL_CHANNEL_LABEL} error={form.errorAt('panelChannelId')}>
               <ChannelPicker
                 guildId={guildId}
                 label={PANEL_CHANNEL_LABEL}
@@ -241,7 +237,7 @@ export function PanelArea({ guildId, moduleId, form }: AreaProps): ReactElement 
           onChange={(embeds) => form.set('panel.embeds', embeds)}
         />
 
-        <Section label="Mentions" intro={MENTIONS_NOTE}>
+        <Section label="Mentions" help={MENTIONS_NOTE}>
           <Rows>
             {MENTION_LABELS.map((mention) => (
               <SettingRow key={mention.key} title={mention.label}>
@@ -291,18 +287,17 @@ export function PanelArea({ guildId, moduleId, form }: AreaProps): ReactElement 
             <Button
               busy={post.isPending}
               disabled={postable?.channelId === undefined}
-              title={postable?.channelId === undefined ? NO_CHANNEL : undefined}
               onClick={() => post.mutate()}
             >
-              Post
+              Post panel
             </Button>
 
             <AsyncOperationStatus
               phase={phase}
               workingLabel="Posting…"
-              requestedLabel="Asked Proton to post it. Check the channel in Discord to confirm it appeared."
+              requestedLabel="Asked Proton to post it. Check the channel in Discord to make sure it’s there."
               failedLabel={
-                post.error ? saveFailure(post.error, 'The panel was not posted') : undefined
+                post.error ? saveFailure(post.error, 'The panel wasn’t posted') : undefined
               }
             />
 

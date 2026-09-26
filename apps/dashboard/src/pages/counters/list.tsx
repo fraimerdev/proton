@@ -42,8 +42,7 @@ import {
 
 const SEARCH_FROM = 8;
 
-const INTRO =
-  'Counts refresh every 10 minutes, not instantly. Saving asks for a refresh straight away.';
+const INTRO = 'Counts refresh every 10 minutes, and again when you save.';
 
 export function CounterList({
   form,
@@ -61,6 +60,12 @@ export function CounterList({
   onOpen: (counterId: string) => void;
 }): ReactElement {
   const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState(0);
+
+  const startAdding = (): void => {
+    setDraft((current) => current + 1);
+    setAdding(true);
+  };
 
   const counters = form.value.counters;
   const searchable = counters.length > SEARCH_FROM;
@@ -111,7 +116,7 @@ export function CounterList({
               icon="plus"
               disabled={atCeiling}
               title={atCeiling ? ceilingNote(form.view.tier, 'counters') : undefined}
-              onClick={() => setAdding(true)}
+              onClick={startAdding}
             >
               Add counter
             </Button>
@@ -125,7 +130,7 @@ export function CounterList({
           title="No counter channels"
           inset
           actions={
-            <Button tone="primary" icon="plus" onClick={() => setAdding(true)}>
+            <Button tone="primary" icon="plus" onClick={startAdding}>
               Add counter
             </Button>
           }
@@ -173,17 +178,17 @@ export function CounterList({
         </Rows>
       )}
 
-      {adding ? (
-        <AddCounterDialog
-          counters={counters}
-          onClose={() => setAdding(false)}
-          onAdd={(counter) => {
-            setCounters(form, [...counters, counter]);
-            setAdding(false);
-            onOpen(counter.id);
-          }}
-        />
-      ) : null}
+      <AddCounterDialog
+        key={draft}
+        open={adding}
+        counters={counters}
+        onClose={() => setAdding(false)}
+        onAdd={(counter) => {
+          setCounters(form, [...counters, counter]);
+          setAdding(false);
+          onOpen(counter.id);
+        }}
+      />
     </Section>
   );
 }
@@ -194,14 +199,16 @@ function describedBy(...ids: readonly (string | undefined)[]): string | undefine
 }
 
 function AddCounterDialog({
+  open,
   counters,
   onClose,
   onAdd,
 }: {
+  open: boolean;
   counters: readonly Counter[];
   onClose: () => void;
   onAdd: (counter: Counter) => void;
-}): ReactElement {
+}): ReactElement | null {
   const [source, setSource] = useState<CounterSource>('members');
   const [template, setTemplate] = useState(prefillFor('members'));
   const [edited, setEdited] = useState(false);
@@ -229,10 +236,12 @@ function AddCounterDialog({
 
   return (
     <Dialog
-      open
+      open={open}
       onClose={onClose}
       title="Add counter"
-      description="Proton creates a channel for it. You can choose an existing channel later."
+      size="medium"
+      icon="hash"
+      description="Proton creates its channel; you can choose an existing one later."
       footerNote={
         <>
           Counter ID <span className="mono">{id}</span>
@@ -246,53 +255,55 @@ function AddCounterDialog({
             disabled={trimmed === '' || !hasCount(trimmed) || report.blocking.length > 0}
             onClick={() => onAdd({ id, template: trimmed, source })}
           >
-            Add
+            Add counter
           </Button>
         </>
       }
     >
-      <div className="stack stack-16">
-        <div className="field">
-          <span className="field-label">What to count</span>
-          <SegmentedControl
-            label="What to count"
-            options={SOURCE_OPTIONS}
-            value={source}
-            block
-            onChange={(next) => {
-              setSource(next);
-              if (!edited) setTemplate(prefillFor(next));
-            }}
-          />
-        </div>
+      <div className="field">
+        <span className="field-label">What to count</span>
+        <SegmentedControl
+          label="What to count"
+          options={SOURCE_OPTIONS}
+          value={source}
+          block
+          onChange={(next) => {
+            setSource(next);
+            if (!edited) setTemplate(prefillFor(next));
+          }}
+        />
+      </div>
 
-        <Field label="Name template" error={name.error}>
-          {(props) => (
-            <>
-              <TextInput
-                {...name.autocomplete.field}
-                {...props}
-                aria-describedby={describedBy(props['aria-describedby'], name.describedBy)}
-                autoFocus
-                spellCheck={false}
-                maxLength={TEMPLATE_MAX}
-                invalid={name.invalid}
-                value={template}
-                onChange={(event) => {
-                  setEdited(true);
-                  setTemplate(event.currentTarget.value);
-                }}
-              />
-              <PlaceholderSuggestions autocomplete={name.autocomplete} />
-              <TemplateDiagnostics id={name.diagnosticsId} diagnostics={name.diagnostics} />
-            </>
-          )}
-        </Field>
+      <Field label="Name template" error={name.error}>
+        {(props) => (
+          <>
+            <TextInput
+              {...name.autocomplete.field}
+              {...props}
+              aria-describedby={describedBy(props['aria-describedby'], name.describedBy)}
+              autoFocus
+              spellCheck={false}
+              maxLength={TEMPLATE_MAX}
+              invalid={name.invalid}
+              value={template}
+              onChange={(event) => {
+                setEdited(true);
+                setTemplate(event.currentTarget.value);
+              }}
+            />
+            <PlaceholderSuggestions autocomplete={name.autocomplete} />
+            <TemplateDiagnostics
+              id={name.diagnosticsId}
+              diagnostics={name.diagnostics}
+              autocomplete={name.autocomplete}
+            />
+          </>
+        )}
+      </Field>
 
-        <div className="field">
-          <span className="field-label">Channel name</span>
-          <NamePreview template={template} source={source} icon="speaker-high" />
-        </div>
+      <div className="field">
+        <span className="field-label">Channel name</span>
+        <NamePreview template={template} source={source} icon="speaker-high" />
       </div>
     </Dialog>
   );

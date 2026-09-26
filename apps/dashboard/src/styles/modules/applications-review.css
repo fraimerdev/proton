@@ -1,0 +1,426 @@
+.applications-review-body {
+  flex: 1 0 auto;
+}
+
+.applications-review-card-brand {
+  margin-bottom: 18px;
+}
+
+.applications-review-card-action {
+  margin-top: 20px;
+}
+
+.applications-review-link,
+.applications-review-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--link);
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.applications-review-link:hover,
+.applications-review-back:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+}
+
+.applications-review-link {
+  overflow-wrap: anywhere;
+}
+
+.applications-review-back {
+  align-self: flex-start;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.applications-review-tabs {
+  max-width: 100%;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.applications-review-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+}
+
+.applications-review-toolbar {
+  align-items: flex-end;
+  row-gap: 10px;
+}
+
+.applications-review-toolbar .field {
+  gap: 4px;
+}
+
+.applications-review-toolbar .field-label {
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-medium);
+}
+
+.applications-review-queue .table-foot {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.applications-review-queue .table time {
+  white-space: nowrap;
+}
+
+.applications-review-queue .table .user-cell {
+  max-width: 180px;
+}
+
+.applications-review-cell-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.applications-review-form-name {
+  display: -webkit-box;
+  min-width: 10ch;
+  max-width: 28ch;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: break-word;
+}
+
+.applications-review-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.applications-review-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.applications-review-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+}
+
+.applications-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.applications-review-banners:not(:empty) {
+  margin-bottom: 24px;
+}
+
+.applications-review-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: 38px 32px;
+  align-items: start;
+}
+
+.applications-review-main,
+.applications-review-side {
+  min-width: 0;
+}
+
+.applications-review-block {
+  margin-top: 38px;
+}
+
+.applications-review-block + .section {
+  margin-top: 38px;
+}
+
+.applications-review-side .pairs {
+  grid-template-columns: minmax(84px, max-content) minmax(0, 1fr);
+  gap: 10px 14px;
+}
+
+.applications-review-facts {
+  padding: 14px 16px;
+}
+
+.applications-review-group-title {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-semibold);
+}
+
+.applications-review-answer {
+  padding: 12px 16px;
+}
+
+.applications-review-question {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  font-weight: var(--weight-medium);
+}
+
+.applications-review-reply,
+.applications-review-message-body {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.applications-review-thread,
+.applications-review-notes,
+.applications-review-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.applications-review-message {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 16px;
+}
+
+.applications-review-message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+.applications-review-message-kind {
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.applications-review-note-form {
+  margin-top: 12px;
+}
+
+.applications-review-count {
+  margin-left: 4px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.applications-review-vote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 16px;
+}
+
+.applications-review-vote-when {
+  margin-left: auto;
+}
+
+.applications-review-average {
+  margin: 8px 0 0;
+}
+
+.applications-review-case {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+}
+
+.applications-review-case-reason {
+  flex-basis: 100%;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  overflow-wrap: anywhere;
+}
+
+.applications-review-effect {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 12px 16px;
+}
+
+.applications-review-effect-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.applications-review-effect-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-body);
+}
+
+.applications-review-effect-role {
+  color: var(--text-secondary);
+}
+
+.applications-review-effect-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+.applications-review-effect-error,
+.applications-review-effect-note {
+  margin: 0;
+  font-size: var(--text-secondary-size);
+  overflow-wrap: anywhere;
+}
+
+.applications-review-effect-error {
+  color: var(--danger);
+}
+
+.applications-review-effect-note {
+  color: var(--text-secondary);
+}
+
+.applications-review-effect-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.applications-review-event {
+  display: flex;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.applications-review-event-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+}
+
+.applications-review-event[data-tone="warning"] .applications-review-event-dot {
+  background: var(--warning);
+}
+
+.applications-review-event[data-tone="success"] .applications-review-event-dot {
+  background: var(--success);
+}
+
+.applications-review-event-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.applications-review-event-text {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--text-body);
+}
+
+.applications-review-event-detail {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+}
+
+.applications-review-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+}
+
+@container workspace (max-width: 860px) {
+  .applications-review-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .applications-review-toolbar .field {
+    flex: 1 1 140px;
+    min-width: 0;
+  }
+
+  .applications-review-toolbar .control-w-md,
+  .applications-review-toolbar .control-w-sm {
+    width: 100%;
+  }
+
+  .applications-review-toolbar .push-right {
+    margin-left: 0;
+  }
+
+  .applications-review-answer,
+  .applications-review-message,
+  .applications-review-facts,
+  .applications-review-vote,
+  .applications-review-event {
+    padding: 10px 14px;
+  }
+
+  .applications-review-effect {
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .applications-review-actions > .button {
+    flex: 1 1 auto;
+  }
+}

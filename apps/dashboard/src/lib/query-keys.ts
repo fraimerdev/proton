@@ -9,6 +9,7 @@ export const queryKeys = {
     ['guild', guildId, 'member-search', query] as const,
   moduleConfig: (guildId: string, moduleId: string) =>
     ['guild', guildId, 'module', moduleId] as const,
+  commands: (guildId: string) => ['guild', guildId, 'commands'] as const,
 
   channels: (guildId: string) => ['guild', guildId, 'channels'] as const,
   roles: (guildId: string) => ['guild', guildId, 'roles'] as const,
@@ -17,6 +18,17 @@ export const queryKeys = {
   nameStyleStatus: (guildId: string) =>
     ['guild', guildId, 'branding', 'name-style-status'] as const,
   xpEvents: (guildId: string) => ['guild', guildId, 'leveling', 'xp-events'] as const,
+  joinrolesSync: (guildId: string) => ['guild', guildId, 'joinroles', 'sync'] as const,
+  protonRolePower: (guildId: string) => ['guild', guildId, 'proton-role-power'] as const,
+  achievements: (guildId: string) => ['guild', guildId, 'achievements'] as const,
+  achievementsOverview: (guildId: string) =>
+    ['guild', guildId, 'achievements', 'overview'] as const,
+  achievementMember: (guildId: string, userId: string) =>
+    ['guild', guildId, 'achievements', 'member', userId] as const,
+  achievementUnlocks: (guildId: string, query: unknown) =>
+    ['guild', guildId, 'achievements', 'unlocks', query] as const,
+  achievementRewards: (guildId: string, query: unknown) =>
+    ['guild', guildId, 'achievements', 'rewards', query] as const,
   view: (guildId: string, viewId: string, search: unknown) =>
     ['guild', guildId, 'view', viewId, search] as const,
 };

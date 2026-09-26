@@ -1,15 +1,8 @@
 import type { AutomodConfig, KeywordPreset } from '@proton/module-automod/config';
-import { severityOf } from '@proton/module-automod/config';
-import type { DesiredRule } from '@proton/module-automod/native';
-import { planNativeRules, RULE_NAMES } from '@proton/module-automod/native';
-import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import type { ModuleForm } from '../../components/module/form.ts';
-import { ModuleLink } from '../../components/module/route.tsx';
 import { NumberStepper, Switch } from '../../components/ui/controls.tsx';
-import { EmptyState, Spinner, StatusBanner } from '../../components/ui/feedback.tsx';
 import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
-import { channelsQuery } from '../../lib/queries.ts';
 import { TokenField } from './lists.tsx';
 import { setField } from './shape.ts';
 
@@ -31,39 +24,7 @@ const PRESET_DESCRIPTION: Record<KeywordPreset, string> = {
   slurs: 'Block personal insults and hate speech.',
 };
 
-function ruleDetail(rule: DesiredRule, config: AutomodConfig): string {
-  const metadata = rule.triggerMetadata;
-
-  if (rule.name === RULE_NAMES.keywords) {
-    const words = metadata.keywordFilter?.length ?? 0;
-    const patterns = metadata.regexPatterns?.length ?? 0;
-
-    return [
-      `${words} ${words === 1 ? 'word' : 'words'}`,
-      `${patterns} ${patterns === 1 ? 'pattern' : 'patterns'}`,
-    ].join(' · ');
-  }
-
-  if (rule.name === RULE_NAMES.presets) {
-    return config.presets.map((preset) => PRESET_LABEL[preset]).join(' · ');
-  }
-
-  if (rule.name === RULE_NAMES.mentions) {
-    return `${config.mentionLimit} or more mentions in one message`;
-  }
-
-  return 'Discord’s spam filter';
-}
-
-export function NativeArea({
-  form,
-  guildId,
-  enabled,
-}: {
-  form: Form;
-  guildId: string;
-  enabled: boolean;
-}): ReactElement {
+export function NativeArea({ form }: { form: Form }): ReactElement {
   const config = form.value;
 
   const togglePreset = (preset: KeywordPreset, on: boolean): void => {
@@ -84,7 +45,7 @@ export function NativeArea({
         <Rows>
           <SettingRow
             title="Blocked words"
-            description="Action taken when a message contains any of these."
+            description="Discord blocks messages that contain any of these."
             error={form.errorAt('blockedWords')}
             stacked
           >
@@ -104,7 +65,7 @@ export function NativeArea({
 
           <SettingRow
             title="Allowed words"
-            description="Action taken when a message contains any of these."
+            description="Discord never blocks these, even when a blocked word or preset matches."
             error={form.errorAt('allowedWords')}
             stacked
           >

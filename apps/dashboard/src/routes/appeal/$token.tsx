@@ -53,14 +53,14 @@ function AppealPage(): ReactElement {
         }
       >
         Sign in with Discord so Proton can confirm this link belongs to you. Proton reads your
-        account name and the servers you are in, and nothing else.
+        Discord user ID, name and avatar and the servers you’re in, and nothing else.
       </LinkCard>
     );
   }
 
   if (!state.ok) {
     return (
-      <LinkCard entering={entering} title="Could not open this link" tone="danger">
+      <LinkCard entering={entering} title="Couldn’t open this link" tone="danger">
         {state.reason}
       </LinkCard>
     );

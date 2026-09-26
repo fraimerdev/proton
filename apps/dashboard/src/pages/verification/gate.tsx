@@ -14,18 +14,14 @@ import { Rows, Section, SettingRow } from '../../components/ui/layout.tsx';
 
 const QUARANTINE_ANCHOR = 'verification-quarantine-role';
 
-const DURATION_INVALID = 'Enter a number followed by s, m, h, d or w — for example 30m, 12h or 7d.';
+const DURATION_INVALID = 'Enter a number followed by s, m, h, d or w, like 30m, 12h or 7d.';
 
-// gate.ts:78-84, without the clause naming the member who joined: no member is in scope here.
 const UNGATED =
-  'This server has "Apply the unverified role on join" disabled, so a member who joins ' +
-  'without the unverified role is NOT gated. The invite they used does not grant the role — add ' +
-  'it under Server Settings → Invites, or turn the setting back on.';
+  'Proton won’t give new members the unverified role, so they aren’t gated unless the invite ' +
+  'they use gives it. You can set that up under Server Settings → Invites.';
 
-// failure.ts:66-76, trimmed at the sentence that points back at this page.
 const QUARANTINE_UNSET =
-  'Verification is set to quarantine members who run out of attempts, but no quarantine role is ' +
-  'chosen, so Proton cannot act on them.';
+  'No quarantine role is chosen, so members who run out of attempts can just try again.';
 
 // What pressing the panel button actually does in each mode — interactions.ts:123-132, and for
 // website the link's own lifetime from panel.ts:109-110. Nothing on this page configures the
@@ -34,7 +30,8 @@ const MODE_EXPLAINS: Record<VerificationMode, string> = {
   button: 'Members are verified as soon as they press the button.',
   captcha: 'Members read a code from an image and type it in.',
   website:
-    'Members get a private link to sign in with Discord. The link stops working after 15 minutes.',
+    'Members get a private link and sign in with Discord on Proton’s website. The link expires ' +
+    'after 15 minutes.',
 };
 
 const QUARANTINE_EXPLAINS =
@@ -63,6 +60,7 @@ function RoleRow({
   path,
   label,
   description,
+  help,
   word,
   title,
   note,
@@ -72,6 +70,7 @@ function RoleRow({
   path: RolePath;
   label: string;
   description?: string | undefined;
+  help?: ReactNode;
   word: string;
   title?: ReactNode;
   note?: ReactNode;
@@ -80,11 +79,18 @@ function RoleRow({
 
   const error =
     value === guildId
-      ? `The ${word} role is set to @everyone, which Discord does not let anyone add or remove.`
+      ? `The ${word} role can’t be @everyone, because it can’t be given or removed. Choose another role.`
       : form.errorAt(path);
 
   return (
-    <SettingRow title={title ?? label} description={description} error={error} note={note}>
+    <SettingRow
+      title={title ?? label}
+      description={description}
+      help={help}
+      helpLabel={label}
+      error={error}
+      note={note}
+    >
       <RolePicker
         guildId={guildId}
         label={label}
@@ -183,7 +189,8 @@ export function GateArea({ guildId, form, enabled }: AreaProps): ReactElement {
             form={form}
             path="unverifiedRoleId"
             label="Unverified role"
-            description="Removed when a member verifies. Until Proton adds it, new members briefly have full access."
+            description="Removed when a member verifies."
+            help="Proton adds it right after a member joins, so there’s a brief moment when they have full access."
             word="unverified"
           />
 
@@ -192,6 +199,7 @@ export function GateArea({ guildId, form, enabled }: AreaProps): ReactElement {
             form={form}
             path="verifiedRoleId"
             label="Member role"
+            description="Given when a member verifies."
             word="member"
           />
 
@@ -213,14 +221,14 @@ export function GateArea({ guildId, form, enabled }: AreaProps): ReactElement {
           <Rows>
             <SettingRow
               title={CAPTCHA_DELIVERY_LABEL}
-              description="Members with DMs closed always get it in the channel."
+              help="Members with closed DMs get it in the channel instead."
             >
               <Select
                 aria-label={CAPTCHA_DELIVERY_LABEL}
                 className="verification-select-wide"
                 options={[
                   { value: 'channel', label: 'Privately in the channel' },
-                  { value: 'dm', label: 'By direct message' },
+                  { value: 'dm', label: 'In a DM' },
                 ]}
                 value={config.captchaDelivery}
                 onChange={(value) => form.set('captchaDelivery', value as CaptchaDelivery)}
@@ -241,23 +249,22 @@ export function GateArea({ guildId, form, enabled }: AreaProps): ReactElement {
       ) : null}
 
       {captcha ? (
-        <Section label="Response">
+        <Section label="Out of attempts">
           <Rows>
             <SettingRow
               title={FAILURE_ACTION_LABEL}
-              description="What Proton does when a member runs out of attempts."
               error={quarantineUnset ? QUARANTINE_UNSET : form.errorAt('failureAction')}
             >
               <div className="stack stack-6">
                 <Select
-                  aria-label={FAILURE_ACTION_LABEL}
+                  aria-label="Action when out of attempts"
                   width="lg"
                   invalid={quarantineUnset}
                   options={[
-                    { value: 'none', label: 'Nothing — let them try again' },
+                    { value: 'none', label: 'Let them try again' },
                     { value: 'kick', label: 'Kick' },
                     { value: 'ban', label: 'Ban' },
-                    { value: 'timeout', label: 'Timeout' },
+                    { value: 'timeout', label: 'Time out' },
                     { value: 'quarantine', label: 'Add quarantine role' },
                   ]}
                   value={config.failureAction}

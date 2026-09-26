@@ -16,6 +16,36 @@ export interface CommandEntry {
 
 export const COMMAND_SET: readonly CommandEntry[] = [
   {
+    usage: '/achievement reset',
+    description: 'Reset a member’s progress and badges. Needs Manage Server.',
+    args: [
+      { name: 'member', required: true },
+      { name: 'achievement', required: false },
+      { name: 'rewards_again', required: false },
+    ],
+    module: 'achievements',
+    permission: null,
+  },
+  {
+    usage: '/achievement view',
+    description: 'Show what an achievement takes, its tiers and rewards, and a member’s progress.',
+    args: [
+      { name: 'achievement', required: true },
+      { name: 'user', required: false },
+    ],
+    module: 'achievements',
+    permission: null,
+  },
+  {
+    usage: '/achievements',
+    description: 'Show a member’s achievement badges and their progress towards the rest.',
+    args: [
+      { name: 'user', required: false },
+    ],
+    module: 'achievements',
+    permission: null,
+  },
+  {
     usage: '/afk clear',
     description: 'Clear your AFK, or with Manage Nicknames, someone else’s.',
     args: [
@@ -35,7 +65,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/antinuke maintenance',
-    description: 'Suspend the breaker for a fixed period of bulk admin work.',
+    description: 'Pause Anti-Nuke for a set time while you make bulk changes.',
     args: [
       { name: 'duration', required: true },
       { name: 'reason', required: false },
@@ -45,21 +75,69 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/antinuke resume',
-    description: 'End maintenance mode now and re-arm the breaker.',
+    description: 'End maintenance mode now and re-arm Anti-Nuke.',
     args: [],
     module: 'antinuke',
     permission: 'Manage Server',
   },
   {
     usage: '/antinuke status',
-    description: 'Show whether the breaker is armed, and at what thresholds.',
+    description: 'Show whether Anti-Nuke is armed, and its limits.',
     args: [],
     module: 'antinuke',
     permission: 'Manage Server',
   },
   {
+    usage: '/applications queue',
+    description: 'See how many applications are waiting for review.',
+    args: [],
+    module: 'applications',
+    permission: null,
+  },
+  {
+    usage: '/applications view',
+    description: 'Open an application by its number.',
+    args: [
+      { name: 'number', required: true },
+    ],
+    module: 'applications',
+    permission: null,
+  },
+  {
+    usage: '/apply resume',
+    description: 'Continue an application you saved for later.',
+    args: [],
+    module: 'applications',
+    permission: null,
+  },
+  {
+    usage: '/apply start',
+    description: 'See what a form asks and whether you can apply, then start or continue.',
+    args: [
+      { name: 'form', required: true },
+    ],
+    module: 'applications',
+    permission: null,
+  },
+  {
+    usage: '/apply status',
+    description: 'See your applications in this server and their status.',
+    args: [],
+    module: 'applications',
+    permission: null,
+  },
+  {
+    usage: '/apply withdraw',
+    description: 'Withdraw an application that hasn’t been decided yet.',
+    args: [
+      { name: 'application', required: true },
+    ],
+    module: 'applications',
+    permission: null,
+  },
+  {
     usage: '/backup create',
-    description: 'Take a snapshot of every channel, role and permission overwrite.',
+    description: 'Take a snapshot of every channel, role and channel permission.',
     args: [],
     module: 'backup',
     permission: 'Manage Server',
@@ -73,7 +151,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/backup restore',
-    description: 'Recreate the channels and roles from a snapshot.',
+    description: 'Recreate the missing channels and roles from a snapshot.',
     args: [
       { name: 'backup_id', required: true },
       { name: 'confirm', required: false },
@@ -105,14 +183,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/branding',
-    description: 'Re-apply how Proton looks in this server, and report what Discord said.',
+    description: 'Re-apply Proton’s nickname and profile in this server and see what Discord accepted.',
     args: [],
     module: 'branding',
     permission: 'Manage Server',
   },
   {
     usage: '/counters refresh',
-    description: 'Update every counter channel now instead of waiting for the timer.',
+    description: 'Update every counter channel now, without waiting for the next refresh.',
     args: [],
     module: 'counters',
     permission: 'Manage Channels',
@@ -129,7 +207,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway blacklist list',
-    description: 'Show who cannot enter giveaways here.',
+    description: 'Show who can’t enter giveaways in this server.',
     args: [],
     module: 'giveaways',
     permission: null,
@@ -157,7 +235,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway bonus list',
-    description: 'Show who has been granted extra entries.',
+    description: 'Show who has been given extra entries.',
     args: [
       { name: 'giveaway', required: true },
     ],
@@ -166,7 +244,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway bonus remove',
-    description: 'Take back every extra entry a member was granted.',
+    description: 'Take back all the extra entries a member was given.',
     args: [
       { name: 'giveaway', required: true },
       { name: 'member', required: true },
@@ -176,7 +254,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway cancel',
-    description: 'Stop a running giveaway without drawing anybody.',
+    description: 'Stop a giveaway without drawing any winners.',
     args: [
       { name: 'giveaway', required: true },
     ],
@@ -192,7 +270,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway drop',
-    description: 'Post a drop — the first eligible member to press it wins, with no draw.',
+    description: 'Post a drop. The first eligible member to press it wins, with no draw.',
     args: [
       { name: 'prize', required: true },
       { name: 'expires', required: false },
@@ -203,7 +281,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway edit',
-    description: 'Change a giveaway that is already posted.',
+    description: 'Change a giveaway that’s already posted.',
     args: [
       { name: 'giveaway', required: true },
       { name: 'prize', required: false },
@@ -226,7 +304,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway entrants',
-    description: 'Page through everybody in a giveaway and how many entries they hold.',
+    description: 'List everyone in a giveaway and how many entries they have.',
     args: [
       { name: 'giveaway', required: true },
       { name: 'page', required: false },
@@ -236,7 +314,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway entries',
-    description: 'Show how many entries somebody has, and why.',
+    description: 'Show the top entrants in a giveaway, or how many entries a member has.',
     args: [
       { name: 'giveaway', required: true },
       { name: 'member', required: false },
@@ -246,7 +324,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway export',
-    description: 'Download the entrant list as a CSV, for an audit.',
+    description: 'Download the entrant list as a CSV file.',
     args: [
       { name: 'giveaway', required: true },
     ],
@@ -265,7 +343,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway history',
-    description: 'Everything that has happened to one giveaway, in order.',
+    description: 'Show everything that has happened to a giveaway, in order.',
     args: [
       { name: 'giveaway', required: true },
     ],
@@ -274,7 +352,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway info',
-    description: 'Everything about one giveaway.',
+    description: 'Show the details of a giveaway.',
     args: [
       { name: 'giveaway', required: true },
     ],
@@ -290,7 +368,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway pause',
-    description: 'Close entries without ending it. The time left is held where it is.',
+    description: 'Close entries for now. The time left is kept until you resume it.',
     args: [
       { name: 'giveaway', required: true },
       { name: 'reason', required: false },
@@ -311,7 +389,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway resume',
-    description: 'Reopen a paused giveaway. The deadline moves by the time it was paused.',
+    description: 'Reopen a paused giveaway. Its end time moves by however long it was paused.',
     args: [
       { name: 'giveaway', required: true },
     ],
@@ -320,7 +398,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway shorten',
-    description: 'Bring a giveaway’s deadline forward.',
+    description: 'Make a giveaway end sooner.',
     args: [
       { name: 'giveaway', required: true },
       { name: 'duration', required: true },
@@ -342,7 +420,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/giveaway stats',
-    description: 'Giveaway totals for this server.',
+    description: 'Show giveaway totals for this server.',
     args: [],
     module: 'giveaways',
     permission: null,
@@ -410,7 +488,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/lockdown add',
-    description: 'Stop everyone posting in this channel.',
+    description: 'Stop everyone from posting in this channel.',
     args: [
       { name: 'duration', required: false },
       { name: 'reason', required: false },
@@ -429,14 +507,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/message list',
-    description: 'List this server’s saved messages.',
+    description: 'List this server’s templates.',
     args: [],
     module: 'messages',
     permission: 'Manage Messages',
   },
   {
     usage: '/message post',
-    description: 'Post a saved message.',
+    description: 'Post a template.',
     args: [
       { name: 'name', required: true },
       { name: 'channel', required: false },
@@ -446,14 +524,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/message send',
-    description: 'Compose a one-off message and post it here.',
+    description: 'Compose a one-off embed and post it in this channel.',
     args: [],
     module: 'messages',
     permission: 'Manage Messages',
   },
   {
     usage: '/phishing',
-    description: 'Show the state of the phishing blocklist in this server.',
+    description: 'Check the phishing blocklist and how this server handles a match.',
     args: [],
     module: 'phishing',
     permission: 'Manage Server',
@@ -479,7 +557,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/poll end',
-    description: 'Close one of Proton’s polls before its clock runs out.',
+    description: 'Close one of Proton’s polls early.',
     args: [
       { name: 'message_id', required: true },
     ],
@@ -495,7 +573,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/quarantine add',
-    description: 'Swap a member’s roles for the quarantine role, recording what they had.',
+    description: 'Replace a member’s roles with the quarantine role, saving the ones they had.',
     args: [
       { name: 'user', required: true },
       { name: 'reason', required: false },
@@ -505,7 +583,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/quarantine remove',
-    description: 'Lift a quarantine and put the member’s roles back exactly.',
+    description: 'Release a member from quarantine and give back the roles they had.',
     args: [
       { name: 'user', required: true },
       { name: 'reason', required: false },
@@ -549,8 +627,19 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     permission: null,
   },
   {
+    usage: '/report',
+    description: 'Report a member to this server’s staff.',
+    args: [
+      { name: 'member', required: true },
+      { name: 'message', required: false },
+      { name: 'evidence', required: false },
+    ],
+    module: 'moderation',
+    permission: null,
+  },
+  {
     usage: '/role add',
-    description: 'Add a role to a user.',
+    description: 'Add a role to a member.',
     args: [
       { name: 'user', required: true },
       { name: 'role', required: true },
@@ -561,7 +650,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/role all',
-    description: 'Add a role to all users.',
+    description: 'Add a role to every member.',
     args: [
       { name: 'role', required: true },
       { name: 'reason', required: false },
@@ -571,7 +660,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/role bots',
-    description: 'Add a role to all bots.',
+    description: 'Add a role to every bot.',
     args: [
       { name: 'role', required: true },
       { name: 'reason', required: false },
@@ -581,14 +670,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/role cancel',
-    description: 'Stop a mass role run that is still going.',
+    description: 'Stop a mass role change that’s still running.',
     args: [],
     module: 'moderation',
     permission: 'Manage Roles, Timeout Members',
   },
   {
     usage: '/role humans',
-    description: 'Add a role to all users excluding bots.',
+    description: 'Add a role to every member except bots.',
     args: [
       { name: 'role', required: true },
       { name: 'reason', required: false },
@@ -598,7 +687,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/role in',
-    description: 'Add a role to users with a specific role.',
+    description: 'Add a role to every member who has another role.',
     args: [
       { name: 'role', required: true },
       { name: 'target_role', required: true },
@@ -609,7 +698,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/role remove',
-    description: 'Remove a role from a user.',
+    description: 'Remove a role from a member.',
     args: [
       { name: 'user', required: true },
       { name: 'role', required: true },
@@ -620,7 +709,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/rolemenu',
-    description: 'Post one of this server’s role menus, or refresh it after editing it.',
+    description: 'Post a role menu, or update one that’s already posted.',
     args: [
       { name: 'menu', required: true },
       { name: 'message', required: false },
@@ -640,7 +729,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/suggest',
-    description: 'Suggest something to this server’s staff.',
+    description: 'Post a suggestion for the server to vote on.',
     args: [
       { name: 'text', required: true },
     ],
@@ -649,7 +738,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/suggestion accept',
-    description: 'Accept a suggestion and edit its post to say so.',
+    description: 'Accept a suggestion and update its post.',
     args: [
       { name: 'number', required: true },
       { name: 'reason', required: false },
@@ -659,7 +748,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/suggestion deny',
-    description: 'Turn a suggestion down and edit its post to say so.',
+    description: 'Deny a suggestion and update its post.',
     args: [
       { name: 'number', required: true },
       { name: 'reason', required: false },
@@ -669,7 +758,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/suggestion implement',
-    description: 'Mark a suggestion as done and edit its post to say so.',
+    description: 'Mark a suggestion as implemented and update its post.',
     args: [
       { name: 'number', required: true },
       { name: 'reason', required: false },
@@ -698,7 +787,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/tags delete',
-    description: 'Remove a tag.',
+    description: 'Delete a tag.',
     args: [
       { name: 'name', required: true },
     ],
@@ -717,7 +806,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/tags info',
-    description: 'Show who wrote a tag and how often it is used.',
+    description: 'Show who created a tag and how often it’s been posted.',
     args: [
       { name: 'name', required: true },
     ],
@@ -735,7 +824,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket add',
-    description: 'Give somebody access to this ticket.',
+    description: 'Give a member access to this ticket.',
     args: [
       { name: 'user', required: true },
     ],
@@ -753,7 +842,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket blacklist add',
-    description: 'Stop a member opening tickets.',
+    description: 'Block a member from opening tickets.',
     args: [
       { name: 'user', required: true },
       { name: 'reason', required: false },
@@ -764,7 +853,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket blacklist list',
-    description: 'Show who cannot open tickets.',
+    description: 'List members who can’t open tickets.',
     args: [],
     module: 'tickets',
     permission: null,
@@ -780,14 +869,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket claim',
-    description: 'Take this ticket.',
+    description: 'Claim this ticket.',
     args: [],
     module: 'tickets',
     permission: null,
   },
   {
     usage: '/ticket close',
-    description: 'Close the ticket you are in, or any ticket by its number.',
+    description: 'Close this ticket, or another one by its number.',
     args: [
       { name: 'reason', required: false },
       { name: 'number', required: false },
@@ -817,7 +906,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket info',
-    description: 'Show everything Proton knows about a ticket.',
+    description: 'Show a ticket’s details.',
     args: [
       { name: 'number', required: false },
     ],
@@ -826,21 +915,21 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket list',
-    description: 'List the tickets that are currently open.',
+    description: 'List open tickets. Members see only their own.',
     args: [],
     module: 'tickets',
     permission: null,
   },
   {
     usage: '/ticket lock',
-    description: 'Stop the member posting without closing the ticket.',
+    description: 'Let only staff post in this ticket, without closing it.',
     args: [],
     module: 'tickets',
     permission: null,
   },
   {
     usage: '/ticket move',
-    description: 'Move this ticket into another category.',
+    description: 'Move this ticket to another category.',
     args: [
       { name: 'category', required: true },
     ],
@@ -858,7 +947,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket priority',
-    description: 'Change how urgent this ticket is.',
+    description: 'Change this ticket’s priority.',
     args: [
       { name: 'level', required: true },
     ],
@@ -867,7 +956,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket remove',
-    description: 'Take somebody’s access to this ticket away.',
+    description: 'Remove a member’s access to this ticket.',
     args: [
       { name: 'user', required: true },
     ],
@@ -894,7 +983,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket response',
-    description: 'Post one of this server’s saved replies into the ticket.',
+    description: 'Post a quick response in this ticket.',
     args: [
       { name: 'name', required: true },
     ],
@@ -903,7 +992,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket stats',
-    description: 'Support statistics for this server.',
+    description: 'Show ticket stats for this server.',
     args: [
       { name: 'days', required: false },
     ],
@@ -912,14 +1001,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket transcript',
-    description: 'Get a transcript of this ticket as it stands.',
+    description: 'Get a transcript of this ticket so far.',
     args: [],
     module: 'tickets',
     permission: null,
   },
   {
     usage: '/ticket transfer',
-    description: 'Hand ownership of this ticket to somebody else.',
+    description: 'Give ownership of this ticket to another member.',
     args: [
       { name: 'user', required: true },
     ],
@@ -928,14 +1017,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/ticket unclaim',
-    description: 'Let this ticket go.',
+    description: 'Unclaim this ticket so other staff can take it.',
     args: [],
     module: 'tickets',
     permission: null,
   },
   {
     usage: '/ticket unlock',
-    description: 'Let the member post again.',
+    description: 'Let members post in this ticket again.',
     args: [],
     module: 'tickets',
     permission: null,
@@ -963,14 +1052,14 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/verify',
-    description: 'Pass this server’s verification and get access.',
+    description: 'Verify yourself and get access to this server.',
     args: [],
     module: 'verification',
     permission: null,
   },
   {
     usage: '/voice block',
-    description: 'Keep somebody out, and disconnect them if they are inside.',
+    description: 'Keep a member out, and disconnect them if they’re in.',
     args: [
       { name: 'member', required: true },
     ],
@@ -993,7 +1082,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice invite',
-    description: 'Send somebody a link to your channel.',
+    description: 'Give a member access to your channel so you can invite them.',
     args: [
       { name: 'member', required: true },
     ],
@@ -1002,7 +1091,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice kick',
-    description: 'Disconnect somebody from your channel.',
+    description: 'Disconnect a member from your channel.',
     args: [
       { name: 'member', required: true },
     ],
@@ -1011,7 +1100,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice limit',
-    description: 'Set how many members may join. 0 removes the limit.',
+    description: 'Set how many members can join your channel.',
     args: [
       { name: 'limit', required: true },
     ],
@@ -1020,7 +1109,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice privacy',
-    description: 'Choose who may join.',
+    description: 'Choose who can join your channel.',
     args: [
       { name: 'mode', required: true },
     ],
@@ -1029,7 +1118,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice region',
-    description: 'Pin the voice region, or let Discord choose.',
+    description: 'Set your channel’s voice region, or let Discord choose.',
     args: [
       { name: 'region', required: false },
     ],
@@ -1047,7 +1136,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice transfer',
-    description: 'Hand the channel to somebody else in it.',
+    description: 'Make another member the owner of your channel.',
     args: [
       { name: 'member', required: true },
     ],
@@ -1056,7 +1145,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice trust',
-    description: 'Let somebody join even when the channel is locked.',
+    description: 'Let a member join, even when your channel is locked or private.',
     args: [
       { name: 'member', required: true },
     ],
@@ -1065,7 +1154,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice unblock',
-    description: 'Lift a block.',
+    description: 'Unblock a member.',
     args: [
       { name: 'member', required: true },
     ],
@@ -1074,7 +1163,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/voice untrust',
-    description: 'Take back that trust.',
+    description: 'Stop trusting a member.',
     args: [
       { name: 'member', required: true },
     ],
@@ -1110,7 +1199,7 @@ export const COMMAND_SET: readonly CommandEntry[] = [
   },
   {
     usage: '/xp event list',
-    description: 'List the active and scheduled XP events.',
+    description: 'List the running and scheduled XP events.',
     args: [],
     module: 'leveling',
     permission: 'Manage Server',
@@ -1155,5 +1244,26 @@ export const COMMAND_SET: readonly CommandEntry[] = [
     ],
     module: 'leveling',
     permission: 'Manage Server',
+  },
+  {
+    usage: 'Apps › Punish author',
+    description: 'Punish the author of a message, keeping the message as proof.',
+    args: [],
+    module: 'moderation',
+    permission: 'Timeout Members',
+  },
+  {
+    usage: 'Apps › Report message',
+    description: 'Report a message to this server’s staff.',
+    args: [],
+    module: 'moderation',
+    permission: null,
+  },
+  {
+    usage: 'Apps › Report user',
+    description: 'Report a member to this server’s staff.',
+    args: [],
+    module: 'moderation',
+    permission: null,
   },
 ];

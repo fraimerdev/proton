@@ -19,13 +19,8 @@ import { componentNameKeys, templateKeys, useHeldIndex } from './messages/shared
 import { TemplatesArea } from './messages/templates.tsx';
 
 const MIGRATED =
-  'These settings were saved by an older version of Proton, and some may have changed. Open each ' +
-  'template, check its embeds, then save once to store them in the current format.';
-
-const SWITCHED_OFF =
-  'Messages is disabled. Settings are saved, but nothing runs until you switch it on. ' +
-  '/message post is refused, scheduled posts are cancelled, and buttons already posted say the ' +
-  'module is off.';
+  'Some templates were saved by an older version of Proton. Check each one, then save to update ' +
+  'them.';
 
 // The whole-message rules land on the item rather than on a field, so the SaveBar carries them.
 const ITEM_ISSUE = /^(templates|components)\.\d+$/;
@@ -102,6 +97,7 @@ export default function MessagesPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but nothing runs until you turn it on. /message is refused, scheduled posts are cancelled, and buttons already posted stop working."
         migrated={form.view.migrated}
         migrationNote={MIGRATED}
         changedElsewhere={form.changedElsewhere}
@@ -112,8 +108,6 @@ export default function MessagesPage({
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {!enabled ? <StatusBanner tone="neutral">{SWITCHED_OFF}</StatusBanner> : null}
       </ModuleBanners>
 
       <LoadingBoundary

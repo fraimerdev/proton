@@ -12,10 +12,7 @@ export const SELECT_OPTIONS_MAX = 25;
 export const DEFAULT_SELECT_PLACEHOLDER = 'Choose what you need help with…';
 
 export function noTypesReason(panel: TicketPanel): string {
-  return (
-    `The **${panel.name}** panel has no ticket types on it, so its buttons would open nothing. ` +
-    'Add at least one under Tickets → Ticket types, then attach it to the panel.'
-  );
+  return `${panel.name} has no ticket types, so it would open nothing. Add at least one before posting it.`;
 }
 
 export function shownOnPanel(panel: TicketPanel, types: readonly TicketType[]): TicketType[] {

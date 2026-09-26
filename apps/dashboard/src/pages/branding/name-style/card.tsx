@@ -41,42 +41,44 @@ export function NameStyleCard({
 
   return (
     <div className="name-style-card">
-      <div className="dc name-style-card-specimen">
-        {style === null ? (
-          <span className="name-style-card-plain">{name}</span>
-        ) : (
-          <NameSpecimen
-            font={style.font}
-            effect={style.effect}
-            colours={style.colours}
-            text={name}
-            missing={missing}
-          />
-        )}
-        <AppTag />
-        {style !== null && faces.status === 'loading' ? (
-          <Spinner size="sm" status label="Loading the font" />
-        ) : null}
-      </div>
+      <div className="name-style-card-body">
+        <div className="dc name-style-card-specimen">
+          {style === null ? (
+            <span className="name-style-card-plain">{name}</span>
+          ) : (
+            <NameSpecimen
+              font={style.font}
+              effect={style.effect}
+              colours={style.colours}
+              text={name}
+              missing={missing}
+            />
+          )}
+          <AppTag />
+          {style !== null && faces.status === 'loading' ? (
+            <Spinner size="sm" status label="Loading the font" />
+          ) : null}
+        </div>
 
-      <div className="name-style-card-main">
-        <p className="name-style-card-summary">{nameStyleSummary(style)}</p>
-        {flag !== undefined && flag !== status?.text ? (
-          <p className="name-style-card-flag">{flag}</p>
-        ) : null}
-        <p className="name-style-card-state" aria-live="polite">
-          <NameStyleStatusLine copy={status} />
-        </p>
-        {shows !== null ? <p className="name-style-card-shows">{shows}</p> : null}
-      </div>
+        <div className="name-style-card-main">
+          <p className="name-style-card-summary">{nameStyleSummary(style)}</p>
+          {flag !== undefined && flag !== status?.text ? (
+            <p className="name-style-card-flag">{flag}</p>
+          ) : null}
+          <p className="name-style-card-state" aria-live="polite">
+            <NameStyleStatusLine copy={status} />
+          </p>
+          {shows !== null ? <p className="name-style-card-shows">{shows}</p> : null}
+        </div>
 
-      <div className="name-style-card-actions">
-        <Button onClick={onCustomise}>Customise</Button>
-        {style !== null ? (
-          <Button tone="ghost" onClick={onRemove}>
-            Remove style
-          </Button>
-        ) : null}
+        <div className="name-style-card-actions">
+          <Button onClick={onCustomise}>Customise</Button>
+          {style !== null ? (
+            <Button tone="ghost" onClick={onRemove}>
+              Remove style
+            </Button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

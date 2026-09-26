@@ -2,7 +2,11 @@ import { Permissions } from '@proton/core';
 import { createFileRoute } from '@tanstack/react-router';
 import { ApiClient } from '../../../../lib/api-client.ts';
 import { auth } from '../../../../lib/auth.ts';
-import { fetchCurrentUser, fetchUserGuilds } from '../../../../lib/discord.ts';
+import {
+  expiredSignInResponse,
+  fetchCurrentUser,
+  fetchUserGuilds,
+} from '../../../../lib/discord.ts';
 import { getDiscordAccessToken } from '../../../../lib/discord-token.ts';
 import { loadEnv } from '../../../../lib/env.ts';
 import { accessGrants, resolveGuildAccess } from '../../../../lib/guild-access.ts';
@@ -21,6 +25,11 @@ const PASSED_THROUGH = [
   'showPercent',
   'showTotalXp',
   'showMemberCount',
+  'showBadges',
+  'shape',
+  'icon',
+  'colour',
+  'assetId',
 ];
 
 function forbidden(message: string): Response {
@@ -39,19 +48,16 @@ export const Route = createFileRoute('/api/guilds/$guildId/card-preview')({
 
         const token = await getDiscordAccessToken(request.headers, session.user.id);
         const [guilds, profile] = await Promise.all([
-          fetchUserGuilds(env.REST_PROXY_URL, token),
+          fetchUserGuilds(env.REST_PROXY_URL, token).catch(expiredSignInResponse),
           fetchCurrentUser(env.REST_PROXY_URL, token),
         ]);
+        if (guilds instanceof Response) return guilds;
+
         const access = resolveGuildAccess(guilds, params.guildId);
 
-        if (!access)
-          return forbidden(
-            'You no longer administer this server, so Proton will not render its cards.',
-          );
+        if (!access) return forbidden('You no longer have Manage Server in this server.');
         if (!accessGrants(access, Permissions.ManageGuild)) {
-          return forbidden(
-            'Rendering a preview needs Manage Server in this server, and your roles do not have it.',
-          );
+          return forbidden('You need Manage Server in this server to see previews.');
         }
 
         const asked = new URL(request.url).searchParams;
@@ -74,8 +80,8 @@ export const Route = createFileRoute('/api/guilds/$guildId/card-preview')({
 
         if (!upstream.ok) {
           return new Response(
-            `Proton could not render this card (HTTP ${upstream.status}). The settings above are ` +
-              `saved either way — only the picture is missing.`,
+            `Proton couldn't draw this preview (HTTP ${upstream.status}). Your settings aren't ` +
+              `affected.`,
             { status: upstream.status, headers: { 'content-type': 'text/plain' } },
           );
         }

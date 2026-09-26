@@ -23,13 +23,14 @@ import { rolesQuery } from '../../lib/queries.ts';
 import { type KeyContext, Labelled, RowEditor } from './row-editor.tsx';
 import { describeRow, emptyComponent, rowActions, uniqueName } from './shared.ts';
 
-const WHY_A_ROW =
+const EMPTY_BODY =
   'Save a row of buttons or a dropdown once, then insert it into any template. Each template gets ' +
   'its own copy.';
 
-const EMPTY_BODY = 'Start by creating one.';
-
 const NAME_HELP = 'Shown when inserting the row into a template. Members never see it.';
+
+const COPIES =
+  'Templates that already use this row keep their own copy, so changes here don’t reach them.';
 
 const KEYS_ARE_FRESHENED =
   'Keys only need to be unique within this row. When a template already uses one, Proton renames ' +
@@ -53,7 +54,7 @@ interface AreaProps {
 }
 
 function duplicateName(name: string): string {
-  return `two saved components are both called '${name}' — the palette could not say which of them you were inserting.`;
+  return `Another saved row is already called '${name}'.`;
 }
 
 function previewOf(row: ActionRow): Partial<ProtonMessage> {
@@ -165,10 +166,17 @@ function ComponentList({ guildId, moduleId, form }: AreaProps): ReactElement {
         }
       />
 
-      <p className="section-intro">{WHY_A_ROW}</p>
-
       {entries.length === 0 ? (
-        <EmptyState icon="squares-four" title="No saved rows" inset>
+        <EmptyState
+          icon="squares-four"
+          title="No saved rows yet"
+          inset
+          actions={
+            <Button tone="primary" icon="plus" onClick={() => setCreating(true)}>
+              Create saved row
+            </Button>
+          }
+        >
           {EMPTY_BODY}
         </EmptyState>
       ) : (
@@ -194,7 +202,9 @@ function ComponentList({ guildId, moduleId, form }: AreaProps): ReactElement {
         open={creating}
         onClose={() => setCreating(false)}
         title="Create saved row"
-        description="The type cannot be changed later."
+        size="compact"
+        icon="squares-four"
+        description="You can’t change the type later."
         footer={
           <>
             <Button onClick={() => setCreating(false)}>Cancel</Button>
@@ -203,34 +213,33 @@ function ComponentList({ guildId, moduleId, form }: AreaProps): ReactElement {
               disabled={typed === '' || nameError !== undefined}
               onClick={create}
             >
-              Create
+              Create saved row
             </Button>
           </>
         }
       >
-        <div className="stack stack-12">
-          <Field label="Name" hint={NAME_HELP} error={nameError}>
-            {(props) => (
-              <TextInput
-                {...props}
-                width="lg"
-                maxLength={COMPONENT_NAME_MAX}
-                invalid={nameError !== undefined}
-                value={name}
-                onChange={(event) => setName(event.currentTarget.value)}
-              />
-            )}
-          </Field>
-
-          <Labelled label="Type">
-            <SegmentedControl
-              label="Row type"
-              options={KIND_OPTIONS}
-              value={kind}
-              onChange={setKind}
+        <Field label="Name" hint={NAME_HELP} error={nameError}>
+          {(props) => (
+            <TextInput
+              {...props}
+              width="lg"
+              maxLength={COMPONENT_NAME_MAX}
+              invalid={nameError !== undefined}
+              value={name}
+              onChange={(event) => setName(event.currentTarget.value)}
             />
-          </Labelled>
-        </div>
+          )}
+        </Field>
+
+        <Labelled label="Type">
+          <SegmentedControl
+            label="Row type"
+            options={KIND_OPTIONS}
+            value={kind}
+            block
+            onChange={setKind}
+          />
+        </Labelled>
       </Dialog>
     </>
   );
@@ -343,7 +352,11 @@ function ComponentEditor({
               </Rows>
             </Section>
 
-            <Section label={entry.row.kind === 'select' ? 'Dropdown' : 'Buttons'}>
+            <Section
+              label={entry.row.kind === 'select' ? 'Dropdown' : 'Buttons'}
+              intro={COPIES}
+              help={KEYS_ARE_FRESHENED}
+            >
               <RowEditor
                 guildId={guildId}
                 row={entry.row}
@@ -353,7 +366,6 @@ function ComponentEditor({
                 onChange={(row) => setEntry({ ...entry, row })}
                 onRemove={() => setRemoving(true)}
               />
-              <p className="text-xs text-muted">{KEYS_ARE_FRESHENED}</p>
             </Section>
           </>
         }
@@ -366,7 +378,8 @@ function ComponentEditor({
         onClose={() => setRemoving(false)}
         onConfirm={remove}
         title={`Delete ${entry.name}?`}
-        confirmLabel="Delete"
+        confirmLabel="Delete saved row"
+        icon="trash"
         danger
       >
         Templates that already use this row keep their own copy.

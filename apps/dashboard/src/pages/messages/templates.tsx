@@ -10,7 +10,6 @@ import {
   encodedLength,
   MIN_REPEAT_MS,
   normaliseTemplateName,
-  SCHEDULE_HELP,
   SCHEDULE_MODES,
   TEMPLATE_NAME_MAX,
   withFreshKeys,
@@ -84,44 +83,47 @@ const RENAME_WARNING =
   'Buttons already posted from this template use the old name, so they stop working until you ' +
   'post it again.';
 
-const EMPTY_BODY = 'Create a template, then post it with /message post or on a schedule.';
+const EMPTY_BODY = 'Post templates with /message post or on a schedule.';
 
 const EXTRA_EMBEDS =
   'Only the first embed can be edited here. The others are kept and shown in the preview.';
 
 const V2_TEMPLATE =
-  'A layout replaces the whole message, so this template has no text, embeds or button rows of ' +
-  'its own. Saving keeps the layout as it is, and the preview shows how Discord displays it.';
+  'This template uses a layout, which replaces its text, embeds and button rows. Saving keeps ' +
+  'the layout as it is, and the preview shows how it looks in Discord.';
 
 const V2_REPLACE =
-  'The layout is cleared and you start again with text and embeds. This cannot be undone once ' +
+  'The layout is cleared and you start again with text and embeds. This can’t be undone once ' +
   'you save.';
 
-const PING_OVERRIDES =
-  'Mention this role at the start of each scheduled post. Discord cannot combine this with the ' +
-  'template’s mention settings, so only this role is pinged.';
+const PING_OVERRIDES = 'Mentioned at the start of each scheduled post.';
+
+const PING_OVERRIDES_HELP =
+  'While a ping role is set, it’s the only mention in scheduled posts that notifies anyone. The ' +
+  'template’s own mention settings are ignored there.';
 
 const PING_IN_LAYOUT =
-  'A layout has no message text, so Proton cannot add the mention. Write the role mention into a ' +
-  'text display yourself, and it still pings.';
+  'A layout has no message text, so Proton can’t add the mention. The role is only pinged if the ' +
+  'layout already mentions it.';
 
 const PING_OVERRIDES_MENTIONS =
   'The schedule pings a role, which replaces these mention settings on scheduled posts.';
 
-const PASSED =
-  'The start time has passed. If Proton missed it during downtime, the post may still go out.';
+const PASSED = 'This start time has passed. Choose a later time to post it.';
 
-const AT_HELP = 'A complete ISO timestamp carrying a timezone, such as 2026-01-31T09:00:00Z.';
+const AT_HELP = 'A date and time with a timezone, such as 2026-01-31T09:00:00Z.';
 
-const SCHEDULE_OFF_HELP = 'Switch off to stop posting without removing the schedule.';
+const SCHEDULE_OFF_HELP = 'Turn off to pause posting without removing the schedule.';
 
 const NO_PALETTE = 'Create one under Saved rows.';
 
 const NOTHING_YET = 'Add buttons or a dropdown that give members a role or reply to them.';
 
+const PLACEHOLDERS_DESCRIPTION =
+  'Replace placeholders like {server.name} each time this template is posted.';
+
 const PLACEHOLDERS_HELP =
-  'Off: text in {braces} is posted exactly as written. On: {server.name} and the other ' +
-  'placeholders are filled in each time this template is posted, and {{ writes a literal {.';
+  'When off, text in {braces} is posted exactly as written. When on, type {{ for a literal {.';
 
 const CONTENT_AS_WRITTEN =
   'Supports Discord markdown. Text in {braces} is posted as written, not replaced.';
@@ -129,7 +131,7 @@ const CONTENT_AS_WRITTEN =
 const CONTENT_FILLED_IN = 'Supports Discord markdown and placeholders. Type { to add one.';
 
 const PREVIEW_REFUSED =
-  'Filled in for this sample, this template could not be posted, so nothing would appear. Check ' +
+  'With this sample filled in, this template can’t be posted, so nothing would appear. Check ' +
   'the links and any text that could come out empty. The preview shows it as written.';
 
 const STATUS_OPTIONS = [
@@ -153,7 +155,7 @@ interface AreaProps {
 }
 
 function duplicateName(name: string): string {
-  return `two saved messages are both called '${name}' — /message post could not say which of them you meant`;
+  return `Another template is already called '${name}'.`;
 }
 
 function templateMessage(template: SavedMessage): EditableMessage {
@@ -305,7 +307,16 @@ function TemplateList({ guildId, moduleId, form, search }: AreaProps): ReactElem
       {full ? <p className="text-sm text-muted">{ceilingNote(tier, 'savedTemplates')}</p> : null}
 
       {templates.length === 0 ? (
-        <EmptyState icon="chat-centered-text" title="No templates" inset>
+        <EmptyState
+          icon="chat-centered-text"
+          title="No templates yet"
+          inset
+          actions={
+            <Button tone="primary" icon="plus" onClick={() => setCreating(true)}>
+              Create template
+            </Button>
+          }
+        >
           {EMPTY_BODY}
         </EmptyState>
       ) : shown.length === 0 ? (
@@ -357,6 +368,8 @@ function TemplateList({ guildId, moduleId, form, search }: AreaProps): ReactElem
         open={creating}
         onClose={() => setCreating(false)}
         title="Create template"
+        size="compact"
+        icon="chat-centered-text"
         footer={
           <>
             <Button onClick={() => setCreating(false)}>Cancel</Button>
@@ -365,7 +378,7 @@ function TemplateList({ guildId, moduleId, form, search }: AreaProps): ReactElem
               disabled={typed === '' || nameError !== undefined}
               onClick={create}
             >
-              Create
+              Create template
             </Button>
           </>
         }
@@ -435,9 +448,9 @@ function TemplateEditor({
           length,
           problem:
             length > MAX_CUSTOM_ID_LENGTH
-              ? `the name '${template.name}' and the component key '${key}' come to ${length} ` +
-                'characters once Proton adds its own prefix, and Discord allows ' +
-                `${MAX_CUSTOM_ID_LENGTH}. Shorten the message name or the key.`
+              ? `The template name '${template.name}' and the key '${key}' come to ${length} ` +
+                'characters with Proton’s prefix, and Discord allows ' +
+                `${MAX_CUSTOM_ID_LENGTH}. Shorten the template name or the key.`
               : undefined,
         };
       },
@@ -585,7 +598,11 @@ function TemplateEditor({
                   />
                 </SettingRow>
 
-                <SettingRow title="Fill in placeholders" description={PLACEHOLDERS_HELP}>
+                <SettingRow
+                  title="Fill in placeholders"
+                  description={PLACEHOLDERS_DESCRIPTION}
+                  help={PLACEHOLDERS_HELP}
+                >
                   <Switch
                     label="Fill in placeholders"
                     checked={optedIn}
@@ -597,12 +614,12 @@ function TemplateEditor({
 
             {template.v2.length > 0 ? (
               <Section label="Layout">
-                <StatusBanner tone="info" title="Layouts cannot be edited here">
+                <StatusBanner tone="info" title="Layouts can’t be edited here">
                   {V2_TEMPLATE}
                 </StatusBanner>
 
                 {interactiveKeys({ components: [], v2: template.v2 }).length > 0 ? (
-                  <StatusBanner tone="warning" title="Layout buttons do not work yet">
+                  <StatusBanner tone="warning" title="Layout buttons don’t work yet">
                     {V2_PRESS_UNROUTABLE}
                   </StatusBanner>
                 ) : null}
@@ -738,17 +755,6 @@ function TemplateEditor({
                       })}
                     </Rows>
                   )}
-
-                  {keys.taken.size > 0 ? (
-                    <p className="messages-keys text-xs text-muted">
-                      Keys in use:{' '}
-                      {[...keys.taken].map((key) => (
-                        <span className="mono" key={key}>
-                          {key}
-                        </span>
-                      ))}
-                    </p>
-                  ) : null}
                 </Section>
               </>
             )}
@@ -831,7 +837,8 @@ function TemplateEditor({
         onClose={() => setPalette(false)}
         title="Insert saved row"
         description="The template gets its own copy of the row."
-        size="wide"
+        size="medium"
+        icon="squares-four"
       >
         {form.value.components.length === 0 ? (
           <EmptyState icon="squares-four" title="No saved rows" inset>
@@ -860,7 +867,7 @@ function TemplateEditor({
           setDropV2(false);
         }}
         title="Replace layout?"
-        confirmLabel="Replace"
+        confirmLabel="Replace layout"
         danger
       >
         {V2_REPLACE}
@@ -871,7 +878,8 @@ function TemplateEditor({
         onClose={() => setRemoving(false)}
         onConfirm={remove}
         title={`Delete ${template.name}?`}
-        confirmLabel="Delete"
+        confirmLabel="Delete template"
+        icon="trash"
         danger
       >
         Messages already posted from this template stay in Discord. Their buttons tell members who
@@ -919,7 +927,7 @@ function DeliverySurface({
         </Rows>
       </Section>
 
-      <Section label="Schedule" intro={SCHEDULE_HELP}>
+      <Section label="Schedule">
         <Rows>
           <SettingRow title="Post on a schedule">
             <Switch
@@ -1037,6 +1045,7 @@ function DeliverySurface({
               <SettingRow
                 title="Ping role"
                 description={PING_OVERRIDES}
+                help={PING_OVERRIDES_HELP}
                 error={form.errorAt(`${path}.schedule.pingRoleId`)}
               >
                 <RolePicker
@@ -1067,11 +1076,12 @@ function DeliverySurface({
           setClearing(false);
         }}
         title="Remove schedule?"
-        confirmLabel="Remove"
+        confirmLabel="Remove schedule"
+        icon="trash"
         danger
       >
-        The channel, start time and interval are cleared. The template stays, and /message post
-        still posts it.
+        Scheduled posts stop, and the channel, start time and interval are cleared. The template
+        stays, and /message post still posts it.
       </ConfirmDialog>
     </>
   );

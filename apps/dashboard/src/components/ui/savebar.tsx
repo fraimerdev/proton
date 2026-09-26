@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button, cx } from './controls.tsx';
 import { Icon } from './icon.tsx';
-import { usePresence } from './overlay.tsx';
+import { useHydrated, usePresence } from './overlay.tsx';
 
 interface SaveBarProps {
   dirty: boolean;
@@ -108,6 +108,7 @@ export function SaveBar({
   }, [dirty]);
 
   const { present, leaving, onAnimationEnd } = usePresence(dirty || holding, bar);
+  const hydrated = useHydrated();
 
   if (!present) return null;
 
@@ -121,7 +122,7 @@ export function SaveBar({
     >
       <div className="savebar-text">
         <div className="savebar-title" aria-hidden={saved || undefined}>
-          Careful, you have unsaved changes
+          You have unsaved changes
         </div>
         {note !== undefined && disabled ? (
           <p id={noteId} className="savebar-note" aria-hidden={saved || undefined}>
@@ -154,7 +155,7 @@ export function SaveBar({
         {saved ? (
           <>
             <Icon name="check" size={16} weight="fill" className="motion-pop" />
-            <span className="motion-enter">Changes saved successfully</span>
+            <span className="motion-enter">Changes saved</span>
           </>
         ) : null}
       </div>
@@ -170,7 +171,7 @@ export function SaveBar({
     <>
       <div className="savebar-spacer" aria-hidden />
       {/* Portalled: a transformed ancestor (the page transition) would otherwise capture position: fixed. */}
-      {typeof document === 'undefined' ? toast : createPortal(toast, document.body)}
+      {hydrated ? createPortal(toast, document.body) : null}
     </>
   );
 }

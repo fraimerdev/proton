@@ -23,22 +23,17 @@ import { SettingsArea } from './tickets/settings.tsx';
 import { TypeDetail } from './tickets/type-detail.tsx';
 import { TypesArea } from './tickets/types.tsx';
 
-const SWITCHED_OFF =
-  'Tickets is disabled. Settings are saved, but nothing runs until you switch it on. No panel ' +
-  'opens a ticket and no ticket command works.';
-
 const MIGRATED =
-  'These settings were saved by an older version of Proton. Each panel’s category, staff roles, ' +
-  'opening message and transcript channel became its own ticket type. Those types delete the ' +
-  'channel 1 second after the ticket closes and do not allow reopening. Check them, then save to ' +
-  'store them in the current format.';
+  'These settings came from an older version of Proton. Each panel became its own ticket type, ' +
+  'with the panel’s category, staff roles, opening message and transcript channel. These types ' +
+  'delete the channel as soon as a ticket closes and don’t allow reopening. Check them, then save.';
 
 const NO_TYPES =
-  'Tickets is enabled but has no ticket types, so members have nothing to open. Create one ' +
+  'Tickets is on, but there are no ticket types, so members have nothing to open. Create one ' +
   'under Ticket types.';
 
 const NO_PANEL_CARRIES =
-  'No panel offers a ticket type, so members cannot open tickets from a panel. They can still use ' +
+  'No panel offers a ticket type, so members can’t open tickets from a panel. They can still use ' +
   '/ticket create.';
 
 const SAVE_NOTE = 'Posted panels keep their old wording until you post them again.';
@@ -121,6 +116,7 @@ export default function TicketsPage({
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Settings are saved, but no one can open a ticket until you turn it on."
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
       >
@@ -129,8 +125,6 @@ export default function TicketsPage({
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {!enabled ? <StatusBanner tone="neutral">{SWITCHED_OFF}</StatusBanner> : null}
 
         {form.view.migrated ? (
           <StatusBanner

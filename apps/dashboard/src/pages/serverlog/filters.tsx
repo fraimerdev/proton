@@ -15,7 +15,7 @@ const USER_MAX = 100;
 
 const USER_ID = /^\d{17,20}$/;
 
-const SELF = 'Activity in log channels is never logged, so Proton cannot log its own posts.';
+const SELF = 'Log channels are always skipped, so Server Logs never logs its own posts.';
 
 export function Filters({
   guildId,
@@ -27,11 +27,11 @@ export function Filters({
   const config = form.value;
 
   return (
-    <Section label="Exemptions" intro={SELF}>
+    <Section label="Exemptions" help={SELF}>
       <Rows>
         <SettingRow
           title="Ignored channels"
-          description="Activity in these channels is not logged."
+          description="Activity in these channels isn’t logged."
           error={firstError(form, 'ignoredChannelIds')}
           badge={
             <LimitCounter
@@ -51,7 +51,7 @@ export function Filters({
 
         <SettingRow
           title="Ignored roles"
-          description="Actions by members with these roles are not logged."
+          description="Actions by members with these roles aren’t logged."
           error={firstError(form, 'ignoredRoleIds')}
           badge={
             <LimitCounter
@@ -73,7 +73,8 @@ export function Filters({
 
         <SettingRow
           title="Ignored user IDs"
-          description="Actions by these users are not logged. Turn on Developer Mode in Discord to see Copy User ID."
+          description="Actions by these users aren’t logged."
+          help="Turn on Developer Mode in Discord’s Advanced settings, then right-click a user and choose Copy User ID."
           error={firstError(form, 'ignoredUserIds')}
           badge={
             <LimitCounter

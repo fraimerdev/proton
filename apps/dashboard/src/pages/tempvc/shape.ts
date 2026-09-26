@@ -22,8 +22,7 @@ export const PRIVACY_SHORT: Record<PrivacyMode, string> = {
   private: 'Private',
 };
 
-export const DUPLICATE_HUB =
-  'each creator channel can only be listed once — the second entry would never be used.';
+export const DUPLICATE_HUB = 'This channel is already a creator channel.';
 
 export function updateHub(
   form: TempVcForm,

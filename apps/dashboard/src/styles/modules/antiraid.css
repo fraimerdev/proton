@@ -84,7 +84,7 @@
 .antiraid-term-weight {
   min-width: 18px;
   padding: 1px 5px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--surface-2);
   color: var(--text-muted);
   font-size: var(--text-micro);
@@ -163,13 +163,13 @@
 }
 
 .antiraid-band-seg:first-child {
-  border-top-left-radius: var(--radius-sm);
-  border-bottom-left-radius: var(--radius-sm);
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
 }
 
 .antiraid-band-seg:last-child {
-  border-top-right-radius: var(--radius-sm);
-  border-bottom-right-radius: var(--radius-sm);
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
 }
 
 .antiraid-band-heavy {
@@ -214,5 +214,13 @@
 
   .antiraid-band-light {
     border-left-color: var(--warning-border);
+  }
+}
+
+@media (max-width: 460px) {
+  .antiraid-age-input {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 }

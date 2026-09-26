@@ -45,7 +45,7 @@ function quoted(value: string): string {
 
 function reviewCard(panel: AppealPanel, status: CardStatus): V2Component {
   const verdict =
-    status === 'approved' ? ' — accepted' : status === 'denied' ? ' — turned down' : '';
+    status === 'approved' ? ' (accepted)' : status === 'denied' ? ' (turned down)' : '';
 
   const children: ContainerChild[] = [
     {
@@ -160,15 +160,16 @@ export function PanelPreview({
           />
           <DiscordPreview message={{ v2: [reviewCard(panel, status)] }} channelName={channelName} />
           <p className="text-muted text-xs">
-            Each answer shows its question’s placeholder. Real answers appear in the same code
-            block, with backticks replaced and anything past {ANSWER_MAX_SHOWN} characters cut off.
+            Each answer shows its question’s placeholder text. Real answers appear in a code block,
+            cut off after {ANSWER_MAX_SHOWN} characters.
           </p>
         </>
       ) : (
         <>
           <AppellantForm panel={panel} />
           <p className="text-muted text-xs">
-            Members open this page from the link Proton sends them. It is never posted in a channel.
+            Members open this page from the Appeal button in Honeypot’s DM. It’s never posted in a
+            channel.
           </p>
         </>
       )}

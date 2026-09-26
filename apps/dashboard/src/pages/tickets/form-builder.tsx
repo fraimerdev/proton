@@ -43,7 +43,7 @@ const FIRST_ANSWER = 'The first answer becomes the ticket’s subject, which the
 const EMPTY_SELECT =
   'A dropdown with no choices is left out of the form. Add a choice or change the style.';
 
-const DUPLICATE_VALUE = 'Two choices share a value. Discord refuses the form.';
+const DUPLICATE_VALUE = 'Two choices have the same value, so Discord would refuse the form.';
 
 const ID_FIXED =
   'Answers already saved are stored under this ID. Changing it separates them from this question.';
@@ -51,7 +51,8 @@ const ID_FIXED =
 const SLUG = /^[a-z0-9][a-z0-9._-]*$/;
 
 const ID_SHAPE =
-  'a form field id is letters, digits, dots, dashes and underscores, starting with a letter or digit.';
+  'A question ID can use lowercase letters, numbers, dots, dashes and underscores, and must start ' +
+  'with a letter or number.';
 
 function blankField(taken: ReadonlySet<string>, index: number): TicketFormField {
   return {
@@ -107,10 +108,8 @@ export function FormBuilder({
         }
       />
 
-      <p className="tickets-ceiling-note">{CEILING_NOTE}</p>
-
       {fields.length === 0 ? (
-        <EmptyState icon="list-checks" title="No questions" inset>
+        <EmptyState icon="list-checks" title="No questions yet" inset>
           {EMPTY}
         </EmptyState>
       ) : (
@@ -127,7 +126,7 @@ export function FormBuilder({
 
             const labelError =
               field.label.trim() === ''
-                ? 'Question cannot be empty. Members see it in the form.'
+                ? 'Enter the question members will see.'
                 : form.errorAt(`${path}.label`);
 
             const idError = idClash

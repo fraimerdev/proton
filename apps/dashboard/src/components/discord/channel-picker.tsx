@@ -84,14 +84,7 @@ export function ChannelName({
     if (!id) return <span className="text-muted">None</span>;
     if (guildId !== undefined && isPending) return <Spinner label="Loading channel" />;
 
-    return (
-      <span
-        className="text-muted mono"
-        title="Proton cannot find this channel — it may have been deleted."
-      >
-        {id}
-      </span>
-    );
+    return <span className="text-muted mono">{id}</span>;
   }
 
   return (
@@ -173,6 +166,9 @@ export function ChannelMultiPicker({
           onChange([...value, next]);
         }}
       />
+      {atMax && !disabled ? (
+        <span className="text-xs text-muted">You can add up to {max} channels.</span>
+      ) : null}
     </div>
   );
 }
@@ -238,7 +234,6 @@ export function ChannelPicker({
           aria-expanded={open}
           aria-invalid={invalid ? true : undefined}
           aria-label={label ?? placeholder}
-          title={label ?? placeholder}
           onClick={() => {
             setQuery('');
             setOpen((current) => !current);
@@ -251,7 +246,7 @@ export function ChannelPicker({
           ref={anchor}
           type="button"
           className="picker-trigger"
-          style={{ width }}
+          style={{ width, maxWidth: '100%' }}
           disabled={disabled}
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -352,7 +347,7 @@ export function ChannelPicker({
 
           {!isPending && !error && offered.length === 0 ? (
             <p className="picker-note">
-              {query.trim() === '' ? 'No channels Proton can use here.' : 'No matching channels'}
+              {query.trim() === '' ? 'No channels to choose from.' : 'No matching channels'}
             </p>
           ) : null}
         </div>

@@ -15,11 +15,6 @@ import { StatusBanner } from '../components/ui/feedback.tsx';
 import { RoutePending } from '../components/ui/pending.tsx';
 import { CaseLogArea } from './cases/log.tsx';
 
-const SWITCHED_OFF =
-  'Cases is disabled. Proton still records every action in the case log. Its No active ' +
-  'moderation and Clean recent record conditions are no longer offered, but requirements that ' +
-  'already use them are still checked.';
-
 export default function CasesPage({ guildId, meta, summary }: ModulePageProps): ReactElement {
   const form = useModuleForm({ guildId, moduleId: meta.id, schema: casesConfigSchema });
   const toggle = useModuleToggle(guildId, summary);
@@ -69,6 +64,7 @@ export default function CasesPage({ guildId, meta, summary }: ModulePageProps): 
         moduleName={meta.label}
         status={summary?.status}
         enabled={enabled}
+        offNote="Proton still records every action in the case log. Requirements that already use No active moderation or Clean recent record keep them, but new requirements can’t add them."
         migrated={form.view.migrated}
         changedElsewhere={form.changedElsewhere}
         saveError={form.saveError}
@@ -78,8 +74,6 @@ export default function CasesPage({ guildId, meta, summary }: ModulePageProps): 
             {toggle.failure}
           </StatusBanner>
         ) : null}
-
-        {!enabled ? <StatusBanner tone="neutral">{SWITCHED_OFF}</StatusBanner> : null}
       </ModuleBanners>
 
       <CaseLogArea guildId={guildId} moduleId={meta.id} />

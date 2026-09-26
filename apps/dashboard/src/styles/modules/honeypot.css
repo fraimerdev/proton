@@ -1,16 +1,5 @@
 /* honeypot page styles. Keep this small: prefer the shared classes in rows.css and surfaces.css. */
 
-.honeypot-sequence {
-  list-style: none;
-  counter-reset: none;
-}
-
-.honeypot-sequence .rung-body {
-  color: var(--text-secondary);
-  font-size: var(--text-secondary-size);
-  line-height: 1.5;
-}
-
 .honeypot-collection-note {
   margin: 0 0 10px;
 }

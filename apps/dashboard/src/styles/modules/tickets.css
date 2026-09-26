@@ -1,9 +1,3 @@
-.tickets-ceiling-note {
-  margin: -6px 0 12px;
-  color: var(--text-muted);
-  font-size: var(--text-micro);
-}
-
 .tickets-row-error {
   margin: -4px 0 10px;
   padding: 0 16px;
@@ -23,6 +17,18 @@
   max-width: 74ch;
 }
 
+.tickets-when {
+  white-space: nowrap;
+}
+
+.tickets-detail-subject {
+  color: var(--text-secondary);
+  font-size: var(--text-secondary-size);
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
 .tickets-preview-note,
 .tickets-foot-note {
   margin-top: 10px;
@@ -30,6 +36,15 @@
   font-size: var(--text-secondary-size);
   line-height: 1.5;
   max-width: 74ch;
+}
+
+.tickets-opening + .collection-head {
+  margin-top: 28px;
+}
+
+.tickets-closing {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .tickets-preview-options {
@@ -70,6 +85,11 @@
   flex-wrap: wrap;
 }
 
+.tickets-subject {
+  display: block;
+  max-width: min(40ch, 60vw);
+}
+
 .tickets-search-help {
   margin: 8px 0 12px;
   color: var(--text-muted);
@@ -82,4 +102,25 @@
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+@media (max-width: 640px) {
+  .tickets-name-field {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .tickets-toolbar > :not(.search-field) {
+    flex: 1 1 calc(50% - 4px);
+    width: auto;
+  }
+
+  .tickets-toolbar > .button {
+    height: var(--control-height);
+  }
+
+  .tickets-toolbar .search-field {
+    flex-basis: 100%;
+  }
 }

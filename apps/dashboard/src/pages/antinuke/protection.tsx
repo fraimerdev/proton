@@ -57,7 +57,7 @@ export function ProtectionState({
         queryKey: [...queryKeys.guild(guildId), 'antinuke', 'maintenance'],
       });
     },
-    onError: (thrown: Error) => setFailure(saveFailure(thrown, 'Maintenance mode was not ended')),
+    onError: (thrown: Error) => setFailure(saveFailure(thrown, 'Couldn’t end maintenance mode')),
   });
 
   if (isPending) {
@@ -71,7 +71,7 @@ export function ProtectionState({
   if (error) {
     return (
       <StatusBanner tone="neutral" icon="warning">
-        {readFailure(error, 'whether protection is suspended')}
+        {readFailure(error, 'the maintenance mode status')}
       </StatusBanner>
     );
   }
@@ -98,12 +98,12 @@ export function ProtectionState({
       >
         <div className="stack stack-4">
           <span>
-            Maintenance mode ends in {remaining(window_.expiresAt, now)}. Until then Proton will not
-            act on mass deletions.
+            Maintenance mode ends in {remaining(window_.expiresAt, now)}. Until then, Anti-Nuke
+            won’t act on destructive changes.
           </span>
           <span className="inline inline-6 text-xs">
             Started by <MemberCell userId={window_.enabledBy} />
-            {window_.reason ? ` — ${window_.reason}` : ''}
+            {window_.reason ? `(${window_.reason})` : null}
           </span>
         </div>
       </StatusBanner>

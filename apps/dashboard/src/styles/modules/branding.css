@@ -85,7 +85,7 @@
   height: 92px;
   margin-top: -46px;
   border: 6px solid var(--dc-surface);
-  border-radius: var(--radius-pill);
+  border-radius: 50%;
   background: var(--dc-bg-secondary);
   object-fit: cover;
 }
@@ -148,7 +148,7 @@
   width: 32px;
   height: 32px;
   flex: none;
-  border-radius: var(--radius-pill);
+  border-radius: 50%;
   background: var(--dc-bg-tertiary);
   object-fit: cover;
 }
@@ -170,22 +170,51 @@
 }
 
 .name-style-card {
-  display: flex;
-  align-items: center;
-  gap: 16px;
   width: 100%;
   min-width: 0;
+  container: name-style-card / inline-size;
+}
+
+.name-style-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 14px 20px;
 }
 
 .name-style-card-specimen {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  flex: 0 1 auto;
-  gap: 8px;
+  gap: 6px 8px;
   min-width: 0;
-  max-width: 45%;
+  min-height: 56px;
   padding: 12px 16px;
   font-size: 18px;
+}
+
+@container name-style-card (min-width: 480px) {
+  .name-style-card-body {
+    grid-template-columns: fit-content(50%) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .name-style-card-specimen {
+    grid-row: 1 / span 2;
+    align-self: stretch;
+    min-width: 180px;
+  }
+}
+
+@container name-style-card (min-width: 720px) {
+  .name-style-card-body {
+    grid-template-columns: fit-content(40%) minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .name-style-card-specimen {
+    grid-row: auto;
+  }
 }
 
 .name-style-card-plain {
@@ -580,29 +609,20 @@
   height: 40px;
   min-height: 0;
   padding: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .name-style-swatch {
   display: block;
   width: 32px;
   height: 32px;
-  border-radius: var(--radius-sm);
+  border-radius: calc(var(--radius-sm) - 4px);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-}
-
-@media (max-width: 560px) {
-  .name-style-card {
-    flex-wrap: wrap;
-  }
-
-  .name-style-card-specimen {
-    flex: 1 1 100%;
-    max-width: none;
-  }
 }
 
 @media (max-width: 480px) {
   .name-style-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
   }
 
@@ -611,20 +631,13 @@
   }
 
   .name-style-tile-face {
-    font-size: 11px;
+    font-size: 13px;
   }
+}
 
-  .dialog-scrim:has(.name-style-editor) {
-    padding: 12px;
-  }
-
-  .dialog:has(.name-style-editor) .dialog-foot {
-    flex-wrap: wrap;
-  }
-
-  .dialog:has(.name-style-editor) .dialog-foot-note {
-    flex-basis: 100%;
-    margin-right: 0;
+@media (max-width: 359px) {
+  .name-style-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
