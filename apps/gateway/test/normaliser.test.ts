@@ -576,6 +576,10 @@ describe('member removals', () => {
       interactionCreateComponent: ['interaction.component:1500000000000000002'],
       interactionCreateModal: ['interaction.modal:1500000000000000003'],
       interactionCreateAutocomplete: ['interaction.autocomplete:1500000000000000004'],
+      interactionCreateUserCommand: ['interaction.command:1500000000000000005'],
+      interactionCreateMessageCommand: ['interaction.command:1500000000000000006'],
+      interactionCreateModalFileUpload: ['interaction.modal:1500000000000000007'],
+      interactionCreateComponentDm: ['interaction.component:1500000000000000008'],
       channelObfuscated: ['guild.available:900000000000000001'],
       auditLogChannelDelete: [
         'channel.deleted:1537750759112835075',

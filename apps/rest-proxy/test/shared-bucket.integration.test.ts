@@ -129,17 +129,17 @@ describe('rate limit handling', () => {
     const rolesArrival = upstream.requests.find((r) => r.path.endsWith('/roles'))?.receivedAt ?? 0;
     expect(rolesArrival - rateLimitedAt).toBeGreaterThanOrEqual(300);
   }, 60_000);
+});
 
-  test('passes an upstream error status through rather than masking it', async () => {
+describe('healthz', () => {
+  test('answers locally without reaching the upstream', async () => {
     upstream = startMockUpstream();
     const proxyUrl = startProxy(upstream.url);
 
-    const res = await fetch(`${proxyUrl}/api/channels/123/messages`, { method: 'GET' });
-    expect(res.status).toBe(200);
-
-    const before = upstream.requests.length;
     const health = await fetch(`${proxyUrl}/healthz`);
+
     expect(health.status).toBe(200);
-    expect(upstream.requests).toHaveLength(before);
-  }, 60_000);
+    expect(await health.json()).toEqual({ ok: true });
+    expect(upstream.requests).toHaveLength(0);
+  });
 });

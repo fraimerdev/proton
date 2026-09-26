@@ -1,7 +1,17 @@
-import type { InternalRequest, RawFile, REST, RequestMethod, RouteLike } from '@discordjs/rest';
+import {
+  DiscordAPIError,
+  type InternalRequest,
+  RateLimitError,
+  type RawFile,
+  type REST,
+  type RequestMethod,
+  type RouteLike,
+} from '@discordjs/rest';
 import { Hono } from 'hono';
 
 const BODYLESS_METHODS = new Set(['GET', 'HEAD', 'DELETE']);
+
+const TOKEN_IN_URL_ROUTES = [/^\/webhooks\/\d+\/[^/]+/, /^\/interactions\/\d+\/[^/]+\/callback$/];
 
 interface BlobLike {
   name?: string;
@@ -15,6 +25,35 @@ function isBlobLike(value: unknown): value is BlobLike {
     value !== null &&
     typeof (value as BlobLike).arrayBuffer === 'function'
   );
+}
+
+function discordAnswer(error: unknown): Response | undefined {
+  if (error instanceof DiscordAPIError) {
+    const raw: unknown = error.rawError;
+    // @discordjs/rest keeps a non-JSON error body as bytes; JSON.stringify would turn it into "{}".
+    if (raw instanceof ArrayBuffer) return new Response(raw, { status: error.status });
+    return new Response(JSON.stringify(raw), {
+      status: error.status,
+      headers: { 'content-type': 'application/json' },
+    });
+  }
+
+  if (error instanceof RateLimitError) {
+    const seconds = error.retryAfter / 1000;
+    return new Response(
+      JSON.stringify({
+        message: 'You are being rate limited.',
+        retry_after: seconds,
+        global: error.global,
+      }),
+      {
+        status: 429,
+        headers: { 'content-type': 'application/json', 'retry-after': String(Math.ceil(seconds)) },
+      },
+    );
+  }
+
+  return undefined;
 }
 
 export function createProxyApp(rest: REST): Hono {
@@ -72,6 +111,7 @@ export function createProxyApp(rest: REST): Hono {
 
     try {
       const userAuth = c.req.header('x-proton-authorization');
+      const tokenInUrl = TOKEN_IN_URL_ROUTES.some((pattern) => pattern.test(route));
       const auditReason = c.req.header('x-audit-log-reason');
 
       // Not InternalRequest.reason: @discordjs/rest encodes that, and the caller already did.
@@ -86,7 +126,7 @@ export function createProxyApp(rest: REST): Hono {
         query: url.searchParams,
         ...(body !== undefined ? { body } : {}),
         ...(files && files.length > 0 ? { files } : {}),
-        ...(userAuth ? { auth: false } : {}),
+        ...(userAuth || tokenInUrl ? { auth: false } : {}),
         ...(Object.keys(upstreamHeaders).length > 0 ? { headers: upstreamHeaders } : {}),
       };
 
@@ -101,6 +141,9 @@ export function createProxyApp(rest: REST): Hono {
 
       return new Response(text, { status: response.status, headers });
     } catch (error) {
+      const answer = discordAnswer(error);
+      if (answer) return answer;
+
       return c.json(
         {
           error: 'rest_proxy_upstream_failure',
