@@ -18,6 +18,8 @@ const MEMBER = '400000000000000001';
 const OTHER = '400000000000000002';
 
 const MOD = '100000000000000000';
+const CHANNEL_ID = '500000000000000005';
+const MESSAGE_ID = '600000000000000006';
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:17-alpine').start();
@@ -64,7 +66,9 @@ async function rowCount(): Promise<number> {
 describe('block', () => {
   test('records the member, with the reason and the evidence it was given', async () => {
     expect(
-      await store.block(input({ evidence: { channelId: '5', messageId: '6' }, caseId: 'case-1' })),
+      await store.block(
+        input({ evidence: { channelId: CHANNEL_ID, messageId: MESSAGE_ID }, caseId: 'case-1' }),
+      ),
     ).toEqual({ blocked: true });
 
     const found = await store.find(GUILD, MEMBER);
@@ -72,7 +76,7 @@ describe('block', () => {
     expect(found?.reason).toBe('Posted in a honeypot channel.');
     expect(found?.moduleId).toBe('honeypot');
     expect(found?.caseId).toBe('case-1');
-    expect(found?.evidence).toEqual({ channelId: '5', messageId: '6' });
+    expect(found?.evidence).toEqual({ channelId: CHANNEL_ID, messageId: MESSAGE_ID });
     expect(found?.liftedAt).toBeNull();
   });
 

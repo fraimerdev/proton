@@ -1,6 +1,15 @@
+import type { Causation } from '@proton/core';
 import type { DbHandle } from './client.ts';
 
 type AwardRow = { xp: number; level: number; awarded: boolean };
+type GrantRow = {
+  previous_level: number;
+  level: number;
+  xp_after: number;
+  duplicate: boolean;
+  cached_level: number | null;
+};
+type StoredGrantRow = { previous_level: number; level: number; xp_after: number };
 type AdjustRow = { xp: number; level: number; previous_xp: number };
 type RecordRow = {
   xp: number;
@@ -49,6 +58,53 @@ export interface MemberXpAwardResult {
   awarded: boolean;
 }
 
+export interface MemberXpGrantInput {
+  guildId: string;
+  userId: string;
+  amount: number;
+  grantId: string;
+  sourceModule: string;
+  causation: Causation;
+  now: number;
+}
+
+export interface MemberXpGrantResult extends MemberXpAwardResult {
+  duplicate: boolean;
+}
+
+const UNIQUE_VIOLATION = '23505';
+
+const XP_GRANTS_PKEY = 'xp_grants_guild_id_grant_id_pk';
+
+function isGrantRace(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+
+  const { code, constraint_name: constraint } = error as {
+    code?: unknown;
+    constraint_name?: unknown;
+  };
+
+  return code === UNIQUE_VIOLATION && constraint === XP_GRANTS_PKEY;
+}
+
+function levelThresholds(levelForXp: (xp: number) => number, maxXp: number): number[] {
+  const thresholds: number[] = [];
+  const top = levelForXp(maxXp);
+
+  let low = 0;
+  for (let level = 1; level <= top; level += 1) {
+    let high = maxXp;
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2);
+      if (levelForXp(middle) >= level) high = middle;
+      else low = middle + 1;
+    }
+    thresholds.push(low);
+  }
+
+  return thresholds;
+}
+
 export interface MemberXpRecordResult {
   userId: string;
   xp: number;
@@ -69,6 +125,7 @@ export class DrizzleMemberXpStore {
   readonly #handle: DbHandle;
   readonly #levelForXp: (xp: number) => number;
   readonly #maxXp: number;
+  #thresholds: number[] | undefined;
 
   constructor(handle: DbHandle, options: MemberXpStoreOptions) {
     this.#handle = handle;
@@ -180,6 +237,101 @@ export class DrizzleMemberXpStore {
       level,
       previousLevel: this.#levelForXp(row.previous_xp),
       awarded: true,
+    };
+  }
+
+  async grant(input: MemberXpGrantInput): Promise<MemberXpGrantResult> {
+    try {
+      return await this.#grant(input);
+    } catch (error) {
+      if (!isGrantRace(error)) throw error;
+
+      const stored = await this.#storedGrant(input.guildId, input.grantId);
+      if (!stored) throw error;
+      return stored;
+    }
+  }
+
+  async #grant(input: MemberXpGrantInput): Promise<MemberXpGrantResult> {
+    const amount = this.#clamp(input.amount);
+    const now = new Date(input.now).toISOString();
+    this.#thresholds ??= levelThresholds(this.#levelForXp, this.#maxXp);
+
+    // Levels come from the module's curve as thresholds, so credit and ledger share one statement.
+    const rows = await this.#handle.client<GrantRow[]>`
+      with recorded as (
+        select previous_level, level, xp_after
+          from xp_grants
+         where guild_id = ${input.guildId} and grant_id = ${input.grantId}
+      ), before as (
+        select xp from members where guild_id = ${input.guildId} and user_id = ${input.userId}
+      ), credited as (
+        insert into members as m (guild_id, user_id, xp, level)
+        select ${input.guildId}, ${input.userId}, ${amount}, ${this.#levelForXp(amount)}
+         where not exists (select 1 from recorded)
+        on conflict (guild_id, user_id) do update
+           set xp = least(${this.#maxXp}::int, m.xp + ${amount}::int)
+        returning m.xp as xp_after, m.level as cached_level
+      ), grown as (
+        select xp_after, cached_level,
+               case when xp_after < ${this.#maxXp}::int then xp_after - ${amount}::int
+                    else greatest(${this.#maxXp}::int - ${amount}::int,
+                                  coalesce((select xp from before), 0))
+               end as xp_before
+          from credited
+      ), ledger as (
+        insert into xp_grants (guild_id, grant_id, user_id, amount, source_module, causation,
+                               previous_level, level, xp_after, created_at)
+        select ${input.guildId}, ${input.grantId}, ${input.userId}, ${amount},
+               ${input.sourceModule}, ${JSON.stringify(input.causation)}::jsonb,
+               (select count(*) from unnest(${this.#thresholds}::int[]) as curve(xp)
+                 where curve.xp <= grown.xp_before)::int,
+               (select count(*) from unnest(${this.#thresholds}::int[]) as curve(xp)
+                 where curve.xp <= grown.xp_after)::int,
+               grown.xp_after, ${now}::timestamptz
+          from grown
+        returning previous_level, level, xp_after
+      )
+      select l.previous_level, l.level, l.xp_after, false as duplicate,
+             (select cached_level from credited) as cached_level
+        from ledger l
+      union all
+      select previous_level, level, xp_after, true as duplicate, null as cached_level
+        from recorded
+    `;
+
+    const row = rows[0];
+    if (!row) throw new Error('xp grant wrote no ledger row and found none, which cannot happen');
+
+    if (!row.duplicate && row.cached_level !== null) {
+      await this.#cacheLevel(input.guildId, input.userId, row.cached_level, row.level);
+    }
+
+    return {
+      xp: row.xp_after,
+      level: row.level,
+      previousLevel: row.previous_level,
+      awarded: !row.duplicate,
+      duplicate: row.duplicate,
+    };
+  }
+
+  async #storedGrant(guildId: string, grantId: string): Promise<MemberXpGrantResult | null> {
+    const rows = await this.#handle.client<StoredGrantRow[]>`
+      select previous_level, level, xp_after
+        from xp_grants
+       where guild_id = ${guildId} and grant_id = ${grantId}
+    `;
+
+    const row = rows[0];
+    if (!row) return null;
+
+    return {
+      xp: row.xp_after,
+      level: row.level,
+      previousLevel: row.previous_level,
+      awarded: false,
+      duplicate: true,
     };
   }
 

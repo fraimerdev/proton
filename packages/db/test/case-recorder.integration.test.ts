@@ -87,6 +87,19 @@ describe('DrizzleCaseRecorder', () => {
     expect(row.n).toBe(1);
   });
 
+  test('writes the moderator for a member, and none for an automatic action', async () => {
+    const byMember = await recorder.record(input({ kind: 'kick', actorId: '100000000000000042' }));
+    const automatic = await recorder.record(input({ kind: 'kick', actorId: 'proton:automod' }));
+
+    const found = await rows<{ id: string; moderator_id: string | null }>(handle.client`
+      select id, moderator_id from cases where id in (${byMember.caseId}, ${automatic.caseId})
+    `);
+    const moderatorOf = new Map(found.map((r) => [r.id, r.moderator_id]));
+
+    expect(moderatorOf.get(byMember.caseId)).toBe('100000000000000042');
+    expect(moderatorOf.get(automatic.caseId)).toBeNull();
+  });
+
   test('stores the payload as queryable jsonb', async () => {
     const { caseId } = await recorder.record(
       input({ payload: { channelId: '123', content: 'Pong!' } }),

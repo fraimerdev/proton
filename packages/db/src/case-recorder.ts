@@ -1,5 +1,5 @@
 import type { CaseInput, CaseRecorder } from '@proton/core';
-import { newCaseId, redactSecrets } from '@proton/core';
+import { isReversalIdempotencyKey, newCaseId, redactSecrets, snowflakeSchema } from '@proton/core';
 import { sql } from 'drizzle-orm';
 import type { DbHandle } from './client.ts';
 import { cases } from './schema/cases.ts';
@@ -23,6 +23,13 @@ function isCaseIdCollision(error: unknown): boolean {
   };
 
   return code === UNIQUE_VIOLATION && constraint === CASE_PKEY;
+}
+
+// A reversal runs as the moderator who set the duration, but nobody acted when it ran out.
+function caseModerator(input: CaseInput): string | null {
+  if (isReversalIdempotencyKey(input.idempotencyKey)) return null;
+
+  return snowflakeSchema.safeParse(input.actorId).success ? input.actorId : null;
 }
 
 export class DrizzleCaseRecorder implements CaseRecorder {
@@ -53,6 +60,7 @@ export class DrizzleCaseRecorder implements CaseRecorder {
       caseNumber: sql<number>`(select coalesce(max(${cases.caseNumber}), 0) + 1 from ${cases} where ${cases.guildId} = ${input.guildId})`,
       type: input.kind,
       actorId: input.actorId,
+      moderatorId: caseModerator(input),
       targetId: input.targetId ?? null,
       reason: input.reason ?? null,
       moduleId: input.moduleId,

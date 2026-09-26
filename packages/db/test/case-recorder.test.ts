@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { CASE_ID_LENGTH } from '@proton/core';
+import { CASE_ID_LENGTH, reversalIdempotencyKey } from '@proton/core';
 import { DrizzleCaseRecorder } from '../src/case-recorder.ts';
 import type { DbHandle } from '../src/client.ts';
 
@@ -22,25 +22,34 @@ function violation(constraint: string): Error & { code: string; constraint_name:
   );
 }
 
+interface InsertedRow {
+  id: string;
+  actorId: string;
+  moderatorId: string | null;
+}
+
 /** A handle whose insert runs `onInsert` with the row, so a test can reject the first attempt. */
-function handleThat(onInsert: (row: { id: string }) => void): {
+function handleThat(onInsert: (row: InsertedRow) => void): {
   handle: DbHandle;
   ids: string[];
+  rows: InsertedRow[];
 } {
   const ids: string[] = [];
+  const rows: InsertedRow[] = [];
 
   const handle = {
     db: {
       insert: () => ({
-        values: async (row: { id: string }) => {
+        values: async (row: InsertedRow) => {
           ids.push(row.id);
+          rows.push(row);
           onInsert(row);
         },
       }),
     },
   } as unknown as DbHandle;
 
-  return { handle, ids };
+  return { handle, ids, rows };
 }
 
 describe('DrizzleCaseRecorder', () => {
@@ -89,6 +98,39 @@ describe('DrizzleCaseRecorder', () => {
       'cases_idempotency_key_uq',
     );
     expect(ids).toHaveLength(1);
+  });
+
+  test('the member who ran the action is recorded as its moderator', async () => {
+    const { handle, rows } = handleThat(() => undefined);
+
+    await new DrizzleCaseRecorder(handle).record(INPUT);
+
+    expect(rows[0]?.actorId).toBe(INPUT.actorId);
+    expect(rows[0]?.moderatorId).toBe(INPUT.actorId);
+  });
+
+  test('an automatic action has no moderator, only the pseudo-actor that took it', async () => {
+    const { handle, rows } = handleThat(() => undefined);
+
+    await new DrizzleCaseRecorder(handle).record({ ...INPUT, actorId: 'proton:automod' });
+    await new DrizzleCaseRecorder(handle).record({ ...INPUT, actorId: 'rules:r1' });
+
+    expect(rows.map((row) => [row.actorId, row.moderatorId])).toEqual([
+      ['proton:automod', null],
+      ['rules:r1', null],
+    ]);
+  });
+
+  test('a duration running out has no moderator, though it runs as the one who set it', async () => {
+    const { handle, rows } = handleThat(() => undefined);
+
+    await new DrizzleCaseRecorder(handle).record({
+      ...INPUT,
+      kind: 'unban',
+      idempotencyKey: reversalIdempotencyKey(INPUT.idempotencyKey),
+    });
+
+    expect(rows.map((row) => [row.actorId, row.moderatorId])).toEqual([[INPUT.actorId, null]]);
   });
 
   test('a failure that is not a unique violation is not retried either', async () => {

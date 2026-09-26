@@ -253,6 +253,48 @@
       "when": 1787003500000,
       "tag": "0035_branding_name_styles",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1787003600000,
+      "tag": "0036_scrub_sign_in_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1787003700000,
+      "tag": "0037_moderation_reports",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1787003800000,
+      "tag": "0038_xp_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1787003900000,
+      "tag": "0039_achievements",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1787004000000,
+      "tag": "0040_guild_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1787004100000,
+      "tag": "0041_applications",
+      "breakpoints": true
     }
   ]
 }
