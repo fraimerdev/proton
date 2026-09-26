@@ -95,6 +95,20 @@ bind 127.0.0.1 -::1
 already. `maxmemory-policy` is server-wide, so an eviction policy chosen for that one database
 would also throw away event-bus streams, dedupe keys and gateway session state.
 
+Which process reads which database. A database shared by two processes must have the same number
+for both, which the single `.env` guarantees as long as nobody overrides one per process:
+
+| Variable | Default | Read by |
+| --- | --- | --- |
+| `REDIS_DB_BUS` | 0 | gateway, worker, api |
+| `REDIS_DB_DEDUPE` | 1 | worker |
+| `REDIS_DB_SESSIONS` | 2 | gateway |
+| `REDIS_DB_JOBS` | 3 | worker |
+| `REDIS_DB_MODULES` | 4 | worker, api (the anti-nuke maintenance window) |
+| `REDIS_DB_STATE` | 5 | worker |
+| `REDIS_DB_USERS` | 6 | worker |
+| `REDIS_DB_MESSAGES` | 7 | worker |
+
 Silence the background-save warning and restart:
 
 ```bash
@@ -288,18 +302,66 @@ In the developer portal, for the same application whose ids are in `.env`:
   `PROTON_EMOJI_STEM` / `PROTON_EMOJI_REPLY`. A guild emoji id renders as broken text in every
   other server; the worker checks ownership at boot and falls back to `├` and `└`.
 
-`COMMAND_REGISTRATION_SCOPE=global` in production. Global commands can take up to an hour to appear
-after a deploy that changed them — this is Discord's propagation, not a Proton failure. The worker
-logs `registered N command(s) at <path>` when it succeeds.
+`COMMAND_REGISTRATION_SCOPE=every-guild` in production. Proton registers its commands in each server
+separately, because each server can rename, re-describe and switch off its own commands on the
+dashboard's Commands page, so there are no global commands. Server commands change in Discord at
+once. The old value `global` still works: it is read as `every-guild` and the worker (and the api)
+warn about it at boot.
 
-`DISCORD_TEST_GUILD_ID` is the development safety rail from `CLAUDE.md` and stays unset here.
+`DISCORD_TEST_GUILD_ID` is the development safety rail from `CLAUDE.md` and stays unset here. The
+worker refuses to start with `every-guild` while it is set, and with `guild` while it is not.
+
+How the worker keeps each server's commands in step:
+
+- **At boot** it asks Discord which servers Proton is in and checks each one. A server whose command
+  set (the code definitions, its Commands page settings and its module switches) hashes the same as
+  its last successful registration is skipped, so only a deploy that changes a command definition
+  sends anything. Every server's PUT goes through one queue in the rest-proxy, because Discord
+  rate-limits this route per application rather than per server: a definition-changing deploy costs
+  about one request per server, one after another, and dashboard saves and newly added servers are
+  sent ahead of that backlog.
+- **While running** a dashboard save, a module switched on or off, and a server adding Proton are
+  synced within seconds. Every 10 minutes a sweep (BullMQ queue `proton-command-sync`) picks up any
+  server whose settings changed after its last check, in case the event was lost, and any whose
+  retry time has come.
+- **Failures** are shown on the server's Commands page in words, with Discord's own text beneath.
+  Missing access (50001 or a 403) is retried only when Discord next announces the server to the
+  gateway (Proton added again, or the gateway identifying) or Proton finds its commands out of step
+  there, so it does not spend Discord's invalid-request budget; Discord's
+  limit of 200 command creates per server per day (30034) is retried after 24 hours; a 5xx, a network
+  error or a PUT with no answer after 60 seconds is retried with backoff up to 10 minutes, then by
+  the sweep.
+
+The first deploy of this release moves every server from the global commands to its own:
+
+- Until the global set is retired, members may see each command twice in the picker. Both work.
+- Before touching a server, the worker reads which global commands had their own permissions in that
+  server's Server Settings → Integrations. Discord deletes those permissions with the global commands,
+  and a bot cannot set them again, so the server's Commands page shows a banner naming the commands
+  whose Integrations permissions an admin has to set again. Permissions set on Proton as a whole
+  carry over.
+- The worker removes the global commands, once, only when every server Proton is in has registered
+  its own current set and has had its permissions read. Servers where Proton can't manage commands
+  (50001 or 403) do not hold this up and are named in the log. Until then each sweep logs which
+  servers are holding it up, by id and Discord code.
+- Later, renaming a command, switching it off and on, or switching its module off and on clears the
+  Integrations permissions set on that one command too. The dashboard says so beside those controls.
+
+What the worker logs:
+
+- `checking the commands of N server(s)` and, once the boot check has drained,
+  `finished checking the commands of N server(s)`;
+- `registered N command(s) in server <id>` for each server whose commands changed;
+- `could not register commands in server <id>: …` with the readable reason and Discord's text;
+- `kept Proton's N global command(s), because M server(s) are not synced yet: …` until the move is
+  complete, then `retired Proton's N global command(s): every server now has its own commands`.
 
 ## 10. Verify
 
 ```bash
 pm2 status                                   # five processes, all online
 pm2 logs proton-gateway --lines 30           # expect "gateway connected"
-pm2 logs proton-worker --lines 30            # expect "registered N command(s) at ..."
+pm2 logs proton-worker --lines 30            # expect "finished checking the commands of N server(s)"
 curl -fsS -o /dev/null -w '%{http_code}\n' https://prtn.xyz/
 ```
 
@@ -344,6 +406,45 @@ After the migrations the script moves the warn escalation rate windows in Redis 
 Moderation, which migration 0032 re-keyed, so a member's warnings inside the window still count.
 Later deploys find nothing to move.
 
+Migration 0037 adds the user report tables (`reports`, `report_events`, `report_automation_runs`)
+and the ones Moderation keeps for timeouts and case messages (`moderation_timeouts`,
+`moderation_case_messages`). It must run before the new worker starts — the script's order already
+ensures that. A worker started by hand against the older schema fails on its first report or timeout.
+
+0037 must be applied after 0036, never instead of it. Drizzle skips any migration older than the
+newest one it has recorded, so a release that carries 0037 without 0036 leaves 0036 unapplied for
+good — ship them together, or 0036 first.
+
+The same release adds the global module job `moderation:purge-evidence`. It runs hourly at :35 on the
+`proton-module-jobs` queue, for every server whether or not Moderation is on, and removes report
+evidence and case message snapshots whose time is up (the privacy page promises both). Nothing to set
+up: the worker schedules it at boot, and `declared N module job(s)` counts it. The worker refuses to
+start if the job is declared without its handler.
+
+Migration 0040 adds `guild_commands` (each server's command settings) and
+`guild_command_registrations` (what the worker last registered in each server, and why it failed if
+it did). The api and the worker both need them, and the script's order runs the migration before
+either starts. The first worker on this release registers every server's own commands at boot and
+then retires the global ones, as described in section 9. Option changes to a command should stay
+backwards-compatible for the length of that fan-out: a server not yet re-registered still sends the
+old options, and Proton refuses those as "updating" rather than running a handler on options it no
+longer has.
+
+Migration 0041 adds the Applications tables (`application_form_versions`, `applications`,
+`application_events`, `application_thread`, `application_notes`, `application_votes`,
+`application_effects`, `application_role_grants`), and two nullable columns on `tickets`,
+`source_module` and `source_ref`, with a partial unique index (`tickets_source_open_uq`) that
+allows one open ticket per source. It is additive, so the gateway, rest-proxy and dashboard running
+through the migration are unaffected: none of them reads the new tables, and existing ticket rows
+keep both columns null, which leaves them outside the index. The api and the worker need the tables,
+and the script's order runs the migration before either starts.
+
+The same release adds the global module job `applications:purge`. It runs hourly at :15 on the
+`proton-module-jobs` queue, for every server whether or not Applications is on, deletes drafts left
+unchanged past their server's draft expiry and removes answers whose keep-for period has ended.
+Nothing to set up: the worker schedules it at boot, and `declared N module job(s)` counts it. The
+worker refuses to start if the job is declared without its handler.
+
 If either step fails, the api and worker stay stopped. Fix the cause and run the script again, or roll
 back as below.
 
@@ -361,10 +462,30 @@ a per-server nickname, avatar, banner and bio that live on Discord, not in this 
 the code that sets them does not remove them — it removes the only thing that could. Switch the
 module off in each affected server first, let the teardown run, and only then roll back.
 
-Rolling back past the `afk` module is the other. The `[AFK]` tags it adds to members' nicknames live
+Rolling back past the `afk` module is another. The `[AFK]` tags it adds to members' nicknames live
 on Discord too, and once the code is gone nothing is left to take them off. Switch AFK off in
 each affected server first, let the teardown end every AFK status and put the nicknames back, and
 only then roll back.
+
+Rolling back past per-server commands is the third. An older release registers the global commands
+at boot and never touches server commands, so every server would keep its own commands next to the
+global ones, and any it renamed would answer that it isn't working. Remove them first, with the
+worker stopped so it cannot register them again:
+
+```bash
+pm2 stop proton-worker
+set -o pipefail
+bun --env-file=.env apps/worker/src/commands-rollback.ts 2>&1 | tee -a ~/rollbacks.log
+bun --env-file=.env apps/worker/src/commands-rollback.ts --confirm 2>&1 | tee -a ~/rollbacks.log
+```
+
+Without `--confirm` it only lists the servers. With it, it sends an empty command list to every
+server that has a registration record (only `DISCORD_TEST_GUILD_ID` when the scope is `guild`) and
+deletes each record once Discord accepts. A server Discord refuses keeps its record and is printed as
+`FAILED:` with Discord's reason, and the exit status is 1; run it again once the cause is fixed.
+Then check out and deploy the older release as above, and its worker registers the global commands
+again. Renames, descriptions and switches set on the Commands page do not carry back, and
+Integrations permissions set on the per-server commands are lost with them.
 
 ## 12. Backups
 
@@ -387,7 +508,110 @@ Redis needs no backup schedule: everything in it is either derivable (guild stat
 windows) or short-lived. The append-only file is there so a restart does not lose the event-bus
 backlog.
 
-## 13. Troubleshooting
+## 13. Deleting a server's or a person's data
+
+The privacy page tells server owners and members to ask in the support server, with a server id or
+a Discord user id. Two scripts carry out those requests. Both are dry runs unless told otherwise,
+both print a report meant to be kept, and both run as `proton` from `/srv/proton` against the
+`.env` there. Run them only for a request someone actually made, and never point them at a database
+you were not asked to change.
+
+Removing Proton from a server deletes nothing by itself. The worker clears the backup layout and
+remembered message text, then asks Discord whether Proton is really gone, because a removal can be
+handled after the same server added Proton back. Only once Discord confirms it does the worker
+record `guilds.left_at`, clear the cached server details and stop the server's cron rules (they come
+back if Proton is added again). If Discord cannot be asked, the removal is retried. Pending scheduled
+actions (reminders, temporary-ban lifts, giveaway draws, AFK expiries and the like) are kept: the
+ones that need Discord fail harmlessly while Proton is gone, and they still run if it is added back
+in time. The website refuses appeal and verification links for the server. Everything, the
+`scheduled_actions` rows included, stays until it is purged.
+
+Run both scripts from a shell with `set -o pipefail` and pipe them through
+`2>&1 | tee -a ~/purges.log`, as below. Without `pipefail` the shell reports `tee`'s exit status, so
+a refusal or a crash reads as success; without `2>&1` the error that explains a crash reaches the
+terminal but not the log.
+
+### A server
+
+Dry run first. It changes nothing (the Postgres half runs in a read-only transaction, and the
+BullMQ schedules are read from their id set without loading or tidying any of them) and answers
+"what does Proton hold for this server":
+
+```bash
+cd /srv/proton
+set -o pipefail
+bun --env-file=.env apps/worker/src/purge-guild.ts 123456789012345678 2>&1 | tee -a ~/purges.log
+```
+
+The report header (the server id, the start time and the operator) is printed before any database
+work, so a run that is refused or fails still leaves who ran it and when in the log. Then the
+server's `guilds` row, then every Postgres table holding its rows with a count and how each goes: `cascade`
+with the `guilds` row, or `direct` for tables with a `guild_id` but no foreign key to it
+(`message_logs` and `giveaway_events` today). Then the rule cron schedules in BullMQ, and the Redis
+keys it would delete. The table list is read from the live schema's foreign keys on every run, so a
+table added by a later migration is included without editing the script.
+
+To delete, add `--delete` and type the id a second time:
+
+```bash
+bun --env-file=.env apps/worker/src/purge-guild.ts 123456789012345678 \
+  --delete --confirm 123456789012345678 2>&1 | tee -a ~/purges.log
+```
+
+It refuses, deleting nothing, when:
+
+- Proton is still in the server (`guilds.left_at` is empty). This is checked again under a lock on
+  the row, so a server that re-added Proton after the dry run is refused too, and the `guilds` row
+  is only deleted while `left_at` is set, so a server that re-adds Proton during the purge keeps
+  its new row and the whole transaction is rolled back. `--force` overrides both; use it only for a
+  server Discord has deleted, where no removal was ever recorded.
+- `--delete` comes without `--confirm`, or the `--confirm` id is a different one.
+- A foreign key into a table the server owns is not `ON DELETE CASCADE`. Such a table would block
+  the delete or keep rows behind, so the script names it and stops.
+- A table still holds rows for the server after the deletes. The whole Postgres transaction is
+  rolled back and the table is named.
+
+What it deletes, in this order: every Postgres row for the server in one transaction; the BullMQ
+rule cron schedules filed under the server; the Redis keys Proton keeps for it with no expiry
+(verification quarantine records and panel, the honeypot notice book, counters and caught lists,
+giveaway counts waiting for a refresh, the backup layout), plus the cached server details,
+remembered message text and the Join Roles sync records (the running sync, the last result and
+member count, and when the scheduled sync is due — kept up to 180 days, so not left to expire). Redis is searched with `SCAN MATCH` on the server id, never `KEYS`.
+Keys that expire by themselves (captchas, locks, rate windows, voice sessions and similar) are
+left to run out, and events already on the bus age out within about a day. If a step after
+Postgres fails, run the same command again: Postgres then has nothing left and the rest is retried.
+
+The report gives the start time (and, for a deletion, the finish time), the operator (the OS user,
+the `sudo` caller if there was one, and the host) and a count for every table, schedule and key
+pattern. A refusal prints `REFUSED:` and the reason under the header. Exit status is 0 when it
+finished, 2 when it refused, and 1 on any other error.
+
+### A person's sign-in data
+
+```bash
+set -o pipefail
+bun --env-file=.env apps/worker/src/purge-user.ts 234567890123456789 2>&1 | tee -a ~/purges.log
+bun --env-file=.env apps/worker/src/purge-user.ts 234567890123456789 \
+  --delete --confirm 234567890123456789 2>&1 | tee -a ~/purges.log
+```
+
+Its report, header first as above, gives the Better Auth user id, the Discord id and the counts,
+never the person's name.
+
+This deletes the Better Auth `user` row whose Discord account has that id. Its `account` row, with
+the Discord tokens, and every `session` go with it by cascade, which signs the person out
+everywhere. The tokens are deleted here, not revoked at Discord. What servers hold about the person
+(cases, XP, tickets, appeals and so on) belongs to those servers and is not touched, and neither is
+the record of dashboard changes naming them. A server's data goes only with that server's purge.
+
+### Backups
+
+Neither script can reach the database dumps. A deleted row stays in every dump taken before the
+purge until the backup job above deletes that dump after 15 days, so up to 16 days in all, which is
+what the privacy page promises. Copies taken off the box must be deleted on the same schedule for
+that promise to hold.
+
+## 14. Troubleshooting
 
 **A service exits immediately.** Env validation runs at boot and names the offending variable —
 `pm2 logs proton-api --lines 40`. Nothing is redacted into that message except the values

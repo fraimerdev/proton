@@ -22,6 +22,8 @@ another.
 | --- | --- | --- |
 | Welcomer: Welcome, Goodbye and Boosts | The text, embeds, layout and link buttons of each message | anyone in the channel |
 | Leveling: level-up message | The text, embed and link buttons. A layout saved earlier is filled in too, but on this page it can only be removed | anyone in the channel |
+| Achievements: Announcements | The unlock announcement and the "almost there" message: text, embeds, layout and link buttons | anyone in the channel, or the member when it is sent by direct message |
+| Achievements: each achievement's Announcement tab | Its own unlock announcement, when set to **Custom** | anyone in the channel, or the member when it is sent by direct message |
 | Honeypot: warning message | The layout's text, images and buttons | anyone in the channel |
 | Honeypot: direct message | The layout's text, images and buttons | the member who was caught |
 | Tickets: settings and each ticket type | Channel name patterns, and the opening, closing and blacklist messages | names: anyone; messages: the member and staff |
@@ -29,8 +31,13 @@ another.
 | Counters | Each counter's name template | anyone |
 | Temporary Voice Channels: each creator channel | The name template | anyone |
 | Appeals: each form | The accepted and turned-down messages | the member who appealed |
+| Applications: each form's messages | The text and embeds of the sent, accepted, rejected, waitlisted, information request and withdrawn messages, and the closed message | the member who applied; the closed message: members who open the form |
 | Giveaways: the `/giveaway` builder in Discord | The message sent to each winner | that winner |
 | Messages: templates | Every text field, once **Fill in placeholders** is on | anyone in the channel |
+| Moderation: Punish settings | Each type's audit-log reason | staff, in Discord's audit log |
+| Moderation: Member notifications | The text and embeds of the four punishment and three lifted messages | the member who was punished |
+| Moderation: User reports, Messages | The received, accepted and dismissed messages | the member who reported |
+| Moderation: User reports, Automation | Each rule's staff alert, and its direct message to the reported member | alert: staff in the channel; direct message: the reported member |
 
 Everywhere else, text is posted exactly as you write it, braces included.
 [Where placeholders do not work](#where-placeholders-do-not-work) lists the notable places and why.
@@ -244,8 +251,10 @@ save.
 
 **Previews** use a labelled sample instead of real people, captioned under the preview, such as
 "Sample: Fraimer joining Proton HQ". The samples fit together: Fraimer joins Proton HQ, reaches
-level 5, opens Billing ticket #42, which a helper closes, wins Nitro Classic, and gets a voice
-channel from "Create a room". A few previews also use a detail you have chosen, such as the
+level 5, earns Chatterbox (Gold) with 1,000 messages and is close to Diamond, opens Billing ticket
+#42, which a helper closes, wins Nitro Classic, and gets a voice channel from "Create a room". In Moderation, Nova reports a message by Fraimer as report #42, and
+Kestrel times Fraimer out for an hour. In Applications, Fraimer sends application #12 on the
+Moderator Application form and Kestrel accepts it. A few previews also use a detail you have chosen, such as the
 level-up channel's name. Mentions in a preview show the sample's names, such as @Fraimer, and
 relative times count from the sample's moment. Previews are filled in by the same code that posts
 the real message, and nothing is fetched, saved or posted while you look at one.
@@ -270,6 +279,29 @@ the real message, and nothing is fetched, saved or posted while you look at one.
   are on, which is the default.
 - Role mentions in a plain-text field, such as a button label, come out empty, because Proton does
   not know role names.
+
+**Achievements**
+
+- Each message offers what its destination can fill in. Sent by direct message, the unlock
+  announcement and the "almost there" message refuse `{destination_channel.*}`; choose the
+  destination first, then write the message. Changing the destination of a message you already
+  saved does not check it again, so a `{destination_channel.*}` left in it comes out empty.
+- `{channel.*}` is where the member earned it, such as the channel of the message that counted. It
+  is empty for voice time, membership days and other activity that happens outside a channel.
+- The rewards (`{rewards.*}`), `{achievement.tiers_unlocked}` and `{achievement.unlocked_at}` are
+  offered only in the unlock announcement. `{rewards.summary}` never lists a reward that failed;
+  use `{rewards.failed_roles}` to name failed roles. It is written in message text only.
+- XP from a reward counts as given once Leveling confirms it. An announcement that waits too long
+  for that lists it under `{rewards.pending_xp}`.
+- `{achievement.tier}` is "Earned", and `{achievement.tier_label}` is empty, for an achievement
+  without tiers. In the "almost there" message they name the tier the member is close to, and
+  `{progress.*}` counts towards it.
+- Dates written out in plain text, such as an embed footer, use the time zone in Achievements
+  settings.
+- Direct messages never ping anyone, so they show no ping warnings.
+- **Test** rehearses the unlock or "almost there" message for the example member. Nothing is earned
+  or saved and no role or XP is given; progress and rewards are sample values you choose in the
+  dialog.
 
 **Honeypot**
 
@@ -324,6 +356,29 @@ the real message, and nothing is fetched, saved or posted while you look at one.
 - Proton adds the "Appeal #7" heading and the rejoin line itself, and cuts the direct message at
   2,000 characters.
 
+**Applications**
+
+- Each form has its own messages, sent to the member who applied by direct message. They can carry
+  text and embeds only: buttons, menus and layouts do nothing in a direct message, so they are
+  refused when you save.
+- `{user.*}` is the member who applied. `{moderator.*}` (who decided), `{application.reason}` and
+  `{application.reviewed_at}` are offered only in the accepted, rejected and waitlisted messages,
+  and `{application.request}`, the question from staff, only in the information request message.
+- `{application.reason}` is empty when the reviewer wrote no reason for the applicant, so write the
+  message to read well without it, or use `:fallback`.
+- `{application.url}` is the application's status page on the web. It is empty when Proton does not
+  know the dashboard's address.
+- Internal notes, votes and scores (`{application.internal_note}`, `{application.votes}`,
+  `{application.score}`) are for staff only, so they are refused in every applicant message.
+- The closed message is plain text, shown on the form in Discord and on its web page while the form
+  is switched off. It offers only the form's name, the server and the time. Dates are Discord
+  timestamps in Discord and written out on the web page.
+- Direct messages never ping anyone. The message sent when an application expires because staff
+  got no answer is Proton's fixed wording, not a template.
+- **Test** rehearses each message by sending it to you. The example member stands in for the
+  applicant and you for the reviewer; nothing is filed, decided or granted, and no roles or XP
+  change. The review card and the panel can be rehearsed in a channel you pick.
+
 **Giveaways**
 
 - The winner message is set in the `/giveaway` builder's winners step. Problems are reported when
@@ -348,6 +403,37 @@ the real message, and nothing is fetched, saved or posted while you look at one.
   at 2,000 characters and never ping.
 - If a value cannot be read when a scheduled post goes out, the post is sent with that value empty.
 
+**Moderation**
+
+- Audit-log reasons are plain text in Discord's audit log, cut at 512 characters. They offer only
+  the moderator's id and username, the reason, the duration and the time. Sapphire's `${…}`
+  variables are refused when you save, with the Proton name to use instead: `${authorid}` is
+  `{moderator.id}`, `${authortag}` is `{moderator.username}`, `${duration}` is
+  `{punishment.duration}`, `${reason}` is `{punishment.reason}` and `${currentdate}` is `{today}`.
+- In member notifications, `{user.*}` is the member and `{moderator.*}` the moderator. When Proton
+  acted on its own (report automation, a timeout that ran out, a temporary ban that ended),
+  `{moderator.*}` is Proton. `{punishment.expired}` is offered only in the lifted messages, and the
+  audit-log reason is refused because it is for staff only.
+- Report messages go to the member who reported: `{user.*}` is them and `{target.*}` the member
+  they reported. `{moderator.*}` (who decided) is offered only in the accepted and dismissed
+  messages, `{report.action}` only in the accepted one, and `{report.explanation}`, the note staff
+  wrote for the reporter, in the accepted and dismissed ones. A message that doesn't use
+  `{report.explanation}` still carries the note: Proton adds it at the end as a "Note from staff"
+  field, or as a last line when the message has no embed. The internal note, case ids, the
+  dashboard link and the report counts are for staff only, so they are refused.
+- A rule's staff alert describes the newest report that set the rule off, and
+  `{report.total_reports}` and `{report.reporter_count}` count the reports that set it off. What
+  reporters wrote (`{report.comment}`, `{report.custom_reason}`) is not a placeholder in an alert,
+  so it is posted as written. The roles picked on the alert are pinged ahead of the message when
+  its role pings are on. `{report.url}` is empty when Proton does not know the dashboard's address.
+- A rule's direct message to the reported member offers only them (`{user.*}`), the server, Proton,
+  the time and `{rule.name}`. Every report and target placeholder is refused, so a member is never
+  told who reported them or what the reports say.
+- The report card staff see in the report channel is Proton's own format, not a template.
+- **Test** sends a direct message to you, and the report card or an alert to the channel you pick.
+  No report is filed, nobody is punished and no case is recorded; you stand in for the reporter and
+  the moderator, and the example member is the one reported or punished.
+
 ### Older names
 
 Before the current names, each page had a few short placeholders such as `{user}` and `{server}`.
@@ -364,6 +450,7 @@ names, and typing the start of an older name suggests its current one.
 | Welcome, Goodbye and Boost | `{server}` | The server's name | `this server` |
 | Welcome, Goodbye and Boost | `{memberCount}` | The member count | `0` |
 | Level-up | `{user}`, `{level}`, `{xp}` | A mention of the member, the new level, and total XP | always has one |
+| Achievements messages | `{user}` | A mention of the member, kept short for the default messages | always has one |
 | Honeypot warning | `{consequence}`, `{purge}` | Proton's wording for what happens, and for the messages deleted | always has one |
 | Honeypot direct message | `{action}` | Proton's wording for what was done | always has one |
 | Honeypot direct message | `{server}` | The server's name | `this server` |
@@ -422,7 +509,10 @@ How older names differ from the current ones:
 | Branding nickname and bio | Proton keeps these matching what you saved, so a value that changes would always look out of date. |
 | The `/rolemenu` message option | It is typed once in Discord rather than saved as a template, so its braces are posted as typed. |
 | Rules and escalation | Rules do not send messages of their own. |
-| Proton's own messages | Starboard, suggestions, AFK, reminders, polls, giveaway announcements, moderation replies, security alerts, server logs and backups use Proton's fixed wording, not templates. |
+| Proton's own messages | Starboard, suggestions, AFK, reminders, polls, giveaway announcements, security alerts, server logs and backups use Proton's fixed wording, not templates. |
+| Achievements commands and names | `/achievements` and `/achievement` replies are Proton's fixed wording, and achievement names, descriptions and badges are shown as written. Achievements' only templates are the announcements [listed above](#where-placeholders-work). |
+| Moderation replies and the report card | Command and button replies, confirmations, the Punish author flow and the staff report card are Proton's fixed wording. Moderation's only templates are the audit-log reasons, member notifications, report messages and automation messages [listed above](#where-placeholders-work). |
+| Application forms, panels and the review card | Questions, the intro, the confirmation text and panel text are shown as written, and replies, the review card, pings and reminders are Proton's fixed wording. Applications' only templates are the messages to applicants and the closed message [listed above](#where-placeholders-work). |
 
 ## For developers
 
@@ -454,8 +544,11 @@ How older names differ from the current ones:
    `bot()` (cached for six hours; a failed read renders failed and is retried after 60 seconds),
    `server(guildId)` (one GuildState read), `user(userId)` (the users resolver) and `now()`. Only
    apps/worker/src/index.ts imports it, and it passes it as `placeholders` to Welcome, Leveling,
-   Honeypot, Tickets, TempVC, Counters, Giveaways and Messages (Messages also gets `guildState`).
-   Appeals gets none: its surface resolves from the appeal and the form alone, because the same
+   Honeypot, Tickets, TempVC, Counters, Giveaways, Messages, Moderation, Achievements and
+   Applications (Messages also gets `guildState`; Moderation builds `{report.url}` from its own
+   `dashboardUrl` dep and reads only the profiles a template uses, through `usedKeys`; Applications
+   does the same for `{application.url}` and its applicant DMs, and renders the closed message from
+   the form and server facts alone, because apps/api shows it on the web form page too). Appeals gets none: its surface resolves from the appeal and the form alone, because the same
    text renders on the appeal web page in apps/api, which has neither GuildState nor the users
    resolver. Modules take only `import type { PlaceholderEnvironment }`; without an environment
    those keys render unavailable and the send still happens.
@@ -464,8 +557,9 @@ How older names differ from the current ones:
    `@proton/core/placeholders`; type-only `@proton/core`; browser-safe barrel values that the
    module's `config.ts` already imports; zod; its own `config.ts`; and its own import-free files
    such as `constants.ts`. Where `config.ts` value-imports `placeholders.ts` for a refine (Tickets,
-   Counters, TempVC), the values both need live in `constants.ts` so there is no cycle. Modules
-   never import each other.
+   Counters, TempVC), the values both need live in `constants.ts` so there is no cycle. Moderation
+   keeps its report surfaces in `src/reports/surfaces.ts` and `src/reports/automation-surfaces.ts`,
+   under the same rules, and `placeholders.ts` re-exports them. Modules never import each other.
 6. **Save path**: the manifest's `templates` reach `assertTemplatesValid(manifest, next, before)`
    (apps/api/src/modules/templates.ts), called in `ModuleConfigService.update` after the size check
    and before the transaction. Only `error` diagnostics on paths whose text changed or is new
@@ -646,7 +740,41 @@ These answers and corrections came after the design was written. The code follow
 - **Defaults and sensitivity.** The shipped default messages keep the older names, so servers that
   never saved are unchanged. `appeal.decided_by` stays staff-only.
 - **Samples.** `SAMPLE_IDS` has no `server`, `counter` or `appeal` id, so those surfaces borrow
-  `member`.
+  `member`. Moderation added two: `report` (the reporter messages, the automation alert and the
+  automation direct message) and `punishment` (the punishment and lifted messages and the audit-log
+  reason), with `SAMPLE_REPORTER` (Nova, `100000000000000011`) as the member who reports.
+  Achievements added `achievement`: `SAMPLE_ACHIEVEMENT`, Fraimer earning Chatterbox (Gold), whose
+  tiers (50, 250, 1,000 and 5,000 messages) live in `SAMPLE_DEFINITION` in the module's
+  `placeholders.ts`, so previews, the "Try it" panel and rehearsals build from one definition
+  through `previewFacts`.
+- **Achievements surfaces by destination.** The unlock announcement and the "almost there" message
+  each have a channel surface and a direct-message surface over the same field paths
+  (`announcement.message.*` and `achievements.*.announcement.message.*`; `almostThere.message.*`).
+  `achievementsTemplates.collect` masks the config by each message's configured destination, as
+  Moderation's automation does, so every site is checked once, against the surface it will render
+  on. The direct-message surfaces register `{destination_channel.*}` with the channel events only,
+  so they are refused rather than posted as written, and carry no `pings`, because
+  `toSendBody` sends direct messages with `parse: []`. The unlock-only keys are registered on the
+  "almost there" surfaces the same way. `{rewards.summary}` is markdown built only from role
+  mention markup and numbers, and is limited to message text.
+- **Achievements simulations.** The achievement is a `fixed` text input holding its id, because an
+  index would drift when achievements are reordered; empty means the sample. A tier the achievement
+  lacks falls back to the highest one below it. The unlock rehearsal attaches the badge card
+  (`kind: 'badge'`, tier colour resolved to an integer) and makes it the first embed's thumbnail,
+  exactly as the announcement does, except on a layout message, where Discord shows only the
+  attachments a component references.
+- **Moderation privacy.** The reporter messages register the internal note, case ids, dashboard
+  link and report counts as `staff_only`, and the automation direct message registers every
+  `report.*` and `target.*` key as `staff_only`, so each is refused rather than posted as written.
+  The punishment messages register `punishment.audit_reason` as `staff_only` for the same reason.
+  The staff alert leaves out `report.comment` and `report.custom_reason`: an alert would post the
+  reporter's words unfenced in a channel.
+- **Moderation simulations.** Report and case ids in a rehearsal are derived from the event id, and
+  the reporter and the moderator are both the admin who runs it, because a scene has only the
+  example member and the admin. The report card is rehearsed without a `surfaceId`: it is fixed copy
+  built by `buildReportCard`, and `asTestDelivery` disables its keyed buttons. The automation
+  alert's and direct message's rule and action are `fixed` inputs; an action index that is not of
+  the right kind falls back to the rule's first action that is, and a rule with none refuses.
 
 ### Surfaces not integrated
 
@@ -658,7 +786,9 @@ These answers and corrections came after the design was written. The code follow
 | Branding nickname and bio | A persistent profile value reconciled against the observed profile (packages/modules/branding/src/profile.ts); a value that changes would always read as drift. |
 | `/rolemenu` message option | One-off invoker input, not a stored template; parsing it would expand text typed literally. |
 | Rules engine payloads | No rule sends a message (packages/modules/moderation/src/escalation.ts), there is no editor, and the facts are thin. |
-| Fixed Proton copy | Starboard, suggestions, AFK, reminders, polls, giveaway announcements, moderation replies, security alerts, serverlog and backup text are written in code, never admin templates. |
+| Fixed Proton copy | Starboard, suggestions, AFK, reminders, polls, giveaway announcements, security alerts, serverlog and backup text are written in code, never admin templates. |
+| Achievements commands | `/achievements` and `/achievement` replies are listings and confirmations written in code (packages/modules/achievements/src/command-views.ts); achievement names and descriptions are admin text shown as written. |
+| Moderation replies and the staff report card | Command, button and modal replies are status embeds and prompts written in code (packages/modules/moderation/src/interactions/respond.ts); the report card is a purpose-built staff card (packages/modules/moderation/src/reports/card.ts) whose member-written text is fenced, not rendered. |
 
 ### Deferred catalogue
 
@@ -676,7 +806,10 @@ Placeholders that were considered and not offered, with what has to exist first.
 | Per-member boost count and history | A boost ledger |
 | `actor.username` on commands, `command.name` | A username and command name on `CommandContext` (packages/core/src/modules/manifest.ts) |
 | `user.is_bot` for profiles read through the environment | A `bot` flag on `UserProfile`; until then `user()` never sets it, so it renders `No` |
-| `moderator.*`, `target.*`, `case.*` | A member-facing moderation message or an authored moderation surface; `case.number` also needs the recorder to return a number |
+| Member details on `moderator.*` and `target.*` (nickname, roles, join date) | A member read at send time; Moderation's surfaces offer account details only, because a punished or reported member may have left |
+| `case.*` beyond `case.id` (`case.number`, a case link) | The recorder returning a number, and a case page a member may open |
+| `report.*` on the report card | An authored staff-card surface; the card is fixed copy (packages/modules/moderation/src/reports/card.ts) |
+| `report.message_content`, reporter words in a staff alert | Fencing of member-written text in the renderer; until then the alert leaves `report.comment` and `report.custom_reason` out |
 | `server.splash_url`, `vanity_code`, `rules_channel`, `system_channel`, `locale` | Those GuildState fields |
 | `server.emoji_count`, `sticker_count` | Storage from GUILD_CREATE; the GuildExpressions intent is not requested |
 | `server.thread_count` (active) | Storage of `thread_metadata.archived` |
@@ -687,7 +820,7 @@ Placeholders that were considered and not offered, with what has to exist first.
 | `channel.topic`, `position`, `is_nsfw`, `slowmode`; `thread.owner`, `archived`, `locked` | Those `ChannelState` fields (packages/core/src/guild-state/build.ts) |
 | Live `thread.member_count`, `message_count` | A REST read per render and thread-member normalisation |
 | `role.name`, `color_hex`, `icon_url`, `member_count` | The `GuildRole` extension, and a member index for the count |
-| `message.*` | A surface that consumes a message; on message deletion, author names and embed counts need the cached message schema extended (packages/core/src/messages/content-cache.ts) |
+| `message.*` | A surface that consumes a message (reports offer only `{report.message_url}`); on message deletion, author names and embed counts need the cached message schema extended (packages/core/src/messages/content-cache.ts) |
 | `bot.latency_ms` | The gateway heartbeat recorded (apps/gateway) |
 | `bot.uptime` | Recorded start times |
 | `bot.version` | A version injected at build or deploy; every package.json is 0.0.0 |
@@ -738,6 +871,8 @@ Placeholders that were considered and not offered, with what has to exist first.
   is still renamed with that placeholder empty.
 - Older names stay unescaped in message text, so `{username}` holding role mention text can ping
   that role under the default role pings.
+- A rehearsed staff alert shows `{report.url}` as unavailable with the reason "Proton does not know
+  where the dashboard is", because a rehearsed report has no dashboard page to link to.
 - GuildState: the first deploy replays every stored GUILD_UPDATE into the profile consumer;
   `RedisGuildStateStore.put` is unconditional, so a GUILD_CREATE handled after a newer GUILD_UPDATE
   overwrites the profile; and a GUILD_UPDATE replayed after a RESUME carries a fresh `occurredAt`
@@ -747,6 +882,9 @@ Placeholders that were considered and not offered, with what has to exist first.
 - `bot()` renders failed for 60 seconds after an expired profile fails to refresh, instead of
   keeping the last good name.
 - `DrizzleMemberXpStore.countRanked` has no database-backed test.
+- Only changed text blocks a save, and the text of an Achievements message does not change when
+  its destination does. Moving a saved message from a channel to a direct message therefore saves
+  even when it uses `{destination_channel.*}`, which then renders empty.
 
 ## Reference
 
@@ -763,7 +901,16 @@ _Generated from the placeholder registries by `bun packages/core/scripts/placeho
 
 | Module | Surface | Id | Seen by | Offered | Refused |
 | --- | --- | --- | --- | --- | --- |
+| `achievements` | [Unlock announcement](#unlock-announcement-achievementsunlocked) | `achievements.unlocked` | anyone | 70 | 0 |
+| `achievements` | [Unlock DM](#unlock-dm-achievementsunlocked_dm) | `achievements.unlocked_dm` | anyone | 65 | 5 |
+| `achievements` | [Almost there message](#almost-there-message-achievementsalmost_there) | `achievements.almost_there` | anyone | 62 | 8 |
+| `achievements` | [Almost there DM](#almost-there-dm-achievementsalmost_there_dm) | `achievements.almost_there_dm` | anyone | 57 | 13 |
 | `appeals` | [Decision message](#decision-message-appealsdecision) | `appeals.decision` | the member it is about | 9 | 2 |
+| `applications` | [Application sent message](#application-sent-message-applicationsreceipt) | `applications.receipt` | the member it is about | 30 | 6 |
+| `applications` | [Decision message](#decision-message-applicationsdecision) | `applications.decision` | the member it is about | 41 | 4 |
+| `applications` | [Information request message](#information-request-message-applicationsinfo_request) | `applications.info_request` | the member it is about | 31 | 5 |
+| `applications` | [Application withdrawn message](#application-withdrawn-message-applicationswithdrawn) | `applications.withdrawn` | the member it is about | 30 | 6 |
+| `applications` | [Form closed message](#form-closed-message-applicationsclosed) | `applications.closed` | the member it is about | 16 | 11 |
 | `counters` | [Counter channel name](#counter-channel-name-counterschannel_name) | `counters.channel_name` | anyone | 9 | 3 |
 | `giveaways` | [Winner message](#winner-message-giveawayswin_dm) | `giveaways.win_dm` | the member it is about | 20 | 0 |
 | `honeypot` | [Warning message](#warning-message-honeypotnotice) | `honeypot.notice` | anyone | 26 | 4 |
@@ -772,6 +919,14 @@ _Generated from the placeholder registries by `bun packages/core/scripts/placeho
 | `messages` | [Posted template](#posted-template-messagespost) | `messages.post` | anyone | 36 | 0 |
 | `messages` | [Scheduled template](#scheduled-template-messagesscheduled) | `messages.scheduled` | anyone | 26 | 10 |
 | `messages` | [Reply to a press](#reply-to-a-press-messagesreply) | `messages.reply` | anyone | 51 | 0 |
+| `moderation` | [Audit-log reason](#audit-log-reason-moderationaudit_reason) | `moderation.audit_reason` | staff | 7 | 0 |
+| `moderation` | [Punishment message](#punishment-message-moderationpunished) | `moderation.punished` | the member it is about | 45 | 1 |
+| `moderation` | [Punishment lifted message](#punishment-lifted-message-moderationunpunished) | `moderation.unpunished` | the member it is about | 46 | 1 |
+| `moderation` | [Report received message](#report-received-message-moderationreport_submitted) | `moderation.report_submitted` | the member it is about | 48 | 5 |
+| `moderation` | [Report accepted message](#report-accepted-message-moderationreport_accepted) | `moderation.report_accepted` | the member it is about | 59 | 5 |
+| `moderation` | [Report dismissed message](#report-dismissed-message-moderationreport_dismissed) | `moderation.report_dismissed` | the member it is about | 58 | 5 |
+| `moderation` | [Report automation alert](#report-automation-alert-moderationreport_alert) | `moderation.report_alert` | staff | 41 | 0 |
+| `moderation` | [Report automation message to the reported member](#report-automation-message-to-the-reported-member-moderationreport_member_notice) | `moderation.report_member_notice` | the member it is about | 31 | 25 |
 | `tempvc` | [Temporary channel name](#temporary-channel-name-tempvcchannel_name) | `tempvc.channel_name` | anyone | 7 | 0 |
 | `tickets` | [Ticket channel name](#ticket-channel-name-ticketschannel_name) | `tickets.channel_name` | anyone | 15 | 2 |
 | `tickets` | [Ticket opening message](#ticket-opening-message-ticketswelcome) | `tickets.welcome` | the member it is about | 41 | 0 |
@@ -896,6 +1051,10 @@ Reply actions, filled in only on Messages templates with placeholders enabled:
 
 | Surface | Older name | Current name |
 | --- | --- | --- |
+| [Unlock announcement](#unlock-announcement-achievementsunlocked) | `{user}` | `{user.mention}` |
+| [Unlock DM](#unlock-dm-achievementsunlocked_dm) | `{user}` | `{user.mention}` |
+| [Almost there message](#almost-there-message-achievementsalmost_there) | `{user}` | `{user.mention}` |
+| [Almost there DM](#almost-there-dm-achievementsalmost_there_dm) | `{user}` | `{user.mention}` |
 | [Counter channel name](#counter-channel-name-counterschannel_name) | `{count}` | `{counter.count}` |
 | [Warning message](#warning-message-honeypotnotice) | `{consequence}` | `{honeypot.consequence}` |
 | [Warning message](#warning-message-honeypotnotice) | `{purge}` | `{honeypot.purge}` |
@@ -927,6 +1086,341 @@ Reply actions, filled in only on Messages templates with placeholders enabled:
 
 ### Placeholders by surface
 
+#### Module `achievements`
+
+##### Unlock announcement (`achievements.unlocked`)
+
+Seen by anyone. Examples come from “Sample: Fraimer earning Chatterbox (Gold) in Proton HQ”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `announcement.message`.
+Fields: every [message field](#message-fields), under `achievements.*.announcement.message`.
+
+| Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `{achievement.name}` | Achievement | Achievement | text |  |  | `Chatterbox` | The achievement’s name |
+| `{achievement.description}` | Description | Achievement | formatted text |  | link | `Keep the conversation going in Proton HQ.` | The achievement’s description, with its formatting; empty when it has none |
+| `{achievement.tier}` | Tier | Achievement | text |  |  | `Gold` | The tier this message is about, such as Gold (the one just earned, or the one they’re close to). Earned for an achievement without tiers |
+| `{achievement.tier_label}` | Tier in brackets | Achievement | text |  |  | `(Gold)` | The tier in brackets, such as (Gold); empty for an achievement without tiers |
+| `{achievement.tier_number}` | Tier number | Achievement | whole number |  |  | `3` | Which tier this is, from 1 for Bronze to 4 for Diamond; 1 for an achievement without tiers |
+| `{achievement.tier_count}` | Number of tiers | Achievement | whole number |  |  | `4` | How many tiers the achievement has; 1 for an achievement without tiers |
+| `{achievement.badge}` | Tier medal | Achievement | text |  |  | `🥇` | A medal for the tier: 🥉 Bronze, 🥈 Silver, 🥇 Gold, 💎 Diamond, or 🏅 without tiers |
+| `{achievement.deadline}` | Deadline | Achievement | date |  | link | `Oct 14, 2026, 9:00 AM` | When the achievement stops counting; empty when it has no deadline |
+| `{achievement.earned_count}` | Achievements held | Achievement | whole number |  |  | `5` | How many of this server’s achievements they hold, this one included |
+| `{requirement.summary}` | Requirements | Achievement | text |  |  | `Send 1,000 messages` | What the tier asks for, such as Send 1,000 messages |
+| `{progress.current}` | Progress | Achievement | whole number |  |  | `1000` | Their count for the requirement furthest from done |
+| `{progress.target}` | Target | Achievement | whole number |  |  | `1000` | The tier’s target for that requirement |
+| `{progress.remaining}` | Still to go | Achievement | whole number |  |  | `0` | How much of that requirement is left; 0 once it is done |
+| `{progress.percent}` | Progress percent | Achievement | percentage |  | link | `100%` | How far they are towards the tier, going by the requirement furthest from done |
+| `{progress.unit}` | Unit | Achievement | text |  |  | `messages` | What that requirement counts, such as messages |
+| `{progress.summary}` | Progress summary | Achievement | text |  |  | `1,000 / 1,000 messages` | Every requirement as progress and target, such as 320 / 500 messages, 40 / 60 voice minutes |
+| `{achievement.tiers_unlocked}` | Tiers held | Achievement | text |  |  | `Bronze, Silver and Gold` | Every tier they hold after this unlock, such as Bronze, Silver and Gold |
+| `{achievement.unlocked_at}` | Earned at | Achievement | date |  | link | `Sep 14, 2026, 9:00 AM` | When they earned it |
+| `{rewards.granted_roles}` | Roles given | Achievement | list of mentions |  | link | `Regular` | The roles given for this unlock, as mentions. In message text, these ping each role if role pings are on for this message. They’re off by default. |
+| `{rewards.pending_roles}` | Roles on their way | Achievement | list of mentions |  | link | `Regular` | The roles Proton is still giving for this unlock, as mentions. In message text, these ping each role if role pings are on for this message. They’re off by default. |
+| `{rewards.failed_roles}` | Roles not given | Achievement | list of mentions |  | link | `Regular` | The roles Proton could not give for this unlock, as mentions. In message text, these ping each role if role pings are on for this message. They’re off by default. |
+| `{rewards.granted_xp}` | XP given | Achievement | whole number |  |  | `250` | The XP Leveling confirmed giving for this unlock; 0 when none |
+| `{rewards.pending_xp}` | XP on its way | Achievement | whole number |  |  | `0` | The XP requested from Leveling that it hasn’t confirmed yet; 0 when none |
+| `{rewards.summary}` | Rewards | Achievement | formatted text |  | link, plain text |  | The rewards in one line, such as @Regular and 250 XP given; 50 XP still on its way. A reward that failed is left out; {rewards.failed_roles} names failed roles. Message text only |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
+| `{user.nickname}` | Nickname | Member | text |  |  | `Fraim` | Server nickname; empty when none |
+| `{user.joined_at}` | Joined server | Member | date |  | link | `Nov 2, 2025, 5:45 PM` | When they joined |
+| `{user.is_boosting}` | Is boosting | Member | yes-or-no value |  | link | `No` | Yes while boosting |
+| `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
+| `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
+| `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date |  | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
+| `{channel.mention}` | Channel | Channel | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
+| `{channel.name}` | Channel name | Channel | text |  |  | `general` | The channel's name |
+| `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
+| `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel ID |
+| `{destination_channel.mention}` | Channel | Where it posts | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
+| `{destination_channel.name}` | Channel name | Where it posts | text |  |  | `general` | The channel's name |
+| `{destination_channel.url}` | Channel link | Where it posts | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
+| `{destination_channel.category_mention}` | Category | Where it posts | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date |  | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date |  | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  |  | `2026` | The current year, in UTC |
+
+##### Unlock DM (`achievements.unlocked_dm`)
+
+Seen by anyone. Examples come from “Sample: Fraimer earning Chatterbox (Gold) in Proton HQ”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `announcement.message`.
+Fields: every [message field](#message-fields), under `achievements.*.announcement.message`.
+
+| Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `{achievement.name}` | Achievement | Achievement | text |  |  | `Chatterbox` | The achievement’s name |
+| `{achievement.description}` | Description | Achievement | formatted text |  | link | `Keep the conversation going in Proton HQ.` | The achievement’s description, with its formatting; empty when it has none |
+| `{achievement.tier}` | Tier | Achievement | text |  |  | `Gold` | The tier this message is about, such as Gold (the one just earned, or the one they’re close to). Earned for an achievement without tiers |
+| `{achievement.tier_label}` | Tier in brackets | Achievement | text |  |  | `(Gold)` | The tier in brackets, such as (Gold); empty for an achievement without tiers |
+| `{achievement.tier_number}` | Tier number | Achievement | whole number |  |  | `3` | Which tier this is, from 1 for Bronze to 4 for Diamond; 1 for an achievement without tiers |
+| `{achievement.tier_count}` | Number of tiers | Achievement | whole number |  |  | `4` | How many tiers the achievement has; 1 for an achievement without tiers |
+| `{achievement.badge}` | Tier medal | Achievement | text |  |  | `🥇` | A medal for the tier: 🥉 Bronze, 🥈 Silver, 🥇 Gold, 💎 Diamond, or 🏅 without tiers |
+| `{achievement.deadline}` | Deadline | Achievement | date |  | link | `Oct 14, 2026, 9:00 AM` | When the achievement stops counting; empty when it has no deadline |
+| `{achievement.earned_count}` | Achievements held | Achievement | whole number |  |  | `5` | How many of this server’s achievements they hold, this one included |
+| `{requirement.summary}` | Requirements | Achievement | text |  |  | `Send 1,000 messages` | What the tier asks for, such as Send 1,000 messages |
+| `{progress.current}` | Progress | Achievement | whole number |  |  | `1000` | Their count for the requirement furthest from done |
+| `{progress.target}` | Target | Achievement | whole number |  |  | `1000` | The tier’s target for that requirement |
+| `{progress.remaining}` | Still to go | Achievement | whole number |  |  | `0` | How much of that requirement is left; 0 once it is done |
+| `{progress.percent}` | Progress percent | Achievement | percentage |  | link | `100%` | How far they are towards the tier, going by the requirement furthest from done |
+| `{progress.unit}` | Unit | Achievement | text |  |  | `messages` | What that requirement counts, such as messages |
+| `{progress.summary}` | Progress summary | Achievement | text |  |  | `1,000 / 1,000 messages` | Every requirement as progress and target, such as 320 / 500 messages, 40 / 60 voice minutes |
+| `{achievement.tiers_unlocked}` | Tiers held | Achievement | text |  |  | `Bronze, Silver and Gold` | Every tier they hold after this unlock, such as Bronze, Silver and Gold |
+| `{achievement.unlocked_at}` | Earned at | Achievement | date |  | link | `Sep 14, 2026, 9:00 AM` | When they earned it |
+| `{rewards.granted_roles}` | Roles given | Achievement | list of mentions |  | link | `Regular` | The roles given for this unlock, as mentions. In message text, these ping each role if role pings are on for this message. They’re off by default. |
+| `{rewards.pending_roles}` | Roles on their way | Achievement | list of mentions |  | link | `Regular` | The roles Proton is still giving for this unlock, as mentions. In message text, these ping each role if role pings are on for this message. They’re off by default. |
+| `{rewards.failed_roles}` | Roles not given | Achievement | list of mentions |  | link | `Regular` | The roles Proton could not give for this unlock, as mentions. In message text, these ping each role if role pings are on for this message. They’re off by default. |
+| `{rewards.granted_xp}` | XP given | Achievement | whole number |  |  | `250` | The XP Leveling confirmed giving for this unlock; 0 when none |
+| `{rewards.pending_xp}` | XP on its way | Achievement | whole number |  |  | `0` | The XP requested from Leveling that it hasn’t confirmed yet; 0 when none |
+| `{rewards.summary}` | Rewards | Achievement | formatted text |  | link, plain text |  | The rewards in one line, such as @Regular and 250 XP given; 50 XP still on its way. A reward that failed is left out; {rewards.failed_roles} names failed roles. Message text only |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
+| `{user.nickname}` | Nickname | Member | text |  |  | `Fraim` | Server nickname; empty when none |
+| `{user.joined_at}` | Joined server | Member | date |  | link | `Nov 2, 2025, 5:45 PM` | When they joined |
+| `{user.is_boosting}` | Is boosting | Member | yes-or-no value |  | link | `No` | Yes while boosting |
+| `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
+| `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
+| `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date |  | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
+| `{channel.mention}` | Channel | Channel | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
+| `{channel.name}` | Channel name | Channel | text |  |  | `general` | The channel's name |
+| `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
+| `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date |  | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date |  | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{destination_channel.id}` | Channel ID | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.mention}` | Channel | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.name}` | Channel name | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.url}` | Channel link | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.category_mention}` | Category | Only filled in on: Unlock announcement, Almost there message. |
+
+##### Almost there message (`achievements.almost_there`)
+
+Seen by anyone. Examples come from “Sample: Fraimer close to Chatterbox (Diamond) in Proton HQ”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `almostThere.message`.
+
+| Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `{achievement.name}` | Achievement | Achievement | text |  |  | `Chatterbox` | The achievement’s name |
+| `{achievement.description}` | Description | Achievement | formatted text |  | link | `Keep the conversation going in Proton HQ.` | The achievement’s description, with its formatting; empty when it has none |
+| `{achievement.tier}` | Tier | Achievement | text |  |  | `Diamond` | The tier this message is about, such as Gold (the one just earned, or the one they’re close to). Earned for an achievement without tiers |
+| `{achievement.tier_label}` | Tier in brackets | Achievement | text |  |  | `(Diamond)` | The tier in brackets, such as (Gold); empty for an achievement without tiers |
+| `{achievement.tier_number}` | Tier number | Achievement | whole number |  |  | `4` | Which tier this is, from 1 for Bronze to 4 for Diamond; 1 for an achievement without tiers |
+| `{achievement.tier_count}` | Number of tiers | Achievement | whole number |  |  | `4` | How many tiers the achievement has; 1 for an achievement without tiers |
+| `{achievement.badge}` | Tier medal | Achievement | text |  |  | `💎` | A medal for the tier: 🥉 Bronze, 🥈 Silver, 🥇 Gold, 💎 Diamond, or 🏅 without tiers |
+| `{achievement.deadline}` | Deadline | Achievement | date |  | link | `Oct 14, 2026, 9:00 AM` | When the achievement stops counting; empty when it has no deadline |
+| `{achievement.earned_count}` | Achievements held | Achievement | whole number |  |  | `5` | How many of this server’s achievements they hold, this one included |
+| `{requirement.summary}` | Requirements | Achievement | text |  |  | `Send 5,000 messages` | What the tier asks for, such as Send 1,000 messages |
+| `{progress.current}` | Progress | Achievement | whole number |  |  | `4000` | Their count for the requirement furthest from done |
+| `{progress.target}` | Target | Achievement | whole number |  |  | `5000` | The tier’s target for that requirement |
+| `{progress.remaining}` | Still to go | Achievement | whole number |  |  | `1000` | How much of that requirement is left; 0 once it is done |
+| `{progress.percent}` | Progress percent | Achievement | percentage |  | link | `80%` | How far they are towards the tier, going by the requirement furthest from done |
+| `{progress.unit}` | Unit | Achievement | text |  |  | `messages` | What that requirement counts, such as messages |
+| `{progress.summary}` | Progress summary | Achievement | text |  |  | `4,000 / 5,000 messages` | Every requirement as progress and target, such as 320 / 500 messages, 40 / 60 voice minutes |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
+| `{user.nickname}` | Nickname | Member | text |  |  | `Fraim` | Server nickname; empty when none |
+| `{user.joined_at}` | Joined server | Member | date |  | link | `Nov 2, 2025, 5:45 PM` | When they joined |
+| `{user.is_boosting}` | Is boosting | Member | yes-or-no value |  | link | `No` | Yes while boosting |
+| `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
+| `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
+| `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date |  | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
+| `{channel.mention}` | Channel | Channel | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
+| `{channel.name}` | Channel name | Channel | text |  |  | `general` | The channel's name |
+| `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
+| `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel ID |
+| `{destination_channel.mention}` | Channel | Where it posts | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
+| `{destination_channel.name}` | Channel name | Where it posts | text |  |  | `general` | The channel's name |
+| `{destination_channel.url}` | Channel link | Where it posts | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
+| `{destination_channel.category_mention}` | Category | Where it posts | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date |  | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date |  | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{achievement.tiers_unlocked}` | Tiers held | Only filled in on: Unlock announcement, Unlock DM. |
+| `{achievement.unlocked_at}` | Earned at | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.granted_roles}` | Roles given | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.pending_roles}` | Roles on their way | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.failed_roles}` | Roles not given | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.granted_xp}` | XP given | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.pending_xp}` | XP on its way | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.summary}` | Rewards | Only filled in on: Unlock announcement, Unlock DM. |
+
+##### Almost there DM (`achievements.almost_there_dm`)
+
+Seen by anyone. Examples come from “Sample: Fraimer close to Chatterbox (Diamond) in Proton HQ”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `almostThere.message`.
+
+| Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `{achievement.name}` | Achievement | Achievement | text |  |  | `Chatterbox` | The achievement’s name |
+| `{achievement.description}` | Description | Achievement | formatted text |  | link | `Keep the conversation going in Proton HQ.` | The achievement’s description, with its formatting; empty when it has none |
+| `{achievement.tier}` | Tier | Achievement | text |  |  | `Diamond` | The tier this message is about, such as Gold (the one just earned, or the one they’re close to). Earned for an achievement without tiers |
+| `{achievement.tier_label}` | Tier in brackets | Achievement | text |  |  | `(Diamond)` | The tier in brackets, such as (Gold); empty for an achievement without tiers |
+| `{achievement.tier_number}` | Tier number | Achievement | whole number |  |  | `4` | Which tier this is, from 1 for Bronze to 4 for Diamond; 1 for an achievement without tiers |
+| `{achievement.tier_count}` | Number of tiers | Achievement | whole number |  |  | `4` | How many tiers the achievement has; 1 for an achievement without tiers |
+| `{achievement.badge}` | Tier medal | Achievement | text |  |  | `💎` | A medal for the tier: 🥉 Bronze, 🥈 Silver, 🥇 Gold, 💎 Diamond, or 🏅 without tiers |
+| `{achievement.deadline}` | Deadline | Achievement | date |  | link | `Oct 14, 2026, 9:00 AM` | When the achievement stops counting; empty when it has no deadline |
+| `{achievement.earned_count}` | Achievements held | Achievement | whole number |  |  | `5` | How many of this server’s achievements they hold, this one included |
+| `{requirement.summary}` | Requirements | Achievement | text |  |  | `Send 5,000 messages` | What the tier asks for, such as Send 1,000 messages |
+| `{progress.current}` | Progress | Achievement | whole number |  |  | `4000` | Their count for the requirement furthest from done |
+| `{progress.target}` | Target | Achievement | whole number |  |  | `5000` | The tier’s target for that requirement |
+| `{progress.remaining}` | Still to go | Achievement | whole number |  |  | `1000` | How much of that requirement is left; 0 once it is done |
+| `{progress.percent}` | Progress percent | Achievement | percentage |  | link | `80%` | How far they are towards the tier, going by the requirement furthest from done |
+| `{progress.unit}` | Unit | Achievement | text |  |  | `messages` | What that requirement counts, such as messages |
+| `{progress.summary}` | Progress summary | Achievement | text |  |  | `4,000 / 5,000 messages` | Every requirement as progress and target, such as 320 / 500 messages, 40 / 60 voice minutes |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
+| `{user.nickname}` | Nickname | Member | text |  |  | `Fraim` | Server nickname; empty when none |
+| `{user.joined_at}` | Joined server | Member | date |  | link | `Nov 2, 2025, 5:45 PM` | When they joined |
+| `{user.is_boosting}` | Is boosting | Member | yes-or-no value |  | link | `No` | Yes while boosting |
+| `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
+| `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
+| `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date |  | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
+| `{channel.mention}` | Channel | Channel | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
+| `{channel.name}` | Channel name | Channel | text |  |  | `general` | The channel's name |
+| `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
+| `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date |  | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date |  | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{achievement.tiers_unlocked}` | Tiers held | Only filled in on: Unlock announcement, Unlock DM. |
+| `{achievement.unlocked_at}` | Earned at | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.granted_roles}` | Roles given | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.pending_roles}` | Roles on their way | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.failed_roles}` | Roles not given | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.granted_xp}` | XP given | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.pending_xp}` | XP on its way | Only filled in on: Unlock announcement, Unlock DM. |
+| `{rewards.summary}` | Rewards | Only filled in on: Unlock announcement, Unlock DM. |
+| `{destination_channel.id}` | Channel ID | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.mention}` | Channel | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.name}` | Channel name | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.url}` | Channel link | Only filled in on: Unlock announcement, Almost there message. |
+| `{destination_channel.category_mention}` | Category | Only filled in on: Unlock announcement, Almost there message. |
+
 #### Module `appeals`
 
 ##### Decision message (`appeals.decision`)
@@ -946,7 +1440,7 @@ Fields:
 | `{appeal.status}` | Outcome | Appeal | text | `approved` | The decision as a word: approved or denied |
 | `{appeal.form_name}` | Form name | Appeal | text | `Ban appeal` | The name of the appeal form it was filed on |
 | `{appeal.filed_at}` | Filed | Appeal | date | `Sep 12, 2026, 9:00 AM` | When the member sent the appeal |
-| `{appeal.decided_at}` | Decided | Appeal | date | `Sep 14, 2026, 9:00 AM` | When a moderator accepted or turned down the appeal |
+| `{appeal.decided_at}` | Decided | Appeal | date | `Sep 14, 2026, 9:00 AM` | When staff accepted or turned down the appeal |
 | `{appeal.rejoin_url}` | Rejoin link | Appeal | link | `https://discord.gg/example` | The form's rejoin link. Empty when the form has none. |
 | `{now}` | Now | Time | date | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
 | `{today}` | Today | Time | date | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
@@ -958,6 +1452,264 @@ Registered here only so that using them is refused when you save, instead of bei
 | --- | --- | --- |
 | `{appeal.decided_by}` | Decided by | Private to staff, and this is seen by the member it is about. |
 | `{appeal.answer.<key>}` | Answer | Private to staff, and this is seen by the member it is about. |
+
+#### Module `applications`
+
+##### Application sent message (`applications.receipt`)
+
+Seen by the member it is about. Examples come from “Sample: Fraimer sends application #12 on the Moderator Application form”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `forms.*.messages.receipt`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{application.id}` | Reference | Application | text |  | `#12` | The application’s reference, like #12 |
+| `{application.number}` | Number | Application | whole number |  | `12` | The application’s number in this server, like 12 |
+| `{application.name}` | Form name | Application | text |  | `Moderator Application` | The name of the form, like Moderator Application |
+| `{application.status}` | Status | Application | text |  | `Submitted` | Where the application stands, like In review or Accepted |
+| `{application.submitted_at}` | Sent | Application | date | link | `Sep 12, 2026, 9:00 AM` | When the application was sent |
+| `{application.url}` | Status page link | Application | link |  | `https://prtn.xyz/applications/100000000000000001/01JAPPLICATIONSAMPLE0000000` | A link to the application’s status page on the web |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{application.reviewed_at}` | Decided | Only filled in on: Decision message. |
+| `{application.reason}` | Reason | Only filled in on: Decision message. |
+| `{application.request}` | Question from staff | Only filled in on: Information request message. |
+| `{application.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{application.votes}` | Votes | Private to staff, and this is seen by the member it is about. |
+| `{application.score}` | Score | Private to staff, and this is seen by the member it is about. |
+
+##### Decision message (`applications.decision`)
+
+Seen by the member it is about. Examples come from “Sample: staff accept Fraimer’s application #12”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `forms.*.messages.accepted`.
+Fields: every [message field](#message-fields), under `forms.*.messages.rejected`.
+Fields: every [message field](#message-fields), under `forms.*.messages.waitlisted`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{application.id}` | Reference | Application | text |  | `#12` | The application’s reference, like #12 |
+| `{application.number}` | Number | Application | whole number |  | `12` | The application’s number in this server, like 12 |
+| `{application.name}` | Form name | Application | text |  | `Moderator Application` | The name of the form, like Moderator Application |
+| `{application.status}` | Status | Application | text |  | `Accepted` | Where the application stands, like In review or Accepted |
+| `{application.submitted_at}` | Sent | Application | date | link | `Sep 12, 2026, 9:00 AM` | When the application was sent |
+| `{application.reviewed_at}` | Decided | Application | date | link | `Sep 14, 2026, 9:00 AM` | When staff made the decision |
+| `{application.reason}` | Reason | Application | text |  | `Thanks for the thoughtful answers. Someone from the team will reach out.` | The reason staff wrote for the applicant. Empty when they wrote none. |
+| `{application.url}` | Status page link | Application | link |  | `https://prtn.xyz/applications/100000000000000001/01JAPPLICATIONSAMPLE0000000` | A link to the application’s status page on the web |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{moderator.id}` | ID | Moderator | text |  | `100000000000000030` | Discord user ID |
+| `{moderator.mention}` | Mention | Moderator | mention | link | `Kestrel` | Pings them where mentions are allowed |
+| `{moderator.username}` | Username | Moderator | text |  | `kestrel` | Unique account handle |
+| `{moderator.global_name}` | Display name | Moderator | text |  | `Kestrel` | Account display name, or the username when none is set (as Discord shows it) |
+| `{moderator.display_name}` | Name in this server | Moderator | text |  | `Kestrel` | Nickname here, else display name, else username |
+| `{moderator.avatar_url}` | Avatar | Moderator | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{moderator.is_bot}` | Is a bot | Moderator | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{moderator.created_at}` | Account created | Moderator | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{moderator.account_age}` | Account age | Moderator | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{application.request}` | Question from staff | Only filled in on: Information request message. |
+| `{application.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{application.votes}` | Votes | Private to staff, and this is seen by the member it is about. |
+| `{application.score}` | Score | Private to staff, and this is seen by the member it is about. |
+
+##### Information request message (`applications.info_request`)
+
+Seen by the member it is about. Examples come from “Sample: staff ask Fraimer a question about application #12”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `forms.*.messages.infoRequest`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{application.id}` | Reference | Application | text |  | `#12` | The application’s reference, like #12 |
+| `{application.number}` | Number | Application | whole number |  | `12` | The application’s number in this server, like 12 |
+| `{application.name}` | Form name | Application | text |  | `Moderator Application` | The name of the form, like Moderator Application |
+| `{application.status}` | Status | Application | text |  | `Needs information` | Where the application stands, like In review or Accepted |
+| `{application.submitted_at}` | Sent | Application | date | link | `Sep 12, 2026, 9:00 AM` | When the application was sent |
+| `{application.request}` | Question from staff | Application | text |  | `Could you share a link to a community you’ve moderated before?` | What staff asked the applicant |
+| `{application.url}` | Status page link | Application | link |  | `https://prtn.xyz/applications/100000000000000001/01JAPPLICATIONSAMPLE0000000` | A link to the application’s status page on the web |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{application.reviewed_at}` | Decided | Only filled in on: Decision message. |
+| `{application.reason}` | Reason | Only filled in on: Decision message. |
+| `{application.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{application.votes}` | Votes | Private to staff, and this is seen by the member it is about. |
+| `{application.score}` | Score | Private to staff, and this is seen by the member it is about. |
+
+##### Application withdrawn message (`applications.withdrawn`)
+
+Seen by the member it is about. Examples come from “Sample: Fraimer withdraws application #12”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `forms.*.messages.withdrawn`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{application.id}` | Reference | Application | text |  | `#12` | The application’s reference, like #12 |
+| `{application.number}` | Number | Application | whole number |  | `12` | The application’s number in this server, like 12 |
+| `{application.name}` | Form name | Application | text |  | `Moderator Application` | The name of the form, like Moderator Application |
+| `{application.status}` | Status | Application | text |  | `Withdrawn` | Where the application stands, like In review or Accepted |
+| `{application.submitted_at}` | Sent | Application | date | link | `Sep 12, 2026, 9:00 AM` | When the application was sent |
+| `{application.url}` | Status page link | Application | link |  | `https://prtn.xyz/applications/100000000000000001/01JAPPLICATIONSAMPLE0000000` | A link to the application’s status page on the web |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{application.reviewed_at}` | Decided | Only filled in on: Decision message. |
+| `{application.reason}` | Reason | Only filled in on: Decision message. |
+| `{application.request}` | Question from staff | Only filled in on: Information request message. |
+| `{application.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{application.votes}` | Votes | Private to staff, and this is seen by the member it is about. |
+| `{application.score}` | Score | Private to staff, and this is seen by the member it is about. |
+
+##### Form closed message (`applications.closed`)
+
+Seen by the member it is about. Examples come from “Sample: the Moderator Application form is closed”, or from the placeholder’s own example where that sample has no value.
+
+Fields:
+
+| Setting | Label | Kind | Limit |
+| --- | --- | --- | --- |
+| `forms.*.messages.closed` | Closed message | Discord message text | 1000 |
+
+| Placeholder | Label | Group | Type | Example | Description |
+| --- | --- | --- | --- | --- | --- |
+| `{application.name}` | Form name | Application | text | `Moderator Application` | The name of the form, like Moderator Application |
+| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number | `2` | The server's boost level, from 0 to 3 |
+| `{now}` | Now | Time | date | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{application.id}` | Reference | Only filled in on: Application sent message, Decision message, Information request message, Application withdrawn message. |
+| `{application.number}` | Number | Only filled in on: Application sent message, Decision message, Information request message, Application withdrawn message. |
+| `{application.status}` | Status | Only filled in on: Application sent message, Decision message, Information request message, Application withdrawn message. |
+| `{application.submitted_at}` | Sent | Only filled in on: Application sent message, Decision message, Information request message, Application withdrawn message. |
+| `{application.reviewed_at}` | Decided | Only filled in on: Decision message. |
+| `{application.reason}` | Reason | Only filled in on: Decision message. |
+| `{application.request}` | Question from staff | Only filled in on: Information request message. |
+| `{application.url}` | Status page link | Only filled in on: Application sent message, Decision message, Information request message, Application withdrawn message. |
+| `{application.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{application.votes}` | Votes | Private to staff, and this is seen by the member it is about. |
+| `{application.score}` | Score | Private to staff, and this is seen by the member it is about. |
 
 #### Module `counters`
 
@@ -1012,11 +1764,11 @@ Fields:
 | `{giveaway.message_url}` | Giveaway link | Giveaway | link | `https://discord.com/channels/100000000000000001/100000000000000040/100000000000000050` | A link to the giveaway message. Empty when the message is gone. |
 | `{giveaway.host}` | Host | Giveaway | mention | `Host` | The member who hosted the giveaway |
 | `{giveaway.ended_at}` | Ended | Giveaway | date | `Sep 14, 2026, 9:00 AM` | When the giveaway ended |
-| `{giveaway.claim_deadline}` | Claim by | Giveaway | date | `Sep 15, 2026, 9:00 AM` | When the prize has to be claimed by. Empty when winners do not need to claim. |
-| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user id |
+| `{giveaway.claim_deadline}` | Claim by | Giveaway | date | `Sep 15, 2026, 9:00 AM` | When the prize must be claimed by. Empty when winners don’t need to claim. |
+| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `Fraimer` | Pings them where mentions are allowed |
 | `{server.name}` | Server name | Server | text | `Proton HQ` | The server's name |
-| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1036,10 +1788,10 @@ Fields: every layout field (the `v2` rows of the [message fields](#message-field
 
 | Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `{honeypot.consequence}` | What happens | Honeypot | formatted text | `{consequence}` | link | `you are removed from the server and let straight back in` | What happens to anyone who posts in this channel, in the words the notice uses |
-| `{honeypot.purge}` | Messages deleted | Honeypot | formatted text | `{purge}` | link | `Everything you posted in the last 7 days is deleted with you.` | The sentence saying how far back their messages are deleted; empty when nothing is deleted |
+| `{honeypot.consequence}` | What happens | Honeypot | formatted text | `{consequence}` | link | `you’re removed from the server, but can rejoin straight away` | What happens to anyone who posts in this channel, in the warning message’s words |
+| `{honeypot.purge}` | Messages deleted | Honeypot | formatted text | `{purge}` | link | `Your messages from the last 7 days are deleted too.` | The sentence saying how far back their messages are deleted. Empty when nothing is deleted. |
 | `{honeypot.caught}` | Caught | Honeypot | whole number |  |  | `3` | How many people this channel has caught. Updates when someone is caught. |
-| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text |  |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1051,12 +1803,12 @@ Fields: every layout field (the `v2` rows of the [message fields](#message-field
 | `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
-| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel id |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
 | `{channel.mention}` | Channel | Channel | mention |  | link | `do-not-post` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{channel.name}` | Channel name | Channel | text |  |  | `do-not-post` | The channel's name |
 | `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1080,19 +1832,19 @@ Fields: every layout field (the `v2` rows of the [message fields](#message-field
 
 | Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `{honeypot.action}` | What was done | Honeypot | formatted text | `{action}` | link | `removed from the server, and can rejoin straight away` | What was done to the member, in the words the direct message uses |
+| `{honeypot.action}` | What was done | Honeypot | formatted text | `{action}` | link | `removed from the server, and can rejoin straight away` | What was done to the member, in the DM’s words |
 | `{honeypot.appeal_url}` | Appeal link | Honeypot | link |  |  | `https://prtn.xyz/appeal/sample` | Where the member appeals their ban. Empty unless they were banned and an appeal form is picked. |
 | `{honeypot.invite_url}` | Rejoin link | Honeypot | link |  |  | `https://discord.gg/example` | The invite behind the Rejoin button. Empty unless the server offers a way back in. |
-| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention |  | link | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
-| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `{server}` |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1104,7 +1856,7 @@ Fields: every layout field (the `v2` rows of the [message fields](#message-field
 | `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1128,26 +1880,26 @@ Fields: every [message field](#message-fields), under `levelUpMessage`.
 | `{level.previous}` | Previous level | Level | whole number |  |  | `4` | The level they had before this level-up |
 | `{level.gained}` | Levels gained | Level | whole number |  |  | `1` | How many levels this level-up jumped |
 | `{level.next}` | Next level | Level | whole number |  |  | `6` | The level after this one |
-| `{level.is_max}` | Is max level | Level | yes-or-no value |  | link | `No` | Yes when they have reached the highest level |
+| `{level.is_max}` | Is max level | Level | yes-or-no value |  | link | `No` | Yes when they’ve reached the highest level |
 | `{xp.total}` | Total XP | Level | whole number | `{xp}` |  | `1234` | Their XP in this server |
 | `{xp.into_level}` | XP into level | Level | whole number |  |  | `234` | XP earned since reaching this level |
 | `{xp.level_span}` | XP for this level | Level | whole number |  |  | `350` | XP between this level and the next |
 | `{xp.remaining}` | XP to next level | Level | whole number |  |  | `116` | XP still needed for the next level |
 | `{xp.progress_percent}` | Progress | Level | percentage |  | link | `66.86%` | How far they are towards the next level; 0 at the highest level |
 | `{xp.gained}` | XP gained | Level | whole number |  |  | `23` | The XP that brought them to this level; empty after /xp set |
-| `{level.source}` | How they levelled | Level | text |  |  | `message` | 'message', 'voice' or 'admin' |
+| `{level.source}` | How they levelled | Level | text |  |  | `message` | 'message', 'voice', 'admin' or 'reward' |
 | `{level.rank}` | Rank | Level | whole number |  |  | `12` | Their place on this server's leaderboard |
 | `{level.messages}` | Messages | Level | whole number |  |  | `812` | How many of their messages have earned XP |
-| `{level.voice_seconds}` | Voice time | Level | duration |  | link | `5h` | How long they have earned XP in voice |
+| `{level.voice_seconds}` | Voice time | Level | duration |  | link | `5h` | How long they’ve earned XP in voice |
 | `{level.ranked_member_count}` | Ranked members | Level | whole number |  |  | `480` | How many members of this server have any XP |
-| `{level.reward_roles}` | Reward roles | Level | list of mentions |  | link | `Level 5` | The reward roles just given, as mentions. In message text these ping each role whenever this message's mention settings allow role pings, which is the default. |
-| `{level.removed_roles}` | Removed roles | Level | list of mentions |  | link | `Level 1` | The reward roles just removed, as mentions. In message text these ping each role whenever this message's mention settings allow role pings, which is the default. |
-| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user id |
+| `{level.reward_roles}` | Reward roles | Level | list of mentions |  | link | `Level 5` | The reward roles just given, as mentions. In message text, these ping each role unless Roles is turned off under Mentions. |
+| `{level.removed_roles}` | Removed roles | Level | list of mentions |  | link | `Level 1` | The reward roles just removed, as mentions. In message text, these ping each role unless Roles is turned off under Mentions. |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
@@ -1157,7 +1909,7 @@ Fields: every [message field](#message-fields), under `levelUpMessage`.
 | `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
 | `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
 | `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
-| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text |  |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number |  |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1169,17 +1921,17 @@ Fields: every [message field](#message-fields), under `levelUpMessage`.
 | `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
-| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel id |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
 | `{channel.mention}` | Channel | Channel | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{channel.name}` | Channel name | Channel | text |  |  | `general` | The channel's name |
 | `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention |  | link | `general` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text |  |  | `general` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{destination_channel.category_mention}` | Category | Where it posts | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1199,7 +1951,7 @@ Fields: every [message field](#message-fields), under `templates.*`.
 
 | Placeholder | Label | Group | Type | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- |
-| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1211,7 +1963,7 @@ Fields: every [message field](#message-fields), under `templates.*`.
 | `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1220,17 +1972,17 @@ Fields: every [message field](#message-fields), under `templates.*`.
 | `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
 | `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
 | `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
-| `{destination_channel.id}` | Channel ID | Where it posts | text |  | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention | link | `announcements` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text |  | `announcements` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{destination_channel.category_mention}` | Category | Where it posts | mention | link | `Community` | The category the channel sits in; empty when it has none |
-| `{actor.id}` | ID | Who did it | text |  | `100000000000000010` | Discord user id |
+| `{actor.id}` | ID | Who did it | text |  | `100000000000000010` | Discord user ID |
 | `{actor.mention}` | Mention | Who did it | mention | link | `Fraimer` | Pings them where mentions are allowed |
 | `{actor.username}` | Username | Who did it | text |  | `fraimer` | Unique account handle |
 | `{actor.global_name}` | Display name | Who did it | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{actor.display_name}` | Name in this server | Who did it | text |  | `Fraimer` | Nickname here, else display name, else username |
-| `{actor.avatar_url}` | Avatar | Who did it | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{actor.avatar_url}` | Avatar | Who did it | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{actor.is_bot}` | Is a bot | Who did it | yes-or-no value | link | `No` | Yes for bot accounts |
 | `{actor.created_at}` | Account created | Who did it | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{actor.account_age}` | Account age | Who did it | duration | link | `3998d 10h` | How long ago the account was made |
@@ -1244,7 +1996,7 @@ Fields: every [message field](#message-fields), under `templates.*`.
 
 | Placeholder | Label | Group | Type | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- |
-| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1256,7 +2008,7 @@ Fields: every [message field](#message-fields), under `templates.*`.
 | `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1265,7 +2017,7 @@ Fields: every [message field](#message-fields), under `templates.*`.
 | `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
 | `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
 | `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
-| `{destination_channel.id}` | Channel ID | Where it posts | text |  | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention | link | `announcements` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text |  | `announcements` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
@@ -1294,7 +2046,7 @@ Fields: the reply text of buttons and dropdown options (see [message fields](#me
 
 | Placeholder | Label | Group | Type | Example | Description |
 | --- | --- | --- | --- | --- | --- |
-| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1306,7 +2058,7 @@ Fields: the reply text of buttons and dropdown options (see [message fields](#me
 | `{server.description}` | Description | Server | text | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1315,27 +2067,27 @@ Fields: the reply text of buttons and dropdown options (see [message fields](#me
 | `{now}` | Now | Time | date | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
 | `{today}` | Today | Time | date | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
 | `{year}` | Year | Time | whole number | `2026` | The current year, in UTC |
-| `{destination_channel.id}` | Channel ID | Where it posts | text | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention | `announcements` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text | `announcements` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{destination_channel.category_mention}` | Category | Where it posts | mention | `Community` | The category the channel sits in; empty when it has none |
-| `{actor.id}` | ID | Who did it | text | `100000000000000010` | Discord user id |
+| `{actor.id}` | ID | Who did it | text | `100000000000000010` | Discord user ID |
 | `{actor.mention}` | Mention | Who did it | mention | `Fraimer` | Pings them where mentions are allowed |
 | `{actor.username}` | Username | Who did it | text | `fraimer` | Unique account handle |
 | `{actor.global_name}` | Display name | Who did it | text | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{actor.display_name}` | Name in this server | Who did it | text | `Fraimer` | Nickname here, else display name, else username |
-| `{actor.avatar_url}` | Avatar | Who did it | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{actor.avatar_url}` | Avatar | Who did it | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{actor.is_bot}` | Is a bot | Who did it | yes-or-no value | `No` | Yes for bot accounts |
 | `{actor.created_at}` | Account created | Who did it | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{actor.account_age}` | Account age | Who did it | duration | `3998d 10h` | How long ago the account was made |
 | `{actor.nickname}` | Nickname | Who did it | text | `Fraim` | Server nickname; empty when none |
-| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration | `3998d 10h` | How long ago the account was made |
@@ -1345,6 +2097,500 @@ Fields: the reply text of buttons and dropdown options (see [message fields](#me
 | `{user.boosting_since}` | Boosting since | Member | date | `Sep 14, 2026, 9:00 AM` | When their boost began |
 | `{user.role_mentions}` | Roles | Member | list of mentions | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
 | `{user.role_count}` | Role count | Member | whole number | `1` | How many roles they have |
+
+#### Module `moderation`
+
+##### Audit-log reason (`moderation.audit_reason`)
+
+Seen by staff. Examples come from “Sample: Kestrel times a member out for an hour”, or from the placeholder’s own example where that sample has no value.
+
+Fields:
+
+| Setting | Label | Kind | Limit |
+| --- | --- | --- | --- |
+| `punish.types.ban.auditReason` | Ban audit-log reason | plain text | 512 |
+| `punish.types.unban.auditReason` | Unban audit-log reason | plain text | 512 |
+| `punish.types.kick.auditReason` | Kick audit-log reason | plain text | 512 |
+| `punish.types.timeout.auditReason` | Timeout audit-log reason | plain text | 512 |
+| `punish.types.untimeout.auditReason` | Timeout removal audit-log reason | plain text | 512 |
+
+| Placeholder | Label | Group | Type | Example | Description |
+| --- | --- | --- | --- | --- | --- |
+| `{punishment.reason}` | Reason | Punishment | text | `Posting invite links` | The reason the moderator gave. Empty when there was none. |
+| `{punishment.duration}` | Duration | Punishment | duration | `1h` | How long it lasts. Empty for a permanent ban, a kick or a warning. |
+| `{moderator.id}` | ID | Moderator | text | `100000000000000030` | Discord user ID |
+| `{moderator.username}` | Username | Moderator | text | `kestrel` | Unique account handle |
+| `{now}` | Now | Time | date | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number | `2026` | The current year, in UTC |
+
+##### Punishment message (`moderation.punished`)
+
+Seen by the member it is about. Examples come from “Sample: Fraimer timed out in Proton HQ for an hour”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `punish.notifications.messages.warn`.
+Fields: every [message field](#message-fields), under `punish.notifications.messages.timeout`.
+Fields: every [message field](#message-fields), under `punish.notifications.messages.kick`.
+Fields: every [message field](#message-fields), under `punish.notifications.messages.ban`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{punishment.type}` | Type | Punishment | text |  | `timeout` | The punishment as one word: ban, kick, timeout or warn |
+| `{punishment.action}` | What was done | Punishment | text |  | `timed out` | What happened to the member, like banned or timed out |
+| `{punishment.reason}` | Reason | Punishment | text |  | `Posting invite links` | The reason the moderator gave. Empty when there was none. |
+| `{punishment.duration}` | Duration | Punishment | duration | link | `1h` | How long it lasts. Empty for a permanent ban, a kick or a warning. |
+| `{punishment.expires_at}` | Ends | Punishment | date | link | `Sep 14, 2026, 10:00 AM` | When it ends on its own. Empty when it doesn't. |
+| `{case.id}` | Case ID | Case | text |  | `K7f3M2q` | The case Proton recorded for it, like K7f3M2q |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{moderator.id}` | ID | Moderator | text |  | `100000000000000030` | Discord user ID |
+| `{moderator.mention}` | Mention | Moderator | mention | link | `Kestrel` | Pings them where mentions are allowed |
+| `{moderator.username}` | Username | Moderator | text |  | `kestrel` | Unique account handle |
+| `{moderator.global_name}` | Display name | Moderator | text |  | `Kestrel` | Account display name, or the username when none is set (as Discord shows it) |
+| `{moderator.display_name}` | Name in this server | Moderator | text |  | `Kestrel` | Nickname here, else display name, else username |
+| `{moderator.avatar_url}` | Avatar | Moderator | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{moderator.is_bot}` | Is a bot | Moderator | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{moderator.created_at}` | Account created | Moderator | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{moderator.account_age}` | Account age | Moderator | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{punishment.audit_reason}` | Audit-log reason | Private to staff, and this is seen by the member it is about. |
+
+##### Punishment lifted message (`moderation.unpunished`)
+
+Seen by the member it is about. Examples come from “Sample: Fraimer's timeout in Proton HQ ended early”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `punish.notifications.messages.unwarn`.
+Fields: every [message field](#message-fields), under `punish.notifications.messages.untimeout`.
+Fields: every [message field](#message-fields), under `punish.notifications.messages.unban`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{punishment.type}` | Type | Punishment | text |  | `timeout` | The punishment as one word: ban, kick, timeout or warn |
+| `{punishment.action}` | What was done | Punishment | text |  | `released from timeout` | What happened to the member, like banned or timed out |
+| `{punishment.reason}` | Reason | Punishment | text |  | `Appeal accepted` | The reason the moderator gave. Empty when there was none. |
+| `{punishment.duration}` | Duration | Punishment | duration | link | `1h` | How long it lasts. Empty for a permanent ban, a kick or a warning. |
+| `{punishment.expires_at}` | Ends | Punishment | date | link | `Sep 14, 2026, 10:00 AM` | When it ends on its own. Empty when it doesn't. |
+| `{punishment.expired}` | Ended on its own | Punishment | yes-or-no value | link | `No` | Yes when the punishment ran out, no when a moderator lifted it |
+| `{case.id}` | Case ID | Case | text |  | `P2m9QxL` | The case Proton recorded for it, like K7f3M2q |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{moderator.id}` | ID | Moderator | text |  | `100000000000000030` | Discord user ID |
+| `{moderator.mention}` | Mention | Moderator | mention | link | `Kestrel` | Pings them where mentions are allowed |
+| `{moderator.username}` | Username | Moderator | text |  | `kestrel` | Unique account handle |
+| `{moderator.global_name}` | Display name | Moderator | text |  | `Kestrel` | Account display name, or the username when none is set (as Discord shows it) |
+| `{moderator.display_name}` | Name in this server | Moderator | text |  | `Kestrel` | Nickname here, else display name, else username |
+| `{moderator.avatar_url}` | Avatar | Moderator | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{moderator.is_bot}` | Is a bot | Moderator | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{moderator.created_at}` | Account created | Moderator | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{moderator.account_age}` | Account age | Moderator | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{punishment.audit_reason}` | Audit-log reason | Private to staff, and this is seen by the member it is about. |
+
+##### Report received message (`moderation.report_submitted`)
+
+Seen by the member it is about. Examples come from “Sample: Nova reports a message by Fraimer”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `reports.notifications.submitted.message`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{report.id}` | Report ID | Report | text |  | `Rk3P9aQ` | The report’s ID, like Rk3P9aQ |
+| `{report.number}` | Report number | Report | whole number |  | `42` | The report’s number in this server’s queue |
+| `{report.status}` | Status | Report | text |  | `open` | Where the report stands: open, in review, accepted or dismissed |
+| `{report.method}` | Filed with | Report | text |  | `Report message` | How the member filed it, like /report or Report message |
+| `{report.reason}` | Reason | Report | text |  | `Spam or flooding` | The reason picked from the server’s list. Empty when none was picked. |
+| `{report.custom_reason}` | Own reason | Report | text |  | `Keeps posting the same link` | The reason the member typed themselves. Empty when they typed none. |
+| `{report.comment}` | Details | Report | text |  | `Started in #general about an hour ago.` | The details the member added. Empty when they added none. |
+| `{report.created_at}` | Filed | Report | date | link | `Sep 14, 2026, 8:00 AM` | When the report was filed |
+| `{report.message_url}` | Reported message link | Report | link |  | `https://discord.com/channels/100000000000000001/100000000000000040/100000000000000041` | A link to the reported message. Empty for a report about a member. |
+| `{user.id}` | ID | Member | text |  | `100000000000000011` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Nova` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `nova` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Nova` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Nova` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{target.id}` | ID | Target | text |  | `100000000000000010` | Discord user ID |
+| `{target.mention}` | Mention | Target | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{target.username}` | Username | Target | text |  | `fraimer` | Unique account handle |
+| `{target.global_name}` | Display name | Target | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{target.display_name}` | Name in this server | Target | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{target.avatar_url}` | Avatar | Target | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{target.is_bot}` | Is a bot | Target | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{target.created_at}` | Account created | Target | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{target.account_age}` | Account age | Target | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{report.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{report.case_ids}` | Case IDs | Private to staff, and this is seen by the member it is about. |
+| `{report.url}` | Dashboard link | Private to staff, and this is seen by the member it is about. |
+| `{report.reporter_count}` | Different reporters | Private to staff, and this is seen by the member it is about. |
+| `{report.total_reports}` | Total reports | Private to staff, and this is seen by the member it is about. |
+
+##### Report accepted message (`moderation.report_accepted`)
+
+Seen by the member it is about. Examples come from “Sample: staff ban Fraimer after Nova’s report”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `reports.notifications.accepted.message`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{report.id}` | Report ID | Report | text |  | `Rk3P9aQ` | The report’s ID, like Rk3P9aQ |
+| `{report.number}` | Report number | Report | whole number |  | `42` | The report’s number in this server’s queue |
+| `{report.status}` | Status | Report | text |  | `accepted` | Where the report stands: open, in review, accepted or dismissed |
+| `{report.method}` | Filed with | Report | text |  | `Report message` | How the member filed it, like /report or Report message |
+| `{report.reason}` | Reason | Report | text |  | `Spam or flooding` | The reason picked from the server’s list. Empty when none was picked. |
+| `{report.custom_reason}` | Own reason | Report | text |  | `Keeps posting the same link` | The reason the member typed themselves. Empty when they typed none. |
+| `{report.comment}` | Details | Report | text |  | `Started in #general about an hour ago.` | The details the member added. Empty when they added none. |
+| `{report.created_at}` | Filed | Report | date | link | `Sep 14, 2026, 8:00 AM` | When the report was filed |
+| `{report.message_url}` | Reported message link | Report | link |  | `https://discord.com/channels/100000000000000001/100000000000000040/100000000000000041` | A link to the reported message. Empty for a report about a member. |
+| `{report.action}` | Action taken | Report | text |  | `Ban` | What staff did, like Ban or No punishment |
+| `{report.explanation}` | Note from staff | Report | text |  | `Thanks for flagging it. They won’t be back.` | The note staff wrote for the member who reported. Empty when they wrote none. If you leave it out of the message, Proton adds the note at the end. |
+| `{user.id}` | ID | Member | text |  | `100000000000000011` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Nova` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `nova` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Nova` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Nova` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{target.id}` | ID | Target | text |  | `100000000000000010` | Discord user ID |
+| `{target.mention}` | Mention | Target | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{target.username}` | Username | Target | text |  | `fraimer` | Unique account handle |
+| `{target.global_name}` | Display name | Target | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{target.display_name}` | Name in this server | Target | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{target.avatar_url}` | Avatar | Target | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{target.is_bot}` | Is a bot | Target | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{target.created_at}` | Account created | Target | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{target.account_age}` | Account age | Target | duration | link | `3998d 10h` | How long ago the account was made |
+| `{moderator.id}` | ID | Moderator | text |  | `100000000000000030` | Discord user ID |
+| `{moderator.mention}` | Mention | Moderator | mention | link | `Kestrel` | Pings them where mentions are allowed |
+| `{moderator.username}` | Username | Moderator | text |  | `kestrel` | Unique account handle |
+| `{moderator.global_name}` | Display name | Moderator | text |  | `Kestrel` | Account display name, or the username when none is set (as Discord shows it) |
+| `{moderator.display_name}` | Name in this server | Moderator | text |  | `Kestrel` | Nickname here, else display name, else username |
+| `{moderator.avatar_url}` | Avatar | Moderator | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{moderator.is_bot}` | Is a bot | Moderator | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{moderator.created_at}` | Account created | Moderator | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{moderator.account_age}` | Account age | Moderator | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{report.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{report.case_ids}` | Case IDs | Private to staff, and this is seen by the member it is about. |
+| `{report.url}` | Dashboard link | Private to staff, and this is seen by the member it is about. |
+| `{report.reporter_count}` | Different reporters | Private to staff, and this is seen by the member it is about. |
+| `{report.total_reports}` | Total reports | Private to staff, and this is seen by the member it is about. |
+
+##### Report dismissed message (`moderation.report_dismissed`)
+
+Seen by the member it is about. Examples come from “Sample: staff close Nova’s report without action”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `reports.notifications.dismissed.message`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{report.id}` | Report ID | Report | text |  | `Rk3P9aQ` | The report’s ID, like Rk3P9aQ |
+| `{report.number}` | Report number | Report | whole number |  | `42` | The report’s number in this server’s queue |
+| `{report.status}` | Status | Report | text |  | `dismissed` | Where the report stands: open, in review, accepted or dismissed |
+| `{report.method}` | Filed with | Report | text |  | `Report message` | How the member filed it, like /report or Report message |
+| `{report.reason}` | Reason | Report | text |  | `Spam or flooding` | The reason picked from the server’s list. Empty when none was picked. |
+| `{report.custom_reason}` | Own reason | Report | text |  | `Keeps posting the same link` | The reason the member typed themselves. Empty when they typed none. |
+| `{report.comment}` | Details | Report | text |  | `Started in #general about an hour ago.` | The details the member added. Empty when they added none. |
+| `{report.created_at}` | Filed | Report | date | link | `Sep 14, 2026, 8:00 AM` | When the report was filed |
+| `{report.message_url}` | Reported message link | Report | link |  | `https://discord.com/channels/100000000000000001/100000000000000040/100000000000000041` | A link to the reported message. Empty for a report about a member. |
+| `{report.explanation}` | Note from staff | Report | text |  | `We looked into it and the messages were a joke between friends.` | The note staff wrote for the member who reported. Empty when they wrote none. If you leave it out of the message, Proton adds the note at the end. |
+| `{user.id}` | ID | Member | text |  | `100000000000000011` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Nova` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `nova` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Nova` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Nova` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{target.id}` | ID | Target | text |  | `100000000000000010` | Discord user ID |
+| `{target.mention}` | Mention | Target | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{target.username}` | Username | Target | text |  | `fraimer` | Unique account handle |
+| `{target.global_name}` | Display name | Target | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{target.display_name}` | Name in this server | Target | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{target.avatar_url}` | Avatar | Target | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{target.is_bot}` | Is a bot | Target | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{target.created_at}` | Account created | Target | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{target.account_age}` | Account age | Target | duration | link | `3998d 10h` | How long ago the account was made |
+| `{moderator.id}` | ID | Moderator | text |  | `100000000000000030` | Discord user ID |
+| `{moderator.mention}` | Mention | Moderator | mention | link | `Kestrel` | Pings them where mentions are allowed |
+| `{moderator.username}` | Username | Moderator | text |  | `kestrel` | Unique account handle |
+| `{moderator.global_name}` | Display name | Moderator | text |  | `Kestrel` | Account display name, or the username when none is set (as Discord shows it) |
+| `{moderator.display_name}` | Name in this server | Moderator | text |  | `Kestrel` | Nickname here, else display name, else username |
+| `{moderator.avatar_url}` | Avatar | Moderator | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{moderator.is_bot}` | Is a bot | Moderator | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{moderator.created_at}` | Account created | Moderator | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{moderator.account_age}` | Account age | Moderator | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{report.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{report.case_ids}` | Case IDs | Private to staff, and this is seen by the member it is about. |
+| `{report.url}` | Dashboard link | Private to staff, and this is seen by the member it is about. |
+| `{report.reporter_count}` | Different reporters | Private to staff, and this is seen by the member it is about. |
+| `{report.total_reports}` | Total reports | Private to staff, and this is seen by the member it is about. |
+
+##### Report automation alert (`moderation.report_alert`)
+
+Seen by staff. Examples come from “Sample: three members report Fraimer within a day”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `reports.automation.*.actions.*.message`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{rule.name}` | Rule name | Rule | text |  | `Several members report the same person` | The name of the automation rule that sent this |
+| `{report.id}` | Latest report ID | Report | text |  | `Rk3P9aQ` | The ID of the newest report that set off the rule, like Rk3P9aQ |
+| `{report.number}` | Latest report number | Report | whole number |  | `42` | Its number in this server’s queue |
+| `{report.status}` | Latest report status | Report | text |  | `open` | Where it stands: open, in review, accepted or dismissed |
+| `{report.method}` | Filed with | Report | text |  | `Report message` | How the newest report was filed, like /report or Report message |
+| `{report.reason}` | Latest reason | Report | text |  | `Spam or flooding` | The reason picked from the server’s list. Empty when none was picked. |
+| `{report.created_at}` | Latest report filed | Report | date | link | `Sep 14, 2026, 8:00 AM` | When the newest report was filed |
+| `{report.message_url}` | Reported message link | Report | link |  | `https://discord.com/channels/100000000000000001/100000000000000040/100000000000000041` | A link to the message the newest report is about. Empty for a member report. |
+| `{report.url}` | Dashboard link | Report | link |  | `https://prtn.xyz/dashboard` | A link to the newest report in the Proton dashboard |
+| `{report.total_reports}` | Reports | Report | whole number |  | `4` | How many reports set off the rule |
+| `{report.reporter_count}` | Different reporters | Report | whole number |  | `3` | How many different members filed them |
+| `{target.id}` | ID | Target | text |  | `100000000000000010` | Discord user ID |
+| `{target.mention}` | Mention | Target | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{target.username}` | Username | Target | text |  | `fraimer` | Unique account handle |
+| `{target.global_name}` | Display name | Target | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{target.display_name}` | Name in this server | Target | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{target.avatar_url}` | Avatar | Target | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{target.is_bot}` | Is a bot | Target | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{target.created_at}` | Account created | Target | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{target.account_age}` | Account age | Target | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+##### Report automation message to the reported member (`moderation.report_member_notice`)
+
+Seen by the member it is about. Examples come from “Sample: a rule messages Fraimer after several reports”, or from the placeholder’s own example where that sample has no value.
+
+Fields: every [message field](#message-fields), under `reports.automation.*.actions.*.message`.
+
+| Placeholder | Label | Group | Type | Not offered in | Example | Description |
+| --- | --- | --- | --- | --- | --- | --- |
+| `{rule.name}` | Rule name | Rule | text |  | `Several members report the same person` | The name of the automation rule that sent this |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
+| `{user.mention}` | Mention | Member | mention | link | `Fraimer` | Pings them where mentions are allowed |
+| `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
+| `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
+| `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
+| `{user.is_bot}` | Is a bot | Member | yes-or-no value | link | `No` | Yes for bot accounts |
+| `{user.created_at}` | Account created | Member | date | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
+| `{user.account_age}` | Account age | Member | duration | link | `3998d 10h` | How long ago the account was made |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
+| `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
+| `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
+| `{server.owner_mention}` | Owner | Server | mention | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
+| `{server.role_count}` | Role count | Server | whole number |  | `24` | How many roles the server has, not counting @everyone |
+| `{server.channel_count}` | Channel count | Server | whole number |  | `40` | How many channels the server has, not counting categories and threads |
+| `{server.created_at}` | Server created | Server | date | link | `Oct 3, 2015, 10:44 PM` | When the server was made |
+| `{server.icon_url}` | Server icon | Server | image link |  | `https://cdn.discordapp.com/icons/100000000000000001/0a1b2c3d.png?size=256` | The server's icon image; empty when it has none |
+| `{server.banner_url}` | Server banner | Server | image link |  | `https://cdn.discordapp.com/banners/100000000000000001/0a1b2c3d.png?size=1024` | The server's banner image; empty when it has none |
+| `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
+| `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
+| `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
+| `{bot.mention}` | Proton | Proton | mention | link | `Proton` | Mentions Proton |
+| `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
+| `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
+| `{bot.website_url}` | Dashboard | Proton | link |  | `https://prtn.xyz` | The Proton dashboard |
+| `{bot.support_url}` | Support server | Proton | link |  | `https://discord.gg/rWWJ2AUMby` | An invite to the Proton support server |
+| `{now}` | Now | Time | date | link | `Sep 14, 2026, 9:00 AM` | The moment the message is written |
+| `{today}` | Today | Time | date | link | `Sep 14, 2026, 12:00 AM` | The start of today, in UTC |
+| `{year}` | Year | Time | whole number |  | `2026` | The current year, in UTC |
+
+Registered here only so that using them is refused when you save, instead of being posted as written:
+
+| Placeholder | Label | Why it is refused |
+| --- | --- | --- |
+| `{report.id}` | Latest report ID | Private to staff, and this is seen by the member it is about. |
+| `{report.number}` | Latest report number | Private to staff, and this is seen by the member it is about. |
+| `{report.status}` | Latest report status | Private to staff, and this is seen by the member it is about. |
+| `{report.method}` | Filed with | Private to staff, and this is seen by the member it is about. |
+| `{report.reason}` | Latest reason | Private to staff, and this is seen by the member it is about. |
+| `{report.created_at}` | Latest report filed | Private to staff, and this is seen by the member it is about. |
+| `{report.message_url}` | Reported message link | Private to staff, and this is seen by the member it is about. |
+| `{report.url}` | Dashboard link | Private to staff, and this is seen by the member it is about. |
+| `{report.total_reports}` | Reports | Private to staff, and this is seen by the member it is about. |
+| `{report.reporter_count}` | Different reporters | Private to staff, and this is seen by the member it is about. |
+| `{report.custom_reason}` | Own reason | Private to staff, and this is seen by the member it is about. |
+| `{report.comment}` | Details | Private to staff, and this is seen by the member it is about. |
+| `{report.action}` | Action taken | Private to staff, and this is seen by the member it is about. |
+| `{report.explanation}` | Note from staff | Private to staff, and this is seen by the member it is about. |
+| `{report.internal_note}` | Internal note | Private to staff, and this is seen by the member it is about. |
+| `{report.case_ids}` | Case IDs | Private to staff, and this is seen by the member it is about. |
+| `{target.id}` | ID | Private to staff, and this is seen by the member it is about. |
+| `{target.mention}` | Mention | Private to staff, and this is seen by the member it is about. |
+| `{target.username}` | Username | Private to staff, and this is seen by the member it is about. |
+| `{target.global_name}` | Display name | Private to staff, and this is seen by the member it is about. |
+| `{target.display_name}` | Name in this server | Private to staff, and this is seen by the member it is about. |
+| `{target.avatar_url}` | Avatar | Private to staff, and this is seen by the member it is about. |
+| `{target.is_bot}` | Is a bot | Private to staff, and this is seen by the member it is about. |
+| `{target.created_at}` | Account created | Private to staff, and this is seen by the member it is about. |
+| `{target.account_age}` | Account age | Private to staff, and this is seen by the member it is about. |
 
 #### Module `tempvc`
 
@@ -1360,12 +2606,12 @@ Fields:
 
 | Placeholder | Label | Group | Type | Older name | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- |
-| `{user.id}` | ID | Member | text | `{userId}` | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text | `{userId}` | `100000000000000010` | Discord user ID |
 | `{user.username}` | Username | Member | text | `{username}` | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text | `{user}` `{displayName}` | `Fraimer` | Nickname here, else display name, else username |
 | `{tempvc.hub_name}` | Creator channel name | Creator channel | text |  | `Create a room` | The name of the creator channel they joined |
-| `{tempvc.hub_mention}` | Creator channel | Creator channel | mention |  | `Create a room` | The creator channel they joined; a channel name shows its name |
+| `{tempvc.hub_mention}` | Creator channel | Creator channel | mention |  | `Create a room` | The creator channel they joined, shown as its name in a channel name |
 | `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
 
 #### Module `tickets`
@@ -1385,12 +2631,12 @@ Fields:
 | --- | --- | --- | --- | --- | --- | --- |
 | `{ticket.number}` | Ticket number | Ticket | whole number | `{number}` | `42` | The number of this ticket |
 | `{ticket.type_name}` | Ticket type | Ticket | text | `{type}` | `Billing` | The name of the ticket type |
-| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention |  | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `{user}` | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | `3998d 10h` | How long ago the account was made |
@@ -1419,8 +2665,8 @@ Fields:
 | Placeholder | Label | Group | Type | Older name | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- |
 | `{ticket.number}` | Ticket number | Ticket | whole number |  | `42` | The number of this ticket |
-| `{ticket.subject}` | Subject | Ticket | text |  | `Refund for order 1182` | The one-line summary the member gave; empty when they gave none |
-| `{ticket.opener_mention}` | Opened by | Ticket | mention |  | `Fraimer` | Who opened the ticket. After a transfer this is still the opener; {user.mention} is the current owner. |
+| `{ticket.subject}` | Subject | Ticket | text |  | `Refund for order 1182` | The subject the member gave, or their first form answer; empty when there is none |
+| `{ticket.opener_mention}` | Opened by | Ticket | mention |  | `Fraimer` | Who opened the ticket. After a transfer, {user.mention} is the new owner. |
 | `{ticket.opened_at}` | Opened | Ticket | date |  | `Sep 14, 2026, 7:00 AM` | When the ticket was opened |
 | `{ticket.channel_mention}` | Ticket channel | Ticket | mention |  | `ticket-42` | The ticket channel as a clickable mention |
 | `{ticket.claimed_by}` | Claimed by | Ticket | mention |  | `Helper` | The staff member who claimed the ticket; empty when nobody has. Updates when the ticket panel refreshes. |
@@ -1428,17 +2674,17 @@ Fields:
 | `{ticket.type_name}` | Ticket type | Ticket | text |  | `Billing` | The name of the ticket type |
 | `{ticket.priority}` | Priority | Ticket | text |  | `Medium` | Low, Medium, High or Urgent |
 | `{ticket.participant_count}` | Participants | Ticket | whole number |  | `1` | How many members are in the ticket, the opener included. Updates when the ticket panel refreshes. |
-| `{ticket.answer.<question_key>}` | Form answer | Ticket | text |  | `1182` | The member's answer to one question on the ticket form, named by the question's id, as in {ticket.answer.order} |
-| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user id |
+| `{ticket.answer.<question_key>}` | Form answer | Ticket | text |  | `1182` | The member's answer to one form question, named by the question's ID, as in {ticket.answer.order} |
+| `{user.id}` | ID | Member | text |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `{user}` | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | `3998d 10h` | How long ago the account was made |
-| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1450,7 +2696,7 @@ Fields:
 | `{server.description}` | Description | Server | text |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1473,8 +2719,8 @@ Fields:
 | Placeholder | Label | Group | Type | Example | Description |
 | --- | --- | --- | --- | --- | --- |
 | `{ticket.number}` | Ticket number | Ticket | whole number | `42` | The number of this ticket |
-| `{ticket.subject}` | Subject | Ticket | text | `Refund for order 1182` | The one-line summary the member gave; empty when they gave none |
-| `{ticket.opener_mention}` | Opened by | Ticket | mention | `Fraimer` | Who opened the ticket. After a transfer this is still the opener; {user.mention} is the current owner. |
+| `{ticket.subject}` | Subject | Ticket | text | `Refund for order 1182` | The subject the member gave, or their first form answer; empty when there is none |
+| `{ticket.opener_mention}` | Opened by | Ticket | mention | `Fraimer` | Who opened the ticket. After a transfer, {user.mention} is the new owner. |
 | `{ticket.opened_at}` | Opened | Ticket | date | `Sep 14, 2026, 7:00 AM` | When the ticket was opened |
 | `{ticket.channel_mention}` | Ticket channel | Ticket | mention | `ticket-42` | The ticket channel as a clickable mention |
 | `{ticket.claimed_by}` | Claimed by | Ticket | mention | `Helper` | The staff member who claimed the ticket; empty when nobody has. Updates when the ticket panel refreshes. |
@@ -1483,25 +2729,25 @@ Fields:
 | `{ticket.priority}` | Priority | Ticket | text | `Medium` | Low, Medium, High or Urgent |
 | `{ticket.closed_by}` | Closed by | Ticket | mention | `Helper` | Who closed the ticket |
 | `{ticket.close_reason}` | Close reason | Ticket | text | `Refund issued` | Why the ticket was closed; empty when no reason was given |
-| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration | `3998d 10h` | How long ago the account was made |
-| `{actor.id}` | ID | Who did it | text | `100000000000000030` | Discord user id |
+| `{actor.id}` | ID | Who did it | text | `100000000000000030` | Discord user ID |
 | `{actor.mention}` | Mention | Who did it | mention | `Helper` | Pings them where mentions are allowed |
 | `{actor.username}` | Username | Who did it | text | `helper` | Unique account handle |
 | `{actor.global_name}` | Display name | Who did it | text | `Helper` | Account display name, or the username when none is set (as Discord shows it) |
 | `{actor.display_name}` | Name in this server | Who did it | text | `Helper` | Nickname here, else display name, else username |
-| `{actor.avatar_url}` | Avatar | Who did it | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{actor.avatar_url}` | Avatar | Who did it | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{actor.is_bot}` | Is a bot | Who did it | yes-or-no value | `No` | Yes for bot accounts |
 | `{actor.created_at}` | Account created | Who did it | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{actor.account_age}` | Account age | Who did it | duration | `3998d 10h` | How long ago the account was made |
-| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1513,7 +2759,7 @@ Fields:
 | `{server.description}` | Description | Server | text | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1543,18 +2789,18 @@ Fields:
 | --- | --- | --- | --- | --- | --- |
 | `{ticket.type_name}` | Ticket type | Ticket | text | `Billing` | The name of the ticket type |
 | `{ticket.priority}` | Priority | Ticket | text | `Medium` | Low, Medium, High or Urgent |
-| `{ticket.blacklist_reason}` | Block reason | Ticket | text | `Spamming tickets` | Why the member may not open tickets; empty when no reason was given |
-| `{ticket.blacklist_expires_at}` | Block lifts | Ticket | date | `Sep 21, 2026, 9:00 AM` | When the member may open tickets again; empty when the block is permanent |
-| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user id |
+| `{ticket.blacklist_reason}` | Block reason | Ticket | text | `Spamming tickets` | Why the member can't open tickets; empty when no reason was given |
+| `{ticket.blacklist_expires_at}` | Block lifts | Ticket | date | `Sep 21, 2026, 9:00 AM` | When the member can open tickets again; empty when the block is permanent |
+| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration | `3998d 10h` | How long ago the account was made |
-| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1566,7 +2812,7 @@ Fields:
 | `{server.description}` | Description | Server | text | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1596,8 +2842,8 @@ Fields:
 | Placeholder | Label | Group | Type | Example | Description |
 | --- | --- | --- | --- | --- | --- |
 | `{ticket.number}` | Ticket number | Ticket | whole number | `42` | The number of this ticket |
-| `{ticket.subject}` | Subject | Ticket | text | `Refund for order 1182` | The one-line summary the member gave; empty when they gave none |
-| `{ticket.opener_mention}` | Opened by | Ticket | mention | `Fraimer` | Who opened the ticket. After a transfer this is still the opener; {user.mention} is the current owner. |
+| `{ticket.subject}` | Subject | Ticket | text | `Refund for order 1182` | The subject the member gave, or their first form answer; empty when there is none |
+| `{ticket.opener_mention}` | Opened by | Ticket | mention | `Fraimer` | Who opened the ticket. After a transfer, {user.mention} is the new owner. |
 | `{ticket.opened_at}` | Opened | Ticket | date | `Sep 14, 2026, 7:00 AM` | When the ticket was opened |
 | `{ticket.channel_mention}` | Ticket channel | Ticket | mention | `ticket-42` | The ticket channel as a clickable mention |
 | `{ticket.claimed_by}` | Claimed by | Ticket | mention | `Helper` | The staff member who claimed the ticket; empty when nobody has. Updates when the ticket panel refreshes. |
@@ -1605,26 +2851,26 @@ Fields:
 | `{ticket.type_name}` | Ticket type | Ticket | text | `Billing` | The name of the ticket type |
 | `{ticket.priority}` | Priority | Ticket | text | `Medium` | Low, Medium, High or Urgent |
 | `{ticket.participant_count}` | Participants | Ticket | whole number | `1` | How many members are in the ticket, the opener included. Updates when the ticket panel refreshes. |
-| `{ticket.answer.<question_key>}` | Form answer | Ticket | text | `1182` | The member's answer to one question on the ticket form, named by the question's id, as in {ticket.answer.order} |
-| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user id |
+| `{ticket.answer.<question_key>}` | Form answer | Ticket | text | `1182` | The member's answer to one form question, named by the question's ID, as in {ticket.answer.order} |
+| `{user.id}` | ID | Member | text | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration | `3998d 10h` | How long ago the account was made |
-| `{actor.id}` | ID | Who did it | text | `100000000000000030` | Discord user id |
+| `{actor.id}` | ID | Who did it | text | `100000000000000030` | Discord user ID |
 | `{actor.mention}` | Mention | Who did it | mention | `Helper` | Pings them where mentions are allowed |
 | `{actor.username}` | Username | Who did it | text | `helper` | Unique account handle |
 | `{actor.global_name}` | Display name | Who did it | text | `Helper` | Account display name, or the username when none is set (as Discord shows it) |
 | `{actor.display_name}` | Name in this server | Who did it | text | `Helper` | Nickname here, else display name, else username |
-| `{actor.avatar_url}` | Avatar | Who did it | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{actor.avatar_url}` | Avatar | Who did it | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{actor.is_bot}` | Is a bot | Who did it | yes-or-no value | `No` | Yes for bot accounts |
 | `{actor.created_at}` | Account created | Who did it | date | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{actor.account_age}` | Account age | Who did it | duration | `3998d 10h` | How long ago the account was made |
-| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1636,7 +2882,7 @@ Fields:
 | `{server.description}` | Description | Server | text | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number | `2` | The server's boost level, from 0 to 3 |
-| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1656,12 +2902,12 @@ Fields: every [message field](#message-fields), under `welcomeMessage`.
 
 | Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `{username}` |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
@@ -1671,7 +2917,7 @@ Fields: every [message field](#message-fields), under `welcomeMessage`.
 | `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
 | `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
 | `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
-| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `{server}` |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `{memberCount}` |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1683,12 +2929,12 @@ Fields: every [message field](#message-fields), under `welcomeMessage`.
 | `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
-| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention |  | link | `welcome` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text |  |  | `welcome` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{destination_channel.category_mention}` | Category | Where it posts | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1707,16 +2953,16 @@ Fields: every [message field](#message-fields), under `goodbyeMessage`.
 
 | Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text | `{username}` |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text |  |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
-| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `{server}` |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `{memberCount}` |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1728,12 +2974,12 @@ Fields: every [message field](#message-fields), under `goodbyeMessage`.
 | `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
-| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention |  | link | `welcome` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text |  |  | `welcome` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{destination_channel.category_mention}` | Category | Where it posts | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
@@ -1763,12 +3009,12 @@ Fields: every [message field](#message-fields), under `boostMessage`.
 
 | Placeholder | Label | Group | Type | Older name | Not offered in | Example | Description |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user id |
+| `{user.id}` | ID | Member | text |  |  | `100000000000000010` | Discord user ID |
 | `{user.mention}` | Mention | Member | mention | `{user}` | link | `Fraimer` | Pings them where mentions are allowed |
 | `{user.username}` | Username | Member | text |  |  | `fraimer` | Unique account handle |
 | `{user.global_name}` | Display name | Member | text |  |  | `Fraimer` | Account display name, or the username when none is set (as Discord shows it) |
 | `{user.display_name}` | Name in this server | Member | text | `{username}` |  | `Fraimer` | Nickname here, else display name, else username |
-| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Server-independent avatar image |
+| `{user.avatar_url}` | Avatar | Member | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Account avatar image, not a server-specific one |
 | `{user.is_bot}` | Is a bot | Member | yes-or-no value |  | link | `No` | Yes for bot accounts |
 | `{user.created_at}` | Account created | Member | date |  | link | `Oct 3, 2015, 10:44 PM` | When the account was made |
 | `{user.account_age}` | Account age | Member | duration |  | link | `3998d 10h` | How long ago the account was made |
@@ -1778,7 +3024,7 @@ Fields: every [message field](#message-fields), under `boostMessage`.
 | `{user.boosting_since}` | Boosting since | Member | date |  | link | `Sep 14, 2026, 9:00 AM` | When their boost began |
 | `{user.role_mentions}` | Roles | Member | list of mentions |  | link | `Mods, Level 5` | Their roles as mentions. In message text these ping each role whenever the message's mention settings allow role pings, which is the default. |
 | `{user.role_count}` | Role count | Member | whole number |  |  | `1` | How many roles they have |
-| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server id |
+| `{server.id}` | Server ID | Server | text |  |  | `100000000000000001` | Discord server ID |
 | `{server.name}` | Server name | Server | text | `{server}` |  | `Proton HQ` | The server's name |
 | `{server.member_count}` | Member count | Server | whole number | `{memberCount}` |  | `1204` | How many members the server has |
 | `{server.owner_mention}` | Owner | Server | mention |  | link | `Owner` | Mentions the owner. In message text this pings them whenever the message's mention settings allow user pings, which is the default. |
@@ -1790,17 +3036,17 @@ Fields: every [message field](#message-fields), under `boostMessage`.
 | `{server.description}` | Description | Server | text |  |  | `Sample server` | The server's description; empty when it has none |
 | `{server.boost_count}` | Boosts | Server | whole number |  |  | `14` | How many boosts the server has. Refreshes when Discord reports a server change or Proton reconnects. |
 | `{server.boost_tier}` | Boost level | Server | whole number |  |  | `2` | The server's boost level, from 0 to 3 |
-| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel id |
+| `{destination_channel.id}` | Channel ID | Where it posts | text |  |  | `100000000000000040` | Discord channel ID |
 | `{destination_channel.mention}` | Channel | Where it posts | mention |  | link | `welcome` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{destination_channel.name}` | Channel name | Where it posts | text |  |  | `welcome` | The channel's name |
 | `{destination_channel.url}` | Channel link | Where it posts | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{destination_channel.category_mention}` | Category | Where it posts | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel id |
+| `{channel.id}` | Channel ID | Channel | text |  |  | `100000000000000040` | Discord channel ID |
 | `{channel.mention}` | Channel | Channel | mention |  | link | `welcome` | The channel as a clickable mention; its name where mentions cannot be shown |
 | `{channel.name}` | Channel name | Channel | text |  |  | `welcome` | The channel's name |
 | `{channel.url}` | Channel link | Channel | link |  |  | `https://discord.com/channels/100000000000000001/100000000000000040` | A link that opens the channel |
 | `{channel.category_mention}` | Category | Channel | mention |  | link | `Community` | The category the channel sits in; empty when it has none |
-| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user id |
+| `{bot.id}` | Proton's ID | Proton | text |  |  | `100000000000000099` | Proton's Discord user ID |
 | `{bot.mention}` | Proton | Proton | mention |  | link | `Proton` | Mentions Proton |
 | `{bot.name}` | Proton's name | Proton | text |  |  | `Proton` | Proton's name on Discord |
 | `{bot.avatar_url}` | Proton's avatar | Proton | image link |  |  | `https://cdn.discordapp.com/embed/avatars/0.png` | Proton's avatar image |
