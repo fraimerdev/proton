@@ -80,7 +80,7 @@ export function createPhishingModule(
 ): ModuleManifest<typeof phishingConfigSchema> {
   return {
     id: 'phishing',
-    name: 'Phishing links',
+    name: 'Phishing',
     category: 'security',
     configSchema: phishingConfigSchema,
     defaultConfig: phishingDefaultConfig,

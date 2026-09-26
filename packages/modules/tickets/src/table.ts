@@ -62,9 +62,16 @@ export const tickets = pgTable(
 
     messageCount: integer('message_count').notNull().default(0),
     transcriptUrl: text('transcript_url'),
+
+    sourceModule: text('source_module'),
+    sourceRef: text('source_ref'),
   },
   (t) => [
     uniqueIndex('tickets_guild_number_uq').on(t.guildId, t.number),
+
+    uniqueIndex('tickets_source_open_uq')
+      .on(t.guildId, t.sourceModule, t.sourceRef)
+      .where(sql`${t.sourceRef} is not null and ${t.status} = 'open'`),
 
     // Not status = 'open' any more: a closed ticket keeps its channel until it is deleted or
     // archived, so channel exclusivity has to hold for every row that still points at a real one.

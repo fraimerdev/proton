@@ -1,9 +1,48 @@
-import { type GuildState, highestRolePosition } from '@proton/core';
+import { type GuildState, roleGrantRefusal } from '@proton/core';
+import type { GrantRefusalCode } from './sync/view.ts';
 
 export interface GrantPlan {
   grant: string[];
 
   skipped: Array<{ roleId: string; reason: string }>;
+}
+
+export interface GrantRefusal {
+  roleId: string;
+  code: GrantRefusalCode;
+  reason: string;
+}
+
+export interface GrantableRoles {
+  grantable: string[];
+  refused: GrantRefusal[];
+}
+
+const MISSING_ROLE_HINT =
+  'Remove it from Member roles or Bot roles on the Join Roles page in the Proton dashboard.';
+
+function refusal(state: GuildState, roleId: string): GrantRefusal | null {
+  const why = roleGrantRefusal(state, roleId, MISSING_ROLE_HINT);
+  return why === null ? null : { roleId, code: why.code, reason: why.reason };
+}
+
+function byPosition(state: GuildState, roleIds: string[]): string[] {
+  return roleIds.sort(
+    (a, b) => (state.roles.get(a)?.position ?? 0) - (state.roles.get(b)?.position ?? 0),
+  );
+}
+
+export function grantableRoles(state: GuildState, roleIds: readonly string[]): GrantableRoles {
+  const grantable: string[] = [];
+  const refused: GrantRefusal[] = [];
+
+  for (const roleId of new Set(roleIds)) {
+    const why = refusal(state, roleId);
+    if (why) refused.push(why);
+    else grantable.push(roleId);
+  }
+
+  return { grantable: byPosition(state, grantable), refused };
 }
 
 export function planGrant(input: {
@@ -21,14 +60,17 @@ export function planGrant(input: {
   }
 
   const held = new Set(heldRoleIds);
-  const botPosition = highestRolePosition(state.roles, state.botRoleIds);
+  const { refused } = grantableRoles(state, wantedRoleIds);
+  const refusedById = new Map(refused.map((entry) => [entry.roleId, entry]));
 
   const grant: string[] = [];
   const skipped: GrantPlan['skipped'] = [];
 
   for (const roleId of new Set(wantedRoleIds)) {
-    if (roleId === state.everyoneRoleId) {
-      skipped.push({ roleId, reason: 'it is @everyone, which Discord grants automatically.' });
+    const refusedRole = refusedById.get(roleId);
+
+    if (refusedRole?.code === 'everyone') {
+      skipped.push({ roleId, reason: refusedRole.reason });
       continue;
     }
 
@@ -37,40 +79,13 @@ export function planGrant(input: {
       continue;
     }
 
-    const role = state.roles.get(roleId);
-    if (!role) {
-      skipped.push({
-        roleId,
-        reason:
-          'it no longer exists in this server. Remove it from the Join roles list in the Proton ' +
-          'dashboard.',
-      });
-      continue;
-    }
-
-    if (role.managed) {
-      skipped.push({
-        roleId,
-        reason: 'it is managed by Discord or another integration, so nobody can assign it by hand.',
-      });
-      continue;
-    }
-
-    if (role.position >= botPosition) {
-      skipped.push({
-        roleId,
-        reason:
-          `it sits at position ${role.position} and my own highest role is at position ` +
-          `${botPosition}. Discord only lets me assign roles below my own — drag Proton's ` +
-          'role above it in Server Settings → Roles.',
-      });
+    if (refusedRole) {
+      skipped.push({ roleId, reason: refusedRole.reason });
       continue;
     }
 
     grant.push(roleId);
   }
 
-  grant.sort((a, b) => (state.roles.get(a)?.position ?? 0) - (state.roles.get(b)?.position ?? 0));
-
-  return { grant, skipped };
+  return { grant: byPosition(state, grant), skipped };
 }

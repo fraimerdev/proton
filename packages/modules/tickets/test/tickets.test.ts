@@ -142,7 +142,7 @@ describe('opening a ticket from a panel', () => {
     const h = harness({ config: { enabled: false } });
     await h.press(pressEvent(OPEN));
 
-    expect(h.told().join(' ')).toContain('disabled');
+    expect(h.told().join(' ')).toContain('Tickets is off in this server');
   });
 });
 
@@ -222,7 +222,7 @@ describe('the limits that stop a member flooding the queue', () => {
     await h.press(pressEvent(OPEN, { eventId: newId() }));
 
     expect(h.store.rows.size).toBe(1);
-    expect(h.lastTold()).toContain('wait');
+    expect(h.lastTold()).toContain('You can open another ticket in 30 seconds.');
   });
 
   test('the cooldown lapses, so the same member can open another once it has passed', async () => {
@@ -480,7 +480,7 @@ describe('the lifecycle after a ticket is answered', () => {
     await h.run(subcommand('delete'), { ...STAFF, channelId: ticket.channelId });
 
     expect((await h.store.get(GUILD, ticket.id))?.status).toBe('open');
-    expect(h.replyContent()).toContain('cannot do that');
+    expect(h.followUpContent()).toContain('can’t do that');
   });
 
   test('locking stops the member posting without closing the ticket', async () => {
@@ -508,7 +508,7 @@ describe('who may do what', () => {
     });
 
     expect((await h.store.get(GUILD, ticket.id))?.status).toBe('open');
-    expect(h.replyContent()).toContain('cannot do that');
+    expect(h.followUpContent()).toContain('can’t do that');
   });
 
   test('the member who raised the ticket may close their own', async () => {
@@ -528,7 +528,7 @@ describe('who may do what', () => {
 
     await h.run(subcommand('list'), { userId: MEMBER, channelId: PANEL_CHANNEL });
 
-    const shown = h.replyContent() ?? '';
+    const shown = h.followUpContent() ?? '';
     expect(shown).toContain('1 open ticket');
     expect(shown).toContain('of yours');
     expect(shown).not.toContain(`<@${HELPER}>`);
@@ -541,7 +541,7 @@ describe('who may do what', () => {
 
     await h.run(subcommand('list'), { ...STAFF, channelId: PANEL_CHANNEL });
 
-    expect(h.replyContent()).toContain('2 open ticket');
+    expect(h.followUpContent()).toContain('2 open ticket');
   });
 
   test('a passer-by cannot post a ticket panel into the server', async () => {
@@ -549,7 +549,7 @@ describe('who may do what', () => {
     await h.run(subcommand('panel', [stringOption('panel', PANEL.id)]), { userId: MEMBER });
 
     expect(h.sentIn(PANEL_CHANNEL)).toHaveLength(0);
-    expect(h.replyContent()).toContain('permission');
+    expect(h.followUpContent()).toContain('Manage Server');
   });
 });
 
@@ -582,7 +582,7 @@ describe('participants', () => {
       channelId: ticket.channelId,
     });
 
-    expect(h.replyContent()).toContain('owns this ticket');
+    expect(h.followUpContent()).toContain('owns this ticket');
     expect((await h.store.listParticipants(ticket.id)).some((p) => p.userId === MEMBER)).toBe(true);
   });
 
@@ -661,7 +661,7 @@ describe('what Proton says back', () => {
     const status = h.lastStatus();
     expect(status?.color).toBe(STATUS_ERROR_COLOUR);
     expect(status?.description).toStartWith(STATUS_ERROR_EMOJI);
-    expect(status?.description).toContain('cannot do that');
+    expect(status?.description).toContain('can’t do that');
   });
 
   test('a press that opened a ticket answers green on the followup too', async () => {
@@ -690,7 +690,7 @@ describe('what Proton says back', () => {
     await h.run(subcommand('list'), { ...STAFF, channelId: PANEL_CHANNEL });
 
     expect(h.lastStatus()).toEqual(before);
-    expect(h.replyContent()).toContain('1 open ticket');
+    expect(h.followUpContent()).toContain('1 open ticket');
   });
 });
 

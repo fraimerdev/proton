@@ -10,6 +10,10 @@ import {
   SWEEP_KEY,
   schedulesTimers,
 } from './schedule.ts';
+import type { TicketStore } from './store.ts';
+
+const PURGE_BATCH = 500;
+const PURGE_ROUNDS = 40;
 
 export const TICKET_CHANNEL_EVENT_TYPES: EventType[] = ['channel.deleted'];
 
@@ -51,7 +55,7 @@ export async function handleChannelDeleted(
     ctx.guildId,
     ticket.id,
     MODULE_ID,
-    'the channel was deleted outside Proton',
+    'The channel was deleted outside Proton',
   );
 
   if (!removed) return 'ignored';
@@ -132,6 +136,8 @@ export async function patrol(
   const due = await bound.store.due(ctx.guildId, SWEEP_BATCH);
 
   for (const ticket of due) {
+    // A row still pointing at itself has no channel yet, so there is nothing for a timer to close.
+    if (ticket.channelId === ticket.id) continue;
     await armTicketTimers(ctx, typeFor(ctx.config, ticket.typeId), ticket);
   }
 
@@ -140,4 +146,20 @@ export async function patrol(
   await armPatrol(ctx, now);
 
   return { inspected: due.length, purged };
+}
+
+// Global rather than part of the patrol: a server that switches capture or Tickets off stops
+// patrolling, and its captured messages would then outlive their 30 days.
+export async function purgeCapturedMessages(
+  store: Pick<TicketStore, 'purgeExpiredMessages'>,
+  now: Date,
+): Promise<number> {
+  let purged = 0;
+  for (let round = 0; round < PURGE_ROUNDS; round++) {
+    const batch = await store.purgeExpiredMessages(now, PURGE_BATCH);
+    purged += batch;
+    if (batch < PURGE_BATCH) break;
+  }
+
+  return purged;
 }

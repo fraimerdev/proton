@@ -63,7 +63,7 @@ describe('the saved component palette', () => {
 
     expect(clash.success).toBe(false);
     expect(clash.success === false && clash.error.issues[0]?.message).toContain(
-      'could not say which of them you were inserting',
+      'Another saved row is already called',
     );
   });
 

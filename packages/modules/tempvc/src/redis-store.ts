@@ -1,5 +1,5 @@
 import type { Redis } from 'ioredis';
-import type { PresenceStore } from './store.ts';
+import type { PresenceStore, Seen } from './store.ts';
 
 export const TEMPVC_PREFIX = 'tempvc';
 
@@ -34,23 +34,36 @@ export class RedisPresenceStore implements PresenceStore {
     return `${this.#prefix}:occ:${guildId}:${channelId}`;
   }
 
+  #refusalsKey(guildId: string, rowId: string): string {
+    return `${this.#prefix}:delrefused:${guildId}:${rowId}`;
+  }
+
   #seconds(): number {
     return Math.ceil(this.#ttlMs / 1000);
   }
 
   async locate(guildId: string, userId: string): Promise<string | null> {
-    return this.#redis.get(this.#atKey(guildId, userId));
+    return (await this.where(guildId, userId))?.channelId ?? null;
   }
 
-  async place(guildId: string, userId: string, channelId: string | null): Promise<void> {
-    const key = this.#atKey(guildId, userId);
+  async where(guildId: string, userId: string): Promise<Seen | null> {
+    const raw = await this.#redis.get(this.#atKey(guildId, userId));
+    return raw === null ? null : decodeSeen(raw);
+  }
 
-    if (channelId === null) {
-      await this.#redis.del(key);
-      return;
-    }
-
-    await this.#redis.set(key, channelId, 'PX', this.#ttlMs);
+  // A leave keeps a stamped empty entry, so a replayed join older than it is still refused.
+  async place(
+    guildId: string,
+    userId: string,
+    channelId: string | null,
+    at: number,
+  ): Promise<void> {
+    await this.#redis.set(
+      this.#atKey(guildId, userId),
+      `${channelId ?? ''}|${at}`,
+      'PX',
+      this.#ttlMs,
+    );
   }
 
   async enter(guildId: string, channelId: string, userId: string): Promise<number> {
@@ -88,6 +101,31 @@ export class RedisPresenceStore implements PresenceStore {
 
     await pipeline.exec();
   }
+
+  async refusedDelete(guildId: string, rowId: string, windowMs: number): Promise<number> {
+    const key = this.#refusalsKey(guildId, rowId);
+
+    const [, count] = (await this.#redis
+      .multi()
+      .set(key, '0', 'PX', Math.max(1, windowMs), 'NX')
+      .incr(key)
+      .exec()) as Array<[Error | null, unknown]>;
+
+    return Number(count?.[1] ?? 0);
+  }
+
+  async deleteRefusals(guildId: string, rowId: string): Promise<number> {
+    return Number((await this.#redis.get(this.#refusalsKey(guildId, rowId))) ?? 0);
+  }
+}
+
+export function decodeSeen(raw: string): Seen {
+  const bar = raw.lastIndexOf('|');
+  // Written before locations were stamped: a bare channel id, which any new event outranks.
+  if (bar < 0) return { channelId: raw, at: 0 };
+
+  const at = Number(raw.slice(bar + 1));
+  return { channelId: raw.slice(0, bar) || null, at: Number.isFinite(at) ? at : 0 };
 }
 
 /**

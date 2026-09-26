@@ -10,7 +10,18 @@ import {
 import { MODULE_ID } from '../src/config.ts';
 import { handleComponent, handleModal } from '../src/interactions.ts';
 import { MODAL_ACTION, PANEL_ACTION, USER_SELECT_ACTION } from '../src/interface.ts';
-import { ADA, BEN, callsOf, GUILD, harness, member, replyColour, replyText } from './harness.ts';
+import {
+  ADA,
+  BEN,
+  CREATED,
+  callsOf,
+  depsOf,
+  GUILD,
+  harness,
+  member,
+  replyColour,
+  replyText,
+} from './harness.ts';
 
 const COMPONENT = 3;
 const MODAL_SUBMIT = 5;
@@ -68,25 +79,10 @@ async function withChannel(options: Parameters<typeof harness>[0] = {}) {
   const outcome = await fake.service.create(fake.ctx, fake.hub, member());
   if (!('created' in outcome)) throw new Error('expected a channel');
 
-  const deps = {
-    repository: fake.repository,
-    presence: presence(),
-    botUserId: '300000000000000000',
-  };
+  const deps = depsOf(fake);
   fake.calls.length = 0;
 
   return { fake, row: outcome.created, deps };
-}
-
-function presence() {
-  return {
-    locate: async () => null,
-    place: async () => undefined,
-    enter: async () => 1,
-    leave: async () => 0,
-    occupants: async () => [],
-    reset: async () => undefined,
-  };
 }
 
 describe('a button press is authorised from the database, never from the button', () => {
@@ -100,7 +96,7 @@ describe('a button press is authorised from the database, never from the button'
     );
 
     expect(outcome).toMatchObject({ action: 'done', what: 'delete' });
-    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Your channel has been deleted.`);
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Deleted your channel.`);
     expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
@@ -116,9 +112,7 @@ describe('a button press is authorised from the database, never from the button'
 
     expect(outcome.action).toBe('refused');
     expect(callsOf(fake, 'delete_channel')).toHaveLength(0);
-    expect(replyText(fake)).toBe(
-      `${STATUS_ERROR_EMOJI} Only the owner of this channel can use that.`,
-    );
+    expect(replyText(fake)).toBe(`${STATUS_ERROR_EMOJI} Only this channel’s owner can use that.`);
     expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
   });
 
@@ -129,7 +123,7 @@ describe('a button press is authorised from the database, never from the button'
     await handleComponent(press(customId(PANEL_ACTION, 'delete', row.id)), fake.ctx, deps);
 
     expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
-    expect(replyText(fake)).toContain('I could not delete your channel');
+    expect(replyText(fake)).toContain('Couldn’t delete your channel');
     expect(replyText(fake)).not.toContain('Manage Channels is missing');
   });
 
@@ -228,7 +222,7 @@ describe('the member picker', () => {
     expect(outcome).toMatchObject({ action: 'done', what: 'block' });
     expect(await fake.repository.access(row.id)).toEqual([{ userId: BEN, kind: 'block' }]);
     expect(callsOf(fake, 'edit_channel')).toHaveLength(1);
-    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} <@${BEN}> is blocked from this channel.`);
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Blocked <@${BEN}> from your channel.`);
     expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
@@ -242,7 +236,76 @@ describe('the member picker', () => {
     );
 
     expect(outcome.action).toBe('refused');
-    expect(replyText(fake)).toBe(`${STATUS_ERROR_EMOJI} Pick somebody other than yourself.`);
+    expect(replyText(fake)).toBe(`${STATUS_ERROR_EMOJI} Choose someone other than yourself.`);
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('kicking somebody sitting in the channel disconnects them', async () => {
+    const { fake, row, deps } = await withChannel();
+    fake.voice.set(BEN, CREATED);
+
+    const outcome = await handleComponent(
+      press(customId(USER_SELECT_ACTION, 'kick', row.id), ADA, [BEN]),
+      fake.ctx,
+      deps,
+    );
+
+    expect(outcome).toMatchObject({ action: 'done', what: 'kick' });
+    expect(callsOf(fake, 'move_member')[0]).toMatchObject({
+      targetId: BEN,
+      payload: { userId: BEN, channelId: null },
+    });
+    expect(replyText(fake)).toBe(
+      `${STATUS_SUCCESS_EMOJI} Disconnected <@${BEN}> from your channel.`,
+    );
+  });
+
+  test('kicking somebody in another voice channel is refused and disconnects nobody', async () => {
+    const { fake, row, deps } = await withChannel();
+    fake.voice.set(BEN, '600000000000000077');
+
+    const outcome = await handleComponent(
+      press(customId(USER_SELECT_ACTION, 'kick', row.id), ADA, [BEN]),
+      fake.ctx,
+      deps,
+    );
+
+    expect(outcome.action).toBe('refused');
+    expect(callsOf(fake, 'move_member')).toHaveLength(0);
+    expect(replyText(fake)).toBe(
+      `${STATUS_ERROR_EMOJI} I can’t see <@${BEN}> in your channel, so I didn’t disconnect them.`,
+    );
+    expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('blocking somebody in another voice channel through the panel leaves them connected', async () => {
+    const { fake, row, deps } = await withChannel();
+    fake.voice.set(BEN, '600000000000000077');
+
+    await handleComponent(
+      press(customId(USER_SELECT_ACTION, 'block', row.id), ADA, [BEN]),
+      fake.ctx,
+      deps,
+    );
+
+    expect(await fake.repository.access(row.id)).toEqual([{ userId: BEN, kind: 'block' }]);
+    expect(callsOf(fake, 'move_member')).toHaveLength(0);
+  });
+
+  test('a panel block whose disconnect Discord refuses is red and names Move Members', async () => {
+    const { fake, row, deps } = await withChannel();
+    fake.voice.set(BEN, CREATED);
+    fake.refuse('move_member', 'discord_403', 'Discord refused.', 'failed_api');
+
+    await handleComponent(
+      press(customId(USER_SELECT_ACTION, 'block', row.id), ADA, [BEN]),
+      fake.ctx,
+      deps,
+    );
+
+    expect(await fake.repository.access(row.id)).toEqual([{ userId: BEN, kind: 'block' }]);
+    expect(replyText(fake)).toContain(`Blocked <@${BEN}> from your channel.`);
+    expect(replyText(fake)).toContain('Move Members in this server');
     expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
   });
 
@@ -280,9 +343,7 @@ describe('modals', () => {
 
     expect(outcome).toMatchObject({ action: 'done', what: 'rename' });
     expect(callsOf(fake, 'edit_channel')[0]?.payload.name).toBe('Study room');
-    expect(replyText(fake)).toBe(
-      `${STATUS_SUCCESS_EMOJI} Your channel has been renamed to **Study room**.`,
-    );
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Renamed your channel to **Study room**.`);
     expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 
@@ -297,9 +358,7 @@ describe('modals', () => {
 
     expect(outcome.action).toBe('refused');
     expect(callsOf(fake, 'edit_channel')).toHaveLength(0);
-    expect(replyText(fake)).toBe(
-      `${STATUS_ERROR_EMOJI} A channel needs a name — that one was empty.`,
-    );
+    expect(replyText(fake)).toBe(`${STATUS_ERROR_EMOJI} The name can’t be empty.`);
     expect(replyColour(fake)).toBe(STATUS_ERROR_COLOUR);
   });
 
@@ -328,7 +387,7 @@ describe('modals', () => {
     );
 
     expect(callsOf(fake, 'edit_channel')[0]?.payload.userLimit).toBe(4);
-    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Your channel now holds 4 members.`);
+    expect(replyText(fake)).toBe(`${STATUS_SUCCESS_EMOJI} Set your channel’s member limit to 4.`);
     expect(replyColour(fake)).toBe(STATUS_SUCCESS_COLOUR);
   });
 

@@ -1,13 +1,4 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type {
-  BlockedMember,
-  BlockedMemberList,
-  BlockedMemberQuery,
-  BlockedMemberStore,
-  BlockMemberInput,
-  LiftBlockInput,
-  LiftBlockResult,
-} from '@proton/core';
 import {
   EVERYONE_ROLE,
   GATED,
@@ -15,48 +6,12 @@ import {
   type Harness,
   harness,
   MEMBER,
+  MemoryBlockedMemberStore,
   UNVERIFIED_ROLE,
   VERIFIED_ROLE,
   verifyPress,
   WEBSITE,
 } from './harness.ts';
-
-class MemoryBlockedMemberStore implements BlockedMemberStore {
-  readonly live = new Map<string, BlockedMember>();
-
-  block(_input: BlockMemberInput): Promise<{ blocked: boolean }> {
-    throw new Error('verification never writes to the blocked list');
-  }
-
-  async find(guildId: string, userId: string): Promise<BlockedMember | null> {
-    return this.live.get(`${guildId}:${userId}`) ?? null;
-  }
-
-  list(_guildId: string, _query: BlockedMemberQuery): Promise<BlockedMemberList> {
-    throw new Error('verification never lists the blocked list');
-  }
-
-  lift(_input: LiftBlockInput): Promise<LiftBlockResult> {
-    throw new Error('verification never lifts from the blocked list');
-  }
-
-  add(guildId: string, userId: string): void {
-    this.live.set(`${guildId}:${userId}`, {
-      id: 'block-1',
-      guildId,
-      userId,
-      moduleId: 'honeypot',
-      blockedBy: 'proton:honeypot',
-      reason: 'Posted in a honeypot channel.',
-      caseId: null,
-      evidence: null,
-      createdAt: '2026-02-01T12:00:00.000Z',
-      liftedAt: null,
-      liftedBy: null,
-      liftReason: null,
-    });
-  }
-}
 
 let h: Harness;
 let blocked: MemoryBlockedMemberStore;

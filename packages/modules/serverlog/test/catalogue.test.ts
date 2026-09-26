@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test';
+import { MODERATION_ACTION_KINDS } from '@proton/core';
 import { AuditLogEvent } from 'discord-api-types/v10';
 import {
+  ACTION_LOG_KEY,
   entitySpecsForAuditAction,
   LOG_CATEGORIES,
   LOG_EVENT_KEYS,
   LOG_EVENTS,
   LOG_TRIGGER_TYPES,
   type LogEventSpec,
+  specForAction,
   specsForAuditAction,
 } from '../src/catalogue.ts';
 import { ServerLogColors } from '../src/colours.ts';
@@ -89,11 +92,49 @@ describe('the catalogue is internally consistent', () => {
     }
   });
 
+  test('application log keys stay as they are, because saved per-event settings name them', () => {
+    expect(LOG_EVENT_KEYS.filter((key) => key.startsWith('proton.application_'))).toEqual([
+      'proton.application_submitted',
+      'proton.application_decided',
+      'proton.application_reopened',
+      'proton.application_action_failed',
+    ]);
+
+    expect(LOG_EVENTS['proton.application_decided']?.triggers).toEqual([
+      'applications.accepted',
+      'applications.rejected',
+      'applications.waitlisted',
+    ]);
+  });
+
   test('every category has at least one log, or it would be an empty dashboard section', () => {
     for (const category of LOG_CATEGORIES) {
       if (category === 'proton') continue;
       expect(specs.some((spec) => spec.category === category)).toBe(true);
     }
+  });
+});
+
+describe('actions Proton performed', () => {
+  test('every moderation kind is logged by exactly one moderation log', () => {
+    for (const kind of MODERATION_ACTION_KINDS) {
+      const owners = specs.filter((spec) => spec.actionKinds?.includes(kind));
+
+      expect(owners).toHaveLength(1);
+      expect(owners[0]?.category).toBe('moderation');
+      expect(specForAction(kind)).toBe(owners[0] as LogEventSpec);
+    }
+  });
+
+  test('only moderation logs take actions Proton performed', () => {
+    for (const spec of specs.filter((candidate) => candidate.actionKinds !== undefined)) {
+      expect(spec.category).toBe('moderation');
+    }
+  });
+
+  test('any other action falls through to the Proton log', () => {
+    expect(specForAction('add_role')?.key).toBe(ACTION_LOG_KEY);
+    expect(specForAction('send')?.key).toBe(ACTION_LOG_KEY);
   });
 });
 

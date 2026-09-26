@@ -83,7 +83,7 @@ describe('/phishing', () => {
 
     expect(content).toContain('No blocklist is loaded');
     expect(content).toContain('not');
-    expect(content).toContain('setting in this server');
+    expect(content).toContain('not with this server’s settings');
   });
 
   test('carries the feed failure through from the last refresh', async () => {
@@ -104,7 +104,7 @@ describe('/phishing', () => {
   test('says it cannot answer when nothing is bound, without naming Proton internals', async () => {
     const content = await run({});
 
-    expect(content).toContain('a fault on my side');
+    expect(content).toContain('a problem on my side');
     expect(content).toContain('no links are being checked');
     expect(content).not.toContain('RedisBlocklistStore');
     expect(content).not.toContain('createPhishingModule');
@@ -121,7 +121,7 @@ describe('/phishing', () => {
     };
 
     const content = await run({ blocklist: store, botUserId: BOT });
-    expect(content).toContain('could not read the phishing blocklist');
+    expect(content).toContain('couldn’t read the phishing blocklist');
     expect(content).not.toContain('Connection is closed.');
 
     const embed = await replyEmbed({ blocklist: store, botUserId: BOT });

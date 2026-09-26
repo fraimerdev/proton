@@ -1,56 +1,27 @@
-import type { EventListener, EventType, ModuleContext, ProtonEvent } from '@proton/core';
+import {
+  type EventListener,
+  type EventType,
+  isVoiceEligible,
+  type ModuleContext,
+  type ProtonEvent,
+  readVoiceState,
+  type VoiceState,
+} from '@proton/core';
 import type { LevelingConfig } from './config.ts';
 import { bindVoice, describeUnbound, type LevelingDeps } from './deps.ts';
 import { applyLevelUp } from './level-up.ts';
 import { channelChainFor, xpEventsBetween } from './multiplier-lookup.ts';
 import { staticXpCandidates, voiceXpPayout } from './multipliers.ts';
 import { MODULE_ID } from './perform.ts';
+import { organicCausation, publishXpAwarded } from './publish.ts';
 import type { MemberXpStore } from './store.ts';
 import { MAX_PAID_SESSION_MS, type VoiceSession } from './voice-session.ts';
+
+export { readVoiceState, type VoiceState } from '@proton/core';
 
 export const VOICE_XP_EVENT_TYPES: EventType[] = ['voice.state_updated', 'guild.available'];
 
 const MINUTE_MS = 60_000;
-
-export interface VoiceState {
-  userId: string;
-
-  channelId: string | null;
-  selfDeaf: boolean;
-  serverDeaf: boolean;
-
-  isBot: boolean | null;
-
-  roleIds: string[] | null;
-}
-
-export function readVoiceState(payload: unknown): VoiceState | null {
-  if (typeof payload !== 'object' || payload === null) return null;
-  const raw = payload as Record<string, unknown>;
-
-  const userId = typeof raw.user_id === 'string' ? raw.user_id : null;
-  if (userId === null) return null;
-
-  const member =
-    typeof raw.member === 'object' && raw.member !== null
-      ? (raw.member as Record<string, unknown>)
-      : null;
-  const user = member === null ? null : member.user;
-  const bot =
-    typeof user === 'object' && user !== null ? (user as Record<string, unknown>).bot : undefined;
-  const roles = member === null ? null : member.roles;
-
-  return {
-    userId,
-    channelId: typeof raw.channel_id === 'string' ? raw.channel_id : null,
-    selfDeaf: raw.self_deaf === true,
-    serverDeaf: raw.deaf === true,
-    isBot: typeof bot === 'boolean' ? bot : null,
-    roleIds: Array.isArray(roles)
-      ? roles.filter((role): role is string => typeof role === 'string')
-      : null,
-  };
-}
 
 function field(value: unknown, key: string): unknown {
   return typeof value === 'object' && value !== null
@@ -87,6 +58,29 @@ function sessionFor(guildId: string, state: VoiceState, channelId: string, joine
   };
 }
 
+async function excludedChannels(
+  ctx: ModuleContext<LevelingConfig>,
+  deps: LevelingDeps,
+  guildId: string,
+): Promise<ReadonlySet<string>> {
+  const excluded = new Set<string>();
+  if (ctx.config.afkChannelId !== undefined) excluded.add(ctx.config.afkChannelId);
+  if (!deps.guildState) return excluded;
+
+  try {
+    const afkChannelId = (await deps.guildState.get(guildId))?.afkChannelId;
+    if (afkChannelId) excluded.add(afkChannelId);
+  } catch (error) {
+    ctx.logger.warn(
+      `leveling could not read server ${guildId}'s AFK channel, so a member idling there earns ` +
+        `voice XP until it can: ${error instanceof Error ? error.message : String(error)}`,
+      { guildId, moduleId: MODULE_ID },
+    );
+  }
+
+  return excluded;
+}
+
 export function createVoiceXpListener(deps: LevelingDeps): EventListener<LevelingConfig> {
   return {
     types: VOICE_XP_EVENT_TYPES,
@@ -107,7 +101,7 @@ export function createVoiceXpListener(deps: LevelingDeps): EventListener<Levelin
       }
 
       if (event.type === 'guild.available') {
-        await reconcile(ctx, event, bound.sessions);
+        await reconcile(ctx, deps, event, bound.sessions);
         return;
       }
 
@@ -116,7 +110,11 @@ export function createVoiceXpListener(deps: LevelingDeps): EventListener<Levelin
 
       if (state.isBot === true) return;
 
-      const active = isEarning(ctx.config, state);
+      const active =
+        state.channelId !== null &&
+        isVoiceEligible(state, {
+          excludedChannelIds: await excludedChannels(ctx, deps, event.guildId),
+        });
 
       if (active) {
         const open = await bound.sessions.get(event.guildId, state.userId);
@@ -139,14 +137,6 @@ export function createVoiceXpListener(deps: LevelingDeps): EventListener<Levelin
       }
     },
   };
-}
-
-function isEarning(config: LevelingConfig, state: VoiceState): boolean {
-  if (state.channelId === null) return false;
-
-  if (config.afkChannelId !== undefined && state.channelId === config.afkChannelId) return false;
-
-  return !state.selfDeaf && !state.serverDeaf;
 }
 
 async function payout(
@@ -213,6 +203,21 @@ async function payout(
     channelId: session.channelId,
   });
 
+  const causation = organicCausation(event.id);
+
+  // Before the level-up, not after: the session was taken by GETDEL, so if applyLevelUp throws the
+  // redelivered event finds nothing to pay and a publish after it is lost for the whole stay.
+  await publishXpAwarded(ctx, `voice:${session.userId}:${session.joinedAt}`, {
+    userId: session.userId,
+    amount,
+    source: 'voice',
+    channelId: session.channelId,
+    activityAt: event.occurredAt,
+    xp: result.xp,
+    level: result.level,
+    causation,
+  });
+
   await applyLevelUp(
     ctx,
     {
@@ -223,6 +228,7 @@ async function payout(
       source: 'voice',
       idempotencyRoot: `leveling:${event.id}`,
       gained: amount,
+      causation,
     },
     deps,
   );
@@ -230,6 +236,7 @@ async function payout(
 
 async function reconcile(
   ctx: ModuleContext<LevelingConfig>,
+  deps: LevelingDeps,
   event: ProtonEvent,
   sessions: NonNullable<LevelingDeps['sessions']>,
 ): Promise<void> {
@@ -244,6 +251,7 @@ async function reconcile(
 
   // GUILD_CREATE voice states carry no member, so roles and the bot flag come from its members list.
   const members = readMembers((payload as Record<string, unknown>).members);
+  const excludedChannelIds = await excludedChannels(ctx, deps, guildId);
 
   let adopted = 0;
   for (const entry of raw) {
@@ -258,7 +266,7 @@ async function reconcile(
     };
 
     if (state.isBot === true) continue;
-    if (!isEarning(ctx.config, state) || state.channelId === null) continue;
+    if (!isVoiceEligible(state, { excludedChannelIds }) || state.channelId === null) continue;
 
     if (await sessions.get(guildId, state.userId)) continue;
 

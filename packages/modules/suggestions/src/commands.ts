@@ -3,6 +3,7 @@ import {
   type CommandDefinition,
   errorStatus,
   type InteractionRef,
+  labelOf,
   newId,
   Permissions,
   type RespondTo,
@@ -47,10 +48,12 @@ import type { Suggestion, SuggestionStore } from './store.ts';
 type Command = CommandDefinition<SuggestionsConfig>;
 type Ctx = CommandContext<SuggestionsConfig>;
 
-const NO_CHANNEL =
-  'This server has not picked a suggestion channel yet, so there is nowhere for me to post ' +
-  'this. An admin sets one under **Suggestions → Suggestion channel** on the Proton dashboard; ' +
-  'until then `/suggest` cannot do anything. Nothing was saved.';
+function noChannel(suggest: string): string {
+  return (
+    `This server has no suggestion channel yet, so \`${suggest}\` can’t post anything. An ` +
+    'admin can choose one in the Proton dashboard under **Suggestions**. Nothing was saved.'
+  );
+}
 
 function interactionOf(ctx: Ctx): InteractionRef {
   return {
@@ -89,16 +92,16 @@ async function ready(ctx: Ctx, deps: SuggestionsDeps, what: string): Promise<Bou
 export function suggestCommand(deps: SuggestionsDeps): Command {
   return {
     name: 'suggest',
-    description: 'Suggest something to this server’s staff.',
+    description: 'Post a suggestion for the server to vote on.',
 
     data: new SlashCommandBuilder()
       .setName('suggest')
-      .setDescription('Suggest something to this server’s staff.')
+      .setDescription('Post a suggestion for the server to vote on.')
       .setContexts(InteractionContextType.Guild)
       .addStringOption((option) =>
         option
           .setName('text')
-          .setDescription('What you would like changed, and why it would help.')
+          .setDescription('What you’d like to change, and why it would help.')
           .setRequired(true)
           .setMaxLength(SUGGESTION_CONTENT_MAX),
       )
@@ -108,13 +111,14 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
       const bound = await ready(ctx, deps, 'a suggestion could not be posted');
       if (!bound) return;
 
+      const suggest = labelOf(ctx, 'suggest');
       const channelId = ctx.config.channelId;
       if (channelId === undefined) {
-        await answer(ctx, bound.to, errorStatus(NO_CHANNEL));
+        await answer(ctx, bound.to, errorStatus(noChannel(suggest)));
         return;
       }
 
-      const parsed = normaliseSuggestion(ctx.options.getString('text') ?? '');
+      const parsed = normaliseSuggestion(ctx.options.getString('text') ?? '', suggest);
       if (!parsed.ok) {
         await answer(ctx, bound.to, errorStatus(parsed.humanReason));
         return;
@@ -138,7 +142,7 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
         await bound.store.remove(ctx.guildId, suggestion.id);
         await say(
           errorStatus(
-            `I could not build the vote buttons, so nothing was posted in <#${channelId}>: ` +
+            `I couldn’t build the vote buttons, so nothing was posted in <#${channelId}>: ` +
               `${row.humanReason}`,
           ),
         );
@@ -159,7 +163,7 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
         await bound.store.remove(ctx.guildId, suggestion.id);
         await say(
           errorStatus(
-            `I could not post your suggestion in <#${channelId}>, so nothing was saved: ` +
+            `I couldn’t post your suggestion in <#${channelId}>, so nothing was saved: ` +
               `${whyItFailed(posted)}`,
           ),
         );
@@ -182,8 +186,8 @@ export function suggestCommand(deps: SuggestionsDeps): Command {
 
       await say(
         successStatus(
-          `Posted as **suggestion #${suggestion.number}** in <#${channelId}>. Members vote with ` +
-            `the buttons under it.${thread}`,
+          `Posted **suggestion #${suggestion.number}** in <#${channelId}>. Members can vote ` +
+            `with the buttons under it.${thread}`,
         ),
       );
     },
@@ -207,7 +211,7 @@ async function discussIn(
   });
 
   if (!succeeded(thread)) {
-    return ` I could not open its discussion thread: ${whyItFailed(thread)}`;
+    return ` I couldn’t open its discussion thread: ${whyItFailed(thread)}`;
   }
 
   const threadId = createdId(thread);
@@ -224,9 +228,9 @@ function decisionBuilder(): SlashCommandBuilder {
     .setDefaultMemberPermissions(Permissions.ManageMessages);
 
   const described: Record<string, string> = {
-    accept: 'Accept a suggestion and edit its post to say so.',
-    deny: 'Turn a suggestion down and edit its post to say so.',
-    implement: 'Mark a suggestion as done and edit its post to say so.',
+    accept: 'Accept a suggestion and update its post.',
+    deny: 'Deny a suggestion and update its post.',
+    implement: 'Mark a suggestion as implemented and update its post.',
   };
 
   for (const decision of DECISIONS) {
@@ -237,7 +241,7 @@ function decisionBuilder(): SlashCommandBuilder {
         .addIntegerOption((option) =>
           option
             .setName('number')
-            .setDescription('The number in the title of the suggestion post.')
+            .setDescription('The number in the suggestion post’s title.')
             .setRequired(true)
             .setMinValue(1)
             .setMaxValue(SUGGESTION_NUMBER_MAX),
@@ -245,7 +249,7 @@ function decisionBuilder(): SlashCommandBuilder {
         .addStringOption((option) =>
           option
             .setName('reason')
-            .setDescription('Shown on the post, so the server knows why.')
+            .setDescription('Why you decided this. Shown on the post.')
             .setMaxLength(DECISION_REASON_MAX),
         ),
     );
@@ -267,7 +271,7 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
 
       const subcommand = ctx.options.getSubcommand() ?? '';
       if (!isDecision(subcommand)) {
-        await answer(ctx, bound.to, errorStatus('That subcommand is not one I know.'));
+        await answer(ctx, bound.to, errorStatus('I don’t recognise that subcommand.'));
         return;
       }
 
@@ -277,8 +281,7 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
           ctx,
           bound.to,
           errorStatus(
-            'That command needs a suggestion number — the one in the title of the post, like ' +
-              '`Suggestion #12`.',
+            'Give the suggestion’s number. It’s in the title of its post, like `Suggestion #12`.',
           ),
         );
         return;
@@ -293,8 +296,7 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
       if (!suggestion) {
         await say(
           errorStatus(
-            `There is no **suggestion #${number}** in this server, so there was nothing to ` +
-              `${subcommand}. The number is the one in the title of the post you mean.`,
+            `Couldn’t find **suggestion #${number}**. The number is in the title of its post.`,
           ),
         );
         return;
@@ -305,7 +307,7 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
         await say(
           errorStatus(
             `**Suggestion #${number}** is already **${STATUS_LABELS[outcome.status]}**, so ` +
-              'nothing changed. Pick a different decision if you have changed your mind.',
+              'nothing changed.',
           ),
         );
         return;
@@ -323,8 +325,8 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
       if (!decided) {
         await say(
           errorStatus(
-            `**Suggestion #${number}** was deleted while I was deciding it, so nothing was ` +
-              'recorded.',
+            `**Suggestion #${number}** was deleted before I could update it, so nothing was ` +
+              'saved.',
           ),
         );
         return;
@@ -348,10 +350,7 @@ export function suggestionCommand(deps: SuggestionsDeps): Command {
 
 async function refresh(ctx: Ctx, bound: Bound, suggestion: Suggestion): Promise<string> {
   if (suggestion.messageId === null) {
-    return (
-      ' I never recorded which message it was posted as, so the post itself still shows the old ' +
-      'status. Editing it by hand is the only fix.'
-    );
+    return ' The post still shows the old status because I don’t know which message it is.';
   }
 
   const row = buildVoteRow(suggestion.id, suggestion.status);

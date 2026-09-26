@@ -55,7 +55,7 @@ export function findConflicts(
         blocking: true,
         humanReason:
           `${both.map((id) => `<@&${id}>`).join(', ')} is both required and excluded, so nobody ` +
-          'can enter. Remove one of the two rules, or switch the logic to “any one of these”.',
+          'can enter. Change one of the two rules.',
       });
     }
   }
@@ -71,9 +71,9 @@ export function findConflicts(
     conflicts.push({
       blocking: false,
       humanReason:
-        `“${labelFor(registry, providerId)}” is set ${count} times. Under ` +
-        `${logic === 'all' ? '“all of these” the strictest one decides' : '“any one of these” the loosest one decides'}` +
-        ', so the others do nothing.',
+        `“${labelFor(registry, providerId)}” is added ${count} times. With ` +
+        `${logic === 'all' ? '“all of these”, only the strictest one' : '“any one of these”, only the loosest one'}` +
+        ' counts.',
     });
   }
 

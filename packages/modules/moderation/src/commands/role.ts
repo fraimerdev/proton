@@ -4,6 +4,7 @@ import {
   errorStatus,
   type GuildState,
   INTERACTION_CALLBACK_DEFERRED_MESSAGE,
+  labelOf,
   newId,
   Permissions,
   type StatusBody,
@@ -13,10 +14,19 @@ import { SlashCommandBuilder } from 'discord.js';
 import { InteractionContextType } from 'discord-api-types/v10';
 import type { ModerationConfig } from '../config.ts';
 import type { ModerationDeps } from '../deps.ts';
-import { isRefusal, MODULE_ID, perform, type Refusal, reasonRefusal, reply } from '../perform.ts';
+import {
+  isRefusal,
+  MODULE_ID,
+  moderationReply,
+  perform,
+  type Refusal,
+  repliesPrivately,
+  reply,
+} from '../perform.ts';
 import { guardRole, guardTarget } from '../role-guard.ts';
 import { ROLE_RUN_JOB, ROLE_RUN_KEY, renderProgress } from '../role-run.ts';
 import type { RoleRun, RoleRunMode } from '../run-store.ts';
+import { acknowledge } from './answer.ts';
 
 type Command = CommandDefinition<ModerationConfig>;
 
@@ -32,19 +42,19 @@ const MASS_MODES: Record<string, RoleRunMode> = {
 export function roleCommand(deps: ModerationDeps): Command {
   return {
     name: 'role',
-    description: 'Manage roles.',
+    description: 'Add or remove roles, for one member or many.',
 
     data: new SlashCommandBuilder()
       .setName('role')
-      .setDescription('Manage roles.')
+      .setDescription('Add or remove roles, for one member or many.')
       .setContexts(InteractionContextType.Guild)
       .setDefaultMemberPermissions(Permissions.ManageRoles | Permissions.ModerateMembers)
       .addSubcommand((s) =>
         s
           .setName('add')
-          .setDescription('Add a role to a user.')
+          .setDescription('Add a role to a member.')
           .addUserOption((o) =>
-            o.setName('user').setDescription('The user to add the role to.').setRequired(true),
+            o.setName('user').setDescription('The member to add the role to.').setRequired(true),
           )
           .addRoleOption((o) =>
             o.setName('role').setDescription('The role to add.').setRequired(true),
@@ -59,9 +69,12 @@ export function roleCommand(deps: ModerationDeps): Command {
       .addSubcommand((s) =>
         s
           .setName('remove')
-          .setDescription('Remove a role from a user.')
+          .setDescription('Remove a role from a member.')
           .addUserOption((o) =>
-            o.setName('user').setDescription('The user to remove the role from.').setRequired(true),
+            o
+              .setName('user')
+              .setDescription('The member to remove the role from.')
+              .setRequired(true),
           )
           .addRoleOption((o) =>
             o.setName('role').setDescription('The role to remove.').setRequired(true),
@@ -76,7 +89,7 @@ export function roleCommand(deps: ModerationDeps): Command {
       .addSubcommand((s) =>
         s
           .setName('all')
-          .setDescription('Add a role to all users.')
+          .setDescription('Add a role to every member.')
           .addRoleOption((o) =>
             o.setName('role').setDescription('The role to add.').setRequired(true),
           )
@@ -90,7 +103,7 @@ export function roleCommand(deps: ModerationDeps): Command {
       .addSubcommand((s) =>
         s
           .setName('bots')
-          .setDescription('Add a role to all bots.')
+          .setDescription('Add a role to every bot.')
           .addRoleOption((o) =>
             o.setName('role').setDescription('The role to add.').setRequired(true),
           )
@@ -104,7 +117,7 @@ export function roleCommand(deps: ModerationDeps): Command {
       .addSubcommand((s) =>
         s
           .setName('humans')
-          .setDescription('Add a role to all users excluding bots.')
+          .setDescription('Add a role to every member except bots.')
           .addRoleOption((o) =>
             o.setName('role').setDescription('The role to add.').setRequired(true),
           )
@@ -118,14 +131,14 @@ export function roleCommand(deps: ModerationDeps): Command {
       .addSubcommand((s) =>
         s
           .setName('in')
-          .setDescription('Add a role to users with a specific role.')
+          .setDescription('Add a role to every member who has another role.')
           .addRoleOption((o) =>
             o.setName('role').setDescription('The role to add.').setRequired(true),
           )
           .addRoleOption((o) =>
             o
               .setName('target_role')
-              .setDescription('The role that users must have to receive the new role.')
+              .setDescription('Members with this role get the new one.')
               .setRequired(true),
           )
           .addStringOption((o) =>
@@ -136,9 +149,11 @@ export function roleCommand(deps: ModerationDeps): Command {
           ),
       )
       .addSubcommand((s) =>
-        s.setName('cancel').setDescription('Stop a mass role run that is still going.'),
+        s.setName('cancel').setDescription('Stop a mass role change that’s still running.'),
       )
       .toJSON(),
+
+    reply: moderationReply(['add', 'remove', 'all', 'bots', 'humans', 'in', 'cancel']),
 
     async handler(ctx) {
       const sub = ctx.options.getSubcommand() ?? '';
@@ -150,19 +165,19 @@ export function roleCommand(deps: ModerationDeps): Command {
 
       if (sub === 'cancel') return cancel(ctx, deps);
 
+      const label = (path: string) => labelOf(ctx, 'role', path);
       return reply(
         ctx,
         errorStatus(
-          'Use /role add or /role remove for one member, or /role all, /role bots, /role humans ' +
-            'or /role in to give a role to many at once.',
+          `Use ${label('add')} or ${label('remove')} for one member, or ${label('all')}, ` +
+            `${label('bots')}, ${label('humans')} or ${label('in')} to give a role to many at once.`,
         ),
       );
     },
   };
 }
 
-// Returns rather than replies: the mass path has already deferred by the time it calls this, so
-// its refusals have to go out as followups and not as a second interaction callback.
+// Returns the refusal: its callers may have deferred, so replying here would be a second callback.
 async function guardedState(
   ctx: CommandContext<ModerationConfig>,
   deps: ModerationDeps,
@@ -171,8 +186,8 @@ async function guardedState(
   if (!deps.guildState) {
     return {
       refusal:
-        'I cannot read this server’s role list, so I cannot check that handing that role out is ' +
-        'allowed. Nothing was changed. This is a Proton problem, not a setting in this server.',
+        'I can’t read this server’s role list, so I can’t check that changing that role is ' +
+        'allowed. Nothing was changed. This is a problem on my end, not a setting in this server.',
     };
   }
 
@@ -180,8 +195,8 @@ async function guardedState(
   if (!state) {
     return {
       refusal:
-        "I don't have this server's roles yet, so I can't check that handing that one out is " +
-        'allowed. Try again shortly.',
+        "I don't have this server's roles yet, so I can't check that changing that role is " +
+        'allowed. Try again in a moment.',
     };
   }
 
@@ -200,7 +215,7 @@ async function defer(ctx: CommandContext<ModerationConfig>): Promise<boolean> {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
       callbackType: INTERACTION_CALLBACK_DEFERRED_MESSAGE,
-      ephemeral: !ctx.config.publicReplies,
+      ephemeral: repliesPrivately(ctx),
     },
   });
 
@@ -233,7 +248,7 @@ async function answer(
     payload: {
       applicationId,
       interactionToken: ctx.interaction.token,
-      ephemeral: !ctx.config.publicReplies,
+      ephemeral: repliesPrivately(ctx),
       ...body,
       allowedMentions: { parse: [] },
     },
@@ -253,28 +268,28 @@ async function one(
   sub: 'add' | 'remove',
 ): Promise<void> {
   const userId = ctx.options.getUserId('user');
-  if (!userId) return reply(ctx, errorStatus('I need a member to change the roles of.'));
+  if (!userId) return reply(ctx, errorStatus('Pick the member whose roles you want to change.'));
 
   const roleId = ctx.options.getRoleId('role');
-  if (!roleId) return reply(ctx, errorStatus('I need a role to hand out.'));
+  if (!roleId) return reply(ctx, errorStatus('Pick a role to add or remove.'));
+
+  const answer = await acknowledge(ctx, deps);
 
   const state = await guardedState(ctx, deps, roleId);
-  if (isRefusal(state)) return reply(ctx, errorStatus(state.refusal));
+  if (isRefusal(state)) return answer(errorStatus(state.refusal));
 
   if (!deps.fetchMemberRoles) {
-    return reply(
-      ctx,
+    return answer(
       errorStatus(
-        `I cannot read <@${userId}>’s roles, so I cannot check that you outrank them. Nothing ` +
-          'was changed. This is a Proton problem, not a setting in this server.',
+        `I can’t read <@${userId}>’s roles, so I can’t check that you outrank them. Nothing ` +
+          'was changed. This is a problem on my end, not a setting in this server.',
       ),
     );
   }
 
   const targetRoleIds = await deps.fetchMemberRoles(ctx.guildId, userId);
   if (!targetRoleIds) {
-    return reply(
-      ctx,
+    return answer(
       errorStatus(
         `I couldn't look up <@${userId}>'s roles, so I can't confirm you outrank them. This ` +
           'usually means they just left the server.',
@@ -290,21 +305,25 @@ async function one(
     targetRoleIds,
   });
 
-  if (outranked) return reply(ctx, errorStatus(outranked.refusal));
+  if (outranked) return answer(errorStatus(outranked.refusal));
 
   const reason = ctx.options.getString('reason');
 
-  return perform(ctx, {
-    kind: sub === 'add' ? 'add_role' : 'remove_role',
-    targetId: userId,
-    payload: { userId, roleId },
-    ...(reason ? { reason } : {}),
-    targetRoleIds,
-    success:
-      sub === 'add'
-        ? `Gave <@&${roleId}> to <@${userId}>.`
-        : `Took <@&${roleId}> off <@${userId}>.`,
-  });
+  return perform(
+    ctx,
+    {
+      kind: sub === 'add' ? 'add_role' : 'remove_role',
+      targetId: userId,
+      payload: { userId, roleId },
+      ...(reason ? { reason } : {}),
+      targetRoleIds,
+      success:
+        sub === 'add'
+          ? `Gave <@&${roleId}> to <@${userId}>.`
+          : `Took <@&${roleId}> off <@${userId}>.`,
+    },
+    answer,
+  );
 }
 
 async function mass(
@@ -319,9 +338,8 @@ async function mass(
     return reply(
       ctx,
       errorStatus(
-        'I cannot run a mass role change in this deployment — the member lister, the run store ' +
-          'or the scheduler is not wired into me. Nothing was changed. Use /role add for one ' +
-          'member at a time.',
+        'I can’t run mass role changes right now, so nothing was changed. Use ' +
+          `${labelOf(ctx, 'role', 'add')} for one member at a time.`,
       ),
     );
   }
@@ -332,14 +350,14 @@ async function mass(
   if (!(await defer(ctx))) return;
 
   const roleId = ctx.options.getRoleId('role');
-  if (!roleId) return answer(ctx, applicationId, errorStatus('I need a role to hand out.'));
+  if (!roleId) return answer(ctx, applicationId, errorStatus('Pick a role to add.'));
 
   const targetRoleId = mode === 'in' ? ctx.options.getRoleId('target_role') : null;
   if (mode === 'in' && !targetRoleId) {
     return answer(
       ctx,
       applicationId,
-      errorStatus('I need the role a member must already hold to receive the new one.'),
+      errorStatus('Pick the role members need to have to get the new one.'),
     );
   }
 
@@ -348,8 +366,8 @@ async function mass(
       ctx,
       applicationId,
       errorStatus(
-        `<@&${roleId}> is the same role on both sides, so everybody who would receive it ` +
-          'already has it. Nothing was changed.',
+        `You picked <@&${roleId}> for both roles, so everyone who would get it already has it. ` +
+          'Nothing was changed.',
       ),
     );
   }
@@ -360,14 +378,13 @@ async function mass(
     return answer(
       ctx,
       applicationId,
-      errorStatus('Every member already has @everyone — use `/role all` for that.'),
+      errorStatus(
+        `Every member already has @everyone. Use \`${labelOf(ctx, 'role', 'all')}\` for that.`,
+      ),
     );
   }
 
   const reason = ctx.options.getString('reason');
-
-  const missingReason = reasonRefusal(ctx, reason);
-  if (missingReason) return answer(ctx, applicationId, errorStatus(missingReason.refusal));
 
   const state = await guardedState(ctx, deps, roleId);
   if (isRefusal(state)) return answer(ctx, applicationId, errorStatus(state.refusal));
@@ -378,8 +395,8 @@ async function mass(
       ctx,
       applicationId,
       errorStatus(
-        `I'm already giving <@&${running.roleId}> out in this server, ${running.applied} members ` +
-          'in. Wait for it to finish, or run `/role cancel` to stop it.',
+        `I'm already giving out <@&${running.roleId}> in this server (${running.applied} members ` +
+          `so far). Wait for it to finish, or run \`${labelOf(ctx, 'role', 'cancel')}\` to stop it.`,
       ),
     );
   }
@@ -418,7 +435,7 @@ async function mass(
     idempotencyKey: `${ctx.idempotencyKey}:role-run-progress`,
     payload: {
       channelId: ctx.channelId,
-      content: renderProgress(run).slice(0, 2000),
+      content: renderProgress(run, ctx).slice(0, 2000),
       // The progress line names the role being handed out. Without this, announcing a mass grant
       // of a mentionable role pings everyone already in it. Only the send notifies — Discord does
       // not re-notify for the edits that follow.
@@ -431,9 +448,9 @@ async function mass(
       ctx,
       applicationId,
       errorStatus(
-        `${posted.failure?.humanReason ?? `I couldn't post the progress message into <#${ctx.channelId}>.`}` +
-          '\n\nA mass role change reports as it goes, so I have not started one. Nothing was ' +
-          'changed.',
+        `${posted.failure?.humanReason ?? `I couldn't post the progress message in <#${ctx.channelId}>.`}` +
+          '\n\nA mass role change posts its progress as it goes, so I didn’t start this one. ' +
+          'Nothing was changed.',
       ),
     );
   }
@@ -458,8 +475,8 @@ async function mass(
       ctx,
       applicationId,
       errorStatus(
-        `I couldn't book the run that hands out <@&${roleId}>, so I have not started one and ` +
-          'nothing was changed. Please try again later.',
+        `I couldn't schedule the run for <@&${roleId}>, so it didn't start and nothing was ` +
+          'changed. Try again later.',
       ),
     );
   }
@@ -468,8 +485,8 @@ async function mass(
     ctx,
     applicationId,
     successStatus(
-      `Started giving <@&${roleId}> out. I'm working through the member list now and reporting ` +
-        `into <#${ctx.channelId}> as I go. \`/role cancel\` stops it.`,
+      `Started giving out <@&${roleId}>. I'm working through the member list and posting ` +
+        `progress in <#${ctx.channelId}>. \`${labelOf(ctx, 'role', 'cancel')}\` stops it.`,
     ),
   );
 }
@@ -477,18 +494,19 @@ async function mass(
 async function cancel(ctx: CommandContext<ModerationConfig>, deps: ModerationDeps): Promise<void> {
   const store = deps.roleRuns;
   if (!store) {
-    return reply(ctx, errorStatus('There is no mass role run to cancel in this deployment.'));
+    return reply(ctx, errorStatus('There’s no mass role change to cancel.'));
   }
 
+  const answer = await acknowledge(ctx, deps);
+
   const running = await store.get(ctx.guildId);
-  if (!running) return reply(ctx, errorStatus('No mass role run is going in this server.'));
+  if (!running) return answer(errorStatus('No mass role change is running in this server.'));
 
   if (running.cancelled) {
-    return reply(
-      ctx,
+    return answer(
       errorStatus(
-        `The run handing out <@&${running.roleId}> is already stopping — it finishes the chunk ` +
-          'it is on and stops.',
+        `The run giving out <@&${running.roleId}> is already stopping. It finishes the batch ` +
+          'it’s on, then stops.',
       ),
     );
   }
@@ -500,12 +518,10 @@ async function cancel(ctx: CommandContext<ModerationConfig>, deps: ModerationDep
   // expired a day later. A tick that arrives to find no run simply returns.
   await ctx.schedule?.(ROLE_RUN_JOB, new Date(), ROLE_RUN_KEY, undefined, { replace: true });
 
-  return reply(
-    ctx,
+  return answer(
     successStatus(
-      `Stopping the run that hands out <@&${running.roleId}>. It stays with the ` +
-        `${running.applied} members who already have it — cancelling does not take it back off ` +
-        'them.',
+      `Stopping the run giving out <@&${running.roleId}>. The ${running.applied} members who ` +
+        'already got it keep it, because cancelling doesn’t remove it.',
     ),
   );
 }

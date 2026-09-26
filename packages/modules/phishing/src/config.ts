@@ -13,8 +13,7 @@ export const phishingConfigSchema = z.object({
 
   action: z.enum(PHISHING_ACTIONS).default('timeout').register(protonFields, {
     label: 'Action',
-    description:
-      'What Proton does to the member who posted the link. The message itself is never deleted.',
+    description: 'What happens to the member who posted the link.',
   }),
 
   timeoutDuration: durationStringSchema.default('1h').register(protonFields, {
@@ -29,7 +28,7 @@ export const phishingConfigSchema = z.object({
     .register(protonFields, {
       field: 'channel-id',
       label: 'Alert channel',
-      description: 'Where Proton reports Phishing actions.',
+      description: 'Where Proton posts an alert for each phishing link it finds.',
       channelTypes: [0, 5, 11, 12],
     }),
 

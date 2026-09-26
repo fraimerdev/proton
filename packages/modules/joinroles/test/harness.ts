@@ -1,11 +1,12 @@
-import type {
-  ActionExecutor,
-  ActionRequest,
-  ActionResult,
-  GuildRole,
-  GuildState,
-  Logger,
-  ProtonEvent,
+import {
+  type ActionExecutor,
+  type ActionRequest,
+  type ActionResult,
+  type GuildRole,
+  type GuildState,
+  type Logger,
+  Permissions,
+  type ProtonEvent,
 } from '@proton/core';
 import { type DispatchName, dispatch } from '@proton/fixtures';
 import { normalise } from '@proton/gateway/normaliser';
@@ -92,8 +93,8 @@ export function collectingLogger(): { logger: Logger; lines: string[] } {
   };
 }
 
-function role(id: string, position: number, managed?: boolean): GuildRole {
-  return { id, permissions: 0n, position, ...(managed === undefined ? {} : { managed }) };
+function role(id: string, position: number, managed?: boolean, permissions = 0n): GuildRole {
+  return { id, permissions, position, ...(managed === undefined ? {} : { managed }) };
 }
 
 export const STATE: GuildState = {
@@ -106,7 +107,7 @@ export const STATE: GuildState = {
     [ROLE_MID, role(ROLE_MID, 20)],
     [ROLE_ABOVE_BOT, role(ROLE_ABOVE_BOT, 90)],
     [ROLE_MANAGED, role(ROLE_MANAGED, 5, true)],
-    [BOT_ROLE, role(BOT_ROLE, 50)],
+    [BOT_ROLE, role(BOT_ROLE, 50, undefined, Permissions.ManageRoles)],
   ]),
   botRoleIds: [BOT_ROLE],
   channels: new Map(),

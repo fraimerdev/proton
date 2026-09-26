@@ -1,3 +1,5 @@
+import type { Causation } from '@proton/core';
+
 export type Instant = number;
 
 export interface AwardInput {
@@ -41,6 +43,18 @@ export interface AwardResult {
   awarded: boolean;
 }
 
+export interface GrantInput {
+  guildId: string;
+  userId: string;
+  amount: number;
+  grantId: string;
+  sourceModule: string;
+  causation: Causation;
+  now: Instant;
+}
+
+export type GrantResult = AwardResult & { duplicate: boolean };
+
 export interface MemberXpRecord {
   userId: string;
   xp: number;
@@ -70,6 +84,8 @@ export interface MemberXpStore {
   creditVoice(input: VoiceCreditInput): Promise<AwardResult>;
 
   adjust(input: AdjustInput): Promise<AwardResult>;
+
+  grant(input: GrantInput): Promise<GrantResult>;
 
   get(guildId: string, userId: string): Promise<MemberXpRecord | null>;
 

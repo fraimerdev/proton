@@ -8,7 +8,7 @@ import {
 import { mentionsAny } from '@proton/core/placeholders';
 import { z } from 'zod';
 import { CHANNEL_NAME_MAX } from './channel-name.ts';
-import { NUMBER_PLACEHOLDER, TYPE_PLACEHOLDER, USER_PLACEHOLDER } from './constants.ts';
+import { NUMBER_PLACEHOLDER, USER_PLACEHOLDER } from './constants.ts';
 import {
   renderTicketChannelName,
   renderTicketWelcome,
@@ -88,7 +88,8 @@ const slugSchema = (max: number, noun: string) =>
     .max(max)
     .regex(
       /^[a-z0-9][a-z0-9._-]*$/,
-      `a ${noun} id is letters, digits, dots, dashes and underscores, starting with a letter or digit.`,
+      `A ${noun} ID can use lowercase letters, numbers, dots, dashes and underscores, and must ` +
+        'start with a letter or number.',
     );
 
 const panelIdSchema = slugSchema(PANEL_ID_MAX, 'panel');
@@ -100,7 +101,7 @@ export const FORM_FIELD_STYLES = ['short', 'paragraph', 'select'] as const;
 export type FormFieldStyle = (typeof FORM_FIELD_STYLES)[number];
 
 export const ticketFormFieldSchema = z.object({
-  id: slugSchema(32, 'form field'),
+  id: slugSchema(32, 'question'),
 
   label: z.string().min(1).max(45),
 
@@ -195,7 +196,7 @@ function uniqueIds<T extends { id: string }>(noun: string) {
         ctx.addIssue({
           code: 'custom',
           path: [index, 'id'],
-          message: `two ${noun} cannot share an id — a button would not know which one it meant.`,
+          message: `Another ${noun} already has this ID.`,
         });
       }
       seen.add(entry.id);
@@ -207,7 +208,7 @@ export const ticketTypesSchema = z
   .array(ticketTypeSchema)
   .max(TYPES_CEILING)
   .default([])
-  .superRefine(uniqueIds('ticket types'));
+  .superRefine(uniqueIds('ticket type'));
 
 export const ticketPanelSchema = z.object({
   id: panelIdSchema,
@@ -247,7 +248,7 @@ export const ticketPanelsSchema = z
   .array(ticketPanelSchema)
   .max(PANELS_CEILING)
   .default([])
-  .superRefine(uniqueIds('panels'));
+  .superRefine(uniqueIds('panel'));
 
 export const RESPONSES_CEILING = 50;
 
@@ -265,7 +266,7 @@ export const ticketResponsesSchema = z
   .array(ticketResponseSchema)
   .max(RESPONSES_CEILING)
   .default([])
-  .superRefine(uniqueIds('quick responses'));
+  .superRefine(uniqueIds('quick response'));
 
 const settings = {
   enabled: z.boolean().default(false).register(protonFields, {
@@ -283,19 +284,19 @@ const settings = {
         value.includes(USER_PLACEHOLDER) ||
         mentionsAny(TICKET_NAME_SURFACE, value, UNIQUE_NAME_KEYS),
       {
-        message: `a ticket name needs ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} in it, or every ticket channel would share one name.`,
+        message: `Include ${NUMBER_PLACEHOLDER} or ${USER_PLACEHOLDER} so each ticket channel gets its own name.`,
       },
     )
     .register(protonFields, {
       label: 'Name pattern',
-      description: `How new ticket channels are named, using ${NUMBER_PLACEHOLDER}, ${USER_PLACEHOLDER} and ${TYPE_PLACEHOLDER}. Ticket types can set their own.`,
+      description: 'How new ticket channels are named. Ticket types can set their own.',
     }),
 
   closeConfirmation: z
     .string()
     .min(1)
     .max(2000)
-    .default('This ticket is closed. Staff can reopen it, and it will be tidied up later.')
+    .default('This ticket is closed. Thanks for getting in touch.')
     .register(protonFields, {
       label: 'Closing message',
       description: 'Posted in the ticket channel when it closes.',
@@ -303,13 +304,12 @@ const settings = {
 
   maxOpenPerUser: z.number().int().min(1).max(100).default(3).register(protonFields, {
     label: 'Open tickets per member',
-    description: 'Ticket types can set a lower limit. Your plan caps this too.',
+    description: 'Ticket types can set their own limit too.',
   }),
 
   maxOpenPerGuild: z.number().int().min(1).max(500).default(200).register(protonFields, {
     label: 'Total open tickets',
-    description:
-      'How many tickets can be open at once. Discord allows up to 500 channels in a server.',
+    description: 'The most tickets that can be open at once in this server.',
   }),
 
   creationCooldown: durationStringSchema.default('5s').register(protonFields, {
@@ -334,18 +334,18 @@ const settings = {
   staffRoleIds: z.array(snowflakeSchema).max(20).default([]).register(protonFields, {
     field: 'role-id',
     label: 'Staff roles',
-    description: 'Roles that can access every ticket. Each ticket type can add more.',
+    description: 'Roles that can see and handle every ticket. Ticket types can add more.',
   }),
 
   blacklistMessage: z
     .string()
     .min(1)
     .max(500)
-    .default('You cannot open tickets in this server.')
+    .default("You can't open tickets in this server.")
     .register(protonFields, {
       label: 'Blacklist message',
       description:
-        'Shown to blacklisted members when they try to open a ticket. Use /ticket blacklist in Discord to add or remove members.',
+        'Shown to blocked members when they try to open a ticket. Block members with /ticket blacklist in Discord.',
     }),
 };
 

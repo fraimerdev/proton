@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  BulkMemberContextLoader,
   type ConditionProvider,
   type MemberContext,
   type MemberContextLoader,
   ProviderRegistry,
+  type RestProxyClient,
+  type RestResponse,
   zodToDescriptors,
 } from '@proton/core';
 import { z } from 'zod';
@@ -135,6 +138,7 @@ async function seeded(options: {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: { roleIds: [ROLE], joinedAt: null, premiumSince: null, hasAvatar: true },
+      pressedAt: NOW,
     });
   }
 
@@ -325,6 +329,296 @@ describe('draw-time revalidation', () => {
     });
 
     expect(counted.batchCalls).toBe(0);
+  });
+});
+
+describe('a member list Proton could not read', () => {
+  function listed(ids: readonly string[]) {
+    return ids.map((id) => ({
+      joined_at: '2024-01-01T00:00:00.000Z',
+      roles: [ROLE],
+      premium_since: null,
+      communication_disabled_until: null,
+      user: { id, avatar: 'abc', bot: false },
+    }));
+  }
+
+  function listing(reply: () => RestResponse): BulkMemberContextLoader {
+    const rest: RestProxyClient = { request: async () => reply() };
+    return new BulkMemberContextLoader(rest, { now: () => NOW });
+  }
+
+  function requiringRole() {
+    const counted = roleCondition('leveling.role', 'leveling', ROLE);
+    const providers = new ProviderRegistry();
+    providers.register({ id: 'leveling', providers: [counted.provider] });
+    return providers;
+  }
+
+  test.each([
+    ['a missing Server Members intent', 403],
+    ['a proxy outage', 502],
+  ] as const)(
+    '%s falls back to the join snapshots instead of disqualifying everyone',
+    async (_label, status) => {
+      const { store } = await seeded({
+        entrants: 5,
+        winnerCount: 3,
+        requirements: [{ providerId: 'leveling.role', config: {}, position: 0 }],
+      });
+
+      const members = listing(() => ({ status, body: { message: 'Missing Access', code: 50001 } }));
+      const drawn = await drawGiveaway(deps(store, { providers: requiringRole(), members }), {
+        guildId: GUILD,
+        giveawayId: 'g1',
+        drawnBy: 'a',
+      });
+
+      if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+      expect(drawn.summary.disqualified).toBe(0);
+      expect(drawn.summary.winnerIds).toHaveLength(3);
+      expect(drawn.summary.unchecked).toBe(5);
+      expect(store.entries.some((row) => row.disqualifyReason !== null)).toBe(false);
+    },
+  );
+
+  test('the unchecked count adds up across chunks', async () => {
+    const { store } = await seeded({ entrants: 5, winnerCount: 1 });
+
+    const members = listing(() => ({ status: 502, body: {} }));
+    const drawn = await drawGiveaway(deps(store, { members, chunkSize: 2 }), {
+      guildId: GUILD,
+      giveawayId: 'g1',
+      drawnBy: 'a',
+    });
+
+    if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+    expect(drawn.summary.unchecked).toBe(5);
+  });
+
+  test('a list that failed part-way leaves only the entrants it never reached unchecked', async () => {
+    const { store } = await seeded({ entrants: 3, winnerCount: 3 });
+
+    let page = 0;
+    const rest: RestProxyClient = {
+      request: async () => {
+        page += 1;
+        return page === 1
+          ? { status: 200, body: listed([userId(1), userId(2)]) }
+          : { status: 502, body: {} };
+      },
+    };
+    const members = new BulkMemberContextLoader(rest, { now: () => NOW, pageSize: 2 });
+
+    const drawn = await drawGiveaway(deps(store, { members }), {
+      guildId: GUILD,
+      giveawayId: 'g1',
+      drawnBy: 'a',
+    });
+
+    if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+    expect(drawn.summary.unchecked).toBe(1);
+    expect(drawn.summary.disqualified).toBe(0);
+  });
+
+  const refusals = {
+    403: { message: 'Missing Access', code: 50001 },
+    502: { error: 'rest_proxy_upstream_failure', message: 'socket hang up' },
+  } as const;
+
+  test.each([
+    ['core.not_timed_out', {}, 403],
+    ['core.not_timed_out', {}, 502],
+    ['core.name_matches', { value: 'a', mode: 'contains' }, 403],
+    ['core.name_matches', { value: 'a', mode: 'contains' }, 502],
+  ] as const)(
+    'a %s requirement no join snapshot can answer keeps every entrant when the list answers %s',
+    async (providerId, config, status) => {
+      const { store } = await seeded({
+        entrants: 5,
+        winnerCount: 3,
+        requirements: [{ providerId, config, position: 0 }],
+      });
+
+      const members = listing(() => ({ status, body: refusals[status] }));
+      const drawn = await drawGiveaway(deps(store, { members }), {
+        guildId: GUILD,
+        giveawayId: 'g1',
+        drawnBy: 'a',
+      });
+
+      if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+      expect(drawn.summary.disqualified).toBe(0);
+      expect(drawn.summary.winnerIds).toHaveLength(3);
+      expect(store.entries.some((row) => row.disqualifyReason !== null)).toBe(false);
+    },
+  );
+
+  test('a requirement the snapshot cannot answer does not shield one it answers with a fail', async () => {
+    const { store } = await seeded({
+      entrants: 2,
+      winnerCount: 3,
+      requirements: [
+        { providerId: 'leveling.role', config: {}, position: 0 },
+        { providerId: 'core.not_timed_out', config: {}, position: 1 },
+      ],
+    });
+    await store.enter({
+      giveawayId: 'g1',
+      userId: userId(3),
+      baseEntries: 1,
+      totalEntries: 1,
+      breakdown: [],
+      memberSnapshot: { roleIds: [], joinedAt: null, premiumSince: null, hasAvatar: true },
+      pressedAt: NOW,
+    });
+
+    const members = listing(() => ({ status: 502, body: refusals[502] }));
+    const drawn = await drawGiveaway(deps(store, { providers: requiringRole(), members }), {
+      guildId: GUILD,
+      giveawayId: 'g1',
+      drawnBy: 'a',
+    });
+
+    if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+    expect(drawn.summary.disqualified).toBe(1);
+    expect(drawn.summary.winnerIds.sort()).toEqual([userId(1), userId(2)]);
+    expect(store.entries.find((row) => row.userId === userId(3))?.disqualifyReason).not.toBeNull();
+  });
+
+  test('a requirement the list itself could not answer still refuses a listed entrant', async () => {
+    const undecidable: ConditionProvider<typeof countedSchema> = {
+      kind: 'condition',
+      id: 'leveling.undecidable',
+      moduleId: 'leveling',
+      label: 'Undecidable',
+      description: 'Undecidable',
+      configSchema: countedSchema,
+      builder: zodToDescriptors(countedSchema),
+      cost: 'facts',
+      async evaluate() {
+        return { passed: false, indeterminate: { humanReason: 'could not be judged' } };
+      },
+      describe() {
+        return 'undecidable';
+      },
+      describeFailure(_config, result) {
+        return result.indeterminate?.humanReason ?? 'failed';
+      },
+    };
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: 'leveling',
+      providers: [undecidable as unknown as ConditionProvider],
+    });
+
+    const { store } = await seeded({
+      entrants: 2,
+      winnerCount: 2,
+      requirements: [{ providerId: 'leveling.undecidable', config: {}, position: 0 }],
+    });
+
+    const members = listing(() => ({ status: 200, body: listed([userId(1), userId(2)]) }));
+    const drawn = await drawGiveaway(deps(store, { providers, members }), {
+      guildId: GUILD,
+      giveawayId: 'g1',
+      drawnBy: 'a',
+    });
+
+    if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+    expect(drawn.summary.disqualified).toBe(2);
+    expect(store.entries.map((row) => row.disqualifyReason)).toEqual([
+      'could not be judged',
+      'could not be judged',
+    ]);
+  });
+
+  test('a join snapshot still decides a requirement the entrant did not meet', async () => {
+    const { store } = await seeded({
+      entrants: 2,
+      winnerCount: 2,
+      requirements: [{ providerId: 'leveling.role', config: {}, position: 0 }],
+    });
+    await store.enter({
+      giveawayId: 'g1',
+      userId: userId(3),
+      baseEntries: 1,
+      totalEntries: 1,
+      breakdown: [],
+      memberSnapshot: { roleIds: [], joinedAt: null, premiumSince: null, hasAvatar: true },
+      pressedAt: NOW,
+    });
+
+    const members = listing(() => ({ status: 502, body: {} }));
+    const drawn = await drawGiveaway(deps(store, { providers: requiringRole(), members }), {
+      guildId: GUILD,
+      giveawayId: 'g1',
+      drawnBy: 'a',
+    });
+
+    if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+    expect(drawn.summary.disqualified).toBe(1);
+    expect(store.entries.find((row) => row.userId === userId(3))?.disqualifyReason).toBe(
+      'you no longer hold the required role',
+    );
+  });
+
+  test.each([
+    ['the list failed', true],
+    ['no member loader is wired', false],
+  ] as const)(
+    'an entrant with no join snapshot is kept, not counted as having left, when %s',
+    async (_label, wired) => {
+      const { store } = await seeded({ entrants: 2, winnerCount: 3 });
+      await store.enter({
+        giveawayId: 'g1',
+        userId: userId(3),
+        baseEntries: 1,
+        totalEntries: 1,
+        breakdown: [],
+        memberSnapshot: null,
+        pressedAt: NOW,
+      });
+
+      const extra = wired ? { members: listing(() => ({ status: 502, body: {} })) } : {};
+      const drawn = await drawGiveaway(deps(store, extra), {
+        guildId: GUILD,
+        giveawayId: 'g1',
+        drawnBy: 'a',
+      });
+
+      if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+      expect(drawn.summary.disqualified).toBe(0);
+      expect(drawn.summary.winnerIds).toContain(userId(3));
+    },
+  );
+
+  test('a list that was read still disqualifies the entrant who left', async () => {
+    const { store } = await seeded({ entrants: 3, winnerCount: 3 });
+
+    const members = listing(() => ({ status: 200, body: listed([userId(1), userId(3)]) }));
+    const drawn = await drawGiveaway(deps(store, { members }), {
+      guildId: GUILD,
+      giveawayId: 'g1',
+      drawnBy: 'a',
+    });
+
+    if (drawn.outcome !== 'drawn') throw new Error('expected a draw');
+
+    expect(drawn.summary.disqualified).toBe(1);
+    expect(drawn.summary.unchecked).toBe(0);
+    expect(drawn.summary.winnerIds).not.toContain(userId(2));
+    expect(store.entries.find((row) => row.userId === userId(2))?.disqualifyReason).toBe(
+      'left the server before the draw',
+    );
   });
 });
 

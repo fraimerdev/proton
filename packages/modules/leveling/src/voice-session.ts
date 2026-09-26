@@ -1,5 +1,6 @@
-import { snowflakeSchema } from '@proton/core';
-import { z } from 'zod';
+import { voiceSessionKey as coreVoiceSessionKey } from '@proton/core';
+
+export { type VoiceSession, type VoiceSessionStore, voiceSessionSchema } from '@proton/core';
 
 export const VOICE_SESSION_PREFIX = 'proton:leveling:voice';
 
@@ -10,25 +11,5 @@ export function voiceSessionKey(
   userId: string,
   prefix: string = VOICE_SESSION_PREFIX,
 ): string {
-  return `${prefix}:${guildId}:${userId}`;
-}
-
-export const voiceSessionSchema = z.object({
-  guildId: snowflakeSchema,
-  userId: snowflakeSchema,
-  channelId: snowflakeSchema,
-
-  joinedAt: z.number().int().nonnegative(),
-
-  roleIds: z.array(snowflakeSchema).optional(),
-});
-
-export type VoiceSession = z.infer<typeof voiceSessionSchema>;
-
-export interface VoiceSessionStore {
-  get(guildId: string, userId: string): Promise<VoiceSession | null>;
-
-  open(session: VoiceSession): Promise<void>;
-
-  close(guildId: string, userId: string): Promise<VoiceSession | null>;
+  return coreVoiceSessionKey(guildId, userId, prefix);
 }

@@ -1,14 +1,17 @@
-import type {
-  ActionRequest,
-  ActionResult,
-  CommandContext,
-  FollowUpTo,
-  InteractionRef,
-  ModuleContext,
-  RespondTo,
-  StatusBody,
+import {
+  type ActionRequest,
+  type ActionResult,
+  type CommandContext,
+  deferEphemeral,
+  type FollowUpTo,
+  followUp,
+  type InteractionRef,
+  type ModuleContext,
+  type RespondTo,
+  type StatusBody,
 } from '@proton/core';
 import type { VerificationConfig } from './config.ts';
+import type { VerificationDeps } from './deps.ts';
 import type { RoleStep } from './roles.ts';
 
 export const MODULE_ID = 'verification';
@@ -109,7 +112,28 @@ export async function run(
   return result;
 }
 
-export async function reply(
+export type Answer = (message: string | StatusBody) => Promise<void>;
+
+export async function acknowledge(
+  ctx: CommandContext<VerificationConfig>,
+  deps: VerificationDeps,
+): Promise<Answer> {
+  const applicationId = ctx.applicationId ?? deps.applicationId;
+  // Without an application id there is no followup webhook, so the one callback must be the answer.
+  if (!applicationId) return (message) => reply(ctx, message);
+
+  const to = respondTo(ctx, ctx.interaction, ctx.userId, ctx.idempotencyKey);
+  await run(ctx, deferEphemeral(to), 'acknowledge the command');
+
+  const followTo = followUpTo(to, applicationId);
+
+  return async (message) => {
+    const body = typeof message === 'string' ? { content: message } : message;
+    await run(ctx, followUp(followTo, { ...body, ephemeral: true }), 'answer the invoker');
+  };
+}
+
+async function reply(
   ctx: CommandContext<VerificationConfig>,
   message: string | StatusBody,
 ): Promise<void> {

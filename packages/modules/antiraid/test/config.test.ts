@@ -44,7 +44,7 @@ describe('antiraidConfigSchema', () => {
   test('brand new must be a subset of new, and says so on the offending field', () => {
     const result = parse({ newAccountAge: '1d', brandNewAccountAge: '7d' });
     expect(result.success).toBe(false);
-    expect(issue(result)).toContain('brand-new accounts are a subset of new ones');
+    expect(issue(result)).toBe('Can’t be longer than the new account age (1d).');
     expect(result.success ? [] : result.error.issues[0]?.path).toEqual(['brandNewAccountAge']);
 
     expect(parse({ newAccountAge: '7d', brandNewAccountAge: '7d' }).success).toBe(true);

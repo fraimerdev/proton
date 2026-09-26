@@ -1,6 +1,7 @@
 import {
   errorStatus,
   interactionRef,
+  labelOf,
   type ProtonEvent,
   readComponentInteraction,
   readModalInteraction,
@@ -114,7 +115,9 @@ export async function handleBuilderPress(
         ref,
         interaction.userId,
         target.root,
-        errorStatus('That builder has expired. Start a new one with `/giveaway create`.'),
+        errorStatus(
+          `That builder has expired. Start a new one with \`${labelOf(ctx, 'giveaway', 'create')}\`.`,
+        ),
       );
       return 'handled';
     }
@@ -135,14 +138,18 @@ export async function handleBuilderPress(
     return 'handled';
   }
 
-  const reply = await handleBuilderComponent(deps, {
-    action: route.action,
-    args: route.args,
-    guildId: interaction.guildId,
-    channelId: interaction.channelId ?? '',
-    userId: interaction.userId,
-    values: interaction.values,
-  });
+  const reply = await handleBuilderComponent(
+    deps,
+    {
+      action: route.action,
+      args: route.args,
+      guildId: interaction.guildId,
+      channelId: interaction.channelId ?? '',
+      userId: interaction.userId,
+      values: interaction.values,
+    },
+    ctx,
+  );
 
   return deliver(ctx, target, reply);
 }
@@ -177,14 +184,18 @@ export async function handleBuilderSubmit(
     root: `${interaction.interactionId}:builder`,
   };
 
-  const reply = await handleBuilderModal(deps, {
-    action: route.action,
-    args: route.args,
-    guildId: interaction.guildId,
-    userId: interaction.userId,
-    fields: interaction.fields,
-    values: interaction.values,
-  });
+  const reply = await handleBuilderModal(
+    deps,
+    {
+      action: route.action,
+      args: route.args,
+      guildId: interaction.guildId,
+      userId: interaction.userId,
+      fields: interaction.fields,
+      values: interaction.values,
+    },
+    ctx,
+  );
 
   // Discord refuses a modal opened from a modal submission, so a validation failure comes back as
   // an ephemeral message naming the field rather than the form again.

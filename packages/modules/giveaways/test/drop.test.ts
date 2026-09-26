@@ -156,8 +156,8 @@ describe('the drop card', () => {
   test('says it is a drop and how it is won', async () => {
     const text = await card();
 
-    expect(text).toContain('DROP');
-    expect(text).toContain('First eligible member');
+    expect(text).toContain('**Drop**');
+    expect(text).toContain('The first eligible member to press the button wins');
   });
 
   // A drop has no deadline anybody counts down to and nobody is entered, so showing either would

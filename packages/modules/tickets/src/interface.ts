@@ -1,6 +1,7 @@
 import { encodeCustomId, type TicketPriority } from '@proton/core';
 import { ButtonStyle, ComponentType } from 'discord-api-types/v10';
 import { MODULE_ID, PRIORITY_LABELS, type TicketPanel, type TicketType } from './config.ts';
+import { mentionOf } from './deps.ts';
 import { renderTicketWelcome, type TicketPlaceholderFacts } from './placeholders.ts';
 import type { Ticket, TicketFormAnswer, TicketParticipant } from './store.ts';
 
@@ -106,8 +107,8 @@ export function buildPanelComponents(
     return {
       ok: false,
       humanReason:
-        `The **${panel.name}** panel has no ticket types on it, so its buttons would open ` +
-        'nothing. Add at least one under Tickets → Ticket types, then attach it to the panel.',
+        `The **${panel.name}** panel has no ticket types, so it would open nothing. Add one to ` +
+        'it in the Proton dashboard under Tickets → Panels.',
     };
   }
 
@@ -221,7 +222,7 @@ export function describePriority(priority: TicketPriority): string {
 }
 
 function stamp(date: Date | null | undefined, style = 'f'): string {
-  return date ? `<t:${Math.floor(date.getTime() / 1000)}:${style}>` : '—';
+  return date ? `<t:${Math.floor(date.getTime() / 1000)}:${style}>` : 'Unknown';
 }
 
 export function buildControlRows(view: TicketView): BuildResult<Record<string, unknown>[]> {
@@ -378,7 +379,7 @@ export function buildInfoComponents(
     `**Type**\n${view.typeName}`,
     `**Status**\n${describeStatus(ticket)}`,
     `**Priority**\n${describePriority(ticket.priority)}`,
-    `**Raised by**\n<@${ticket.openerId}>`,
+    `**Opened by**\n<@${ticket.openerId}>`,
     ...(ticket.ownerId === ticket.openerId ? [] : [`**Owner**\n<@${ticket.ownerId}>`]),
     `**Opened**\n${stamp(ticket.openedAt)}`,
     `**Claimed by**\n${ticket.claimedById ? `<@${ticket.claimedById}>` : 'Nobody yet'}`,
@@ -387,7 +388,9 @@ export function buildInfoComponents(
     `**Messages**\n${extra.messageCount}`,
     `**Last activity**\n${stamp(ticket.lastActivityAt, 'R')}`,
     ...(ticket.firstResponseAt ? [`**First reply**\n${stamp(ticket.firstResponseAt, 'R')}`] : []),
-    ...(ticket.closedAt ? [`**Closed**\n${stamp(ticket.closedAt)} by <@${ticket.closedBy}>`] : []),
+    ...(ticket.closedAt
+      ? [`**Closed**\n${stamp(ticket.closedAt)} by ${mentionOf(ticket.closedBy)}`]
+      : []),
     ...(ticket.closeReason ? [`**Reason**\n${ticket.closeReason}`] : []),
     ...(extra.rating === null ? [] : [`**Rating**\n${extra.rating} out of 5`]),
   ];
@@ -427,7 +430,7 @@ export function buildCloseRequestComponents(
         ),
         spacer(),
         row(
-          button(ButtonStyle.Success, 'Yes, close it', confirm.value),
+          button(ButtonStyle.Success, 'Close ticket', confirm.value),
           button(ButtonStyle.Secondary, 'Keep it open', cancel.value),
         ),
       ),
@@ -460,7 +463,7 @@ export function buildRatingComponents(ticket: Ticket): BuildResult<Record<string
         // Numbers do not, so the scale has to be spelled out.
         text(
           `Ticket #${ticket.number} is closed. If you have a moment, rate the help you got from ` +
-            '**1** (poor) to **5** (excellent) — it is only visible to the staff team.',
+            '**1** (poor) to **5** (excellent). Only staff can see your rating.',
         ),
         spacer(),
         row(...buttons),

@@ -1,4 +1,4 @@
-import { parseOverwrites, snowflakeSchema } from '@proton/core';
+import { labelOf, type ModuleContext, parseOverwrites, snowflakeSchema } from '@proton/core';
 import { isObfuscatedChannel } from '@proton/gateway/normaliser';
 import { z } from 'zod';
 
@@ -247,7 +247,10 @@ function channelList(ids: readonly string[], limit = 10): string {
   return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ');
 }
 
-export function describeCapture(report: CaptureReport): string[] {
+export function describeCapture(
+  report: CaptureReport,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
+): string[] {
   const lines = [
     `Backed up ${report.channelsCaptured} channel${report.channelsCaptured === 1 ? '' : 's'} ` +
       `and ${report.rolesCaptured} role${report.rolesCaptured === 1 ? '' : 's'}.`,
@@ -256,31 +259,30 @@ export function describeCapture(report: CaptureReport): string[] {
   if (report.obfuscatedChannelIds.length > 0) {
     const n = report.obfuscatedChannelIds.length;
     lines.push(
-      `${n} channel${n === 1 ? '' : 's'} could NOT be backed up: ${channelList(
+      `**${n} channel${n === 1 ? '' : 's'} couldn’t be backed up:** ${channelList(
         report.obfuscatedChannelIds,
-      )}. Proton has no View Channel permission there, and Discord hides the name, topic and ` +
-        'permissions of a channel a bot cannot view — so there is nothing to save. Grant View ' +
-        'Channel to Proton in each of those channels (Channel Settings → Permissions), then run ' +
-        '`/backup create` again. Until then a restore from this snapshot will leave ' +
-        `${n === 1 ? 'that channel' : 'those channels'} untouched rather than recreate ` +
+      )}. I don’t have View Channel there, and Discord hides the name, topic and permissions ` +
+        'of channels I can’t view, so there’s nothing to save. Give me the View Channel ' +
+        'permission in each of those channels (Channel Settings → Permissions), then run ' +
+        `\`${labelOf(labels, 'backup', 'create')}\` again. Until then, restoring this snapshot ` +
+        `leaves ${n === 1 ? 'that channel' : 'those channels'} untouched instead of recreating ` +
         `${n === 1 ? 'it' : 'them'} wrongly.`,
     );
   }
 
   if (report.source === 'rest') {
     lines.push(
-      'Warning: the channel list this snapshot came from leaves hidden channels out entirely ' +
-        'rather than marking them. The count above may therefore be missing channels, and ' +
-        'nothing in the snapshot can tell you which. Treat it as incomplete.',
+      'This snapshot may be missing channels. The channel list it came from leaves out hidden ' +
+        'channels instead of marking them, so there’s no way to tell which are missing. Treat ' +
+        'it as incomplete.',
     );
   }
 
   if (report.unreadable > 0) {
     lines.push(
-      `${report.unreadable} object${report.unreadable === 1 ? '' : 's'} Discord sent could not ` +
-        'be read by this version of Proton and ' +
-        `${report.unreadable === 1 ? 'is' : 'are'} not in the snapshot. This is a Proton bug, ` +
-        'not a permission problem — please report it.',
+      `I couldn’t read ${report.unreadable} item${report.unreadable === 1 ? '' : 's'} Discord ` +
+        `sent, so ${report.unreadable === 1 ? 'it isn’t' : 'they aren’t'} in the snapshot. ` +
+        'This is a bug on my side, not a permission problem. Please report it.',
     );
   }
 

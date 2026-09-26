@@ -187,7 +187,7 @@ describe('/xp event end', () => {
     await xpCommand(depsWith(store)).handler(ctx);
 
     expect(contentOf(sent)).toContain('Ended 2 XP events.');
-    expect(contentOf(sent)).toContain('1 scheduled XP event is untouched');
+    expect(contentOf(sent)).toContain('1 scheduled XP event will still start');
     expect(store.of(GUILD).map((event) => [event.id, event.endsAt])).toEqual([
       ['a', NOW],
       ['b', NOW],
@@ -220,7 +220,7 @@ describe('/xp event list', () => {
 
     const content = contentOf(sent);
     expect(content).toContain(`(2 of ${XP_EVENT_MAX_PENDING})`);
-    expect(content).toContain(`**Active** · 2× XP, ends <t:${Math.floor((NOW + HOUR) / 1000)}:R>`);
+    expect(content).toContain(`**Running** · 2× XP, ends <t:${Math.floor((NOW + HOUR) / 1000)}:R>`);
     expect(content).toContain(
       `**Scheduled** · 1.5× XP, starts <t:${Math.floor((NOW + DAY) / 1000)}:R>`,
     );
@@ -233,7 +233,7 @@ describe('/xp event list', () => {
 
     await xpCommand(depsWith(new FakeXpEventStore())).handler(ctx);
 
-    expect(contentOf(sent)).toContain('no active or scheduled XP events');
+    expect(contentOf(sent)).toContain('No XP events are running or scheduled');
   });
 });
 
@@ -262,7 +262,7 @@ describe('/xp event gating', () => {
     expect(
       (sent[0]?.payload as { embeds?: { description?: string }[] } | undefined)?.embeds?.[0]
         ?.description,
-    ).toContain('disabled');
+    ).toContain('Leveling is off');
   });
 
   test('a process built without the event store refuses and names the missing port', async () => {

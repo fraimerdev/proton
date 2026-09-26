@@ -40,6 +40,7 @@ export interface TempVoiceRepository {
 
   /** Marks the row closing so two sweepers cannot both delete the same Discord channel. */
   beginClose(id: string): Promise<boolean>;
+  reopen(id: string): Promise<void>;
   forget(id: string): Promise<void>;
 
   access(tempChannelId: string): Promise<Array<{ userId: string; kind: AccessKind }>>;
@@ -71,7 +72,8 @@ export class DrizzleTempVoiceRepository implements TempVoiceRepository {
    * same millisecond cannot both read "0 live" and both reserve.
    */
   async reserve(input: ReserveInput): Promise<Reservation> {
-    const rows = await this.#db.execute<TempVoiceChannelRow>(sql`
+    // execute() returns raw snake_case rows with string timestamps; byId decodes through the table.
+    const rows = await this.#db.execute<{ id: string }>(sql`
       insert into ${tempVoiceChannels} (id, guild_id, hub_channel_id, owner_id, status)
       select ${input.id}, ${input.guildId}, ${input.hubChannelId}, ${input.ownerId}, 'reserving'
       where (
@@ -80,11 +82,14 @@ export class DrizzleTempVoiceRepository implements TempVoiceRepository {
           and owner_id = ${input.ownerId}
           and status <> 'closing'
       ) < ${input.maxChannelsPerUser}
-      returning *
+      returning id
     `);
 
-    const reserved = rows[0];
-    if (reserved) return { reserved };
+    if (rows.length > 0) {
+      const reserved = await this.byId(input.id);
+      if (!reserved) throw new Error(`temp voice row ${input.id} vanished after its insert`);
+      return { reserved };
+    }
 
     return { refused: 'at_limit', live: (await this.ownedBy(input.guildId, input.ownerId)).length };
   }
@@ -211,6 +216,13 @@ export class DrizzleTempVoiceRepository implements TempVoiceRepository {
     `);
 
     return rows.length === 1;
+  }
+
+  async reopen(id: string): Promise<void> {
+    await this.#db
+      .update(tempVoiceChannels)
+      .set({ status: 'live' })
+      .where(and(eq(tempVoiceChannels.id, id), eq(tempVoiceChannels.status, 'closing')));
   }
 
   async forget(id: string): Promise<void> {

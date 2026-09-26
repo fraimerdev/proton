@@ -6,6 +6,7 @@ import { applyLevelUp } from './level-up.ts';
 import { channelChainFor, xpEventsBetween } from './multiplier-lookup.ts';
 import { messageXpCandidates, resolveXpMultiplier, scaleMessageXp } from './multipliers.ts';
 import { MODULE_ID } from './perform.ts';
+import { organicCausation, publishXpAwarded } from './publish.ts';
 
 export const MESSAGE_XP_EVENT_TYPES: EventType[] = ['message.created'];
 
@@ -186,6 +187,23 @@ export function createMessageXpListener(deps: LevelingDeps): EventListener<Level
 
       if (!result.awarded) return;
 
+      const causation = organicCausation(event.id);
+
+      // Before the level-up, not after: the XP is already committed, so if applyLevelUp throws the
+      // redelivered message hits the cooldown and awards nothing, and a publish after it is lost.
+      if (amount > 0) {
+        await publishXpAwarded(ctx, event.id, {
+          userId: message.authorId,
+          amount,
+          source: 'message',
+          channelId: message.channelId,
+          activityAt: event.occurredAt,
+          xp: result.xp,
+          level: result.level,
+          causation,
+        });
+      }
+
       await applyLevelUp(
         ctx,
         {
@@ -200,6 +218,7 @@ export function createMessageXpListener(deps: LevelingDeps): EventListener<Level
           ...(message.roleIds === null ? {} : { heldRoleIds: message.roleIds }),
           gained: amount,
           ...readAuthorFacts(event.payload),
+          causation,
         },
         deps,
       );

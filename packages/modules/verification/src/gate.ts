@@ -8,7 +8,7 @@ import {
 } from '@proton/core';
 import type { VerificationConfig } from './config.ts';
 import { bindGateDeps, describeUnbound, type VerificationDeps } from './deps.ts';
-import { MODULE_ID, reply, runSteps, VERIFICATION_ACTOR } from './perform.ts';
+import { type Answer, MODULE_ID, runSteps, VERIFICATION_ACTOR } from './perform.ts';
 import { checkGrantable, type RoleStep } from './roles.ts';
 
 export interface JoinFacts {
@@ -140,9 +140,8 @@ export function planVerification(
   if (!verifiedRoleId && !unverifiedRoleId) {
     return {
       refusal:
-        "This server hasn't finished setting up verification: neither a member role nor an " +
-        'unverified role is chosen, so passing the gate would change nothing. An admin can ' +
-        'set them in the Proton dashboard under Verification.',
+        "Verification isn't set up in this server yet. An admin needs to choose a member role " +
+        'or an unverified role in the Proton dashboard.',
     };
   }
 
@@ -157,7 +156,7 @@ export function planVerification(
 
   return {
     grant: verifiedRoleId
-      ? [{ kind: 'add_role', roleId: verifiedRoleId, what: 'granting the member role' }]
+      ? [{ kind: 'add_role', roleId: verifiedRoleId, what: 'giving the member role' }]
       : [],
     clear: unverifiedRoleId
       ? [{ kind: 'remove_role', roleId: unverifiedRoleId, what: 'removing the unverified role' }]
@@ -168,13 +167,12 @@ export function planVerification(
 export async function runVerify(
   ctx: CommandContext<VerificationConfig>,
   rawDeps: VerificationDeps,
+  answer: Answer,
 ): Promise<void> {
   if (!ctx.config.enabled) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        'Verification is disabled in this server, so there is nothing to pass. An admin can ' +
-          'turn it on from the Proton dashboard.',
+        'Verification is off in this server. An admin can turn it on in the Proton dashboard.',
       ),
     );
     return;
@@ -184,11 +182,9 @@ export async function runVerify(
   if ('unbound' in bound) {
     const detail = describeUnbound('I could not verify you', bound.unbound);
     ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        'I can’t verify you right now. Nothing was changed. This is a fault on my side, not ' +
-          'anything you did.',
+        'I can’t verify you right now. Nothing was changed, and it’s not anything you did.',
       ),
     );
     return;
@@ -203,12 +199,11 @@ export async function runVerify(
       moduleId: MODULE_ID,
       userId: ctx.userId,
     });
-    await reply(ctx, errorStatus(plan.refusal));
+    await answer(errorStatus(plan.refusal));
     return;
   }
 
-  await reply(
-    ctx,
+  await answer(
     verifyStatus(await runVerification(ctx, plan, ctx.userId, ctx.idempotencyKey, rawDeps)),
   );
 }
@@ -224,8 +219,8 @@ export function verifyStatus(result: VerifyResult): StatusBody {
 }
 
 const BLOCKED_MESSAGE =
-  'You are on this server’s blocked list, so I can’t verify you. Nothing has changed. A ' +
-  'moderator can lift it from the Proton dashboard.';
+  'You’re on this server’s blocked list, so I can’t verify you. A moderator can remove you ' +
+  'from the list in the Proton dashboard.';
 
 // Fail-open, and loudly. Refusing everybody when the port is unwired would turn one wiring
 // mistake into a total gate outage, and the list is a second line behind a ban that already ran.
@@ -289,9 +284,7 @@ export async function runVerification(
 
     return {
       verified: false,
-      message:
-        `I couldn't finish verifying you, so nothing has changed — you still have the same ` +
-        `roles you had. ${detail}`,
+      message: `I couldn't finish verifying you, so nothing has changed.\n\nWhat failed: ${detail}`,
     };
   }
 
@@ -307,8 +300,8 @@ export async function runVerification(
     return {
       verified: true,
       message:
-        "You're verified. One thing did not finish — " +
-        `${cleared.failures.join(' | ')} — so if you still can't see the server, tell a moderator.`,
+        "You're verified, but one step didn't finish. If you still can't see the server, tell a " +
+        `moderator.\n\nWhat failed: ${cleared.failures.join(' | ')}`,
     };
   }
 

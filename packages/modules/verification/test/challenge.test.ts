@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import { Permissions } from '@proton/core';
 import {
   answerModal,
+  BOT_PERMISSIONS,
   CAPTCHA,
   CAPTCHA_PNG,
   CAPTCHA_TTL_MS,
@@ -87,7 +89,7 @@ describe('issuing a captcha', () => {
     });
 
     expect(outcome.action).toBe('refused');
-    expect(h.lastTold()).toContain('could not draw your captcha');
+    expect(h.lastTold()).toContain('couldn’t create your captcha');
     expect(await h.captcha.get(GUILD, MEMBER)).toBeNull();
   });
 
@@ -139,7 +141,7 @@ describe('the Enter code press', () => {
 
     expect(outcome.action).toBe('refused');
     expect(h.callbackTypes()).toEqual([4]);
-    expect(h.lastTold()).toContain('expired or been replaced');
+    expect(h.lastTold()).toContain('expired or was replaced');
   });
 });
 
@@ -198,7 +200,7 @@ describe('answering the captcha', () => {
     await h.submit(answerModal(challenge.challengeId), { [CODE]: 'WRONG1' }, { config: CAPTCHA });
 
     expect(h.callbackTypes()).toEqual([4]);
-    expect(h.lastTold()).toContain('That is not the code in the image.');
+    expect(h.lastTold()).toContain('That’s not the code in the image.');
     expect(h.button('Enter code').customId).toBe(captchaPress(challenge.challengeId));
   });
 
@@ -207,7 +209,7 @@ describe('answering the captcha', () => {
     const challenge = await h.seed();
 
     await h.submit(answerModal(challenge.challengeId), { [CODE]: 'WRONG1' }, { config: CAPTCHA });
-    expect(h.lastTold()).toContain('You have one more attempt after this one.');
+    expect(h.lastTold()).toContain('You have 1 more attempt after this one.');
 
     await h.submit(answerModal(challenge.challengeId), { [CODE]: 'WRONG2' }, { config: CAPTCHA });
     expect(h.lastTold()).toContain('This is your last attempt.');
@@ -228,7 +230,7 @@ describe('answering the captcha', () => {
       action: 'refused',
       reason: 'the challenge is gone or has been replaced',
     });
-    expect(h.lastTold()).toContain('expired or been replaced');
+    expect(h.lastTold()).toContain('expired or was replaced');
     expect(h.captcha.updates).toBe(0);
   });
 
@@ -316,7 +318,23 @@ describe('captchaDelivery: dm', () => {
     expect(outcome.action).toBe('challenged');
     expect(h.dmOpens()).toHaveLength(1);
     expect(h.sentIn(DM_CHANNEL)).toHaveLength(1);
-    expect(h.lastTold()).toContain('sent your captcha by direct message');
+    expect(h.lastTold()).toContain('I sent your captcha in a DM');
+  });
+
+  test('reaches the DM from a server that withholds Send Messages and Attach Files', async () => {
+    const h = harness({
+      botPermissions: BOT_PERMISSIONS & ~(Permissions.SendMessages | Permissions.AttachFiles),
+    });
+
+    const outcome = await h.press(verifyPress(), {
+      config: { ...CAPTCHA, captchaDelivery: 'dm' },
+    });
+
+    expect(outcome.action).toBe('challenged');
+    expect(h.sentIn(DM_CHANNEL)).toHaveLength(1);
+    expect(JSON.stringify(h.sentIn(DM_CHANNEL))).not.toContain('directMessage');
+    expect(h.lastTold()).toContain('I sent your captcha in a DM');
+    expect(h.logs.map((log) => log.message).join('\n')).not.toContain('Send Messages');
   });
 
   test('a closed DM refuses the send, not the open, and still gets the member their captcha', async () => {

@@ -52,11 +52,11 @@ function summary(draft: GiveawayDraft, registry: ProviderRegistry): string {
 
   lines.push(
     draft.title.length === 0
-      ? '**Prize** — *not set yet. Press “Basic settings”.*'
-      : `**Prize** — ${draft.title}`,
+      ? '**Prize:** *not set yet. Press “Basic settings”.*'
+      : `**Prize:** ${draft.title}`,
   );
 
-  if (draft.description) lines.push(`**Description** — ${truncate(draft.description, 120)}`);
+  if (draft.description) lines.push(`**Description:** ${truncate(draft.description, 120)}`);
 
   lines.push(
     `**Runs for** ${describeWait(draft.durationMs)} · **${plural(draft.winnerCount, 'winner')}**`,
@@ -66,13 +66,13 @@ function summary(draft: GiveawayDraft, registry: ProviderRegistry): string {
   lines.push(
     '',
     requirements.length === 0
-      ? '**Requirements** — anyone can enter'
+      ? '**Requirements:** anyone can enter'
       : `**Requirements** (${draft.requirementLogic === 'any' ? 'any one of these' : 'all of these'})`,
   );
   for (const [index, line] of requirements.entries()) lines.push(`\`${index + 1}.\` ${line}`);
 
   const multipliers = describeMultipliers(registry, draft.multipliers);
-  lines.push('', multipliers.length === 0 ? '**Bonus entries** — none' : '**Bonus entries**');
+  lines.push('', multipliers.length === 0 ? '**Bonus entries:** none' : '**Bonus entries**');
   for (const [index, line] of multipliers.entries()) {
     lines.push(`\`${requirements.length + index + 1}.\` ${line}`);
   }
@@ -175,7 +175,7 @@ export function builderScreen(
     BUILDER_ADD_REQUIREMENT,
     'Add a requirement…',
     conditions,
-    'No requirements are available — no module that provides them is on',
+    'No requirements available. Turn on a module that provides them.',
   );
   if (!requirementRow.ok) return { ok: false, humanReason: requirementRow.humanReason };
 
@@ -183,7 +183,7 @@ export function builderScreen(
     BUILDER_ADD_MULTIPLIER,
     'Add bonus entries…',
     multipliers,
-    'No bonus-entry rules are available',
+    'No bonus entries available. Turn on a module that provides them.',
   );
   if (!multiplierRow.ok) return { ok: false, humanReason: multiplierRow.humanReason };
 
@@ -295,7 +295,7 @@ export function basicsModal(draft: GiveawayDraft): BasicsModalResult {
         {
           type: ComponentType.Label,
           label: 'How long it runs',
-          description: 'A number and a unit — 30m, 12h, 7d.',
+          description: 'For example 30m, 12h or 7d.',
           component: {
             type: ComponentType.TextInput,
             custom_id: DURATION_FIELD,

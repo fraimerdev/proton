@@ -15,8 +15,8 @@ export function checkGrantable(state: GuildState | null, roleId: string, label: 
     return {
       ok: false,
       reason:
-        "I don't have this server's role list yet, so I can't tell whether I'm allowed to " +
-        `move the ${label} role. Try again shortly.`,
+        "I haven't loaded this server's roles yet, so I can't check the " +
+        `${label} role. Try again in a moment.`,
     };
   }
 
@@ -24,8 +24,8 @@ export function checkGrantable(state: GuildState | null, roleId: string, label: 
     return {
       ok: false,
       reason:
-        `The ${label} role is set to @everyone, which Discord does not let anyone add or ` +
-        'remove. Pick a real role in the Proton dashboard.',
+        `The ${label} role is set to @everyone, which can't be given or removed. An admin ` +
+        'needs to choose another role in the Proton dashboard.',
     };
   }
 
@@ -34,8 +34,8 @@ export function checkGrantable(state: GuildState | null, roleId: string, label: 
     return {
       ok: false,
       reason:
-        `The ${label} role (id ${roleId}) doesn't exist in this server any more, or I can't ` +
-        'see it. Choose a role that exists in the Proton dashboard.',
+        `The ${label} role (ID ${roleId}) doesn't exist anymore, or I can't see it. An admin ` +
+        'needs to choose another role in the Proton dashboard.',
     };
   }
 
@@ -44,9 +44,8 @@ export function checkGrantable(state: GuildState | null, roleId: string, label: 
     return {
       ok: false,
       reason:
-        `I can't grant the ${label} role (id ${roleId}): it sits at position ${role.position} ` +
-        `and my own highest role is at position ${botPosition}. Discord only lets me assign ` +
-        "roles below my own. Drag Proton's role above it in Server Settings → Roles.",
+        `The ${label} role (<@&${roleId}>) is at or above my highest role, so I can't give ` +
+        'or remove it. An admin needs to move my role above it in Server Settings → Roles.',
     };
   }
 
@@ -81,7 +80,7 @@ export function planQuarantine(input: {
     priorRoleIds,
     steps: [
       ...priorRoleIds.map(
-        (roleId): RoleStep => ({ kind: 'remove_role', roleId, what: `removing role ${roleId}` }),
+        (roleId): RoleStep => ({ kind: 'remove_role', roleId, what: `removing <@&${roleId}>` }),
       ),
       {
         kind: 'add_role',
@@ -125,7 +124,7 @@ export function planRelease(input: {
   return {
     steps: [
       ...restorable.map(
-        (roleId): RoleStep => ({ kind: 'add_role', roleId, what: `restoring role ${roleId}` }),
+        (roleId): RoleStep => ({ kind: 'add_role', roleId, what: `giving back <@&${roleId}>` }),
       ),
       {
         kind: 'remove_role',

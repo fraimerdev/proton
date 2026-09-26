@@ -8,27 +8,83 @@ import {
   parseCustomId,
   readComponentInteraction,
   replyEphemeral,
+  type StatusBody,
   successStatus,
 } from '@proton/core';
 import { mayReview, readPermissions, readRoleIds } from './authorize.ts';
-import { type AppealsConfig, MODULE_ID, panelFor } from './config.ts';
-import { applyDecision, stampCard } from './decision.ts';
+import { type AppealPanel, type AppealsConfig, MODULE_ID, panelFor } from './config.ts';
+import { type ApplyOutcome, applyDecision, stampCard } from './decision.ts';
 import { type AppealsDeps, bindAppealsDeps, describeUnbound } from './deps.ts';
-import { tellAppellant } from './notify.ts';
+import { type NotifyOutcome, tellAppellant } from './notify.ts';
 import { APPROVE_ACTION, DENY_ACTION } from './review.ts';
-import type { AppealRecord } from './store.ts';
+import type { AppealRecord, AppealStore } from './store.ts';
 
 export const APPEALS_INTERACTION_EVENT_TYPES: EventType[] = ['interaction.component'];
 
 const VERDICT = { approved: 'accepted', denied: 'turned down' } as const;
 
+interface Finished {
+  applied: ApplyOutcome;
+  told: NotifyOutcome;
+}
+
+function toldSentence(member: string, told: NotifyOutcome): string {
+  switch (told) {
+    case 'sent':
+      return `${member} has been told.`;
+    case 'closed':
+      return (
+        `I couldn’t DM ${member}. Their DMs are closed, or they no longer share a server ` +
+        'with me.'
+      );
+    case 'unconfirmed':
+      return `I can’t tell whether ${member} got the decision, because Discord didn’t confirm it.`;
+    case 'failed':
+    case 'gave_up':
+      return `I couldn’t send ${member} the decision, so let them know yourself.`;
+  }
+}
+
+function notLifted(member: string, panel: AppealPanel, humanReason: string): string {
+  return panel.onApprove === 'unban'
+    ? `I couldn’t unban ${member}: ${humanReason} Lift the ban by hand if it’s still in place.`
+    : `I couldn’t lift the timeout on ${member}: ${humanReason} Lift it by hand if it’s still ` +
+        'in place.';
+}
+
+function decidedReply(
+  appeal: AppealRecord,
+  decision: 'approved' | 'denied',
+  panel: AppealPanel,
+  done: Finished,
+  repeated: boolean,
+): StatusBody {
+  const member = `<@${appeal.userId}>`;
+  const verdict = VERDICT[decision];
+  const told = toldSentence(member, done.told);
+
+  if (done.applied.humanReason !== null) {
+    return errorStatus(
+      `Appeal #${appeal.number} ${repeated ? 'was already ' : ''}${verdict}, but ` +
+        `${notLifted(member, panel, done.applied.humanReason)} ${told}`,
+    );
+  }
+
+  if (!repeated) return successStatus(`Appeal #${appeal.number} ${verdict}. ${told}`);
+
+  return successStatus(
+    `Appeal #${appeal.number} was already ${verdict}. I’ve finished carrying it out` +
+      (done.told === 'sent' ? `, and ${told}` : `. ${told}`),
+  );
+}
+
 function alreadyDecided(fresh: AppealRecord | null): string {
   if (!fresh || fresh.status === 'open' || !fresh.decidedBy) {
-    return 'That appeal is no longer waiting on a decision, so nothing has changed.';
+    return 'That appeal is no longer waiting on a decision, so nothing changed.';
   }
 
   return (
-    `Somebody else got there first — appeal #${fresh.number} was ${VERDICT[fresh.status]} by ` +
+    `Someone else got there first. Appeal #${fresh.number} was ${VERDICT[fresh.status]} by ` +
     `<@${fresh.decidedBy}>.`
   );
 }
@@ -76,7 +132,7 @@ export async function handleReviewPress(
     await ctx.executor.execute(
       replyEphemeral(
         to,
-        errorStatus('I cannot record appeal decisions right now, so nothing has changed.'),
+        errorStatus('I can’t record appeal decisions right now, so nothing changed.'),
       ),
     );
     return { action: 'refused', reason: 'the appeal store is unbound' };
@@ -87,7 +143,7 @@ export async function handleReviewPress(
   const held = await store.find(ctx.guildId, appealId);
   if (!held) {
     await ctx.executor.execute(
-      replyEphemeral(to, errorStatus('That appeal is no longer here, so nothing has changed.')),
+      replyEphemeral(to, errorStatus('I couldn’t find that appeal, so nothing changed.')),
     );
     return { action: 'ignored', reason: 'no such appeal' };
   }
@@ -98,8 +154,8 @@ export async function handleReviewPress(
       replyEphemeral(
         to,
         errorStatus(
-          'The appeal form this belonged to has been removed, so Proton does not know what ' +
-            'accepting it should do. Re-create the form, or handle this one by hand.',
+          'The appeal form this belonged to has been deleted, so I don’t know what accepting it ' +
+            'should do. Recreate the form with the same ID, or handle this appeal by hand.',
         ),
       ),
     );
@@ -129,16 +185,10 @@ export async function handleReviewPress(
     // Same button, already-recorded decision: re-run every effect. They are all keyed off the
     // appeal id, so this repairs a crash between the decision and the unban rather than doubling it.
     if (fresh && fresh.status === decision) {
-      await finish(ctx, rawDeps, fresh, panel);
+      const done = await finish(ctx, rawDeps, store, fresh, panel);
 
       await ctx.executor.execute(
-        replyEphemeral(
-          to,
-          successStatus(
-            `Appeal #${fresh.number} was already ${VERDICT[decision]}. I have finished carrying ` +
-              `it out, and <@${fresh.userId}> has been told.`,
-          ),
-        ),
+        replyEphemeral(to, decidedReply(fresh, decision, panel, done, true)),
       );
       return { action: 'decided', decision, appealId };
     }
@@ -147,15 +197,10 @@ export async function handleReviewPress(
     return { action: 'ignored', reason: 'already decided' };
   }
 
-  await finish(ctx, rawDeps, decided, panel);
+  const done = await finish(ctx, rawDeps, store, decided, panel);
 
   await ctx.executor.execute(
-    replyEphemeral(
-      to,
-      successStatus(
-        `Appeal #${decided.number} ${VERDICT[decision]}. <@${decided.userId}> has been told.`,
-      ),
-    ),
+    replyEphemeral(to, decidedReply(decided, decision, panel, done, false)),
   );
 
   await ctx.publish?.('appeals.decided', decided.id, {
@@ -174,17 +219,18 @@ export async function handleReviewPress(
 async function finish(
   ctx: ModuleContext<AppealsConfig>,
   rawDeps: AppealsDeps,
-  appeal: Parameters<typeof stampCard>[2],
-  panel: Parameters<typeof stampCard>[3],
-): Promise<void> {
-  const store = rawDeps.store;
-  if (!store) return;
-
+  store: AppealStore,
+  appeal: AppealRecord,
+  panel: AppealPanel,
+): Promise<Finished> {
   const applied = await applyDecision(ctx, rawDeps, appeal, panel);
   if (applied.lifted) await store.markApplied(ctx.guildId, appeal.id);
 
-  await tellAppellant(ctx, store, appeal, panel);
+  const told = await tellAppellant(ctx, store, appeal, panel);
+  // Last on purpose: a crash before this leaves the card's buttons live for a second press.
   await stampCard(ctx, store, appeal, panel);
+
+  return { applied, told };
 }
 
 export function createAppealsInteractionListener(deps: AppealsDeps): EventListener<AppealsConfig> {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { STATUS_ERROR_COLOUR, STATUS_SUCCESS_COLOUR } from '@proton/core';
+import { PUNISH_DIRECTIONS, punishConfigSchema } from '../src/config.ts';
 import { moderationModule } from '../src/index.ts';
 import { ROLE_RUN_JOB, ROLE_RUN_KEY } from '../src/role-run.ts';
 import type { RoleRun } from '../src/run-store.ts';
@@ -116,7 +117,7 @@ describe('/role add and /role remove', () => {
 
     expect(h.discordCalls()).toEqual([]);
     expect(h.cases()).toEqual([]);
-    expect(h.replyContent()).toContain('your own highest role');
+    expect(h.replyContent()).toContain('at or above your highest role');
   });
 
   test('lets the server owner hand out a role they do not themselves hold', async () => {
@@ -128,7 +129,7 @@ describe('/role add and /role remove', () => {
       { actorRoleIds: [] },
     );
 
-    expect(h.replyContent()).toContain('your own highest role');
+    expect(h.replyContent()).toContain('at or above your highest role');
 
     const owner = harness();
     await owner.run(
@@ -149,7 +150,7 @@ describe('/role add and /role remove', () => {
     );
 
     expect(h.discordCalls()).toEqual([]);
-    expect(h.replyContent()).toContain('my own highest role');
+    expect(h.replyContent()).toContain('at or above my highest role');
   });
 
   test('refuses a managed role, because nobody can assign one', async () => {
@@ -201,7 +202,7 @@ describe('/role add and /role remove', () => {
 
     expect(h.discordCalls()).toEqual([]);
     expect(h.cases()).toEqual([]);
-    expect(h.replyContent()).toContain('above or equal to your own');
+    expect(h.replyContent()).toContain('at or above yours');
   });
 
   test('lets the invoker change the roles of somebody they outrank', async () => {
@@ -225,7 +226,7 @@ describe('/role add and /role remove', () => {
     );
 
     expect(h.discordCalls()).toEqual([]);
-    expect(h.replyContent()).toContain('above or equal to mine');
+    expect(h.replyContent()).toContain("above or equal to Proton's");
   });
 
   test('lets a moderator change their own roles, which Discord also allows', async () => {
@@ -239,17 +240,19 @@ describe('/role add and /role remove', () => {
     expect(h.discordCalls()).toHaveLength(1);
   });
 
-  test('honours the server’s require-reason policy', async () => {
+  test('a reason forced for every punishment does not gate a role change', async () => {
     const h = harness();
+    const types = Object.fromEntries(
+      PUNISH_DIRECTIONS.map((kind) => [kind, { forceReason: true }]),
+    );
 
     await h.run(
       'role',
       subcommand('add', [userOption('user', MEMBER), roleOption('role', GRANT_ROLE)]),
-      { config: { requireReason: true } },
+      { config: { punish: punishConfigSchema.parse({ types }) } },
     );
 
-    expect(h.discordCalls()).toEqual([]);
-    expect(h.replyContent()).toContain('requires a reason');
+    expect(h.discordCalls()).toHaveLength(1);
   });
 });
 
@@ -316,7 +319,7 @@ describe('/role all, bots, humans and in', () => {
 
     expect(h.discordCalls()).toEqual([]);
     expect(h.replyContent()).toContain('/role cancel');
-    expect(h.replyContent()).toContain('12 members in');
+    expect(h.replyContent()).toContain('12 members so far');
   });
 
   test('starts nothing when the progress message cannot be posted', async () => {
@@ -338,7 +341,7 @@ describe('/role all, bots, humans and in', () => {
     );
 
     expect(await h.roleRuns.get(GUILD)).toBeNull();
-    expect(h.replyContent()).toContain('same role');
+    expect(h.replyContent()).toContain('for both roles');
   });
 
   test('refuses /role in @everyone, which would match nobody', async () => {
@@ -371,7 +374,7 @@ describe('/role all, bots, humans and in', () => {
     await h.run('role', subcommand('humans', [roleOption('role', HIGH_ROLE)]));
 
     expect(await h.roleRuns.get(GUILD)).toBeNull();
-    expect(h.replyContent()).toContain('my own highest role');
+    expect(h.replyContent()).toContain('at or above my highest role');
   });
 
   test('says so rather than going quiet when the run store is not wired in', async () => {
@@ -595,7 +598,9 @@ describe('the mass job’s guards and durability', () => {
 
     expect(h.discordCalls().filter((c) => c.method === 'PUT')).toEqual([]);
     const summary = h.discordCalls().find((c) => c.method === 'PATCH');
-    expect((summary?.body as { content?: string })?.content).toContain('your own highest role');
+    expect((summary?.body as { content?: string })?.content).toContain(
+      'at or above your highest role',
+    );
   });
 
   test('skips members who outrank the moderator who asked for the run', async () => {
@@ -623,7 +628,7 @@ describe('/role cancel', () => {
 
     expect((await h.roleRuns.get(GUILD))?.cancelled).toBe(true);
     expect(h.replyContent()).toContain('30 members');
-    expect(h.replyContent()).toContain('does not take it back');
+    expect(h.replyContent()).toContain('cancelling doesn’t remove it');
   });
 
   test('says so when nothing is going', async () => {
@@ -631,7 +636,7 @@ describe('/role cancel', () => {
 
     await h.run('role', subcommand('cancel', []));
 
-    expect(h.replyContent()).toContain('No mass role run');
+    expect(h.replyContent()).toContain('No mass role change');
   });
 
   test('a second cancel does not undo the first', async () => {

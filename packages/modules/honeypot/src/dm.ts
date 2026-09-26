@@ -1,6 +1,7 @@
-import type { ActionResult, EntitlementTier, ModuleContext } from '@proton/core';
+import type { ActionFailure, ActionResult, EntitlementTier, ModuleContext } from '@proton/core';
 import { appealLinkUrl, BUTTON_URL_MAX, newAppealLinkClaims, signAppealLink } from '@proton/core';
 import { serverFactsFrom, type UserFacts } from '@proton/core/placeholders';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import { HONEYPOT_ACTOR, type HoneypotConfig, MODULE_ID } from './config.ts';
 import {
   describeUnbound,
@@ -13,7 +14,16 @@ import { usesNamespace } from './placeholders.ts';
 import { type DmFacts, dmPlaceholderKeys, renderDirectMessage } from './render.ts';
 import { DM_ATTEMPTS_MAX } from './store.ts';
 
-export type DmOutcome = 'sent' | 'closed' | 'failed' | 'skipped' | 'gave_up';
+export type DmOutcome =
+  | 'sent'
+  | 'closed'
+  | 'unshared'
+  | 'unconfirmed'
+  | 'failed'
+  | 'skipped'
+  | 'gave_up';
+
+type Undelivered = 'closed' | 'unshared' | 'unconfirmed' | 'failed';
 
 /**
  * The Appeal button's address, minted per recipient. Every failure here answers `undefined` and
@@ -124,17 +134,47 @@ export async function directMessageFacts(
 }
 
 export const DM_RESULT_LABEL: Record<DmOutcome, string> = {
-  sent: 'They were told before it happened.',
-  closed: 'They could not be told — their direct messages are closed.',
-  failed: 'They could not be told — Discord refused the message.',
-  skipped: 'They were not told: this server does not send one.',
-  gave_up: 'They were NOT told, after several attempts. Check the log.',
+  sent: 'Sent before the action.',
+  closed: 'Not sent: their DMs are closed.',
+  unshared: 'Not sent: they no longer share a server with Proton.',
+  unconfirmed: 'May not have arrived: Proton couldn’t reach Discord.',
+  failed: 'Not sent: Discord refused the DM.',
+  skipped: 'Not sent: the DM is off in this server.',
+  gave_up: 'Not sent: gave up after several attempts.',
 };
 
 function channelIdOf(result: ActionResult): string | null {
   const id = (result.body as { id?: unknown } | undefined)?.id;
 
   return typeof id === 'string' ? id : null;
+}
+
+function undelivered(failure: ActionFailure | undefined): Undelivered {
+  const code = failure?.discordCode;
+
+  if (code === RESTJSONErrorCodes.CannotSendMessagesToThisUser) return 'closed';
+  if (code === RESTJSONErrorCodes.CannotSendMessagesToThisUserDueToHavingNoMutualGuilds) {
+    return 'unshared';
+  }
+  if (code === undefined && failure?.code === 'discord_403') return 'closed';
+  if (failure?.code === 'transport_failure' || /^discord_5\d\d$/.test(failure?.code ?? '')) {
+    return 'unconfirmed';
+  }
+
+  return 'failed';
+}
+
+function reasonFor(outcome: Undelivered, failure: ActionFailure | undefined): string {
+  switch (outcome) {
+    case 'closed':
+      return 'their direct messages are closed.';
+    case 'unshared':
+      return 'they no longer share a server with Proton.';
+    case 'unconfirmed':
+      return 'Proton could not reach Discord.';
+    case 'failed':
+      return failure?.humanReason ?? 'Discord gave no reason.';
+  }
 }
 
 /**
@@ -187,13 +227,12 @@ export async function sendDirectMessage(
     channelId = channelIdOf(opened);
 
     if (channelId === null) {
+      const outcome = undelivered(opened.failure);
       ctx.logger.warn(
-        `honeypot could not open a direct message with ${userId}: ${
-          opened.failure?.humanReason ?? 'their direct messages are closed.'
-        }`,
+        `honeypot could not open a direct message with ${userId}: ${reasonFor(outcome, opened.failure)}`,
         { guildId: ctx.guildId, moduleId: MODULE_ID, userId },
       );
-      return 'closed';
+      return outcome;
     }
 
     await deps.dms?.remember(ctx.guildId, root, channelId);
@@ -233,17 +272,20 @@ export async function sendDirectMessage(
       components: built.components,
       flags: built.flags,
       allowedMentions: { parse: [] },
+      directMessage: true,
     },
   });
 
   if (sent.status === 'executed' || sent.status === 'skipped_duplicate') return 'sent';
 
+  const outcome = undelivered(sent.failure);
   ctx.logger.warn(
-    `honeypot opened a direct message with ${userId} but could not send it: ${
-      sent.failure?.humanReason ?? 'Discord gave no reason.'
-    }`,
+    outcome === 'unconfirmed'
+      ? `honeypot sent a direct message to ${userId} but cannot tell whether it arrived: ` +
+          'Proton could not reach Discord.'
+      : `honeypot could not tell ${userId}: ${reasonFor(outcome, sent.failure)}`,
     { guildId: ctx.guildId, moduleId: MODULE_ID, userId },
   );
 
-  return 'failed';
+  return outcome;
 }

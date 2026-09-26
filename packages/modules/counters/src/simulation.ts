@@ -4,8 +4,7 @@ import type { CountersConfig } from './config.ts';
 import { COUNTER_SURFACE, renderCounterName } from './placeholders.ts';
 
 const NO_STATE =
-  'Proton has not finished reading this server yet, so it cannot count anything. Try again in a ' +
-  'moment — the count arrives with the first gateway connection after a restart.';
+  'Proton is still loading this server, so there’s nothing to count yet. Try again in a minute.';
 
 export const COUNTERS_NAME_SIMULATION: SimulationAdapter<CountersConfig> = {
   descriptor: {
@@ -31,8 +30,8 @@ export const COUNTERS_NAME_SIMULATION: SimulationAdapter<CountersConfig> = {
       },
     ],
     note:
-      'Counted against this server as it is right now. No channel is created or renamed — the ' +
-      'refresh that does that runs every ten minutes.',
+      'Counted from your server as it is right now. No channel is created or renamed. The real ' +
+      'refresh runs every 10 minutes.',
   },
 
   build(config, scene: SimulationScene): SimulationBuild {
@@ -42,7 +41,7 @@ export const COUNTERS_NAME_SIMULATION: SimulationAdapter<CountersConfig> = {
     if (counter === undefined) {
       return {
         ok: false,
-        humanReason: 'that counter is no longer in this server’s settings. Reload and try again.',
+        humanReason: 'that counter isn’t in this server’s settings any more. Reload and try again.',
         diagnostics: [],
       };
     }

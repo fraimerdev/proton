@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { planGrant } from '../src/grant.ts';
+import { grantableRoles, planGrant } from '../src/grant.ts';
 import { createJoinRolesListener } from '../src/listeners.ts';
 import {
   BOT_MEMBER,
@@ -271,5 +271,75 @@ describe('planGrant', () => {
 
     expect(plan.grant).toEqual([ROLE_LOW, ROLE_ABOVE_BOT]);
     expect(plan.skipped).toEqual([]);
+  });
+
+  test('a role held and managed is reported as held, as it always was', () => {
+    const plan = planGrant({
+      state: STATE,
+      wantedRoleIds: [ROLE_MANAGED, ROLE_MID, ROLE_LOW],
+      heldRoleIds: [ROLE_MANAGED],
+    });
+
+    expect(plan.grant).toEqual([ROLE_LOW, ROLE_MID]);
+    expect(plan.skipped).toEqual([{ roleId: ROLE_MANAGED, reason: 'the member already has it.' }]);
+  });
+});
+
+describe('grantableRoles', () => {
+  test('names why each role cannot be given, with a code the dashboard can read', () => {
+    const { grantable, refused } = grantableRoles(STATE, [
+      ROLE_MID,
+      GUILD,
+      ROLE_GONE,
+      ROLE_MANAGED,
+      ROLE_ABOVE_BOT,
+      ROLE_LOW,
+      ROLE_LOW,
+    ]);
+
+    expect(grantable).toEqual([ROLE_LOW, ROLE_MID]);
+    expect(refused.map(({ roleId, code }) => ({ roleId, code }))).toEqual([
+      { roleId: GUILD, code: 'everyone' },
+      { roleId: ROLE_GONE, code: 'missing' },
+      { roleId: ROLE_MANAGED, code: 'managed' },
+      { roleId: ROLE_ABOVE_BOT, code: 'above_proton' },
+    ]);
+    expect(refused.every(({ reason }) => reason.length > 0)).toBe(true);
+  });
+
+  test('the reasons are word for word what the dashboard and the join log have always shown', () => {
+    const { refused } = grantableRoles(STATE, [GUILD, ROLE_GONE, ROLE_MANAGED, ROLE_ABOVE_BOT]);
+
+    expect(refused).toEqual([
+      {
+        roleId: GUILD,
+        code: 'everyone',
+        reason: 'it is @everyone, which Discord grants automatically.',
+      },
+      {
+        roleId: ROLE_GONE,
+        code: 'missing',
+        reason:
+          'it no longer exists in this server. Remove it from Member roles or Bot roles on the ' +
+          'Join Roles page in the Proton dashboard.',
+      },
+      {
+        roleId: ROLE_MANAGED,
+        code: 'managed',
+        reason: 'it is managed by Discord or another integration, so nobody can assign it by hand.',
+      },
+      {
+        roleId: ROLE_ABOVE_BOT,
+        code: 'above_proton',
+        reason:
+          "it sits at position 90, and Proton's highest role is at position 50. Discord only lets " +
+          "Proton assign roles below its own, so drag Proton's role above it in Server Settings → " +
+          'Roles.',
+      },
+    ]);
+  });
+
+  test('ignores what the member holds: that is planGrant’s job', () => {
+    expect(grantableRoles(STATE, [ROLE_LOW]).grantable).toEqual([ROLE_LOW]);
   });
 });

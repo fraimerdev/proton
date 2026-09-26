@@ -7,7 +7,16 @@ import {
   roleMention,
   userMention,
 } from '../embed.ts';
-import { changeOf, num, type RenderInput, type RenderResult, record, str } from './types.ts';
+import {
+  changeOf,
+  NONE,
+  num,
+  type RenderInput,
+  type RenderResult,
+  record,
+  str,
+  UNKNOWN,
+} from './types.ts';
 
 export const CHANNEL_TYPE_NAMES: Record<number, string> = {
   0: 'Text channel',
@@ -26,15 +35,20 @@ export function channelType(type: number | undefined): string {
   return type === undefined ? 'Channel' : (CHANNEL_TYPE_NAMES[type] ?? 'Channel');
 }
 
+function channelName(channel: Record<string, unknown>): string {
+  const name = str(channel.name);
+  return name === undefined ? UNKNOWN : `#${name}`;
+}
+
 function channelLines(channel: Record<string, unknown>, id: string): LogLine[] {
   const parentId = str(channel.parent_id);
 
   return [
-    { label: 'Name', mention: channelMention(id), value: `#${str(channel.name) ?? 'unknown'}` },
-    { label: 'Id', value: id },
+    { label: 'Name', mention: channelMention(id), value: channelName(channel) },
+    { label: 'ID', value: id },
     ...(parentId
       ? [{ label: 'Category', mention: channelMention(parentId), value: parentId }]
-      : [{ label: 'Category', value: 'None' }]),
+      : [{ label: 'Category', value: NONE }]),
   ];
 }
 
@@ -88,7 +102,7 @@ export function renderChannelUpdated(input: RenderInput): RenderResult | null {
     const { before, after } = changeOf(input.audit, key);
     if (before === undefined && after === undefined) continue;
 
-    fields.push({ name: label, value: `${before ?? 'none'} → ${after ?? 'none'}` });
+    fields.push({ name: label, value: `${before ?? NONE} → ${after ?? NONE}` });
   }
 
   return {
@@ -97,8 +111,8 @@ export function renderChannelUpdated(input: RenderInput): RenderResult | null {
       action: 'updated',
       colour: ServerLogColors.Modify,
       lines: [
-        { label: 'Name', mention: channelMention(id), value: `#${str(channel.name) ?? 'unknown'}` },
-        { label: 'Id', value: id },
+        { label: 'Name', mention: channelMention(id), value: channelName(channel) },
+        { label: 'ID', value: id },
       ],
       ...(fields.length > 0 ? { fields } : {}),
       executor: input.executor,
@@ -125,11 +139,11 @@ function threadEmbed(
       action,
       colour,
       lines: [
-        { label: 'Name', mention: channelMention(id), value: str(thread.name) ?? 'unknown' },
-        { label: 'Id', value: id },
+        { label: 'Name', mention: channelMention(id), value: str(thread.name) ?? UNKNOWN },
+        { label: 'ID', value: id },
         ...(parentId
           ? [{ label: 'Channel', mention: channelMention(parentId), value: parentId }]
-          : [{ label: 'Channel', value: 'Unknown' }]),
+          : [{ label: 'Channel', value: UNKNOWN }]),
       ],
       executor: input.executor,
       occurredAt: input.occurredAt,
@@ -170,7 +184,7 @@ function overwriteEmbed(
     ? targetType === OVERWRITE_TARGET_ROLE
       ? { label: 'Role', mention: roleMention(targetId), value: roleName ?? targetId }
       : { label: 'Member', mention: userMention(targetId), value: targetId }
-    : { label: 'Target', value: 'Unknown' };
+    : { label: 'Target', value: UNKNOWN };
 
   return {
     embed: logEmbed({
@@ -180,7 +194,7 @@ function overwriteEmbed(
       lines: [
         { label: 'Channel', mention: channelMention(channelId), value: channelId },
         target,
-        { label: 'Changed', value: audit.changes.map((change) => change.key).join(', ') || 'none' },
+        { label: 'Changed', value: audit.changes.map((change) => change.key).join(', ') || NONE },
       ],
       executor: input.executor,
       occurredAt: input.occurredAt,

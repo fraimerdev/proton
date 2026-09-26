@@ -82,7 +82,29 @@ describe('/xp give', () => {
     expect(payload?.content).toBe('');
     expect(payload?.embeds?.[0]?.color).toBe(STATUS_SUCCESS_COLOUR);
     expect(descriptionOf(sent)).toBe(
-      `${STATUS_SUCCESS_EMOJI} <@${TARGET}> is now on 1,250 XP — level 3, up from 2.`,
+      `${STATUS_SUCCESS_EMOJI} <@${TARGET}> now has 1,250 XP (level 3, up from 2).`,
+    );
+  });
+
+  test('a member taken down a level is told it went down, not up', async () => {
+    const store = storeWith();
+    store.adjust = async () => ({ xp: 40, level: 1, previousLevel: 2, awarded: true });
+
+    const { ctx, sent } = commandContext([
+      {
+        name: 'take',
+        type: 1,
+        options: [
+          { name: 'user', type: 6, value: TARGET },
+          { name: 'amount', type: 4, value: 500 },
+        ],
+      },
+    ]);
+
+    await xpCommand({ xp: store, now: () => NOW }).handler(ctx);
+
+    expect(descriptionOf(sent)).toBe(
+      `${STATUS_SUCCESS_EMOJI} <@${TARGET}> now has 40 XP (level 1, down from 2).`,
     );
   });
 
@@ -119,7 +141,7 @@ describe('/xp give', () => {
     expect(adjusted).toBe(false);
     expect(replyOf(sent)).toMatchObject({ ephemeral: true });
     expect(replyOf(sent)?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
-    expect(descriptionOf(sent)).toContain('Leveling is disabled in this server');
+    expect(descriptionOf(sent)).toContain('Leveling is off in this server');
   });
 
   test('a process built without the XP store refuses and names the missing port', async () => {
@@ -169,7 +191,7 @@ describe('/rank', () => {
     await rankCommand(deps).handler(ctx);
 
     expect(replyOf(sent)?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
-    expect(descriptionOf(sent)).toContain('could not draw the rank card');
+    expect(descriptionOf(sent)).toContain('Couldn’t draw the rank card');
     expect(descriptionOf(sent)).toStartWith(STATUS_ERROR_EMOJI);
   });
 
@@ -179,7 +201,7 @@ describe('/rank', () => {
     await rankCommand({ xp: storeWith(record()), now: () => NOW }).handler(ctx);
 
     expect(replyOf(sent)?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
-    expect(descriptionOf(sent)).toContain('Rank cards are disabled in this server');
+    expect(descriptionOf(sent)).toContain('Rank cards are off in this server');
   });
 
   test('a member with no XP yet is told plainly, not in a status embed', async () => {
@@ -187,9 +209,7 @@ describe('/rank', () => {
 
     await rankCommand({ xp: storeWith(), now: () => NOW }).handler(ctx);
 
-    expect(replyOf(sent)?.content).toBe(
-      'You have not earned any XP in this server yet. Join a conversation.',
-    );
+    expect(replyOf(sent)?.content).toBe('You haven’t earned any XP in this server yet.');
     expect(replyOf(sent)).not.toHaveProperty('embeds');
   });
 });
@@ -209,7 +229,7 @@ describe('/leaderboard', () => {
 
     const payload = replyOf(sent);
     expect(payload?.content).toContain('**XP leaderboard** (page 1)');
-    expect(payload?.content).toContain(`**1.** <@${USER}> — level 5, 1,200 XP`);
+    expect(payload?.content).toContain(`**1.** <@${USER}> · Level 5 · 1,200 XP`);
     expect(payload).not.toHaveProperty('embeds');
   });
 
@@ -220,7 +240,7 @@ describe('/leaderboard', () => {
 
     expect(replyOf(sent)?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
     expect(descriptionOf(sent)).toBe(
-      `${STATUS_ERROR_EMOJI} There is no page 3 — the leaderboard is shorter than that.`,
+      `${STATUS_ERROR_EMOJI} There’s no page 3. The leaderboard is shorter than that.`,
     );
   });
 

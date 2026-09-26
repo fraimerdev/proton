@@ -3,6 +3,7 @@ import { ProviderRegistry } from '@proton/core';
 import { drawGiveaway } from '../src/end.ts';
 import { ENTRANT_PAGE_SIZE, entrantPage, exportEntrants, renderStats } from '../src/reports.ts';
 import type { CreateGiveawayInput } from '../src/store.ts';
+import { commandHarness, stringOption, subcommand, userOption } from './command-harness.ts';
 import { MemoryGiveawayStore } from './memory-store.ts';
 
 const GUILD = '100000000000000000';
@@ -39,6 +40,7 @@ async function seeded(entrants: number, over: Partial<CreateGiveawayInput> = {})
       totalEntries: index,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
   }
 
@@ -158,6 +160,7 @@ describe('exporting entrants', () => {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
 
     const exported = await exportEntrants(store, 'g1');
@@ -247,5 +250,87 @@ describe('guild statistics', () => {
 
     expect(rendered).toContain('**2** giveaways');
     expect(rendered).toContain('**4** unique entrants');
+  });
+});
+
+describe('entry counts read as English', () => {
+  async function weighted(...totals: number[]) {
+    const h = commandHarness();
+
+    await h.store.create({
+      id: 'g1',
+      guildId: GUILD,
+      channelId: '500000000000000000',
+      messageId: '700000000000000000',
+      hostId: HOST,
+      title: 'A prize',
+      winnerCount: 1,
+      endsAt: new Date(NOW.getTime() + 60_000),
+      createdBy: HOST,
+    });
+
+    for (const [index, totalEntries] of totals.entries()) {
+      await h.store.enter({
+        giveawayId: 'g1',
+        userId: userId(index + 1),
+        baseEntries: 1,
+        totalEntries,
+        breakdown: [],
+        memberSnapshot: null,
+        pressedAt: NOW,
+      });
+    }
+
+    return h;
+  }
+
+  test.each([
+    [1, '1 entry'],
+    [3, '3 entries'],
+  ] as const)('/giveaway entries member: with %d says %s', async (total, words) => {
+    const h = await weighted(total);
+
+    await h.run(
+      subcommand('entries', [stringOption('giveaway', 'g1'), userOption('member', userId(1))]),
+    );
+
+    expect(h.replyText()).toBe(`<@${userId(1)}> has **${words}** in **A prize**.`);
+  });
+
+  test('/giveaway entries ranks each weight and totals the top in English', async () => {
+    const h = await weighted(1, 3);
+
+    await h.run(subcommand('entries', [stringOption('giveaway', 'g1')]));
+
+    expect(h.replyText()).toBe(
+      [
+        '**A prize** · 2 entrants',
+        `\`1.\` <@${userId(2)}> · 3 entries`,
+        `\`2.\` <@${userId(1)}> · 1 entry`,
+        'Top 2 hold 4 entries between them.',
+      ].join('\n'),
+    );
+  });
+
+  test('/giveaway entries says a lone single entry is one entry', async () => {
+    const h = await weighted(1);
+
+    await h.run(subcommand('entries', [stringOption('giveaway', 'g1')]));
+
+    expect(h.replyText()).toContain('Top 1 hold 1 entry between them.');
+  });
+
+  test('/giveaway entrants pages each weight in English', async () => {
+    const h = await weighted(1, 3);
+
+    await h.run(subcommand('entrants', [stringOption('giveaway', 'g1')]));
+
+    expect(h.replyText()).toBe(
+      [
+        '**A prize** · 2 entrants',
+        `\`  1.\` <@${userId(1)}> · 1 entry`,
+        `\`  2.\` <@${userId(2)}> · 3 entries`,
+      ].join('\n'),
+    );
   });
 });

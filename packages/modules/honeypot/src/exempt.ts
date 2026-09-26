@@ -11,10 +11,10 @@ export const HONEYPOT_EXEMPT_REASONS = [
 export type HoneypotExemptReason = (typeof HONEYPOT_EXEMPT_REASONS)[number];
 
 export const EXEMPT_LABEL: Record<HoneypotExemptReason, string> = {
-  administrator: 'they hold Administrator',
-  admin_role: 'they hold the exempt admin role',
-  role: 'they hold an exempt role',
-  unknown_roles: 'Proton could not read their roles',
+  administrator: 'They have Administrator.',
+  admin_role: 'They have the exempt admin role.',
+  role: 'They have an exempt role.',
+  unknown_roles: 'Their roles couldn’t be read, so they were treated as exempt.',
 };
 
 export interface ExemptInput {

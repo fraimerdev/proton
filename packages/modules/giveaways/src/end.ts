@@ -16,6 +16,7 @@ import type {
   Disqualification,
   EntrantRow,
   Giveaway,
+  GiveawayStatus,
   GiveawayStore,
   MemberSnapshot,
   Reweigh,
@@ -38,6 +39,7 @@ export interface DrawSummary {
   winnerIds: string[];
   disqualified: number;
   degraded: string[];
+  unchecked: number;
 }
 
 export type DrawOutcome =
@@ -68,25 +70,31 @@ export interface DrawInput {
 function contextFromSnapshot(
   guildId: string,
   userId: string,
-  snapshot: MemberSnapshot | null,
+  snapshot: MemberSnapshot,
   now: Date,
 ): MemberContext | null {
-  const absent = absentMemberContext(guildId, userId, now);
-  if (!absent || snapshot === null) return absent;
+  const base = absentMemberContext(guildId, userId, now);
+  if (!base) return null;
 
   return {
-    ...absent,
+    ...base,
     member: {
       roleIds: snapshot.roleIds,
       joinedAt: snapshot.joinedAt ? new Date(snapshot.joinedAt) : null,
       premiumSince: snapshot.premiumSince ? new Date(snapshot.premiumSince) : null,
       communicationDisabledUntil: null,
     },
-    user: { ...absent.user, hasAvatar: snapshot.hasAvatar },
+    user: { ...base.user, hasAvatar: snapshot.hasAvatar },
     // Snapshot facts are as old as the join, so a provider that cannot judge from them says so
     // rather than pretending the member still looks the way they did when they entered.
     partial: true,
   };
+}
+
+interface EntrantContexts {
+  contexts: Map<string, MemberContext>;
+  fromSnapshot: Set<string>;
+  unchecked: number;
 }
 
 async function contextsFor(
@@ -94,27 +102,44 @@ async function contextsFor(
   guildId: string,
   rows: readonly EntrantRow[],
   now: Date,
-): Promise<Map<string, MemberContext>> {
-  const fallback = new Map<string, MemberContext>();
+): Promise<EntrantContexts> {
+  const loaded = deps.members
+    ? await deps.members.load(
+        guildId,
+        rows.map((row) => row.userId),
+      )
+    : new Map<string, MemberContext>();
+
+  const contexts = new Map<string, MemberContext>();
+  const fromSnapshot = new Set<string>();
+  let unchecked = 0;
+
   for (const row of rows) {
+    const live = loaded.get(row.userId);
+    if (live) {
+      contexts.set(row.userId, live);
+      continue;
+    }
+
+    unchecked += 1;
+
+    // No answer and no snapshot leaves them unjudged: an absent context would read as having left.
+    if (row.memberSnapshot === null) continue;
+
     const ctx = contextFromSnapshot(guildId, row.userId, row.memberSnapshot, now);
-    if (ctx) fallback.set(row.userId, ctx);
+    if (!ctx) continue;
+
+    contexts.set(row.userId, ctx);
+    fromSnapshot.add(row.userId);
   }
 
-  if (!deps.members) return fallback;
-
-  const loaded = await deps.members.load(
-    guildId,
-    rows.map((row) => row.userId),
-  );
-
-  for (const [userId, ctx] of loaded) fallback.set(userId, ctx);
-  return fallback;
+  return { contexts, fromSnapshot, unchecked };
 }
 
 interface RevalidationResult {
   disqualified: number;
   degraded: Set<string>;
+  unchecked: number;
 }
 
 async function revalidate(
@@ -127,9 +152,13 @@ async function revalidate(
   const chunkSize = deps.chunkSize ?? DRAW_CHUNK_SIZE;
   const degraded = new Set<string>();
   let disqualified = 0;
+  let unchecked = 0;
 
   for await (const rows of deps.store.entrants(giveaway.id, chunkSize)) {
-    const contexts = await contextsFor(deps, giveaway.guildId, rows, now);
+    const entrants = await contextsFor(deps, giveaway.guildId, rows, now);
+    const { contexts, fromSnapshot } = entrants;
+    unchecked += entrants.unchecked;
+
     const ctxs = rows
       .map((row) => contexts.get(row.userId))
       .filter((ctx): ctx is MemberContext => ctx !== undefined);
@@ -157,7 +186,10 @@ async function revalidate(
         continue;
       }
 
-      if (verdict && !verdict.passed) {
+      // Indeterminate on a join snapshot is a fact it never recorded, not a failed requirement.
+      const unanswerable = verdict?.indeterminate === true && fromSnapshot.has(ctx.userId);
+
+      if (verdict && !verdict.passed && !unanswerable) {
         const reason = verdict.failures[0]?.humanReason ?? 'no longer meets the requirements';
         drops.push({ userId: ctx.userId, reason });
         continue;
@@ -193,7 +225,7 @@ async function revalidate(
     }
   }
 
-  return { disqualified, degraded };
+  return { disqualified, degraded, unchecked };
 }
 
 async function* weighted(
@@ -250,10 +282,12 @@ export async function drawGiveaway(deps: DrawDeps, input: DrawInput): Promise<Dr
 
   const degraded = new Set<string>();
   let disqualified = 0;
+  let unchecked = 0;
 
   if (giveaway.verifyOn === 'draw' || giveaway.verifyOn === 'both') {
     const result = await revalidate(deps, giveaway, requirements, multipliers, now);
     disqualified = result.disqualified;
+    unchecked = result.unchecked;
     for (const providerId of result.degraded) degraded.add(providerId);
   }
 
@@ -315,9 +349,12 @@ export async function drawGiveaway(deps: DrawDeps, input: DrawInput): Promise<Dr
       winnerIds,
       disqualified,
       degraded: [...degraded],
+      unchecked,
     },
   };
 }
+
+export const CANCELLABLE: readonly GiveawayStatus[] = ['running', 'scheduled', 'paused'];
 
 export type CancelOutcome =
   | { outcome: 'cancelled'; giveaway: Giveaway }
@@ -336,13 +373,7 @@ export async function cancelGiveaway(
 
   // The conditional update is the decision, not the read above it: a draw that began between the
   // two would otherwise be told "nobody was drawn" while it announces winners.
-  const cancelled = await deps.store.finishDraw(
-    guildId,
-    giveawayId,
-    ['running', 'scheduled', 'paused'],
-    'cancelled',
-    now,
-  );
+  const cancelled = await deps.store.finishDraw(guildId, giveawayId, CANCELLABLE, 'cancelled', now);
 
   if (!cancelled) {
     const current = await deps.store.get(guildId, giveawayId);

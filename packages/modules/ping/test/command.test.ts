@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  type ActionExecutor,
+  type ActionRequest,
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
@@ -7,12 +9,15 @@ import {
   type DedupeStore,
   DefaultActionExecutor,
   type Logger,
+  MESSAGE_FLAG_EPHEMERAL,
   newId,
   Permissions,
   type PrecheckInput,
   type RestProxyClient,
   type RestRequestOptions,
   type RestResponse,
+  resolvePrivateReply,
+  subcommandPath,
 } from '@proton/core';
 import { pingCommand } from '../src/command.ts';
 import { type PingConfig, pingDefaultConfig } from '../src/config.ts';
@@ -59,9 +64,33 @@ class FakeRest implements RestProxyClient {
   }
 }
 
-function harness(config: Partial<PingConfig> = {}) {
+interface RunOverrides {
+  replyPreference: boolean | null;
+  // Present, it replaces what the worker would resolve — undefined is a worker that set none.
+  privateReply: boolean | undefined;
+
+  idempotencyKey: string;
+}
+
+function privateReplyOf(
+  config: PingConfig,
+  overrides: Partial<RunOverrides>,
+): { privateReply?: boolean } {
+  if ('privateReply' in overrides) {
+    return overrides.privateReply === undefined ? {} : { privateReply: overrides.privateReply };
+  }
+  if (!pingCommand.reply) return {};
+
+  const preference = overrides.replyPreference ?? null;
+  return {
+    privateReply: resolvePrivateReply(pingCommand.reply, config, subcommandPath([]), preference),
+  };
+}
+
+function harness(config: Partial<PingConfig> = {}, overrides: Partial<RunOverrides> = {}) {
   const rest = new FakeRest();
   const recorder = new MemoryRecorder();
+  const requests: ActionRequest[] = [];
   const lines: string[] = [];
   const logger: Logger = {
     info: (message) => lines.push(message),
@@ -84,19 +113,33 @@ function harness(config: Partial<PingConfig> = {}) {
     }),
   });
 
+  const recording: ActionExecutor = {
+    execute: (request) => {
+      requests.push(request);
+      return executor.execute(request);
+    },
+  };
+
+  const full = { ...pingDefaultConfig, ...config };
   const ctx: CommandContext<PingConfig> = {
     guildId: GUILD,
     channelId: CHANNEL,
     userId: USER,
-    config: { ...pingDefaultConfig, ...config },
-    executor,
+    config: full,
+    executor: recording,
     logger,
     options: createCommandOptions([]),
     interaction: { id: INTERACTION, token: LIVE_TOKEN },
-    idempotencyKey: newId(),
+    idempotencyKey: overrides.idempotencyKey ?? newId(),
+    ...privateReplyOf(full, overrides),
   };
 
-  return { ctx, rest, recorder, lines };
+  return { ctx, rest, recorder, requests, lines };
+}
+
+function ephemeralFlag(rest: FakeRest): number {
+  const body = rest.calls[0]?.body as { data?: { flags?: number } } | undefined;
+  return (body?.data?.flags ?? 0) & MESSAGE_FLAG_EPHEMERAL;
 }
 
 describe('/ping', () => {
@@ -116,5 +159,42 @@ describe('/ping', () => {
     await pingCommand.handler(ctx);
 
     expect(JSON.stringify(recorder.recorded)).not.toContain(LIVE_TOKEN);
+  });
+});
+
+describe('/ping reply visibility', () => {
+  test('answers in public unless its own setting says otherwise', () => {
+    expect(pingCommand.reply).toEqual({ default: 'public', toggleable: [''] });
+  });
+
+  test('with no setting it answers exactly as it always has, in public', async () => {
+    const before = harness({}, { privateReply: undefined, idempotencyKey: 'evt-ping' });
+    const after = harness({}, { replyPreference: null, idempotencyKey: 'evt-ping' });
+
+    await pingCommand.handler(before.ctx);
+    await pingCommand.handler(after.ctx);
+
+    expect(after.ctx.privateReply).toBe(false);
+    expect(after.requests).toEqual(before.requests);
+    expect(after.requests.map((request) => request.payload)).toMatchObject([{ ephemeral: false }]);
+    expect(after.requests[0]?.payload).not.toHaveProperty('callbackType');
+    expect(ephemeralFlag(after.rest)).toBe(0);
+  });
+
+  test('set private, only the member who asked sees the answer', async () => {
+    const { ctx, rest, requests } = harness({}, { replyPreference: true });
+
+    await pingCommand.handler(ctx);
+
+    expect(requests[0]?.payload).toMatchObject({ content: 'Pong!', ephemeral: true });
+    expect(ephemeralFlag(rest)).toBe(MESSAGE_FLAG_EPHEMERAL);
+  });
+
+  test('set public, it answers in the channel', async () => {
+    const { ctx, rest } = harness({}, { replyPreference: false });
+
+    await pingCommand.handler(ctx);
+
+    expect(ephemeralFlag(rest)).toBe(0);
   });
 });

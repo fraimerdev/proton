@@ -112,7 +112,7 @@ describe('the captcha message', () => {
     const built = buildCaptchaMessage(CHALLENGE, 1);
 
     if (!built.ok) throw new Error(built.humanReason);
-    expect(built.content).toContain('not case sensitive');
+    expect(built.content).toContain('aren’t case-sensitive');
   });
 
   test('refuses to build a message whose custom_id would not fit Discord', () => {
@@ -127,7 +127,7 @@ describe('the captcha message', () => {
 describe('describeAttempts', () => {
   test('counts down in words a member reads, and warns on the last one', () => {
     expect(describeAttempts(3)).toBe('You have 3 more attempts after this one.');
-    expect(describeAttempts(1)).toBe('You have one more attempt after this one.');
+    expect(describeAttempts(1)).toBe('You have 1 more attempt after this one.');
     expect(describeAttempts(0)).toBe('This is your last attempt.');
     expect(describeAttempts(-1)).toBe('This is your last attempt.');
   });
@@ -191,7 +191,7 @@ describe('the website message', () => {
   test('warns that the link is personal and short-lived', () => {
     const built = buildWebsiteMessage('https://proton.test/verify/token', 'Verify');
 
-    expect(built.content).toContain('yours alone');
+    expect(built.content).toContain('only works for you');
     expect(built.content).toContain('15 minutes');
   });
 });

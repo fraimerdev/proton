@@ -334,7 +334,10 @@ export interface Harness {
   kinds(): ActionKind[];
 
   listen(event: ProtonEvent, config?: Partial<BrandingConfig>): Promise<void>;
-  command(config?: Partial<BrandingConfig>): Promise<void>;
+  command(
+    config?: Partial<BrandingConfig>,
+    commandLabel?: (key: string, path?: string) => string,
+  ): Promise<void>;
 }
 
 export interface HarnessOptions {
@@ -477,8 +480,12 @@ export function harness(options: HarnessOptions = {}): Harness {
       await listener.handler(event, ctx);
     },
 
-    async command(config: Partial<BrandingConfig> = {}): Promise<void> {
+    async command(
+      config: Partial<BrandingConfig> = {},
+      commandLabel?: (key: string, path?: string) => string,
+    ): Promise<void> {
       const ctx: CommandContext<BrandingConfig> = {
+        ...(commandLabel ? { commandLabel } : {}),
         guildId: GUILD,
         channelId: CHANNEL,
         userId: ADMIN,

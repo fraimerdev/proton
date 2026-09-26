@@ -66,8 +66,9 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
       payload: { channelId: facts.channelId, messageId: facts.messageId },
     });
 
-    const detail = failure(result);
-    if (detail) outcome.failures.push(`could not delete the message: ${detail}`);
+    // A 404 means the message is already gone.
+    const detail = result.failure?.code === 'discord_404' ? null : failure(result);
+    if (detail) outcome.failures.push(`Couldn’t delete the message: ${detail}`);
     else outcome.deleted = true;
   }
 
@@ -97,7 +98,9 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
 
   const detail = failure(result);
   if (detail) {
-    outcome.failures.push(`could not ${response} <@${facts.authorId}>: ${detail}`);
+    outcome.failures.push(
+      `Couldn’t ${response === 'timeout' ? 'time out' : response} <@${facts.authorId}>: ${detail}`,
+    );
     return outcome;
   }
 
@@ -128,8 +131,8 @@ export async function respond(input: RespondInput): Promise<RespondOutcome> {
         { guildId: ctx.guildId, moduleId: MODULE_ID },
       );
       outcome.failures.push(
-        'the offence was recorded, but it will not count toward escalation — something went ' +
-          'wrong passing it on',
+        'The action was taken, but it won’t count toward escalation because of an error on ' +
+          'Proton’s side.',
       );
     }
   }

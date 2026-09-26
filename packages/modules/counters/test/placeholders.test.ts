@@ -248,7 +248,7 @@ describe('counts beyond the counter’s own', () => {
 
     expect(rendered.output).toBe('Roles 2 of ?');
     expect(rendered.diagnostics.find(({ code }) => code === 'unavailable')?.message).toContain(
-      'no member count cached',
+      'no member count is cached',
     );
   });
 
@@ -299,8 +299,8 @@ describe('a name that comes out empty', () => {
     expect(h.patches()).toHaveLength(0);
 
     const reply = h.replyContent() ?? '';
-    expect(reply).toContain('1 refused');
-    expect(reply).toContain(`<#${COUNTER_A}> was not renamed`);
+    expect(reply).toContain('1 failed');
+    expect(reply).toContain(`Couldn't rename <#${COUNTER_A}>`);
     expect(reply).toContain('{server.boost_count} has no value');
     expect(h.logs.some((line) => line.level === 'error' && line.message.includes(COUNTER_A))).toBe(
       true,
@@ -317,7 +317,7 @@ describe('a name that comes out empty', () => {
 
     expect(h.creates()).toHaveLength(0);
     expect(h.owned.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('could not make the channel for “{server.boost_count}”');
+    expect(h.replyContent()).toContain("Couldn't set up the channel for “{server.boost_count}”");
   });
 });
 
@@ -389,7 +389,7 @@ describe('validation on save', () => {
         report.blocking.map(({ path, label, diagnostic }) => [path, label, diagnostic.code]),
       ).toEqual([['counters.0.template', 'Name template', 'unavailable']]);
       expect(formatTemplateIssues(report)).toStartWith(
-        `counters.0.template Name template: {${clock}} is not available for ${COUNTER_EVENT}`,
+        `counters.0.template Name template: {${clock}} doesn't work here`,
       );
     }
   });

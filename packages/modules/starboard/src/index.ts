@@ -6,7 +6,7 @@ import {
   starboardDefaultConfig,
 } from './config.ts';
 import type { StarboardDeps } from './deps.ts';
-import { createStarboardListener } from './listener.ts';
+import { createStarboardListener, STARBOARD_EMITS } from './listener.ts';
 
 export {
   DEFAULT_STAR_EMOJI,
@@ -47,6 +47,8 @@ export {
   createKey,
   createStarboardListener,
   MODULE_ID,
+  postedKey,
+  STARBOARD_EMITS,
   STARBOARD_EVENT_TYPES,
 } from './listener.ts';
 export { DrizzleStarboardStore } from './postgres-store.ts';
@@ -97,6 +99,7 @@ export function createStarboardModule(
       Permissions.EmbedLinks,
     ],
     actionKinds: ['send', 'edit_message', 'delete_message'],
+    emits: STARBOARD_EMITS,
 
     listeners: [createStarboardListener(deps)],
 

@@ -36,7 +36,7 @@ function subjectLines(payload: {
 }
 
 function winnerLine(winnerIds: readonly string[]): LogLine {
-  if (winnerIds.length === 0) return { label: 'Winners', value: 'nobody eligible' };
+  if (winnerIds.length === 0) return { label: 'Winners', value: 'No eligible entrants' };
 
   return {
     label: winnerIds.length === 1 ? 'Winner' : 'Winners',

@@ -6,6 +6,7 @@ import {
   STATUS_SUCCESS_COLOUR,
   STATUS_SUCCESS_EMOJI,
 } from '@proton/core';
+import { punishConfigSchema } from '../src/config.ts';
 import {
   ABOVE_BOT,
   BOT_PERMISSIONS,
@@ -19,6 +20,10 @@ import {
   subcommand,
   userOption,
 } from './harness.ts';
+
+const FORCED_BAN_REASON = {
+  punish: punishConfigSchema.parse({ types: { ban: { forceReason: true } } }),
+};
 
 describe('/ban add', () => {
   test('bans a member, records the case and confirms it', async () => {
@@ -57,7 +62,7 @@ describe('/ban add', () => {
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.cases()).toHaveLength(0);
-    expect(h.replyContent()).toContain('above or equal to mine');
+    expect(h.replyContent()).toContain("above or equal to Proton's");
 
     expect(h.replyContent()).toContain('Server Settings');
   });
@@ -103,7 +108,7 @@ describe('/ban add', () => {
     );
 
     expect(h.discordCalls()).toHaveLength(1);
-    expect(h.replyContent()).toContain("couldn't schedule it to lift on its own");
+    expect(h.replyContent()).toContain("couldn't be scheduled to lift on its own");
     expect(h.replyContent()).not.toContain('lifts automatically');
     expect(h.replyContent()).not.toContain('database unavailable');
   });
@@ -118,7 +123,7 @@ describe('/ban add', () => {
 
     const fromConfig = harness();
     await fromConfig.run('ban', subcommand('add', [userOption('user', MEMBER)]), {
-      config: { defaultBanDeleteDays: 1 },
+      config: { punish: punishConfigSchema.parse({ types: { ban: { deleteMessageDays: 1 } } }) },
     });
     expect(fromConfig.discordCalls()[0]?.body).toEqual({ delete_message_seconds: 86_400 });
   });
@@ -202,7 +207,7 @@ describe('/kick', () => {
     await h.run('kick', [userOption('user', ABOVE_BOT)]);
 
     expect(h.discordCalls()).toHaveLength(0);
-    expect(h.replyContent()).toContain('above or equal to mine');
+    expect(h.replyContent()).toContain("above or equal to Proton's");
   });
 
   test('names KickMembers when it is missing', async () => {
@@ -241,7 +246,9 @@ describe('/timeout add and /timeout remove', () => {
     const h = harness();
 
     await h.run('timeout', subcommand('add', [userOption('user', MEMBER)]), {
-      config: { defaultTimeoutDuration: '15m' },
+      config: {
+        punish: punishConfigSchema.parse({ types: { timeout: { defaultDuration: '15m' } } }),
+      },
     });
 
     expect(h.replyContent()).toContain('15m');
@@ -384,25 +391,25 @@ describe('/lockdown add and /lockdown remove', () => {
 });
 
 describe('module policy', () => {
-  test('requireReason refuses an action with no reason and says what to do', async () => {
+  test('a forced reason refuses an action with no reason and says what to do', async () => {
     const h = harness();
 
     await h.run('ban', subcommand('add', [userOption('user', MEMBER)]), {
-      config: { requireReason: true },
+      config: FORCED_BAN_REASON,
     });
 
     expect(h.discordCalls()).toHaveLength(0);
     expect(h.replyContent()).toContain('reason');
   });
 
-  test('requireReason is satisfied by the reason option', async () => {
+  test('a forced reason is satisfied by the reason option', async () => {
     const h = harness();
 
     await h.run(
       'ban',
       subcommand('add', [userOption('user', MEMBER), stringOption('reason', 'spam')]),
       {
-        config: { requireReason: true },
+        config: FORCED_BAN_REASON,
       },
     );
 
@@ -493,7 +500,7 @@ describe('module policy', () => {
     const embed = h.replyMessage()?.embeds?.[0];
     expect(embed?.color).toBe(STATUS_SUCCESS_COLOUR);
     expect(embed?.description).toContain('Banned');
-    expect(embed?.description).toContain("couldn't schedule it to lift on its own");
+    expect(embed?.description).toContain("couldn't be scheduled to lift on its own");
   });
 
   test('the case stamp rides in the same description, not a field of its own', async () => {

@@ -50,7 +50,7 @@ export function mayReview(
     humanReason:
       allowed.length > 0
         ? 'Only this server’s appeal reviewers can decide this one.'
-        : 'Only somebody with Manage Server can decide an appeal here. An admin can name a ' +
-          'reviewer role under Appeals in the Proton dashboard.',
+        : 'You need Manage Server to decide appeals here. An admin can add reviewer roles on ' +
+          'the Appeals page in the Proton dashboard.',
   };
 }

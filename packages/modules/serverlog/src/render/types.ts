@@ -8,12 +8,14 @@ export interface RenderInput {
   entity: unknown;
   audit: AuditEntry | null;
 
-  // The message as it was before this event, when Message logs is remembering recent text.
+  // The message as it was before this event, when Logging is remembering recent text.
   cached?: CachedMessage | null | undefined;
 
   executor: LogExecutor | null;
   occurredAt: number;
   emojis: EmojiSet;
+  commandLabel?(key: string, path?: string): string;
+  dashboardUrl?: string | undefined;
 }
 
 export interface RenderResult {
@@ -45,9 +47,13 @@ export function changeOf(
   };
 }
 
+export const NONE = 'None';
+
+export const UNKNOWN = 'Unknown';
+
 export function display(value: unknown): string {
-  if (value === null || value === undefined) return 'none';
-  if (typeof value === 'string') return value.length > 0 ? value : 'none';
+  if (value === null || value === undefined) return NONE;
+  if (typeof value === 'string') return value.length > 0 ? value : NONE;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
 
   return JSON.stringify(value);

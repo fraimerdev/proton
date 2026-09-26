@@ -76,8 +76,7 @@ export async function handleStatsPress(
       replyEphemeral(
         to,
         errorStatus(
-          `I cannot read the numbers for <#${channelId}> — Proton was started without its ` +
-            'honeypot statistics store.',
+          `I can’t show the numbers for <#${channelId}> right now. This is a problem on my side.`,
         ),
       ),
     );

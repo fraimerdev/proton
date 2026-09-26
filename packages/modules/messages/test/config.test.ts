@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   COMPONENT_KEY_MAX,
   DEFAULT_MENTION_POLICY,
+  formatCommandLabel,
   limitFor,
   MAX_AUTOCOMPLETE_CHOICES,
   MAX_CUSTOM_ID_LENGTH,
@@ -113,6 +114,19 @@ describe('the placeholders switch on a template', () => {
     const twice = messagesConfigSchema.parse({ ...once, enabled: true });
 
     expect(twice.templates.map((template) => template.placeholders)).toEqual([true, false]);
+  });
+
+  test('a placeholder link needs the switch on, because only then is it filled in', () => {
+    const template = {
+      name: 'art',
+      embeds: [{ title: 'Hi', thumbnailUrl: '{server.icon_url}' }],
+    };
+
+    expect(templatesSchema.safeParse([{ ...template, placeholders: true }]).success).toBe(true);
+
+    const off = templatesSchema.safeParse([template]);
+    expect(off.success).toBe(false);
+    expect(off.error?.issues[0]?.message).toContain('turn on placeholders');
   });
 
   test('a switch that is not a yes or no is refused rather than read as on', () => {
@@ -269,7 +283,7 @@ describe('the saved list', () => {
 
     expect(result.success).toBe(false);
     expect(result.success === false && result.error.issues[0]?.message).toContain(
-      'which of them you meant',
+      'Another template is already called',
     );
   });
 });
@@ -340,7 +354,7 @@ describe('a component key has to fit in a custom_id', () => {
     const message = (result.success === false && result.error.issues[0]?.message) || '';
     expect(message).toContain(String(encodedLength(LONG_NAME, LONG_KEY)));
     expect(message).toContain(String(MAX_CUSTOM_ID_LENGTH));
-    expect(message).toContain('Shorten the message name or the key');
+    expect(message).toContain('Shorten the template name or the key');
   });
 
   test('the longest plain name and key still fit, so the guard is not over-eager', () => {
@@ -454,10 +468,22 @@ describe('what the member is told', () => {
   });
 
   test('the list names them and counts them', () => {
-    expect(describeList(named('rules', 'faq'))).toContain('2 in this server');
+    expect(describeList(named('rules', 'faq'))).toContain('2 templates in this server');
   });
 
   test('an empty list says where embeds come from', () => {
     expect(describeList([])).toContain('dashboard');
+    expect(describeList([])).toContain('`/message send` composes a one-off');
+  });
+
+  test('a renamed /message is named as this server shows it', () => {
+    const labels = {
+      commandLabel: (key: string, path?: string) =>
+        formatCommandLabel(key, path, key === 'message' ? 'announce' : undefined),
+    };
+
+    expect(describeUnknown([], 'welcome', labels)).toContain('message now with `/announce send`.');
+    expect(describeList([], labels)).toContain('`/announce send` composes a one-off');
+    expect(describeUnknown([], 'welcome', labels)).not.toContain('/message');
   });
 });

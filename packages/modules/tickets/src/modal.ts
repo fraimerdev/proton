@@ -150,7 +150,7 @@ export function buildCloseReasonModal(): Modal | null {
         style: TextInputStyle.Paragraph,
         required: false,
         max_length: 512,
-        placeholder: 'Shown in the log and the transcript.',
+        placeholder: 'Shown in the logs and the transcript.',
       }),
     ],
   };
@@ -184,7 +184,7 @@ export function buildRatingCommentModal(ticketId: string, score: number): Modal 
     customId: customId.customId,
     title: 'Thanks for rating',
     components: [
-      labelled('Anything you would like to add? (optional)', {
+      labelled('Anything you’d like to add? (optional)', {
         type: ComponentType.TextInput,
         custom_id: COMMENT_FIELD,
         style: TextInputStyle.Paragraph,

@@ -23,6 +23,7 @@ import { archiveTicket, closeTicket, deleteTicket } from './lifecycle.ts';
 import { ticketsTemplates } from './placeholders.ts';
 import { createTicketPanelListener } from './post.ts';
 import { createTicketChannelListener, createTicketPatrolListener, patrol } from './reconcile.ts';
+import { createTicketRequestListener } from './requests.ts';
 import {
   AUTO_CLOSE_JOB,
   AUTO_DELETE_JOB,
@@ -30,6 +31,8 @@ import {
   autoCloseAt,
   CLOSE_REQUEST_JOB,
   INACTIVITY_WARN_JOB,
+  PURGE_CRON,
+  PURGE_JOB_ID,
   SWEEP_JOB,
   TICKET_JOBS,
   ticketJobDataSchema,
@@ -262,10 +265,17 @@ export {
   handleChannelDeleted,
   type PatrolResult,
   patrol,
+  purgeCapturedMessages,
   readDeletedChannel,
   TICKET_CHANNEL_EVENT_TYPES,
   TICKET_PATROL_EVENT_TYPES,
 } from './reconcile.ts';
+export {
+  createTicketRequestListener,
+  TICKET_REQUEST_EVENT_TYPES,
+  TICKETS_OFF_REASON,
+  TICKETS_UNAVAILABLE_REASON,
+} from './requests.ts';
 export {
   AUTO_CLOSE_JOB,
   AUTO_DELETE_JOB,
@@ -277,6 +287,8 @@ export {
   closeRequestAt,
   INACTIVITY_WARN_JOB,
   PER_TICKET_JOBS,
+  PURGE_CRON,
+  PURGE_JOB_ID,
   SWEEP_BATCH,
   SWEEP_INTERVAL_MS,
   SWEEP_JOB,
@@ -302,6 +314,7 @@ export type {
   TicketMessage,
   TicketParticipant,
   TicketRating,
+  TicketSource,
   TicketStats,
   TicketStatus,
   TicketStore,
@@ -390,7 +403,7 @@ function autoCloseHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig> {
       deps,
       ticket,
       closedBy: PROTON_ACTOR,
-      reason: `closed automatically after ${type?.autoCloseAfter} without a reply`,
+      reason: `Closed automatically after ${type?.autoCloseAfter} with no activity`,
       idempotencyKey: `tickets:auto-close:${ticket.id}`,
     });
   });
@@ -424,13 +437,15 @@ function warnHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig> {
       payload: {
         channelId: ticket.channelId,
         content:
-          `<@${ticket.ownerId}> — this ticket has been quiet for a while. Reply here if you ` +
-          'still need help, or it will close itself.',
+          `<@${ticket.ownerId}>, this ticket has been quiet for a while. Reply here if you still ` +
+          `need help${type?.autoCloseAfter ? ', or it will close automatically' : ''}.`,
         allowedMentions: { parse: [], users: [ticket.ownerId] },
       },
     });
   });
 }
+
+const AUTO_DELETE_REASON = 'Deleted automatically after closing';
 
 function autoDeleteHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig> {
   return jobHandler(deps, async ({ ctx, store, ticket }) => {
@@ -445,7 +460,7 @@ function autoDeleteHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig> {
 
     if (!type?.autoDeleteAfter) return;
 
-    await deleteTicket(ctx, store, deps, ticket, PROTON_ACTOR, 'tidied up automatically', [
+    await deleteTicket(ctx, store, deps, ticket, PROTON_ACTOR, AUTO_DELETE_REASON, [
       'closed',
       'archived',
     ]);
@@ -462,7 +477,7 @@ function closeRequestHandler(deps: TicketsDeps): ScheduledHandler<TicketsConfig>
       deps,
       ticket,
       closedBy: ticket.closeRequestedById ?? PROTON_ACTOR,
-      reason: 'closed because nobody answered the request to close it',
+      reason: 'Closed because no one answered the request to close it',
       idempotencyKey: `tickets:close-request:${ticket.id}`,
     });
   });
@@ -528,6 +543,7 @@ export function createTicketsModule(
       'tickets.closed',
       'tickets.reopened',
       'tickets.deleted',
+      'tickets.open_answered',
     ],
 
     configLimits: [
@@ -546,6 +562,7 @@ export function createTicketsModule(
       createTicketChannelListener(deps),
       createTicketPatrolListener(deps),
       createTicketPanelListener(),
+      createTicketRequestListener(deps),
     ],
 
     schedules: [...TICKET_JOBS],
@@ -556,6 +573,8 @@ export function createTicketsModule(
       [CLOSE_REQUEST_JOB]: closeRequestHandler(deps),
       [SWEEP_JOB]: sweepHandler(deps),
     },
+
+    jobs: [{ id: PURGE_JOB_ID, cron: PURGE_CRON }],
 
     // One per configured panel. `/ticket panel` is the other way to post one, and both end in
     // sendPanel, so a panel posted from the dashboard is the message the command would have made.

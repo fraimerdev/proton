@@ -75,6 +75,7 @@ function ticket(overrides: Partial<Ticket> = {}): Ticket {
     deletedAt: null,
     messageCount: 0,
     transcriptUrl: null,
+    source: null,
     ...overrides,
   };
 }

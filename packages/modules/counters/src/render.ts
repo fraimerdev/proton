@@ -43,8 +43,8 @@ export function renderName(
 
 function blankReason(diagnostics: readonly TemplateDiagnostic[]): string {
   return [
-    'its name comes out empty once its placeholders are filled in, and Discord needs a channel ' +
-      'name of 1 to 100 characters.',
+    'its name is empty once the placeholders are filled in, and Discord needs a channel name of ' +
+      '1 to 100 characters.',
     ...diagnostics
       .filter((diagnostic) => diagnostic.code !== 'empty_channel_name')
       .map((diagnostic) => diagnostic.message),
@@ -77,8 +77,8 @@ export interface RefreshOutcome {
 }
 
 export const NO_COUNTERS =
-  'No counter channels are set up in this server yet. Add them in the Proton dashboard, under ' +
-  'Counter channels, and each one will start refreshing every 10 minutes.';
+  'No counter channels are set up in this server yet. Add one on the Counters page of the ' +
+  'Proton dashboard.';
 
 function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
@@ -97,33 +97,33 @@ export function renderReport(outcome: RefreshOutcome): string {
   if (outcome.created > 0) parts.unshift(`${outcome.created} created`);
   if (outcome.unavailable > 0) parts.push(`${outcome.unavailable} skipped`);
 
-  const refused = outcome.failures.length + outcome.creationFailures.length;
-  if (refused > 0) parts.push(`${refused} refused`);
+  const failed = outcome.failures.length + outcome.creationFailures.length;
+  if (failed > 0) parts.push(`${failed} failed`);
 
-  const lines = [`Checked ${plural(outcome.total, 'counter channel')} — ${parts.join(', ')}.`];
+  const lines = [`Checked ${plural(outcome.total, 'counter channel')}: ${parts.join(', ')}.`];
 
   for (const channelId of outcome.unlocked) {
     lines.push(
-      `I made <#${channelId}> but could not stop members joining it — that needs the Manage ` +
-        'Roles permission. Deny Connect on it yourself, or grant Proton Manage Roles and remove ' +
-        'and re-add the counter.',
+      `I created <#${channelId}>, but couldn't stop members joining it because I'm missing ` +
+        'Manage Roles. Deny Connect on it yourself, or give me Manage Roles before you add more ' +
+        'counters.',
     );
   }
 
   for (const failure of outcome.creationFailures) {
-    lines.push(`I could not make the channel for “${failure.name}”: ${failure.humanReason}`);
+    lines.push(`Couldn't set up the channel for “${failure.name}”: ${failure.humanReason}`);
   }
 
   if (outcome.unavailable > 0) {
     lines.push(
-      `I have no member count cached for this server yet, so ${plural(outcome.unavailable, 'counter')} ` +
-        'reading it were left alone rather than renamed to 0. It arrives the next time Proton ' +
-        'connects to Discord.',
+      `I don't have this server's member count yet, so I left ${plural(outcome.unavailable, 'counter')} ` +
+        'that use it alone instead of setting them to 0. It arrives the next time I connect to ' +
+        'Discord.',
     );
   }
 
   for (const failure of outcome.failures) {
-    lines.push(`<#${failure.channelId}> was not renamed: ${failure.humanReason}`);
+    lines.push(`Couldn't rename <#${failure.channelId}>: ${failure.humanReason}`);
   }
 
   return lines.join('\n');

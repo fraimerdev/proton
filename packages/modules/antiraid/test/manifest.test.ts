@@ -75,7 +75,7 @@ describe('antiraid failure paths', () => {
     expect(status.enabled).toBe(false);
     expect(status.disabledReason?.code).toBe('missing_intent');
     expect(status.disabledReason?.humanReason).toContain('Server Members Intent');
-    expect(status.disabledReason?.humanReason).toContain('developer portal');
+    expect(status.disabledReason?.humanReason).toContain('Developer Portal');
   });
 
   test('disables itself and names MANAGE_ROLES when the permission is missing', () => {

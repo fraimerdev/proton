@@ -38,6 +38,7 @@ async function seeded(options: { entrants: number; winnerCount?: number } = { en
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
   }
 
@@ -287,6 +288,7 @@ describe('entry is refused once a giveaway stops running', () => {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
 
     expect(outcome).toBe('closed');
@@ -304,6 +306,7 @@ describe('entry is refused once a giveaway stops running', () => {
         totalEntries: 1,
         breakdown: [],
         memberSnapshot: null,
+        pressedAt: NOW,
       }),
     ).toBe('entered');
   });
@@ -334,6 +337,7 @@ describe('claim deadlines', () => {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
 
     const drawn = await drawGiveaway(deps(store), {

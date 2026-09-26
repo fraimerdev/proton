@@ -187,7 +187,7 @@ describe('draw logs', () => {
     const executor = await render('giveaways.ended', { ...drawn, winnerIds: [], entrantCount: 0 });
 
     expect(executor.titles()).toEqual(['Giveaway ended with no winners']);
-    expect(String(executor.embeds()[0]?.description)).toContain('nobody eligible');
+    expect(String(executor.embeds()[0]?.description)).toContain('No eligible entrants');
   });
 
   // A draw that ran without one of its requirements is a different draw than the host configured.

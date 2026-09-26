@@ -213,12 +213,16 @@ export {
   snapshotOf,
 } from './entry.ts';
 export {
+  dropClaimedKey,
+  enteredKey,
   GIVEAWAY_EMITS,
   publishBonus,
   publishCancelled,
   publishCreated,
   publishDrawn,
+  publishDropClaimed,
   publishEdited,
+  publishEntered,
   publishOrphaned,
   publishPaused,
   publishResumed,
@@ -346,6 +350,7 @@ export {
   type GiveawayStats,
   type GiveawayStatus,
   type GiveawayStore,
+  type LeaveOutcome,
   type ListGiveawaysQuery,
   type MemberSnapshot,
   type MultiplierRow,
@@ -414,6 +419,7 @@ export function createGiveawaysModule(
       'edit_message',
       'giveaway_draw',
       'create_dm',
+      'add_role',
     ],
 
     emits: GIVEAWAY_EMITS,

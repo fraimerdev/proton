@@ -9,6 +9,7 @@ import {
 import { createServerlogListener, type ServerlogDeps } from './listeners.ts';
 
 export {
+  ACTION_LOG_KEY,
   categoryOf,
   entitySpecsForAuditAction,
   isLogEventKey,
@@ -20,6 +21,7 @@ export {
   type LogEventSpec,
   type LogPrimary,
   specByKey,
+  specForAction,
   specsForAuditAction,
   specsForEvent,
 } from './catalogue.ts';
@@ -73,6 +75,7 @@ export {
   SERVERLOG_MODULE_ID,
   type ServerlogDeps,
 } from './listeners.ts';
+export { MODULE_LABELS, moduleLabel } from './render/actions.ts';
 export type { RenderInput, RenderResult } from './render/types.ts';
 export {
   categoriesOn,
@@ -94,7 +97,7 @@ export function createServerlogModule(
 ): ModuleManifest<typeof serverlogConfigSchema> {
   return {
     id: 'serverlog',
-    name: 'Server logs',
+    name: 'Server Logs',
     category: 'logging',
     configSchema: serverlogConfigSchema,
     formSchema: serverlogFormSchema,

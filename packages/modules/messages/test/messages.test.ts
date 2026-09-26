@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   BUTTON_STYLE_VALUES,
   DEFAULT_MENTION_POLICY,
+  formatCommandLabel,
   INTERACTION_CALLBACK_MODAL,
   Permissions,
   STATUS_ERROR_COLOUR,
@@ -34,6 +35,9 @@ import {
 
 const ACTION_ROW_TYPE = 1;
 const BUTTON_TYPE = 2;
+
+const RENAMED = (key: string, path?: string) =>
+  formatCommandLabel(key, path, key === 'message' ? 'announce' : undefined);
 
 const WELCOME: SavedMessage = {
   name: 'welcome',
@@ -189,7 +193,7 @@ describe('/message post', () => {
     expect(h.sends()).toHaveLength(0);
 
     const reply = h.lastSaid() ?? '';
-    expect(reply).toContain('no saved message called “goodbye”');
+    expect(reply).toContain('Couldn’t find a template called “goodbye”');
     expect(reply).toContain('`welcome`');
     expect(reply).toContain('`Rules`');
   });
@@ -318,7 +322,7 @@ describe('/message post', () => {
     const reply = h.lastSaid() ?? '';
     expect(reply).toContain('Send Messages');
     expect(reply).toContain(CHANNEL);
-    expect(reply).toContain('could not post **welcome**');
+    expect(reply).toContain('Couldn’t post **welcome**');
   });
 
   test('a refusal for another channel names the gate as well as the missing permission', async () => {
@@ -337,6 +341,38 @@ describe('/message post', () => {
     const reply = h.lastSaid() ?? '';
     expect(reply).toContain('Send Messages');
     expect(reply).toContain('Manage Messages');
+    expect(reply).toContain('`/message` is limited to members with Manage Messages');
+  });
+
+  test('the gate names /message as this server has renamed it', async () => {
+    const h = harness();
+
+    await h.run(
+      subcommand('post', [
+        stringOption('name', 'welcome'),
+        channelOption('channel', OTHER_CHANNEL),
+      ]),
+      {
+        templates: [WELCOME],
+        botPermissions: Permissions.ViewChannel | Permissions.EmbedLinks,
+        commandLabel: RENAMED,
+      },
+    );
+
+    const reply = h.lastSaid() ?? '';
+    expect(reply).toContain('`/announce` is limited to members with Manage Messages');
+    expect(reply).not.toContain('/message');
+  });
+
+  test('an unknown saved name in an empty server names the renamed /message send', async () => {
+    const h = harness();
+
+    await h.run(subcommand('post', [stringOption('name', 'welcome')]), {
+      templates: [],
+      commandLabel: RENAMED,
+    });
+
+    expect(h.lastSaid()).toContain('compose a one-off message now with `/announce send`.');
   });
 
   test('a refusal for the channel it was run in does not lecture about the gate', async () => {
@@ -416,7 +452,7 @@ describe('/message list', () => {
     await h.run(subcommand('list'), { templates: [WELCOME, RULES] });
 
     const reply = h.lastSaid() ?? '';
-    expect(reply).toContain('2 in this server');
+    expect(reply).toContain('2 templates in this server');
     expect(reply).toContain('`welcome`');
     expect(h.sends()).toHaveLength(0);
   });
@@ -540,7 +576,7 @@ describe('the /message send modal submission', () => {
     await h.modal(modalEvent({ [DESCRIPTION_FIELD]: 'x' }), { config: { enabled: false } });
 
     expect(h.sends()).toHaveLength(0);
-    expect(h.lastSaid()).toContain('disabled');
+    expect(h.lastSaid()).toContain('Messages is off in this server');
   });
 
   test('names the missing wiring when it has no way to confirm', async () => {
@@ -574,7 +610,18 @@ describe('the /message send modal submission', () => {
     await h.modal(modalEvent({ [DESCRIPTION_FIELD]: 'x' }, { channelId: null }));
 
     expect(h.sends()).toHaveLength(0);
-    expect(h.lastSaid()).toContain('/message send');
+    expect(h.lastSaid()).toContain('Run `/message send` again from the channel you want it in.');
+  });
+
+  test('names /message send as this server has renamed it', async () => {
+    const h = harness();
+
+    await h.modal(modalEvent({ [DESCRIPTION_FIELD]: 'x' }, { channelId: null }), {
+      commandLabel: RENAMED,
+    });
+
+    expect(h.lastSaid()).toContain('Run `/announce send` again from the channel you want it in.');
+    expect(h.lastSaid()).not.toContain('/message');
   });
 
   test('a redelivered submission posts once', async () => {

@@ -14,12 +14,11 @@ import {
   renderSavedMessage,
 } from './placeholders.ts';
 
-const GONE =
-  'that saved message is no longer in this server’s settings. Reload the page and try again.';
+const GONE = 'that template is no longer in this server’s settings. Reload the page and try again.';
 
 const TEMPLATE_INPUT = {
   key: 'templateIndex',
-  label: 'Saved message',
+  label: 'Template',
   kind: 'integer',
   min: 0,
   max: 999,
@@ -72,7 +71,7 @@ function buildFor(
 const POST_DESCRIPTOR: SimulationDescriptor = {
   id: 'messages.post',
   moduleId: 'messages',
-  label: 'Saved message',
+  label: 'Template',
   summary: 'What /message post puts in a channel.',
   surfaceId: MESSAGES_POST_SURFACE.id,
   configPath: 'templates.*',
@@ -88,8 +87,8 @@ const POST_DESCRIPTOR: SimulationDescriptor = {
 const SCHEDULED_DESCRIPTOR: SimulationDescriptor = {
   id: 'messages.scheduled',
   moduleId: 'messages',
-  label: 'Scheduled message',
-  summary: 'What this saved message looks like when its schedule fires.',
+  label: 'Scheduled post',
+  summary: 'What this template looks like when its schedule posts it.',
   surfaceId: MESSAGES_SCHEDULED_SURFACE.id,
   configPath: 'templates.*',
   output: 'message',
@@ -97,8 +96,8 @@ const SCHEDULED_DESCRIPTOR: SimulationDescriptor = {
   subject: false,
   inputs: [TEMPLATE_INPUT],
   note:
-    'Rendered as the schedule renders it, so anything about whoever ran a command comes out ' +
-    'empty. The schedule is not moved and the ping role is not pinged.',
+    'Filled in the way the schedule fills it in, so placeholders about who ran the command come ' +
+    'out empty. The schedule isn’t changed and the ping role isn’t pinged.',
 };
 
 export const MESSAGES_POST_SIMULATION: SimulationAdapter<MessagesConfig> = {

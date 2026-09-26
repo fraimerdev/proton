@@ -228,7 +228,7 @@ describe('voice', () => {
 
     await listener.handler(event('voiceStateLeave'), context(executor, config(MESSAGES_ON)));
 
-    expect(executor.titles()).toEqual(['Member left voice']);
+    expect(executor.titles()).toEqual(['Member left a voice channel']);
   });
 
   test('a moderator disconnect is its own log with the moderator named', async () => {

@@ -78,7 +78,7 @@ export function stepModal(step: BuilderStep, draft: GiveawayDraft): ModalResult 
             text('duration', 'How long it runs', {
               required: true,
               maxLength: 16,
-              description: 'A number and a unit — 30m, 12h, 7d.',
+              description: 'For example 30m, 12h or 7d.',
               placeholder: '24h',
             }),
             text('startsIn', 'Start later', {
@@ -134,7 +134,7 @@ export function stepModal(step: BuilderStep, draft: GiveawayDraft): ModalResult 
               required: true,
               maxLength: 3,
             }),
-            text('maxEntriesPerUser', 'Most entries one member can hold', {
+            text('maxEntriesPerUser', 'Most entries per member', {
               value: draft.maxEntriesPerUser === null ? null : String(draft.maxEntriesPerUser),
               description: 'Leave empty for no cap.',
               maxLength: 5,
@@ -148,7 +148,7 @@ export function stepModal(step: BuilderStep, draft: GiveawayDraft): ModalResult 
             text('winMessage', 'Message sent to winners', {
               value: draft.winMessage,
               description:
-                'Empty for the default. Try {giveaway.prize} or {user.mention}; {{ is a literal {.',
+                'Sent only if Send winners a DM is on. Try {giveaway.prize}. Type {{ for a literal {.',
               maxLength: 1000,
               paragraph: true,
             }),
@@ -176,7 +176,7 @@ export function applyStepModal(
   if (step === 'basics') {
     const title = (fields.title ?? '').trim();
     if (title.length === 0) {
-      return { ok: false, humanReason: 'A giveaway needs a prize. Say what is being given away.' };
+      return { ok: false, humanReason: 'The prize can’t be blank.' };
     }
 
     const duration = parseGiveawayDuration((fields.duration ?? '').trim());
@@ -191,8 +191,8 @@ export function applyStepModal(
         return {
           ok: false,
           humanReason:
-            `“${startsIn}” is not a length of time I understand. Give a number followed by ` +
-            's, m, h, d or w — or leave it empty to start straight away.',
+            `“${startsIn}” isn’t a length of time I understand. Use a number followed by ` +
+            's, m, h, d or w, like 2d, or leave it empty to start as soon as you publish.',
         };
       }
       startsInMs = parsed;
@@ -214,7 +214,7 @@ export function applyStepModal(
         return {
           ok: false,
           humanReason:
-            `“${colour}” is not a colour I can read. Give a hex code like #5865F2, or leave it ` +
+            `“${colour}” isn’t a colour I can read. Use a hex code like #5865F2, or leave it ` +
             'empty for the server default.',
         };
       }
@@ -238,8 +238,8 @@ export function applyStepModal(
       return {
         ok: false,
         humanReason:
-          `“${fields.winnerCount}” is not a number of winners I can use. Give a whole number ` +
-          `between 1 and ${WINNER_COUNT_MAX}.`,
+          `“${fields.winnerCount}” isn’t a number of winners I can use. Use a whole number ` +
+          `from 1 to ${WINNER_COUNT_MAX}.`,
       };
     }
 
@@ -250,8 +250,8 @@ export function applyStepModal(
         return {
           ok: false,
           humanReason:
-            `The entry cap has to be a whole number between 1 and ${MAX_ENTRIES_PER_USER_MAX}, ` +
-            'or empty for no cap.',
+            `The entry cap must be a whole number from 1 to ${MAX_ENTRIES_PER_USER_MAX}, or ` +
+            'empty for no cap.',
         };
       }
       draft.maxEntriesPerUser = parsed;
@@ -266,8 +266,8 @@ export function applyStepModal(
         return {
           ok: false,
           humanReason:
-            `“${claim}” is not a claim window I can use. Give at least a minute — for example ` +
-            '24h — or leave it empty so winners keep their prize without claiming.',
+            `“${claim}” isn’t a claim window I can use. Use at least 1 minute, like 24h, or ` +
+            'leave it empty so winners don’t need to claim.',
         };
       }
       draft.claimWindowSeconds = Math.floor(parsed / 1000);
@@ -288,7 +288,7 @@ export function applyStepModal(
       if (errors.length > 0) {
         return {
           ok: false,
-          humanReason: `The winner message was not saved: ${errors.map((error) => error.message).join(' ')}`,
+          humanReason: `The winner message wasn’t saved: ${errors.map((error) => error.message).join(' ')}`,
         };
       }
     }

@@ -37,9 +37,9 @@ async function announceRaid(
   if (!channelId) return;
 
   const parts = [
-    `**Raid mode.** ${joinsInWindow} accounts joined within ${ctx.config.joinWindow}, at or ` +
-      `above this server's threshold of ${ctx.config.joinThreshold}.`,
-    `Joins scoring ${ctx.config.scoreThreshold}/${MAX_JOIN_SCORE} or higher are ` +
+    `**Raid detected.** ${joinsInWindow} accounts joined within ${ctx.config.joinWindow}, at or ` +
+      `above this server's raid threshold of ${ctx.config.joinThreshold}.`,
+    `New members scoring ${ctx.config.scoreThreshold}/${MAX_JOIN_SCORE} or higher are ` +
       `${RESPONSE_LABELS[ctx.config.response]}.`,
   ];
 
@@ -81,9 +81,10 @@ async function publishRaid(
       actorId: null,
       summary:
         `${joinsInWindow} accounts joined within ${ctx.config.joinWindow}, at or above this ` +
-        `server's threshold of ${ctx.config.joinThreshold}.`,
+        `server's raid threshold of ${ctx.config.joinThreshold}.`,
       actionsTaken: [
-        `joins scoring ${ctx.config.scoreThreshold} or higher are ${ctx.config.response}`,
+        `New members scoring ${ctx.config.scoreThreshold}/${MAX_JOIN_SCORE} or higher are ` +
+          RESPONSE_LABELS[ctx.config.response],
       ],
       ownerExempt: false,
     });

@@ -83,6 +83,8 @@ export const CATEGORY = '500000000000000009';
 export const ARCHIVE_CATEGORY = '500000000000000010';
 
 export const INTERACTION = '600000000000000001';
+
+const INITIAL_CALLBACKS: ReadonlySet<number> = new Set([4, 5, 6, 7, 9]);
 export const PANEL_MESSAGE = '700000000000000001';
 
 const EVERYONE_ROLE = GUILD;
@@ -189,6 +191,18 @@ export class MemoryTicketStore implements TicketStore {
   }
 
   async reserve(input: ReserveTicketInput): Promise<Ticket> {
+    const source = input.source;
+
+    const open = source
+      ? this.#of(input.guildId).find(
+          (row) =>
+            row.status === 'open' &&
+            row.source?.module === source.module &&
+            row.source.ref === source.ref,
+        )
+      : undefined;
+    if (open) return open;
+
     const id = newId();
     const highest = this.#of(input.guildId).reduce((top, row) => Math.max(top, row.number), 0);
     const at = this.#now();
@@ -202,7 +216,7 @@ export class MemoryTicketStore implements TicketStore {
       // Its own id until attach() lands, so the live-channel unique index still holds meanwhile.
       channelId: id,
       openerId: input.openerId,
-      ownerId: input.openerId,
+      ownerId: input.ownerId ?? input.openerId,
       status: 'open',
       priority: input.priority,
       subject: input.subject ?? null,
@@ -228,10 +242,26 @@ export class MemoryTicketStore implements TicketStore {
       deletedAt: null,
       messageCount: 0,
       transcriptUrl: null,
+      source: source ? { module: source.module, ref: source.ref } : null,
     };
 
     this.rows.set(id, ticket);
     return ticket;
+  }
+
+  async bySource(guildId: string, sourceModule: string, sourceRef: string): Promise<Ticket | null> {
+    const linked = this.#of(guildId)
+      .filter(
+        (ticket) =>
+          ticket.status !== 'deleted' &&
+          ticket.source?.module === sourceModule &&
+          ticket.source.ref === sourceRef,
+      )
+      .sort(
+        (a, b) => Number(b.status === 'open') - Number(a.status === 'open') || b.number - a.number,
+      );
+
+    return linked[0] ?? null;
   }
 
   async attach(guildId: string, ticketId: string, channelId: string): Promise<Ticket | null> {
@@ -335,6 +365,17 @@ export class MemoryTicketStore implements TicketStore {
   async reopen(guildId: string, ticketId: string, byId: string): Promise<Ticket | null> {
     const ticket = this.#row(guildId, ticketId);
     if (!ticket || (ticket.status !== 'closed' && ticket.status !== 'archived')) return null;
+
+    const source = ticket.source;
+    const taken =
+      source !== null &&
+      this.#of(guildId).some(
+        (row) =>
+          row.status === 'open' &&
+          row.source?.module === source.module &&
+          row.source.ref === source.ref,
+      );
+    if (taken) return null;
 
     const reopened = this.#write(ticket, {
       status: 'open',
@@ -774,7 +815,7 @@ class MemoryRecorder implements CaseRecorder {
   }
 }
 
-export type RouteMatcher = string | ((call: { method: string; path: string }) => boolean);
+export type RouteMatcher = string | ((call: RestRequestOptions) => boolean);
 
 export class FakeRest implements RestProxyClient {
   readonly calls: RestRequestOptions[] = [];
@@ -826,6 +867,7 @@ export interface Overrides {
   messageId: string;
   eventId: string;
   idempotencyKey: string;
+  applicationId: string;
 
   userId: string;
   roleIds: string[];
@@ -833,6 +875,8 @@ export interface Overrides {
 
   componentType: number;
   values: Record<string, string[]>;
+
+  commandLabel: (key: string, path?: string) => string;
 }
 
 export const STAFF: Partial<Overrides> = { userId: HELPER, roleIds: [SUPPORT_ROLE] };
@@ -891,6 +935,8 @@ export interface Harness {
   components(): Record<string, unknown>[];
   buttonIds(): string[];
   callbackTypes(): number[];
+  initialCallbacks(): Array<{ type: number; data: Record<string, unknown> }>;
+  followUpBodies(): Array<{ path: string; body: Record<string, unknown>; files: RestFile[] }>;
   modalOpened(): Record<string, unknown> | null;
 
   context(overrides?: Partial<Overrides>): ModuleContext<TicketsConfig>;
@@ -1004,6 +1050,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     logger,
     publish,
     ...(overrides.scheduler === false ? {} : { schedule, cancel }),
+    ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
   });
 
   const dataOf = (call: RestRequestOptions): Record<string, unknown> => {
@@ -1172,6 +1219,19 @@ export function harness(options: HarnessOptions = {}): Harness {
         .map((call) => (call.body as { type?: number } | undefined)?.type)
         .filter((type): type is number => typeof type === 'number'),
 
+    initialCallbacks: () =>
+      callbacks()
+        .map((call) => (call.body ?? {}) as { type?: number; data?: Record<string, unknown> })
+        .filter((body) => INITIAL_CALLBACKS.has(body.type ?? 0))
+        .map((body) => ({ type: body.type ?? 0, data: body.data ?? {} })),
+
+    followUpBodies: () =>
+      webhooks().map((call) => ({
+        path: call.path,
+        body: (call.body ?? {}) as Record<string, unknown>,
+        files: call.files ?? [],
+      })),
+
     modalOpened: () => {
       const opened = callbacks()
         .map((call) => call.body as { type?: number; data?: Record<string, unknown> } | undefined)
@@ -1239,6 +1299,7 @@ export function harness(options: HarnessOptions = {}): Harness {
         actorPermissions: overrides.permissions ?? 0n,
         options: createCommandOptions(options_),
         interaction: { id: INTERACTION, token: 'interaction-token' },
+        ...(overrides.applicationId ? { applicationId: overrides.applicationId } : {}),
         idempotencyKey: overrides.idempotencyKey ?? newId(),
       };
 

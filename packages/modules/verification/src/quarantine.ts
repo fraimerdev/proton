@@ -1,4 +1,10 @@
-import { type CommandContext, errorStatus, type GuildState, successStatus } from '@proton/core';
+import {
+  type CommandContext,
+  errorStatus,
+  type GuildState,
+  labelOf,
+  successStatus,
+} from '@proton/core';
 import type { VerificationConfig } from './config.ts';
 import {
   type BoundQuarantineDeps,
@@ -6,7 +12,7 @@ import {
   describeUnbound,
   type VerificationDeps,
 } from './deps.ts';
-import { MODULE_ID, REASON_MAX, reply, runSteps } from './perform.ts';
+import { type Answer, MODULE_ID, REASON_MAX, runSteps } from './perform.ts';
 import { checkGrantable, planQuarantine, planRelease } from './roles.ts';
 import type { QuarantineRecord } from './store.ts';
 
@@ -20,13 +26,13 @@ async function prepare(
   ctx: CommandContext<VerificationConfig>,
   rawDeps: VerificationDeps,
   verb: string,
+  answer: Answer,
 ): Promise<Ready | null> {
   if (!ctx.config.enabled) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        'Verification is disabled in this server, so quarantine is unavailable. An admin can ' +
-          'turn it on from the Proton dashboard.',
+        'Verification is off in this server, so quarantine isn’t available. An admin can turn ' +
+          'it on in the Proton dashboard.',
       ),
     );
     return null;
@@ -34,11 +40,10 @@ async function prepare(
 
   const quarantineRoleId = ctx.config.quarantineRoleId;
   if (!quarantineRoleId) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        'No quarantine role is set for this server, so there is nothing to swap in. An admin can ' +
-          'choose one in the Proton dashboard under Verification → Quarantine role.',
+        'No quarantine role is set. An admin can choose one in the Proton dashboard under ' +
+          'Verification → Quarantine role.',
       ),
     );
     return null;
@@ -48,11 +53,10 @@ async function prepare(
   if ('unbound' in bound) {
     const detail = describeUnbound(`I could not ${verb} that member`, bound.unbound);
     ctx.logger.error(detail, { guildId: ctx.guildId, moduleId: MODULE_ID });
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        `I couldn’t ${verb} that member. Nothing was changed. This is a fault on my side, not a ` +
-          'setting in this server.',
+        `I couldn’t ${verb} that member. Nothing was changed. This is a problem on my end, not ` +
+          'a setting in this server.',
       ),
     );
     return null;
@@ -60,11 +64,10 @@ async function prepare(
 
   const state = await bound.deps.guildState.get(ctx.guildId);
   if (!state) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        "I don't have this server's role list yet, so I can't work out which roles to move. " +
-          'Nothing was changed — please try again shortly.',
+        "I haven't loaded this server's roles yet, so nothing was changed. Try again in a " +
+          'moment.',
       ),
     );
     return null;
@@ -76,7 +79,7 @@ async function prepare(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, errorStatus(`${grantable.reason} Nothing was changed.`));
+    await answer(errorStatus(`${grantable.reason} Nothing was changed.`));
     return null;
   }
 
@@ -87,21 +90,22 @@ export async function runQuarantine(
   ctx: CommandContext<VerificationConfig>,
   rawDeps: VerificationDeps,
   input: { targetId: string; reason?: string | undefined },
+  answer: Answer,
 ): Promise<void> {
-  const ready = await prepare(ctx, rawDeps, 'quarantine');
+  const ready = await prepare(ctx, rawDeps, 'quarantine', answer);
   if (!ready) return;
 
   const { deps, quarantineRoleId, state } = ready;
+  const release = labelOf(ctx, 'quarantine', 'remove');
 
   const existing = await deps.quarantine.get(ctx.guildId, input.targetId);
   if (existing) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        `<@${input.targetId}> is already quarantined — <@${existing.quarantinedBy}> did it on ` +
-          `${new Date(existing.quarantinedAt).toISOString()}, and I'm holding ` +
+        `<@${input.targetId}> is already quarantined. <@${existing.quarantinedBy}> quarantined ` +
+          `them <t:${Math.floor(existing.quarantinedAt / 1000)}:R>, and I'm keeping ` +
           `${existing.priorRoleIds.length} role${existing.priorRoleIds.length === 1 ? '' : 's'} ` +
-          'to give back. Run /quarantine remove to restore them.',
+          `to give back. Run ${release} to restore them.`,
       ),
     );
     return;
@@ -109,12 +113,11 @@ export async function runQuarantine(
 
   const memberRoleIds = await deps.fetchMemberRoles(ctx.guildId, input.targetId);
   if (memberRoleIds === null) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        `I couldn't read <@${input.targetId}>'s roles, so I have done nothing. Quarantining ` +
-          'without knowing what to give back is not something I will do. They may have just ' +
-          'left the server — check and try again.',
+        `I couldn't read <@${input.targetId}>'s roles, so I didn't quarantine them. I won't ` +
+          'quarantine a member without knowing which roles to give back. They may have left ' +
+          'the server.',
       ),
     );
     return;
@@ -153,21 +156,18 @@ export async function runQuarantine(
 
   const held =
     plan.priorRoleIds.length === 0
-      ? 'They held no roles beyond @everyone, so there was nothing to take away — /quarantine remove ' +
-        'will simply lift the quarantine role.'
-      : `I'm holding ${plan.priorRoleIds.length} role` +
+      ? `They had no other roles, so ${release} will only remove the quarantine role.`
+      : `I'm keeping ${plan.priorRoleIds.length} role` +
         `${plan.priorRoleIds.length === 1 ? '' : 's'} to give back: ` +
-        `${plan.priorRoleIds.map((id) => `<@&${id}>`).join(', ')}. Run /quarantine remove to restore them ` +
-        'exactly.';
+        `${plan.priorRoleIds.map((id) => `<@&${id}>`).join(', ')}. Run ${release} to restore them.`;
 
-  await reply(
-    ctx,
+  await answer(
     report.failures.length === 0
-      ? successStatus(`<@${input.targetId}> has been quarantined successfully! ${held}`)
+      ? successStatus(`Quarantined <@${input.targetId}>. ${held}`)
       : errorStatus(
-          `<@${input.targetId}> was quarantined, but not cleanly. ${held}\n\nWhat did NOT work — ` +
-            `${report.failures.join(' | ')}\n\nThe record is saved either way, so /quarantine remove ` +
-            'still knows what they had.',
+          `Quarantined <@${input.targetId}>, but some steps failed. ${held}\n\nWhat failed: ` +
+            `${report.failures.join(' | ')}\n\nThe record is saved, so ${release} still knows ` +
+            'which roles to give back.',
         ),
   );
 }
@@ -176,20 +176,20 @@ export async function runRelease(
   ctx: CommandContext<VerificationConfig>,
   rawDeps: VerificationDeps,
   input: { targetId: string; reason?: string | undefined },
+  answer: Answer,
 ): Promise<void> {
-  const ready = await prepare(ctx, rawDeps, 'release');
+  const ready = await prepare(ctx, rawDeps, 'release', answer);
   if (!ready) return;
 
   const { deps, quarantineRoleId, state } = ready;
 
   const record = await deps.quarantine.get(ctx.guildId, input.targetId);
   if (!record) {
-    await reply(
-      ctx,
+    await answer(
       errorStatus(
-        `I have no quarantine record for <@${input.targetId}>, so I don't know what they had ` +
-          'before. If they are still holding the quarantine role, take it off by hand and restore ' +
-          "their roles from the Discord audit log — I won't guess at someone's access.",
+        `I have no quarantine record for <@${input.targetId}>, so I don't know which roles they ` +
+          'had. If they still have the quarantine role, remove it by hand and restore their roles ' +
+          'using the audit log.',
       ),
     );
     return;
@@ -220,8 +220,15 @@ export async function runRelease(
     failures: report.failures.length,
   });
 
-  const told = describeRelease(input.targetId, record, plan, report.failures, clean);
-  await reply(ctx, clean ? successStatus(told) : errorStatus(told));
+  const told = describeRelease(
+    input.targetId,
+    record,
+    plan,
+    report.failures,
+    clean,
+    labelOf(ctx, 'quarantine', 'remove'),
+  );
+  await answer(clean ? successStatus(told) : errorStatus(told));
 }
 
 function describeRelease(
@@ -230,43 +237,47 @@ function describeRelease(
   plan: ReturnType<typeof planRelease>,
   failures: readonly string[],
   clean: boolean,
+  release: string,
 ): string {
   const lines: string[] = [];
+  const roles = record.priorRoleIds.map((id) => `<@&${id}>`).join(', ');
+  const count = `${record.priorRoleIds.length} role${record.priorRoleIds.length === 1 ? '' : 's'}`;
 
   lines.push(
     record.priorRoleIds.length === 0
-      ? `<@${targetId}> has been released from quarantine. They had no roles when they were ` +
-          'quarantined, so the quarantine role is all that came off — they are exactly as they were.'
-      : `<@${targetId}> has been released from quarantine, and I put back ` +
-          `${record.priorRoleIds.length} role${record.priorRoleIds.length === 1 ? '' : 's'}: ` +
-          `${record.priorRoleIds.map((id) => `<@&${id}>`).join(', ')}.`,
+      ? `Released <@${targetId}> from quarantine. They had no other roles, so only the ` +
+          'quarantine role was removed.'
+      : clean
+        ? `Released <@${targetId}> from quarantine and gave back ${count}: ${roles}.`
+        : `Released <@${targetId}> from quarantine. They had ${count}: ${roles}.`,
   );
 
   if (plan.vanishedRoleIds.length > 0) {
+    const one = plan.vanishedRoleIds.length === 1;
     lines.push(
-      `${plan.vanishedRoleIds.length} recorded role${plan.vanishedRoleIds.length === 1 ? '' : 's'} ` +
-        `no longer exist in this server and could not be given back: ` +
-        `${plan.vanishedRoleIds.join(', ')}. They were deleted while the member was quarantined.`,
+      `${plan.vanishedRoleIds.length} of their roles ${one ? 'no longer exists' : 'no longer exist'} ` +
+        `and couldn't be given back: ${plan.vanishedRoleIds.join(', ')}.`,
     );
   }
 
   if (plan.ungrantableRoleIds.length > 0) {
+    const one = plan.ungrantableRoleIds.length === 1;
     lines.push(
-      `${plan.ungrantableRoleIds.length} recorded role` +
-        `${plan.ungrantableRoleIds.length === 1 ? '' : 's'} now sit above Proton's own role, so ` +
-        `I am not allowed to grant ${plan.ungrantableRoleIds.length === 1 ? 'it' : 'them'}: ` +
-        `${plan.ungrantableRoleIds.map((id) => `<@&${id}>`).join(', ')}. Move Proton's role ` +
-        'higher in Server Settings → Roles and run /quarantine remove again, or add them by hand.',
+      `${plan.ungrantableRoleIds.length} of their roles ${one ? 'is' : 'are'} at or above my ` +
+        `highest role, so I can't give ${one ? 'it' : 'them'} back: ` +
+        `${plan.ungrantableRoleIds.map((id) => `<@&${id}>`).join(', ')}. Move my role above ` +
+        `${one ? 'it' : 'them'} in Server Settings → Roles and run ${release} again, or add ` +
+        `${one ? 'it' : 'them'} by hand.`,
     );
   }
 
-  if (failures.length > 0) lines.push(`What did NOT work — ${failures.join(' | ')}`);
+  if (failures.length > 0) lines.push(`What failed: ${failures.join(' | ')}`);
 
   lines.push(
     clean
-      ? 'The quarantine record has been cleared.'
-      : 'The quarantine record has been KEPT so nothing is lost — fix the above and run ' +
-          '/quarantine remove again; the roles that already went back will be skipped.',
+      ? 'The quarantine record was cleared.'
+      : `I kept the quarantine record so nothing is lost. Fix the problems above and run ` +
+          `${release} again. Roles they already have are skipped.`,
   );
 
   return lines.join('\n\n');

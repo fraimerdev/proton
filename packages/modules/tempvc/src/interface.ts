@@ -1,4 +1,4 @@
-import { encodeCustomId } from '@proton/core';
+import { encodeCustomId, labelOf, type ModuleContext } from '@proton/core';
 import {
   MODULE_ID,
   OWNER_CONTROL_LABELS,
@@ -101,7 +101,10 @@ export interface PanelMessage {
   components: Record<string, unknown>[];
 }
 
-export function panelMessage(input: PanelInput & { ownerId: string | null }): PanelMessage {
+export function panelMessage(
+  input: PanelInput & { ownerId: string | null },
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
+): PanelMessage {
   const components = panelComponents(input);
 
   const who =
@@ -113,7 +116,7 @@ export function panelMessage(input: PanelInput & { ownerId: string | null }): Pa
     content:
       `### Temporary voice channel\n${who}\n` +
       (components.length === 0
-        ? 'Its owner manages it with `/voice`.'
+        ? `Its owner manages it with \`${labelOf(labels, 'voice')}\`.`
         : 'Only its owner can use these.'),
     components,
   };
@@ -135,7 +138,7 @@ export function privacySelect(
         {
           type: STRING_SELECT,
           custom_id: encoded.customId,
-          placeholder: 'Who may join?',
+          placeholder: 'Who can join?',
           options: PRIVACY_MODES.map((mode) => ({
             label: mode[0]?.toUpperCase() + mode.slice(1),
             value: mode,
@@ -144,7 +147,7 @@ export function privacySelect(
               mode === 'public'
                 ? 'Anyone who can see the channel'
                 : mode === 'locked'
-                  ? 'Visible, but only trusted members may join'
+                  ? 'Visible, but only trusted members can join'
                   : 'Hidden from everyone but trusted members',
           })),
         },
@@ -229,7 +232,7 @@ export function limitModal(tempChannelId: string, current: number) {
             type: TEXT_INPUT,
             custom_id: LIMIT_FIELD,
             style: 1,
-            label: 'How many may join? 0 for no limit',
+            label: 'Member limit (0 for no limit)',
             value: String(current),
             min_length: 1,
             max_length: 2,

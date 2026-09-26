@@ -87,7 +87,7 @@ describe('the panel button in button mode', () => {
     const outcome = await h.press(verifyPress(), { config: { ...GATED, enabled: false } });
 
     expect(outcome.action).toBe('refused');
-    expect(h.lastTold()).toContain('disabled');
+    expect(h.lastTold()).toContain('Verification is off in this server.');
     expect(h.roleCalls()).toEqual([]);
   });
 
@@ -152,7 +152,7 @@ describe('the status embed every outcome is answered with', () => {
     await h.press(verifyPress(), { config: CAPTCHA });
 
     expect(h.statuses()).toEqual([]);
-    expect(h.lastTold()).toContain('Read the characters in the image');
+    expect(h.lastTold()).toContain('Type the characters you see in the image');
   });
 });
 
@@ -169,9 +169,9 @@ describe('a press the bot cannot honour (the permission-failure path)', () => {
     expect(h.roleCalls()).toEqual([]);
     expect(sorted(h.rolesOf(MEMBER))).toEqual(sorted([EVERYONE_ROLE, UNVERIFIED_ROLE]));
 
-    expect(h.lastTold()).toContain('position 9');
-    expect(h.lastTold()).toContain('position 6');
-    expect(h.lastTold()).toContain("Drag Proton's role above it");
+    expect(h.lastTold()).toContain(`<@&${ABOVE_BOT_ROLE}>`);
+    expect(h.lastTold()).toContain('at or above my highest role');
+    expect(h.lastTold()).toContain('move my role above it in Server Settings → Roles');
   });
 
   test('names the missing permission and where, when the bot cannot move roles at all', async () => {

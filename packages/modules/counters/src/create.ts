@@ -7,14 +7,13 @@ export const VOICE_CHANNEL_TYPE = 2;
 const ROLE_OVERWRITE = 0;
 
 export const LOST_CREATE =
-  'I already made a channel for this counter but could not record which one it was, so I have ' +
-  'not made another — a second would be renamed in turn and neither would settle. Look at the ' +
-  'top of your channel list: if a stray counter channel is sitting there, delete it. Then remove ' +
-  'this counter and add it again, which is what lets me start over.';
+  'I already created a channel for this counter but lost track of it, so I didn’t create another. ' +
+  'If a stray counter channel is at the top of your channel list, delete it. Then remove this ' +
+  'counter and add it again so I can start over.';
 
 export const NO_CHANNEL_ID =
-  'Discord accepted the channel but did not say which one it made, so there is nothing for me ' +
-  'to rename later. Nothing else was changed.';
+  'Discord created the channel but didn’t say which one it was, so I can’t update it. Nothing ' +
+  'else was changed.';
 
 export type CreateOutcome = { created: string; locked: boolean } | { refused: string };
 
@@ -33,7 +32,7 @@ export async function createCounterChannel(
     moduleId: MODULE_ID,
     kind: 'create_channel',
     actorId: MODULE_ID,
-    reason: 'counter channel',
+    reason: 'Counter channel',
     // Stable per counter rather than per refresh: the executor releases the claim whenever Discord
     // refuses, so a failed create is retried on the next pass while a redelivered one is not made
     // a second time.
@@ -62,7 +61,7 @@ async function lock(ctx: ModuleContext<CountersConfig>, channelId: string): Prom
     moduleId: MODULE_ID,
     kind: 'set_channel_overwrite',
     actorId: MODULE_ID,
-    reason: 'a counter channel is for reading, not for joining',
+    reason: 'Counter channels are for reading, not joining',
     idempotencyKey: `${MODULE_ID}:${ctx.guildId}:${channelId}:lock`,
     dryRun: false,
     record: false,

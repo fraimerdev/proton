@@ -18,13 +18,13 @@ export function normaliseTagName(raw: string): TagNameResult {
   const name = raw.trim().toLowerCase().replace(/\s+/g, '-');
 
   if (name.length === 0) {
-    return { ok: false, humanReason: 'A tag needs a name — that one was empty.' };
+    return { ok: false, humanReason: 'The tag name can’t be empty.' };
   }
 
   if (name.length > TAG_NAME_MAX) {
     return {
       ok: false,
-      humanReason: `Tag names are capped at ${TAG_NAME_MAX} characters and “${name}” is ${name.length}.`,
+      humanReason: `Tag names can be up to ${TAG_NAME_MAX} characters, and “${name}” has ${name.length}.`,
     };
   }
 
@@ -32,8 +32,8 @@ export function normaliseTagName(raw: string): TagNameResult {
     return {
       ok: false,
       humanReason:
-        `“${name}” is not a usable tag name. Use letters, digits, dots, dashes and ` +
-        'underscores, starting with a letter or a digit — spaces become dashes.',
+        `“${name}” isn’t a valid tag name. Use letters, numbers, dots, dashes and underscores, ` +
+        'and start with a letter or number. Spaces become dashes.',
     };
   }
 
@@ -52,7 +52,7 @@ export const tagsConfigSchema = z.object({
 
   allowMentions: z.boolean().default(false).register(protonFields, {
     label: 'Allow pings',
-    description: 'A stored @everyone becomes pingable by any member.',
+    description: 'Let mentions in tags notify the members and roles they name.',
   }),
 });
 

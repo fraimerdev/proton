@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  formatCommandLabel,
   limitFor,
   STATUS_ERROR_COLOUR,
   STATUS_ERROR_EMOJI,
@@ -14,6 +15,9 @@ import {
   stringOption,
   subcommand,
 } from './harness.ts';
+
+const RENAMED_TO: Record<string, string> = { tag: 't', tags: 'snippets' };
+const RENAMED = (key: string, path?: string) => formatCommandLabel(key, path, RENAMED_TO[key]);
 
 describe('/tags create', () => {
   test('saves a tag and confirms how to post it', async () => {
@@ -51,6 +55,22 @@ describe('/tags create', () => {
     expect(h.bodies().at(-1)?.data?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
+  test('names /tag and /tags as this server has renamed them', async () => {
+    const h = harness();
+    const create = subcommand('create', [
+      stringOption('name', 'rules'),
+      stringOption('content', 'a'),
+    ]);
+
+    await h.run('tags', create, { commandLabel: RENAMED });
+    await h.run('tags', create, { commandLabel: RENAMED });
+
+    const said = h.bodies().map((body) => body.data?.embeds?.[0]?.description ?? '');
+    expect(said[0]).toContain('Post it with `/t rules`.');
+    expect(said[1]).toContain('Use `/snippets edit` to change it.');
+    expect(said.join('\n')).not.toContain('/tag');
+  });
+
   test('refuses an unusable name before touching storage', async () => {
     const h = harness();
 
@@ -60,7 +80,7 @@ describe('/tags create', () => {
     );
 
     expect(h.tags.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('not a usable tag name');
+    expect(h.replyContent()).toContain('isn’t a valid tag name');
   });
 
   test('refuses at the free tier limit, naming the tier, the limit and the way out', async () => {
@@ -175,10 +195,18 @@ describe('/tag', () => {
 
     await h.run('tag', [stringOption('name', 'missing')]);
 
-    expect(h.replyContent()).toContain('no tag called **missing**');
-    expect(h.replyContent()).toContain('/tags list');
+    expect(h.replyContent()).toContain('Couldn’t find a tag called **missing**');
+    expect(h.replyContent()).toContain('`/tags list` shows every tag.');
     expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
     expect(h.replyEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
+  });
+
+  test('points at /tags list as this server has renamed it', async () => {
+    const h = harness();
+
+    await h.run('tag', [stringOption('name', 'missing')], { commandLabel: RENAMED });
+
+    expect(h.replyContent()).toContain('`/snippets list` shows every tag.');
   });
 
   test('names the missing wiring when the store was never bound', async () => {

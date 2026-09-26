@@ -17,7 +17,7 @@ import type { GiveawayStore } from './store.ts';
 const UNKNOWN: ConditionResult = {
   passed: false,
   indeterminate: {
-    humanReason: 'Your giveaway history could not be read just now, so this could not be checked.',
+    humanReason: 'Your giveaway history couldn’t be read just now, so this couldn’t be checked.',
   },
 };
 
@@ -137,7 +137,7 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
 
       const current = result.progress?.current ?? 0;
       return (
-        `You have won ${current} ${current === 1 ? 'giveaway' : 'giveaways'} in the last ` +
+        `You’ve won ${current} ${current === 1 ? 'giveaway' : 'giveaways'} in the last ` +
         `${config.days} days, so this one is for everybody else.`
       );
     },
@@ -183,15 +183,15 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
     },
 
     describe(config) {
-      return `Have entered ${config.count} giveaways in the last ${config.days} days.`;
+      return `Have entered at least ${config.count} giveaways in the last ${config.days} days.`;
     },
 
     describeFailure(config, result) {
       if (result.indeterminate) return result.indeterminate.humanReason;
 
       return (
-        `You have entered ${result.progress?.current ?? 0} of ${config.count} giveaways in the ` +
-        `last ${config.days} days.`
+        `You’ve entered ${result.progress?.current ?? 0} of the ${config.count} giveaways ` +
+        `needed in the last ${config.days} days.`
       );
     },
   };
@@ -201,7 +201,7 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
     id: 'giveaways.role_bonus',
     moduleId: MODULE_ID,
     label: 'Role bonus',
-    description: 'Members holding a role get extra entries.',
+    description: 'Members with certain roles get extra entries.',
     emoji: '\u{1F3AD}',
     configSchema: roleBonusSchema,
     builder: zodToDescriptors(roleBonusSchema),
@@ -305,7 +305,7 @@ export function createGiveawayProviders(store: GiveawayStore): Provider[] {
     describe(config) {
       return (
         `${config.perLoss} extra ${config.perLoss === 1 ? 'entry' : 'entries'} for every giveaway ` +
-        `you entered and did not win in the last ${config.days} days, up to ${config.cap}.`
+        `you entered and didn’t win in the last ${config.days} days, up to ${config.cap}.`
       );
     },
   };

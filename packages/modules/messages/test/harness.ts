@@ -107,6 +107,7 @@ export interface RunOverrides {
   deps: MessagesDeps;
   botPermissions: bigint;
   idempotencyKey: string;
+  commandLabel: (key: string, path?: string) => string;
 }
 
 export interface DiscordButton {
@@ -257,6 +258,7 @@ export function harness(seed: MessagesDeps = { applicationId: APPLICATION }): Ha
       tier: overrides.tier ?? 'free',
       executor: executor.scoped({ channelId: CHANNEL, appPermissions: botPermissions }),
       logger,
+      ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
     };
   };
 

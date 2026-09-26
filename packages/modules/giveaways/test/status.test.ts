@@ -84,7 +84,7 @@ describe('status replies', () => {
 
     expect(h.replyColour()).toBe(STATUS_ERROR_COLOUR);
     expect(h.replyText()).toBe(
-      `${STATUS_ERROR_EMOJI} There is no giveaway in this server with that id.`,
+      `${STATUS_ERROR_EMOJI} Couldn’t find a giveaway with that ID in this server.`,
     );
   });
 

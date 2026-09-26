@@ -80,6 +80,11 @@ describe('the manifest', () => {
     expect(backupModule.jobs).toBeUndefined();
   });
 
+  test('may follow up, because every /backup answer after its defer is a followup', () => {
+    expect(backupModule.actionKinds).toContain('interaction_followup');
+    expect(registry().mayExecute('backup', 'interaction_followup')).toBe(true);
+  });
+
   test('exposes one admin command, gated on Manage Server', () => {
     expect(backupModule.commands?.map((command) => command.name)).toEqual(['backup']);
     expect(backupModule.commands?.[0]?.data.default_member_permissions).toBe(

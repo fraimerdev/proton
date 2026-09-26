@@ -103,6 +103,46 @@ describe('command overrides', () => {
     expect(decision.allowed).toBe(true);
   });
 
+  test('a renamed command is refused under the name the member typed, looked up by its key', () => {
+    const decision = evaluateCommandGate({
+      commandName: 'ban',
+      displayName: 'punish',
+      memberRoleIds: [MEMBER_ROLE],
+      config: config({ ban: [MOD_ROLE], punish: [] }),
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+
+    expect(decision.refusal.commandName).toBe('ban');
+    expect(decision.refusal.requiredRoleIds).toEqual([MOD_ROLE]);
+    expect(decision.refusal.humanReason).toContain('to use /punish in this server');
+    expect(decision.refusal.humanReason).toContain('under Permissions.');
+    expect(decision.refusal.humanReason).not.toContain('/ban');
+  });
+
+  test('an override stored under the display name does not gate the command', () => {
+    const decision = evaluateCommandGate({
+      commandName: 'ban',
+      displayName: 'punish',
+      memberRoleIds: [MEMBER_ROLE],
+      config: config({ punish: [MOD_ROLE] }),
+    });
+
+    expect(decision.allowed).toBe(true);
+  });
+
+  test('a blank display name falls back to the key rather than printing a bare slash', () => {
+    const decision = evaluateCommandGate({
+      commandName: 'ban',
+      displayName: '',
+      memberRoleIds: [MEMBER_ROLE],
+      config: config({ ban: [MOD_ROLE] }),
+    });
+
+    expect(decision.allowed ? '' : decision.refusal.humanReason).toContain('to use /ban in');
+  });
+
   test('an interaction with no roles at all is refused, not waved through', () => {
     const decision = evaluateCommandGate({
       commandName: 'ban',

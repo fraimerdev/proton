@@ -29,9 +29,9 @@ export const PRIVACY_MODES = ['public', 'locked', 'private'] as const;
 export type PrivacyMode = (typeof PRIVACY_MODES)[number];
 
 export const PRIVACY_LABELS: Record<PrivacyMode, string> = {
-  public: 'Public — anyone who can see it may join',
-  locked: 'Locked — visible, but only trusted members may join',
-  private: 'Private — hidden from everyone but trusted members',
+  public: 'Public: anyone who can see it can join',
+  locked: 'Locked: visible, but only trusted members can join',
+  private: 'Private: hidden from everyone but trusted members',
 };
 
 /** What happens to a channel whose owner walks out while other people are still in it. */
@@ -40,9 +40,9 @@ export const OWNERLESS_MODES = ['claim', 'keep', 'transfer'] as const;
 export type OwnerlessMode = (typeof OWNERLESS_MODES)[number];
 
 export const OWNERLESS_LABELS: Record<OwnerlessMode, string> = {
-  claim: 'Anyone left inside may claim it',
-  keep: 'It keeps running with no owner',
-  transfer: 'Hand it to whoever has been in it longest',
+  claim: 'Anyone still inside can claim it',
+  keep: 'The owner keeps control',
+  transfer: 'Give it to whoever has been in it longest',
 };
 
 export const TEMP_ROLE_MODES = ['off', 'owner', 'everyone'] as const;
@@ -61,9 +61,9 @@ export const PERMISSION_SYNC_MODES = ['off', 'category', 'creator'] as const;
 export type PermissionSyncMode = (typeof PERMISSION_SYNC_MODES)[number];
 
 export const PERMISSION_SYNC_LABELS: Record<PermissionSyncMode, string> = {
-  off: 'Nothing — start from the category Discord gives it',
-  category: 'Copy the destination category’s overwrites',
-  creator: 'Copy the creator channel’s overwrites',
+  off: 'None, only what Proton sets',
+  category: 'Copy from the category',
+  creator: 'Copy from the creator channel',
 };
 
 /** The eleven things an owner can be allowed to do to their own channel. */
@@ -85,7 +85,7 @@ export type OwnerControl = (typeof OWNER_CONTROLS)[number];
 
 export const OWNER_CONTROL_LABELS: Record<OwnerControl, string> = {
   rename: 'Rename',
-  limit: 'User limit',
+  limit: 'Member limit',
   privacy: 'Privacy',
   trust: 'Trust',
   block: 'Block',
@@ -144,7 +144,7 @@ export const tempVcHubSchema = z.object({
     .max(CHANNEL_NAME_MAX)
     .default(DEFAULT_NAME_TEMPLATE)
     .refine(namesTheOwner, {
-      message: `a name template needs one of ${OWNER_NAMES} in it, or every channel it makes has the same name.`,
+      message: `A name template needs one of ${OWNER_NAMES}, or every channel it creates gets the same name.`,
     }),
 
   userLimit: z.number().int().min(0).max(99).default(0),
@@ -189,8 +189,7 @@ export const tempVcHubsSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'channelId'],
-          message:
-            'each creator channel can only be listed once — the second entry would never be used.',
+          message: 'This channel is already a creator channel.',
         });
       }
       seen.add(hub.channelId);
@@ -199,7 +198,7 @@ export const tempVcHubsSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'temporaryRoleId'],
-          message: 'pick the role to hand out, or set the temporary role back to nobody.',
+          message: 'Choose the role to give, or set Who gets the role to Nobody.',
         });
       }
     }
@@ -214,15 +213,13 @@ const settings = {
   ownerCommands: z.boolean().default(true).register(protonFields, {
     label: 'Let owners manage their own channel',
     description:
-      'If off, owners cannot use /voice or the control panel, whatever each creator channel allows.',
+      'If off, owners can’t use /voice or the control panel, whatever each creator channel allows.',
   }),
 
   // Server-wide, not per hub: it exists to keep Proton under Discord's channel-creation rate
   // limit, which is a property of the guild rather than of any one creator channel.
   serverCreationLimit: z.number().int().min(1).max(200).default(30).register(protonFields, {
     label: 'New channels per minute',
-    description:
-      'Discord limits how fast a server can create channels. Past this, Proton waits before creating more.',
   }),
 };
 

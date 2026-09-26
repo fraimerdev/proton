@@ -1,8 +1,11 @@
 import {
+  type Causation,
   type DiscordMessageBody,
   type GuildState,
   type ModuleContext,
   toDiscordMessage,
+  type XpSource,
+  xpLevelGainedSchema,
 } from '@proton/core';
 import {
   type BotFacts,
@@ -29,9 +32,10 @@ import {
   type LevelUpPlaceholderFacts,
   type LevelUpRank,
 } from './placeholders.ts';
+import { publishFact } from './publish.ts';
 import { planRoleRewards, type RewardPlan } from './rewards.ts';
 
-export type LevelUpSource = 'message' | 'voice' | 'admin';
+export type LevelUpSource = XpSource;
 
 export type LevelUpBody = DiscordMessageBody;
 
@@ -91,6 +95,8 @@ export interface LevelUp {
   user?: UserFacts | undefined;
 
   member?: MemberFacts | undefined;
+
+  causation?: Causation | undefined;
 }
 
 export async function applyLevelUp(
@@ -109,25 +115,35 @@ async function publishLevelGained(
   ctx: ModuleContext<LevelingConfig>,
   levelUp: LevelUp,
 ): Promise<void> {
-  if (!ctx.publish) {
-    ctx.logger.warn(
-      `leveling reached level ${levelUp.level} for ${levelUp.userId} but could not publish ` +
-        "xp.level_gained: this module's context has no publish port. Anything reacting to " +
-        'level-ups — including the future rule builder — will never see it. The process ' +
-        'running modules must supply ModuleContext.publish.',
-      { guildId: ctx.guildId, moduleId: MODULE_ID, userId: levelUp.userId },
-    );
-    return;
-  }
+  const what = `reached level ${levelUp.level} for ${levelUp.userId}`;
 
-  await ctx.publish('xp.level_gained', `${ctx.guildId}:${levelUp.userId}:${levelUp.level}`, {
+  const parsed = xpLevelGainedSchema.safeParse({
     guildId: ctx.guildId,
     userId: levelUp.userId,
     level: levelUp.level,
     previousLevel: levelUp.previousLevel,
     xp: levelUp.xp,
     source: levelUp.source,
+    ...(levelUp.originChannelId === undefined ? {} : { channelId: levelUp.originChannelId }),
+    ...(levelUp.causation === undefined ? {} : { causation: levelUp.causation }),
   });
+
+  if (!parsed.success) {
+    ctx.logger.error(
+      `leveling ${what} but its xp.level_gained event is malformed, so it was not published: ` +
+        parsed.error.message,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId: levelUp.userId },
+    );
+    return;
+  }
+
+  await publishFact(
+    ctx,
+    'xp.level_gained',
+    `${ctx.guildId}:${levelUp.userId}:${levelUp.level}`,
+    parsed.data,
+    what,
+  );
 }
 
 async function applyRewards(
@@ -394,13 +410,14 @@ async function announce(
   deps: LevelingRenderDeps,
 ): Promise<void> {
   const message = ctx.config.levelUpMessage;
-  if (isSilentLevelUp(message)) return;
+  if (!ctx.config.levelUpAnnounce || isSilentLevelUp(message)) return;
 
   const channelId = ctx.config.levelUpChannelId ?? levelUp.originChannelId;
   if (!channelId) {
+    const how = levelUp.source === 'reward' ? 'from a reward' : 'in voice';
     ctx.logger.info(
-      `${levelUp.userId} reached level ${levelUp.level} in voice, but this server has no ` +
-        'level-up channel configured and a voice level-up has no channel of its own, so ' +
+      `${levelUp.userId} reached level ${levelUp.level} ${how}, but this server has no ` +
+        `level-up channel configured and a level-up ${how} has no channel of its own, so ` +
         'nothing was posted.',
       { guildId: ctx.guildId, moduleId: MODULE_ID, userId: levelUp.userId },
     );

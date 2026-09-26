@@ -288,12 +288,12 @@ function basicsBody(draft: GiveawayDraft): string {
   return [
     heading(draft),
     '',
-    `**Prize** — ${unset(draft.title, 'not set yet')}`,
-    `**Description** — ${unset(draft.description, 'none')}`,
-    `**Runs for** — ${describeWait(draft.durationMs)}`,
+    `**Prize:** ${unset(draft.title, 'not set yet')}`,
+    `**Description:** ${unset(draft.description, 'none')}`,
+    `**Runs for:** ${describeWait(draft.durationMs)}`,
     draft.startsInMs === null
-      ? '**Starts** — as soon as you publish'
-      : `**Starts** — in ${describeWait(draft.startsInMs)}`,
+      ? '**Starts:** as soon as you publish'
+      : `**Starts:** in ${describeWait(draft.startsInMs)}`,
   ].join('\n');
 }
 
@@ -301,7 +301,7 @@ function rulesBody(draft: GiveawayDraft, registry: ProviderRegistry): string {
   const lines = [heading(draft), ''];
 
   if (draft.requirements.length === 0) {
-    lines.push('*Anybody in the server can enter. Add a requirement to narrow that.*');
+    lines.push('*Anybody in the server can enter. Add a requirement to limit who can.*');
   } else {
     lines.push(
       draft.requirementLogic === 'any'
@@ -324,13 +324,13 @@ function bonusBody(draft: GiveawayDraft, registry: ProviderRegistry): string {
   const lines = [heading(draft), ''];
 
   if (draft.multipliers.length === 0) {
-    lines.push('*Everybody who qualifies gets one entry.*');
+    lines.push('*Everybody who qualifies gets 1 entry.*');
   } else {
     for (const [index, item] of draft.multipliers.entries()) {
       const provider = registry.multiplier(item.providerId);
       lines.push(
         `\`${index + 1}.\` ${provider ? provider.describe(item.config, 'en-GB') : item.providerId}` +
-          ` — *${MODE_LABELS[item.mode]}*`,
+          ` (*${MODE_LABELS[item.mode]}*)`,
       );
     }
   }
@@ -342,9 +342,9 @@ function lookBody(draft: GiveawayDraft): string {
   return [
     heading(draft),
     '',
-    `**Colour** — ${draft.color === null ? '*the server default*' : (formatColour(draft.color) ?? '')}`,
-    `**Emoji** — ${unset(draft.emoji, 'the default 🎉')}`,
-    `**Image** — ${unset(draft.bannerUrl, 'none')}`,
+    `**Colour:** ${draft.color === null ? '*server default*' : (formatColour(draft.color) ?? '')}`,
+    `**Emoji:** ${unset(draft.emoji, 'default 🎉')}`,
+    `**Image:** ${unset(draft.bannerUrl, 'none')}`,
   ].join('\n');
 }
 
@@ -352,15 +352,15 @@ function winnersBody(draft: GiveawayDraft): string {
   return [
     heading(draft),
     '',
-    `**Winners** — ${plural(draft.winnerCount, 'winner')}`,
-    `**Entry cap** — ${draft.maxEntriesPerUser === null ? '*no cap*' : `${draft.maxEntriesPerUser} each`}`,
-    `**DM the winners** — ${draft.dmWinners ? 'yes' : 'no'}`,
-    `**Claim window** — ${
+    `**Winners:** ${draft.winnerCount}`,
+    `**Entry cap:** ${draft.maxEntriesPerUser === null ? '*none*' : `${draft.maxEntriesPerUser} per member`}`,
+    `**DM winners:** ${draft.dmWinners ? 'yes' : '*server setting*'}`,
+    `**Claim window:** ${
       draft.claimWindowSeconds === null
-        ? '*none, winners keep their prize*'
+        ? '*none, winners don’t need to claim*'
         : describeWait(draft.claimWindowSeconds * 1000)
     }`,
-    `**Reward role** — ${draft.rewardRoleId === null ? '*none*' : `<@&${draft.rewardRoleId}>`}`,
+    `**Reward role:** ${draft.rewardRoleId === null ? '*none*' : `<@&${draft.rewardRoleId}>`}`,
   ].join('\n');
 }
 
@@ -443,14 +443,14 @@ export function stepScreen(
       const picker = pickerRow(
         'r',
         shown,
-        'No requirements available — switch on a module that provides them',
+        'No requirements available. Turn on a module that provides them.',
       );
       if (picker) middle.push(picker);
 
       const edit = itemRow(
         'r',
         BUILDER_ITEM_EDIT,
-        'Change or remove a requirement…',
+        'Edit a requirement…',
         draft.requirements,
         registry,
       );
@@ -477,7 +477,7 @@ export function stepScreen(
       const picker = pickerRow(
         'm',
         shown,
-        'No bonus entries available — switch on a module that provides them',
+        'No bonus entries available. Turn on a module that provides them.',
       );
       if (picker) middle.push(picker);
 

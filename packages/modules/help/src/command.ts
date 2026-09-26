@@ -18,6 +18,12 @@ export function helpCommand(deps: HelpDeps = {}): CommandDefinition<HelpConfig> 
       .setContexts(InteractionContextType.Guild)
       .toJSON(),
 
+    reply: {
+      default: (config) => (config.ephemeral ? 'private' : 'public'),
+      toggleable: [''],
+    },
+    alwaysRegistered: true,
+
     async handler(ctx) {
       if (!ctx.config.enabled) return;
 
@@ -37,7 +43,7 @@ export function helpCommand(deps: HelpDeps = {}): CommandDefinition<HelpConfig> 
           interactionToken: ctx.interaction.token,
           components: buildHelpComponents(link),
           flags: MESSAGE_FLAG_IS_COMPONENTS_V2,
-          ephemeral: ctx.config.ephemeral,
+          ephemeral: ctx.privateReply ?? ctx.config.ephemeral,
         },
       });
 

@@ -39,7 +39,7 @@ export const remindersConfigSchema = z
       code: 'custom',
       path: ['minDuration'],
       message:
-        `must not be further ahead than the furthest a reminder may be set (${config.maxDuration}), ` +
+        `can’t be later than the furthest ahead a reminder can be set (${config.maxDuration}), ` +
         'or every reminder in this server would be refused',
     });
   });
@@ -66,8 +66,8 @@ export function resolveDelay(raw: string, config: RemindersConfig): DelayResult 
       humanReason:
         error instanceof Error
           ? error.message
-          : `'${raw}' is not a duration. Use a number followed by s, m, h, d or w — for ` +
-            'example 30m, 12h or 7d.',
+          : `“${raw}” isn’t a length of time I understand. Use a number followed by s, m, h, d ` +
+            'or w, like 30m, 12h or 7d.',
     };
   }
 
@@ -78,9 +78,9 @@ export function resolveDelay(raw: string, config: RemindersConfig): DelayResult 
     return {
       ok: false,
       humanReason:
-        `This server’s reminder bounds cannot be read — soonest “${config.minDuration}”, ` +
-        `furthest ahead “${config.maxDuration}”. An admin needs to fix them in the Proton ` +
-        'dashboard under Reminders; each one is a number followed by s, m, h, d or w.',
+        `I can’t read this server’s reminder limits (soonest “${config.minDuration}”, ` +
+        `furthest ahead “${config.maxDuration}”), so I can’t set reminders right now. Nothing ` +
+        'was saved.',
     };
   }
 
@@ -88,8 +88,8 @@ export function resolveDelay(raw: string, config: RemindersConfig): DelayResult 
     return {
       ok: false,
       humanReason:
-        `That is sooner than this server allows. The soonest a reminder may be set is ` +
-        `${formatDuration(min)} from now.`,
+        `That’s too soon. The soonest you can set a reminder is ${formatDuration(min)} ` +
+        'from now.',
     };
   }
 
@@ -97,8 +97,8 @@ export function resolveDelay(raw: string, config: RemindersConfig): DelayResult 
     return {
       ok: false,
       humanReason:
-        `That is further ahead than this server allows. The furthest a reminder may be set is ` +
-        `${formatDuration(max)} from now.`,
+        `That’s too far ahead. The furthest you can set a reminder is ${formatDuration(max)} ` +
+        'from now.',
     };
   }
 

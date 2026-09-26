@@ -402,7 +402,7 @@ describe('private ticket data', () => {
       ['types.0.namePattern', 'restricted'],
     ]);
     expect(formatTemplateIssues(report)).toStartWith(
-      'types.0.namePattern Name pattern: {ticket.answer.order} may only be shown to',
+      'types.0.namePattern Name pattern: {ticket.answer.order} can only be shown to',
     );
   });
 

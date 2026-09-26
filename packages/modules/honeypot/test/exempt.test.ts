@@ -139,8 +139,9 @@ describe('what an exempt catch still does', () => {
 
     const embed = JSON.stringify(h.embedIn(TRAP));
 
-    expect(embed).toContain('Left alone');
-    expect(embed).toContain('they hold Administrator');
+    expect(embed).toContain('Exempt');
+    expect(embed).not.toContain('Failed');
+    expect(embed).toContain('They have Administrator.');
   });
 
   test('is counted, so the trap’s tally does not silently lose them', async () => {

@@ -31,11 +31,11 @@ export const STEP_LABELS: Record<BuilderStep, string> = {
 };
 
 export const STEP_HINTS: Record<BuilderStep, string> = {
-  basics: 'What is being given away, and how long it runs.',
-  rules: 'Who is allowed to enter.',
+  basics: 'What you’re giving away, and for how long.',
+  rules: 'Who can enter.',
   bonus: 'Who gets more than one entry.',
   look: 'How the giveaway message looks.',
-  winners: 'How winners are told, and what they get.',
+  winners: 'How many win, and what happens when they do.',
   review: 'Check it over, then publish.',
 };
 

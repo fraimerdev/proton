@@ -15,8 +15,7 @@ const UNKNOWN: ConditionResult = {
   passed: false,
   indeterminate: {
     humanReason:
-      'Your moderation history in this server could not be read just now, so this could not ' +
-      'be checked.',
+      'Couldn’t check your moderation history in this server just now. Try again in a moment.',
   },
 };
 
@@ -26,7 +25,7 @@ const typesField = z
   .max(CASE_TYPES.length)
   .default(['ban', 'kick', 'timeout', 'warn'])
   .register(protonFields, {
-    label: 'Which kinds count',
+    label: 'Actions that count',
   });
 
 const noActiveCaseSchema = z.object({ types: typesField });
@@ -42,6 +41,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 function listTypes(types: readonly string[]): string {
   return types.join(', ');
+}
+
+function inTheLast(days: number): string {
+  return days === 1 ? 'in the last day' : `in the last ${days} days`;
 }
 
 export function createCasesProviders(history: CaseHistoryStore): Provider[] {
@@ -66,7 +69,7 @@ export function createCasesProviders(history: CaseHistoryStore): Provider[] {
     id: 'cases.no_active_case',
     moduleId: CASES_MODULE_ID,
     label: 'No active moderation',
-    description: 'Must not currently be under one of the chosen moderation actions.',
+    description: 'Must not have an active moderation action of the chosen types.',
     emoji: '\u{2696}',
     configSchema: noActiveCaseSchema,
     builder: zodToDescriptors(noActiveCaseSchema),
@@ -88,13 +91,13 @@ export function createCasesProviders(history: CaseHistoryStore): Provider[] {
     },
 
     describe(config) {
-      return `Not currently be under moderation (${listTypes(config.types)}).`;
+      return `Have no active moderation action (${listTypes(config.types)}).`;
     },
 
     describeFailure(config, result) {
       if (result.indeterminate) return result.indeterminate.humanReason;
 
-      return `You are currently under a moderation action (${listTypes(config.types)}) in this server.`;
+      return `You’re currently under a moderation action (${listTypes(config.types)}) in this server.`;
     },
   };
 
@@ -132,7 +135,7 @@ export function createCasesProviders(history: CaseHistoryStore): Provider[] {
     },
 
     describe(config) {
-      return `Have no moderation actions (${listTypes(config.types)}) in the last ${config.days} days.`;
+      return `Have no moderation actions (${listTypes(config.types)}) ${inTheLast(config.days)}.`;
     },
 
     describeFailure(config, result) {
@@ -141,7 +144,7 @@ export function createCasesProviders(history: CaseHistoryStore): Provider[] {
       const current = result.progress?.current ?? 0;
       return (
         `You have ${current} moderation ${current === 1 ? 'action' : 'actions'} ` +
-        `(${listTypes(config.types)}) in the last ${config.days} days.`
+        `(${listTypes(config.types)}) ${inTheLast(config.days)}.`
       );
     },
   };

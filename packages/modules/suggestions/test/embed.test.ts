@@ -248,7 +248,7 @@ describe('buildVoteRow', () => {
 
 describe('threadName', () => {
   test('leads with the number so the thread list reads like the channel', () => {
-    expect(threadName(view())).toBe('Suggestion #12 — Add a bot-commands channel.');
+    expect(threadName(view())).toBe('Suggestion #12: Add a bot-commands channel.');
   });
 
   test('never exceeds the hundred characters Discord allows a channel name', () => {
@@ -256,6 +256,6 @@ describe('threadName', () => {
   });
 
   test('flattens newlines, which a channel name cannot carry', () => {
-    expect(threadName(view({ content: 'one\n\ntwo' }))).toBe('Suggestion #12 — one two');
+    expect(threadName(view({ content: 'one\n\ntwo' }))).toBe('Suggestion #12: one two');
   });
 });

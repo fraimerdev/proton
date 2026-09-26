@@ -109,7 +109,9 @@ export {
   type CheckedAnswer,
   checkAnswers,
   DAY_MS,
+  dayCount,
   type FiledAppeal,
+  NOT_TAKING_APPEALS,
 } from './web.ts';
 
 export function createAppealsModule(

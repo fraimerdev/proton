@@ -195,7 +195,7 @@ describe('buildEmbed enforces the colour bounds', () => {
   });
 
   test('refuses a negative colour', () => {
-    expect(reason({ description: 'x', color: -1 })).toContain('not a colour Discord takes');
+    expect(reason({ description: 'x', color: -1 })).toContain('isn’t a colour Discord accepts');
   });
 
   test('refuses a colour past #ffffff', () => {

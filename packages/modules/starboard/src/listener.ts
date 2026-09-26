@@ -1,9 +1,10 @@
-import type {
-  ActionResult,
-  EventListener,
-  EventType,
-  ModuleContext,
-  ProtonEvent,
+import {
+  type ActionResult,
+  type EventListener,
+  type EventType,
+  type ModuleContext,
+  type ProtonEvent,
+  starboardMessagePostedSchema,
 } from '@proton/core';
 import type { StarboardConfig } from './config.ts';
 import { countStars, decide, eligibility, type StarboardDecision } from './decide.ts';
@@ -21,6 +22,8 @@ import {
 export const MODULE_ID = 'starboard';
 
 export const STARBOARD_EVENT_TYPES: EventType[] = ['reaction.added', 'reaction.removed'];
+
+export const STARBOARD_EMITS: EventType[] = ['starboard.message_posted'];
 
 export function createStarboardListener(deps: StarboardDeps): EventListener<StarboardConfig> {
   return {
@@ -91,7 +94,7 @@ export function createStarboardListener(deps: StarboardDeps): EventListener<Star
           post === null ? null : { boardMessageId: post.boardMessageId, starCount: post.starCount },
       });
 
-      await apply(decision, {
+      const input: ApplyInput = {
         ctx,
         event,
         deps: bound.deps,
@@ -99,7 +102,14 @@ export function createStarboardListener(deps: StarboardDeps): EventListener<Star
         configured,
         boardChannelId,
         selfStarUnresolved: stars.selfStarUnresolved,
-      });
+      };
+
+      await apply(decision, input);
+
+      // The row is stamped with its creating event's occurredAt, so this is that event redelivered.
+      if (post !== null && post.createdAt.getTime() === event.occurredAt) {
+        await announcePosted(input, post.boardMessageId, post.starCount);
+      }
     },
   };
 }
@@ -160,26 +170,77 @@ async function create(count: number, input: ApplyInput): Promise<void> {
     return;
   }
 
-  // Straight off the create's own response. This used to re-read the board channel's last 25
-  // messages and match a jump link, which silently duplicated on a board busier than that.
-  const boardMessageId = sentMessageId(result);
-
-  if (boardMessageId === null) {
-    ctx.logger.error(
-      `The starboard posted ${message.id} to <#${boardChannelId}> but Discord's reply carried no ` +
-        'message id, so its star count will not update yet. It is retried on the next star.',
+  if (result.status === 'skipped_duplicate') {
+    ctx.logger.warn(
+      `The starboard sent, or is still sending, a board post for ${message.id} to ` +
+        `<#${boardChannelId}> in the last day and has no record of it, so it did not send ` +
+        'another. If that post has since been taken down, by a moderator or because its stars ' +
+        'fell below the threshold, the message cannot go back on the board until a day after ' +
+        'the post was sent.',
       { guildId: ctx.guildId, moduleId: MODULE_ID, messageId: message.id },
     );
     return;
   }
 
-  await deps.store.record({
+  const boardMessageId = sentMessageId(result);
+
+  if (boardMessageId === null) {
+    ctx.logger.error(
+      `The starboard posted ${message.id} to <#${boardChannelId}> but Discord's reply carried no ` +
+        'message id, so the starboard cannot track that post: its star count will not update, ' +
+        'and it will not be taken down if its stars fall below the threshold.',
+      { guildId: ctx.guildId, moduleId: MODULE_ID, messageId: message.id },
+    );
+    return;
+  }
+
+  const recorded = await deps.store.record({
     guildId: ctx.guildId,
     sourceMessageId: message.id,
     boardMessageId,
     starCount: count,
     createdAt: new Date(input.event.occurredAt),
   });
+
+  const post = recorded
+    ? { boardMessageId, starCount: count }
+    : await deps.store.get(ctx.guildId, message.id);
+
+  if (post !== null) await announcePosted(input, post.boardMessageId, post.starCount);
+}
+
+async function announcePosted(
+  input: ApplyInput,
+  boardMessageId: string,
+  starCount: number,
+): Promise<void> {
+  const { ctx, event, message } = input;
+  if (!ctx.publish) return;
+
+  try {
+    const payload = starboardMessagePostedSchema.parse({
+      guildId: ctx.guildId,
+      sourceMessageId: message.id,
+      sourceChannelId: message.channelId,
+      authorId: message.authorId,
+      authorBot: message.authorBot,
+      boardMessageId,
+      starCount,
+      activityAt: event.occurredAt,
+    });
+
+    await ctx.publish('starboard.message_posted', postedKey(message.id, boardMessageId), payload);
+  } catch (error) {
+    ctx.logger.error(
+      `The starboard put ${message.id} on the board but could not tell other modules, so ` +
+        `Achievements will not count it: ${error instanceof Error ? error.message : String(error)}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, messageId: message.id, boardMessageId },
+    );
+  }
+}
+
+export function postedKey(sourceMessageId: string, boardMessageId: string): string {
+  return `${sourceMessageId}:${boardMessageId}`;
 }
 
 async function edit(

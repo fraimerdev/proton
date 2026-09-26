@@ -68,9 +68,9 @@ export async function runRoleChanges(
     if (succeeded(result)) {
       (step.kind === 'add_role' ? report.added : report.removed).push(step.roleId);
     } else {
-      const what = step.kind === 'add_role' ? 'giving you' : 'taking away';
+      const what = step.kind === 'add_role' ? "Couldn't give you" : "Couldn't take away";
       report.failures.push(
-        `${what} <@&${step.roleId}>: ${result.failure?.humanReason ?? 'no reason was reported'}`,
+        `${what} <@&${step.roleId}>. ${result.failure?.humanReason ?? 'No reason was given.'}`,
       );
     }
   }
@@ -170,12 +170,10 @@ export function describeReport(report: RoleChangeReport): string {
   if (report.removed.length > 0) {
     parts.push(`Took away ${report.removed.map((id) => `<@&${id}>`).join(', ')}.`);
   }
-  if (report.failures.length > 0) {
-    parts.push(`I couldn't finish: ${report.failures.join(' | ')}`);
-  }
+  parts.push(...report.failures);
 
   if (parts.length === 0) {
-    return 'Nothing changed — you already had exactly the roles you asked for.';
+    return 'Nothing changed. You already have the roles you picked.';
   }
 
   return parts.join(' ');

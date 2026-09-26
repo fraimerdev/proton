@@ -79,8 +79,8 @@ export function buildCaptchaMessage(challengeId: string, attemptsLeft: number): 
   return {
     ok: true,
     content:
-      'Read the characters in the image and type them in. ' +
-      `${describeAttempts(attemptsLeft)}\n\nLetters are not case sensitive.`,
+      'Type the characters you see in the image. ' +
+      `${describeAttempts(attemptsLeft)}\n\nLetters aren’t case-sensitive.`,
     components: [
       row(
         {
@@ -107,7 +107,7 @@ export function buildWebsiteMessage(
   return {
     content:
       'Open the link below and sign in with Discord to finish verifying. ' +
-      'The link is yours alone and stops working in 15 minutes.',
+      'The link only works for you and expires in 15 minutes.',
     components: [
       // A link button carries no custom_id and never comes back to Proton, which is the point: the
       // dashboard finishes the flow and the role arrives while the member is still on the page.
@@ -126,7 +126,7 @@ export function buildCaptchaModal(challengeId: string, length: number): Modal | 
     components: [
       {
         type: ComponentType.Label,
-        label: 'The characters in the image',
+        label: 'Characters in the image',
         component: {
           type: ComponentType.TextInput,
           custom_id: CODE_FIELD,
@@ -144,6 +144,6 @@ export function describeAttempts(attemptsLeft: number): string {
   if (attemptsLeft <= 0) return 'This is your last attempt.';
 
   return attemptsLeft === 1
-    ? 'You have one more attempt after this one.'
+    ? 'You have 1 more attempt after this one.'
     : `You have ${attemptsLeft} more attempts after this one.`;
 }

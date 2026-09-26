@@ -76,7 +76,7 @@ export function createBackupModule(
     requiredIntents: [GatewayIntentBits.Guilds],
 
     requiredPermissions: [Permissions.ViewChannel],
-    actionKinds: ['create_role', 'create_channel', 'interaction_reply'],
+    actionKinds: ['create_role', 'create_channel', 'interaction_reply', 'interaction_followup'],
 
     commands: createBackupCommands(deps),
 

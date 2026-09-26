@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { ModuleRegistry, zodToDescriptors } from '@proton/core';
-import { liftStoredConfig, moderationConfigSchema, moderationFormSchema } from '../src/config.ts';
+import { ModuleRegistry, Permissions, zodToDescriptors } from '@proton/core';
+import {
+  liftStoredConfig,
+  moderationConfigSchema,
+  moderationFormSchema,
+  refineModerationWrite,
+} from '../src/config.ts';
 import { moderationModule } from '../src/index.ts';
 
 describe('moderation manifest', () => {
@@ -8,7 +13,68 @@ describe('moderation manifest', () => {
     const registry = new ModuleRegistry();
 
     expect(() => registry.register(moderationModule)).not.toThrow();
-    expect(registry.get('moderation')?.commands).toHaveLength(7);
+    expect(registry.get('moderation')?.commands).toHaveLength(8);
+  });
+
+  test('ships the three context menus under Apps', () => {
+    expect(
+      (moderationModule.contextMenus ?? []).map((menu) => [menu.type, menu.name, menu.data.name]),
+    ).toEqual([
+      ['user', 'Report user', 'Report user'],
+      ['message', 'Report message', 'Report message'],
+      ['message', 'Punish author', 'Punish author'],
+    ]);
+  });
+
+  test('reporting is open to every member, punishing from a message is not', () => {
+    const menus = new Map((moderationModule.contextMenus ?? []).map((m) => [m.name, m.data]));
+
+    expect(menus.get('Report user')?.default_member_permissions).toBeUndefined();
+    expect(menus.get('Report message')?.default_member_permissions).toBeUndefined();
+    expect(menus.get('Punish author')?.default_member_permissions).toBe(
+      String(Permissions.ModerateMembers),
+    );
+  });
+
+  test('declares every job it books, each with a handler', () => {
+    const handlers = Object.keys(moderationModule.scheduledHandlers ?? {}).sort();
+
+    expect([...(moderationModule.schedules ?? [])].sort()).toEqual(handlers);
+    expect(handlers).toEqual([
+      'moderation.prompt-cleanup',
+      'moderation.report-close',
+      'moderation.reports-patrol',
+      'moderation.role-run',
+      'moderation.timeout',
+    ]);
+    expect(moderationModule.jobs).toEqual([{ id: 'purge-evidence', cron: '35 * * * *' }]);
+  });
+
+  test('declares the events and action kinds reports and punishments use', () => {
+    expect(moderationModule.emits).toEqual([
+      'moderation.warned',
+      'moderation.report_submitted',
+      'moderation.report_resolved',
+      'moderation.punishment_expired',
+    ]);
+
+    for (const kind of ['create_dm', 'delete_message', 'remove_reaction', 'move_member'] as const) {
+      expect(moderationModule.actionKinds).toContain(kind);
+    }
+  });
+
+  test('routes a DM press to the server its custom id names, and only for the DM actions', () => {
+    const hook = moderationModule.directInteractionGuild;
+    const guild = '100000000000000001';
+
+    expect(hook?.({ moduleId: 'moderation', action: 'rfin', args: [guild, 'abc'] })).toBe(guild);
+    expect(hook?.({ moduleId: 'moderation', action: 'rclaim', args: [guild] })).toBeNull();
+  });
+
+  test('every manifest listener declares at least one event type', () => {
+    for (const listener of moderationModule.listeners ?? []) {
+      expect(listener.types.length).toBeGreaterThan(0);
+    }
   });
 
   test('command names match their registration payloads', () => {
@@ -41,20 +107,29 @@ describe('moderation manifest', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  test('every command declares default member permissions', () => {
+  test('every command but /report declares default member permissions', () => {
     for (const command of moderationModule.commands ?? []) {
+      if (command.name === 'report') continue;
       expect(command.data.default_member_permissions).toBeTruthy();
     }
+  });
+
+  test('/report is open to every member and runs only in a server', () => {
+    const report = moderationModule.commands?.find((c) => c.name === 'report');
+
+    expect(report?.data.default_member_permissions ?? null).toBeNull();
+    expect(report?.data.contexts).toEqual([0]);
   });
 
   test('config renders as dashboard fields, including the duration kind', () => {
     const descriptors = zodToDescriptors(moderationFormSchema);
     const byPath = new Map(descriptors.map((d) => [d.path, d]));
 
-    expect(byPath.get('defaultTimeoutDuration')?.kind).toBe('duration');
-    expect(byPath.get('defaultBanDeleteDays')?.kind).toBe('number');
-    expect(byPath.get('requireReason')?.kind).toBe('boolean');
+    expect(byPath.get('enabled')?.kind).toBe('boolean');
+    expect(byPath.get('publicReplies')?.kind).toBe('boolean');
     expect(byPath.get('escalationWindow')?.kind).toBe('duration');
+    expect(byPath.has('punish')).toBe(false);
+    expect(byPath.has('reports')).toBe(false);
   });
 
   test('dashboard sections place every config field exactly once', () => {
@@ -71,8 +146,23 @@ describe('moderation manifest', () => {
     });
   });
 
+  test('punish settings and user reports each own a section', () => {
+    expect(
+      (moderationModule.dashboard?.sections ?? []).map((section) => [section.id, section.fields]),
+    ).toEqual([
+      ['general', ['enabled', 'publicReplies']],
+      ['escalation', ['escalationWindow', 'escalationLadder']],
+      ['punish', ['punish']],
+      ['reports', ['reports']],
+    ]);
+  });
+
   test('lifts a save that carries no ladder, so a stale page cannot reset it', () => {
     expect(moderationModule.liftStoredConfig).toBe(liftStoredConfig);
+  });
+
+  test('checks every save across fields', () => {
+    expect(moderationModule.refineWrite).toBe(refineModerationWrite);
   });
 
   test('needs no privileged intent', () => {

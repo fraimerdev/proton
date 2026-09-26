@@ -211,7 +211,7 @@ describe('/poll create', () => {
     await h.run('create', CREATE);
 
     expect(h.polls.rows.size).toBe(0);
-    expect(h.lastAnswer()).toContain('I could not post that poll');
+    expect(h.lastAnswer()).toContain('Couldn’t post that poll');
     expect(h.lastAnswerEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
     expect(h.lastAnswerEmbed()?.description).toStartWith(STATUS_ERROR_EMOJI);
   });
@@ -224,7 +224,7 @@ describe('/poll create', () => {
 
     expect(h.polls.rows.size).toBe(0);
     expect(h.scheduled).toHaveLength(0);
-    expect(h.lastAnswer()).toContain('did not tell me which message');
+    expect(h.lastAnswer()).toContain('didn’t tell me which message');
     expect(h.logs.some((line) => line.level === 'error')).toBe(true);
   });
 
@@ -362,7 +362,7 @@ describe('/poll end', () => {
 
     const answer = h.lastAnswer() ?? '';
     expect(answer).toContain('700000000000000042');
-    expect(answer).toContain('only lets an application close a poll it sent itself');
+    expect(answer).toContain('only lets an app close a poll it sent itself');
     expect(answer).toContain('/poll list');
   });
 
@@ -424,9 +424,9 @@ describe('/poll end', () => {
     expect(h.cancelled).toHaveLength(0);
 
     const answer = h.lastAnswer() ?? '';
-    expect(answer).toContain('I could not close that poll');
+    expect(answer).toContain('Couldn’t close that poll');
     expect(answer).toContain('running-poll limit');
-    expect(answer).toContain('closes itself');
+    expect(answer).toContain('close itself');
   });
 
   test('closes the row when the poll message is gone, so the slot is released', async () => {
@@ -535,7 +535,7 @@ describe('the announce schedule', () => {
     expect(sent[0]?.body.content).toContain(
       `https://discord.com/channels/${GUILD}/${CHANNEL}/${POLL_MESSAGE}`,
     );
-    expect(sent[0]?.body.content).toContain('cannot read it back');
+    expect(sent[0]?.body.content).toContain('The final results are on the poll.');
     expect(sent[0]?.body.allowed_mentions).toEqual({ parse: [] });
   });
 

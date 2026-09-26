@@ -154,7 +154,9 @@ describe('rendering', () => {
     if (!built.ok || built.output.kind !== 'message') throw new Error('expected a message');
     expect(built.output.attachments).toHaveLength(1);
     expect(built.output.attachments[0]?.filename).toBe('welcome.png');
-    expect(built.output.attachments[0]?.card.memberCount).toBe(SAMPLE_SERVER.memberCount);
+    expect(built.output.attachments[0]?.card).toMatchObject({
+      memberCount: SAMPLE_SERVER.memberCount,
+    });
 
     const without = WELCOME_JOIN_SIMULATION.build(config, scene());
     if (!without.ok || without.output.kind !== 'message') throw new Error('expected a message');

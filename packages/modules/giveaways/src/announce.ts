@@ -1,4 +1,9 @@
-import { describeMultipliers, describeRequirements, type ProviderRegistry } from '@proton/core';
+import {
+  describeMultipliers,
+  describeRequirements,
+  labelOf,
+  type ProviderRegistry,
+} from '@proton/core';
 import {
   type BotFacts,
   type PlaceholderEnvironment,
@@ -348,7 +353,7 @@ export async function publishResult(
         `giveaways:${root}:reward:${userId}`,
       );
 
-      if (!granted.ok) refusals.push(`<@${userId}> — ${granted.humanReason}`);
+      if (!granted.ok) refusals.push(`<@${userId}>: ${granted.humanReason}`);
     }
 
     if (refusals.length > 0 && ctx.config.logChannelId) {
@@ -356,10 +361,10 @@ export async function publishResult(
         ctx,
         ctx.config.logChannelId,
         giveaway.hostId,
-        `<@${giveaway.hostId}> — I could not give the reward role for **${giveaway.title}** ` +
-          `to ${refusals.length === 1 ? 'a winner' : 'some winners'}:\n` +
+        `<@${giveaway.hostId}>, the reward role for **${giveaway.title}** couldn’t be given to ` +
+          `${refusals.length === 1 ? 'a winner' : `${refusals.length} winners`}:\n` +
           refusals.map((line) => `• ${line}`).join('\n') +
-          '\nI need Manage Roles, and my own highest role has to sit above the reward role.',
+          '\nProton needs Manage Roles, and its highest role must be above the reward role.',
         `giveaways:${root}:reward-failed`,
       );
     }
@@ -388,7 +393,7 @@ export async function publishResult(
     let closed = 0;
     for (const [index, userId] of summary.winnerIds.entries()) {
       const won = prizes[index] ?? giveaway.title;
-      const standard = `You won **${won}**! Congratulations.${link}`;
+      const standard = `Congratulations! You won **${won}**.${link}`;
 
       const content =
         sources === null
@@ -418,17 +423,34 @@ export async function publishResult(
   // Never silent: a draw that ran without one of its requirements is a different draw than the
   // one the host configured, and they are the only person who can decide whether to rerun it.
   if (summary.degraded.length > 0 && ctx.config.logChannelId) {
+    const one = summary.degraded.length === 1;
+
     await notifyHost(
       ctx,
       ctx.config.logChannelId,
       giveaway.hostId,
-      `<@${giveaway.hostId}> — **${giveaway.title}** was drawn without ` +
-        `${summary.degraded.length === 1 ? 'one of its requirements' : 'some of its requirements'}: ` +
-        `${summary.degraded.join(', ')}. The module that owns ` +
-        `${summary.degraded.length === 1 ? 'it' : 'them'} is disabled or not running, so ` +
-        `${summary.degraded.length === 1 ? 'it was' : 'they were'} skipped rather than failing ` +
-        'the draw. Rerun it with `/giveaway reroll` if that changes who should have won.',
+      `<@${giveaway.hostId}>, **${giveaway.title}** was drawn without ` +
+        `${one ? 'one of its requirements' : 'some of its requirements'}: ` +
+        `${summary.degraded.join(', ')}. The module that provides ${one ? 'it' : 'them'} is off ` +
+        `or not running, so ${one ? 'it was' : 'they were'} skipped instead of stopping the ` +
+        'draw. If that changes who should have won, reroll it with ' +
+        `\`${labelOf(ctx, 'giveaway', 'reroll')}\`.`,
       `giveaways:${root}:degraded`,
+    );
+  }
+
+  if (summary.unchecked > 0 && ctx.config.logChannelId) {
+    await notifyHost(
+      ctx,
+      ctx.config.logChannelId,
+      giveaway.hostId,
+      `<@${giveaway.hostId}>, **${giveaway.title}** was drawn without a full member list ` +
+        "because Proton couldn't read this server's members. " +
+        `${summary.unchecked === 1 ? '1 entrant was' : `${summary.unchecked} entrants were`} ` +
+        'checked against how they looked when they entered (or not checked at all, where there ' +
+        'was no record), and none of them could be disqualified for leaving. If that changes ' +
+        `who should have won, reroll it with \`${labelOf(ctx, 'giveaway', 'reroll')}\`.`,
+      `giveaways:${root}:unchecked`,
     );
   }
 }

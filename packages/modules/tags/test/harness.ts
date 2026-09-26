@@ -1,8 +1,10 @@
 import {
+  type ActionExecutor,
   type ActionRequest,
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
+  type CommandDefinition,
   createCommandOptions,
   type DedupeStore,
   DefaultActionExecutor,
@@ -23,6 +25,8 @@ import {
   type RestRequestOptions,
   type RestResponse,
   resolvePrecheckContext,
+  resolvePrivateReply,
+  subcommandPath,
 } from '@proton/core';
 import { handleAutocomplete } from '../src/autocomplete.ts';
 import { tagsCommands } from '../src/commands.ts';
@@ -179,6 +183,37 @@ export interface RunOverrides {
   tier: EntitlementTier;
   deps: TagsDeps;
   idempotencyKey: string;
+  commandLabel: (key: string, path?: string) => string;
+
+  replyPreference: boolean | null;
+  // Present, it replaces what the worker would resolve — undefined is a worker that set none.
+  privateReply: boolean | undefined;
+}
+
+function privateReplyOf(
+  command: CommandDefinition<TagsConfig>,
+  config: TagsConfig,
+  raw: readonly RawOption[],
+  overrides: Partial<RunOverrides>,
+): { privateReply?: boolean } {
+  if ('privateReply' in overrides) {
+    return overrides.privateReply === undefined ? {} : { privateReply: overrides.privateReply };
+  }
+  if (!command.reply) return {};
+
+  const preference = overrides.replyPreference ?? null;
+  return {
+    privateReply: resolvePrivateReply(command.reply, config, subcommandPath(raw), preference),
+  };
+}
+
+function recording(executor: ActionExecutor, requests: ActionRequest[]): ActionExecutor {
+  return {
+    execute: (request) => {
+      requests.push(request);
+      return executor.execute(request);
+    },
+  };
 }
 
 export interface CallBody {
@@ -196,6 +231,7 @@ export interface Harness {
   rest: FakeRest;
   tags: MemoryTagStore;
   recorder: MemoryRecorder;
+  requests: ActionRequest[];
   logs: Array<{ level: string; message: string }>;
 
   calls(): RestRequestOptions[];
@@ -213,6 +249,7 @@ export function harness(seed: TagsDeps = {}): Harness {
   const recorder = new MemoryRecorder();
   const dedupe = new MemoryDedupe();
   const logs: Array<{ level: string; message: string }> = [];
+  const requests: ActionRequest[] = [];
   const tags = new MemoryTagStore();
 
   const logger: Logger = {
@@ -247,6 +284,7 @@ export function harness(seed: TagsDeps = {}): Harness {
     rest,
     tags,
     recorder,
+    requests,
     logs,
 
     calls: () => rest.calls,
@@ -269,17 +307,23 @@ export function harness(seed: TagsDeps = {}): Harness {
       const definition = tagsCommands(depsOf(overrides)).find((c) => c.name === command);
       if (!definition) throw new Error(`no such tags command: ${command}`);
 
+      const config: TagsConfig = { ...tagsDefaultConfig, enabled: true, ...overrides.config };
       const ctx: CommandContext<TagsConfig> = {
         guildId: GUILD,
         channelId: CHANNEL,
         userId: MEMBER,
-        config: { ...tagsDefaultConfig, enabled: true, ...overrides.config },
+        config,
         tier: overrides.tier ?? 'free',
-        executor: executor.scoped({ channelId: CHANNEL, appPermissions: BOT_PERMISSIONS }),
+        executor: recording(
+          executor.scoped({ channelId: CHANNEL, appPermissions: BOT_PERMISSIONS }),
+          requests,
+        ),
         logger,
         options: createCommandOptions(options),
         interaction: { id: INTERACTION, token: 'interaction-token' },
         idempotencyKey: overrides.idempotencyKey ?? newId(),
+        ...privateReplyOf(definition, config, options, overrides),
+        ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
       };
 
       await definition.handler(ctx);

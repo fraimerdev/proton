@@ -1,6 +1,7 @@
 import {
   type ActionExecutor,
   isScopedActionExecutor,
+  labelOf,
   type ModuleContext,
   type ScheduledHandler,
 } from '@proton/core';
@@ -55,7 +56,10 @@ function tallies(run: RoleRun): string {
   return parts.join(' · ');
 }
 
-export function renderProgress(run: RoleRun): string {
+export function renderProgress(
+  run: RoleRun,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
+): string {
   const scope = ROLE_RUN_MODE_LABELS[run.mode];
   const scoped =
     run.mode === 'in' && run.targetRoleId ? `everyone holding <@&${run.targetRoleId}>` : scope;
@@ -66,8 +70,8 @@ export function renderProgress(run: RoleRun): string {
 
   return (
     `Giving <@&${run.roleId}> to ${scoped}, asked for by <@${run.actorId}>.${bar(run)}\n` +
-    `Looked at ${seen} — ${tallies(run)}.\n` +
-    '-# Still running. `/role cancel` stops it where it is.'
+    `Checked ${seen}: ${tallies(run)}.\n` +
+    `-# Still running. \`${labelOf(labels, 'role', 'cancel')}\` stops it where it is.`
   );
 }
 
@@ -76,10 +80,10 @@ export function renderFinished(run: RoleRun, outcome: FinishOutcome): string {
     outcome.kind === 'cancelled'
       ? `Stopped giving out <@&${run.roleId}>.`
       : outcome.kind === 'failed'
-        ? `Gave up on <@&${run.roleId}>.`
+        ? `Couldn't finish giving out <@&${run.roleId}>.`
         : `Finished giving out <@&${run.roleId}>.`;
 
-  const body = `Looked at ${run.scanned} members — ${tallies(run)}.`;
+  const body = `Checked ${run.scanned} members: ${tallies(run)}.`;
 
   return outcome.kind === 'failed'
     ? `${head}\n${body}\n\n${outcome.humanReason}`
@@ -307,14 +311,12 @@ export function createRoleRunHandler(deps: ModerationDeps): ScheduledHandler<Mod
 
     next.after = page.next;
     await store.put(next);
-    await editProgress(ctx, next, renderProgress(next), `progress:${next.scanned}`);
+    await editProgress(ctx, next, renderProgress(next, ctx), `progress:${next.scanned}`);
 
     if (!ctx.schedule) {
       await finish(ctx, store, next, {
         kind: 'failed',
-        humanReason:
-          'This deployment has no durable scheduler wired into the module runtime, so the run ' +
-          'cannot book its next chunk.',
+        humanReason: "I couldn't schedule the rest of the run, so it stopped here.",
       });
       return;
     }

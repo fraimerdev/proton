@@ -48,7 +48,7 @@ export function renderVoiceLeft(input: RenderInput): RenderResult | null {
   return {
     embed: logEmbed({
       subject: 'Member',
-      action: 'left voice',
+      action: 'left a voice channel',
       colour: ServerLogColors.Remove,
       lines: [member],
       executor: null,

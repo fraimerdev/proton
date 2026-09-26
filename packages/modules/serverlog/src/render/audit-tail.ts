@@ -1,6 +1,6 @@
 import { ServerLogColors } from '../colours.ts';
 import { channelMention, type LogField, type LogLine, logEmbed, userMention } from '../embed.ts';
-import { display, type RenderInput, type RenderResult, str } from './types.ts';
+import { display, NONE, type RenderInput, type RenderResult, str, UNKNOWN } from './types.ts';
 
 // Everything in here is audit-primary: Discord's entry already carries the target, the executor,
 // the reason and a `changes` diff, so no entity dispatch and no correlation is needed.
@@ -18,8 +18,8 @@ function changeFields(input: RenderInput, labels: Record<string, string>): LogFi
     const label = labels[change.key];
     if (!label) continue;
 
-    const before = change.old_value === undefined ? 'none' : display(change.old_value);
-    const after = change.new_value === undefined ? 'none' : display(change.new_value);
+    const before = change.old_value === undefined ? NONE : display(change.old_value);
+    const after = change.new_value === undefined ? NONE : display(change.new_value);
     fields.push({ name: label, value: `${before} → ${after}` });
   }
 
@@ -56,7 +56,7 @@ function tail(input: RenderInput, options: TailOptions): RenderResult | null {
 
   if (audit.targetId) {
     lines.push({
-      label: options.targetLabel ?? 'Id',
+      label: options.targetLabel ?? 'ID',
       ...(options.mention ? { mention: options.mention(audit.targetId) } : {}),
       value: audit.targetId,
     });
@@ -164,7 +164,7 @@ function inviteEmbed(
       subject: 'Invite',
       action,
       colour,
-      lines: [{ label: 'Code', value: code ?? 'unknown' }, reasonLine(input)],
+      lines: [{ label: 'Code', value: code ?? UNKNOWN }, reasonLine(input)],
       ...(action === 'created' ? { fields: changeFields(input, INVITE_KEYS) } : {}),
       executor: input.executor,
       occurredAt: input.occurredAt,
@@ -338,11 +338,11 @@ function automodAction(input: RenderInput, action: string, colour: number): Rend
         ...(audit.targetId
           ? [{ label: 'Member', mention: userMention(audit.targetId), value: audit.targetId }]
           : []),
-        { label: 'Rule', value: str(options.auto_moderation_rule_name) ?? 'unknown' },
+        { label: 'Rule', value: str(options.auto_moderation_rule_name) ?? UNKNOWN },
         ...(channelId
           ? [{ label: 'Channel', mention: channelMention(channelId), value: channelId }]
           : []),
-        { label: 'Trigger', value: str(options.auto_moderation_rule_trigger_type) ?? 'unknown' },
+        { label: 'Trigger', value: str(options.auto_moderation_rule_trigger_type) ?? UNKNOWN },
       ],
       // AutoMod entries name the executor as the offending member, not a moderator. The footer
       // would otherwise read as though they had moderated themselves.

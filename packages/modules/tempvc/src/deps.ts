@@ -10,7 +10,6 @@ export interface TempVcDeps {
   /** Authoritative ownership, access and granted roles. */
   repository?: TempVoiceRepository;
 
-  /** Where members are, cached. Rebuilt by reconcile, so losing it is survivable. */
   presence?: PresenceStore;
 
   guildState?: GuildStateStore;
@@ -66,6 +65,8 @@ export function bindService(deps: TempVcDeps): ServiceBinding {
       repository,
       botUserId: deps.botUserId,
       guildState,
+      presence,
+      refusals: presence,
       placeholders: deps.placeholders,
       ...(deps.now ? { now: deps.now } : {}),
 

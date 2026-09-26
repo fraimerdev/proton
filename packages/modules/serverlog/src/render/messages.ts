@@ -10,8 +10,9 @@ import {
 } from '../embed.ts';
 import { type RenderInput, type RenderResult, record, str } from './types.ts';
 
-export const NOT_CACHED =
-  '*not remembered — turn on “Remember recent message text” in Message logs*';
+export const NOT_CACHED = '*Not remembered. Turn on “Remember recent message text” in Logging.*';
+
+const NO_TEXT = '*No text*';
 
 export const ID_LIST_MAX = 40;
 
@@ -35,8 +36,8 @@ export function renderMessageEdited(input: RenderInput): RenderResult | null {
   if (before !== undefined && before === after) return null;
 
   const fields: LogField[] = [
-    { name: 'Before', value: before === undefined ? NOT_CACHED : before || '*empty*' },
-    { name: 'After', value: after || '*empty*' },
+    { name: 'Before', value: before === undefined ? NOT_CACHED : before || NO_TEXT },
+    { name: 'After', value: after || NO_TEXT },
   ];
 
   return {
@@ -71,7 +72,7 @@ export function renderMessageDeleted(input: RenderInput): RenderResult | null {
   const attachments = cached?.attachments ?? [];
 
   const fields: LogField[] = [
-    { name: 'Content', value: cached ? cached.content || '*empty*' : NOT_CACHED },
+    { name: 'Content', value: cached ? cached.content || NO_TEXT : NOT_CACHED },
     ...(attachments.length > 0
       ? [
           {
@@ -126,7 +127,7 @@ export function renderMessagesBulkDeleted(input: RenderInput): RenderResult | nu
         { label: 'Channel', mention: channelMention(channelId), value: channelId },
         { label: 'Count', value: String(ids.length) },
       ],
-      fields: [{ name: 'Message ids', value: listed }],
+      fields: [{ name: 'Message IDs', value: listed }],
       executor: input.executor,
       occurredAt: input.occurredAt,
       emojis: input.emojis,

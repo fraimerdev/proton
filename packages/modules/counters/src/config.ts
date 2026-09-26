@@ -71,9 +71,8 @@ export const counterSchema = z.preprocess(
           value.includes(COUNT_PLACEHOLDER) || mentionsAny(COUNTER_SURFACE, value, COUNT_KEYS),
         {
           message:
-            `a counter template needs a count in it, such as ${COUNT_PLACEHOLDER} or ` +
-            '{count.roles} — that is where the number goes, as in “Members: {count}”. Without ' +
-            'one the channel would be renamed to a fixed string that never changes.',
+            `needs a count where the number goes, such as ${COUNT_PLACEHOLDER} or {count.roles}, ` +
+            'as in “Members: {count}”',
         },
       )
       .register(protonFields, {
@@ -100,9 +99,7 @@ export const countersListSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'channelId'],
-          message:
-            'two counters cannot share a channel — they would rename it in turn and each one ' +
-            'would spend the other’s rename allowance.',
+          message: 'is already used by another counter. Choose a different channel.',
         });
       }
       if (counter.channelId !== undefined) channels.add(counter.channelId);
@@ -111,9 +108,7 @@ export const countersListSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'id'],
-          message:
-            'two counters cannot share an id — the channel Proton makes for a counter is filed ' +
-            'under it, so both would rename the same channel.',
+          message: 'is already used by another counter',
         });
       }
       ids.add(counter.id);

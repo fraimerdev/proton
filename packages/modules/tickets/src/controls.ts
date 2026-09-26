@@ -1,4 +1,5 @@
 import type { ActionResult, ModuleContext, TicketPriority } from '@proton/core';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import {
   MODULE_ID,
   PRIORITY_LABELS,
@@ -43,6 +44,20 @@ function refused(result: ActionResult): boolean {
   return result.status === 'failed_precheck' || result.status === 'failed_api';
 }
 
+function gone(ticket: Ticket, verb: string): string {
+  return `Couldn’t ${verb} ticket #${ticket.number} because it was deleted.`;
+}
+
+const ACCESS_ALREADY_GONE: ReadonlySet<number> = new Set([
+  RESTJSONErrorCodes.UnknownPermissionOverwrite,
+  RESTJSONErrorCodes.UnknownChannel,
+]);
+
+function accessAlreadyGone(result: ActionResult): boolean {
+  const code = result.failure?.discordCode;
+  return result.status === 'failed_api' && code !== undefined && ACCESS_ALREADY_GONE.has(code);
+}
+
 async function note(
   input: ControlInput,
   type: string,
@@ -70,7 +85,7 @@ export async function claim(input: ControlInput): Promise<ControlOutcome> {
       humanReason:
         current?.claimedById && current.claimedById !== input.actorId
           ? `<@${current.claimedById}> claimed this ticket first.`
-          : `Ticket #${input.ticket.number} cannot be claimed — it is not open any more.`,
+          : `Ticket #${input.ticket.number} can’t be claimed because it’s no longer open.`,
     };
   }
 
@@ -93,10 +108,7 @@ export async function unclaim(input: ControlInput): Promise<ControlOutcome> {
   const released = await input.store.unclaim(input.ctx.guildId, input.ticket.id);
 
   if (!released) {
-    return {
-      ok: false,
-      humanReason: 'Nobody has claimed this ticket, so there was nothing to let go of.',
-    };
+    return { ok: false, humanReason: 'This ticket isn’t claimed.' };
   }
 
   await note(input, 'unclaimed', { previous: input.ticket.claimedById });
@@ -120,7 +132,7 @@ export async function assign(
   );
 
   if (!assigned) {
-    return { ok: false, humanReason: `Ticket #${input.ticket.number} could not be reassigned.` };
+    return { ok: false, humanReason: gone(input.ticket, 'reassign') };
   }
 
   await note(input, assigneeId === null ? 'unassigned' : 'assigned', { assigneeId });
@@ -130,7 +142,7 @@ export async function assign(
     ticket: assigned,
     message:
       assigneeId === null
-        ? `Ticket #${assigned.number} is no longer assigned to anybody.`
+        ? `Ticket #${assigned.number} is no longer assigned to anyone.`
         : `Ticket #${assigned.number} is assigned to <@${assigneeId}>.`,
   };
 }
@@ -146,7 +158,7 @@ export async function transfer(input: ControlInput, ownerId: string): Promise<Co
   const moved = await input.store.transferOwner(input.ctx.guildId, input.ticket.id, ownerId);
 
   if (!moved) {
-    return { ok: false, humanReason: `Ticket #${input.ticket.number} could not be transferred.` };
+    return { ok: false, humanReason: gone(input.ticket, 'transfer') };
   }
 
   await input.store.addParticipant(moved.id, ownerId, 'added', input.actorId);
@@ -173,7 +185,7 @@ export async function setPriority(
   const updated = await input.store.setPriority(input.ctx.guildId, input.ticket.id, priority);
 
   if (!updated) {
-    return { ok: false, humanReason: `Ticket #${input.ticket.number} could not be changed.` };
+    return { ok: false, humanReason: gone(input.ticket, 'change the priority of') };
   }
 
   await note(input, 'priority-changed', { from: input.ticket.priority, to: priority });
@@ -181,7 +193,7 @@ export async function setPriority(
   return {
     ok: true,
     ticket: updated,
-    message: `Ticket #${updated.number} is now ${describePriority(priority)}.`,
+    message: `Ticket #${updated.number} is now ${describePriority(priority)} priority.`,
   };
 }
 
@@ -221,8 +233,8 @@ export async function setLock(input: ControlInput, locked: boolean): Promise<Con
     return {
       ok: false,
       humanReason: locked
-        ? `Ticket #${input.ticket.number} is already locked, or is not open.`
-        : `Ticket #${input.ticket.number} is not locked.`,
+        ? `Ticket #${input.ticket.number} is already locked or isn’t open.`
+        : `Ticket #${input.ticket.number} isn’t locked.`,
     };
   }
 
@@ -254,9 +266,10 @@ export async function setLock(input: ControlInput, locked: boolean): Promise<Con
       ticket: flipped,
       partial: true,
       message:
-        `Ticket #${flipped.number} is marked ${locked ? 'locked' : 'unlocked'}, but ` +
-        `${failures.length} permission change(s) were refused, so some members still ` +
-        'have the access they had before. Check the channel permissions.',
+        `Ticket #${flipped.number} is ${locked ? 'locked' : 'unlocked'}, but ` +
+        `${failures.length} permission ${failures.length === 1 ? 'change' : 'changes'} failed, ` +
+        `so some members ${locked ? 'can still post' : 'still can’t post'} in it. Check the ` +
+        'channel permissions.',
     };
   }
 
@@ -359,8 +372,8 @@ export async function move(input: ControlInput, categoryId: string): Promise<Con
       ticket: input.ticket,
       partial: true,
       message:
-        `Ticket #${input.ticket.number} was moved, but its permissions could not be ` +
-        'reapplied, so the wrong people may be able to read it. Check the channel permissions.',
+        `Moved ticket #${input.ticket.number}, but I couldn’t reapply its permissions, so the ` +
+        'wrong people may be able to read it. Check the channel permissions.',
     };
   }
 
@@ -416,8 +429,8 @@ export async function removeParticipant(
     return {
       ok: false,
       humanReason:
-        'That member owns this ticket, so they cannot be removed from it. Close the ticket, or ' +
-        'transfer it to somebody else first.',
+        'That member owns this ticket, so they can’t be removed from it. Close the ticket, or ' +
+        'transfer it to someone else first.',
     };
   }
 
@@ -427,8 +440,8 @@ export async function removeParticipant(
     return {
       ok: false,
       humanReason:
-        `<@${userId}> was not added to this ticket by anybody, so there is nothing to take away. ` +
-        'Members who can see it through a support role are removed by changing that role.',
+        `<@${userId}> wasn’t added to this ticket, so there’s nothing to remove. If they can ` +
+        'see it through a staff role, change their roles instead.',
     };
   }
 
@@ -444,7 +457,7 @@ export async function removeParticipant(
     payload: { channelId: input.ticket.channelId, overwriteId: userId },
   });
 
-  if (refused(result)) {
+  if (refused(result) && !accessAlreadyGone(result)) {
     // The row is already gone, so saying "nothing happened" would be a lie — the ticket now
     // disagrees with Discord and somebody has to know which way.
     input.ctx.logger.error(
@@ -456,8 +469,8 @@ export async function removeParticipant(
     return {
       ok: false,
       humanReason:
-        `I removed <@${userId}> from the ticket's records but could not take their channel access ` +
-        `away: ${failureOf(result, 'Discord refused it')}`,
+        `I removed <@${userId}> from the ticket, but couldn’t take away their access to the ` +
+        `channel: ${failureOf(result, 'Discord refused it')}`,
     };
   }
 
@@ -483,7 +496,7 @@ export async function requestClose(
   if (!requested) {
     return {
       ok: false,
-      humanReason: `Somebody has already asked to close ticket #${input.ticket.number}.`,
+      humanReason: `Someone has already asked to close ticket #${input.ticket.number}.`,
     };
   }
 

@@ -1,6 +1,6 @@
-import type { ActionResult, ModuleContext } from '@proton/core';
+import { type ActionResult, type ModuleContext, newId } from '@proton/core';
 import { MODULE_ID, type TicketsConfig, type TicketType, transcriptChannelFor } from './config.ts';
-import { namesOf, type TicketsDeps } from './deps.ts';
+import { mentionOf, namesOf, type TicketsDeps } from './deps.ts';
 import { closeCycle, type Ticket, type TicketStore } from './store.ts';
 import { renderTranscriptHtml, type TranscriptInput, transcriptFilename } from './transcript.ts';
 
@@ -102,10 +102,14 @@ export async function deliverTranscript(input: TranscriptDeliveryInput): Promise
     description: `Transcript of ticket #${ticket.number}`,
   };
 
+  const recorded = built.view.messages.length;
+
   const summary =
     `**Ticket #${ticket.number}** · ${built.view.typeName}\n` +
-    `Raised by <@${ticket.openerId}>, closed by <@${ticket.closedBy ?? input.actorId}>.\n` +
-    `${built.view.messages.length} message(s) recorded.` +
+    `Opened by <@${ticket.openerId}>, closed by ${mentionOf(ticket.closedBy ?? input.actorId)}.\n` +
+    (recorded === 0
+      ? 'No messages recorded.'
+      : `${recorded} ${recorded === 1 ? 'message' : 'messages'} recorded.`) +
     (ticket.closeReason ? `\n**Reason**\n${ticket.closeReason}` : '');
 
   let url: string | null = null;
@@ -156,7 +160,8 @@ async function dmTranscript(
     moduleId: MODULE_ID,
     kind: 'create_dm',
     actorId: MODULE_ID,
-    idempotencyKey: `${MODULE_ID}:transcript-dm-open:${ticket.id}:${closeCycle(ticket)}`,
+    // A nonce per attempt: a deduped create_dm has no body, so a replay would never retry the DM.
+    idempotencyKey: `${MODULE_ID}:transcript-dm-open:${ticket.id}:${closeCycle(ticket)}:${newId()}`,
     dryRun: false,
     record: false,
     payload: { userId: ticket.ownerId },
@@ -183,7 +188,13 @@ async function dmTranscript(
     idempotencyKey: `${MODULE_ID}:transcript-dm:${ticket.id}:${closeCycle(ticket)}`,
     dryRun: false,
     record: false,
-    payload: { channelId, content: summary, files: [file], allowedMentions: { parse: [] } },
+    payload: {
+      channelId,
+      content: summary,
+      files: [file],
+      allowedMentions: { parse: [] },
+      directMessage: true,
+    },
   });
 
   if (refused(sent)) {

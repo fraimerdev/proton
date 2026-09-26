@@ -40,12 +40,10 @@ const bindingKeySchema = z
   .min(1)
   .max(BINDING_KEY_MAX)
   .refine((key) => !key.includes(CUSTOM_ID_SEPARATOR), {
-    message:
-      `must not contain '${CUSTOM_ID_SEPARATOR}' — Proton reserves it to tell choices apart, ` +
-      'and a key containing one would resolve to the wrong role',
+    message: `can’t contain '${CUSTOM_ID_SEPARATOR}', which Proton uses to tell choices apart`,
   })
   .refine((key) => key !== SELECT_BINDING_KEY, {
-    message: `'${SELECT_BINDING_KEY}' is reserved — Proton uses it for the dropdown itself`,
+    message: `can’t be '${SELECT_BINDING_KEY}', which is reserved for the dropdown itself`,
   });
 
 export const rolemenuBindingSchema = z.object({
@@ -74,7 +72,7 @@ export const rolemenuMenuSchema = z
         ctx.addIssue({
           code: 'custom',
           path: ['bindings', index, 'key'],
-          message: `duplicate binding key '${binding.key}' — only the first would ever be reachable`,
+          message: `Another role in this menu already uses '${binding.key}'.`,
         });
       }
       seen.add(binding.key);
@@ -85,9 +83,9 @@ export const rolemenuMenuSchema = z
           code: 'custom',
           path: ['bindings', index, 'key'],
           message:
-            `menu id '${menu.id}' and key '${binding.key}' need ${encoded.length} characters ` +
-            `together with Proton's prefix, and Discord only allows ` +
-            `${MAX_CUSTOM_ID_LENGTH} behind a button. Shorten the menu id or the key.`,
+            `The menu ID '${menu.id}' and the key '${binding.key}' come to ${encoded.length} ` +
+            `characters with Proton's prefix, and Discord allows ${MAX_CUSTOM_ID_LENGTH}. ` +
+            'Shorten the menu ID or the key.',
         });
       }
     }
@@ -96,10 +94,7 @@ export const rolemenuMenuSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['messageId'],
-        message:
-          'a reaction menu needs the id of the message it reacts to — a reaction only tells ' +
-          'Proton the channel, the message and the emoji, so without it the menu can never be ' +
-          'recognised. Turn on Developer Mode in Discord and copy the message id.',
+        message: 'A reaction menu needs the ID of the message members react to.',
       });
     }
   });
@@ -116,7 +111,7 @@ export const rolemenuMenusSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'id'],
-          message: `duplicate menu id '${menu.id}' — a button cannot say which of the two it means`,
+          message: `Another role menu already has the ID '${menu.id}'.`,
         });
       }
       seen.add(menu.id);

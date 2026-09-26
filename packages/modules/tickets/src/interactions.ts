@@ -110,6 +110,8 @@ export const REMOVE_SELECT_ACTION = 'remsel';
 export const ASSIGN_SELECT_ACTION = 'asgsel';
 export const MOVE_SELECT_ACTION = 'movsel';
 
+const NO_TICKET_HERE = 'There’s no ticket in this channel any more.';
+
 export type OpenPress = { panelId: string };
 
 // Kept at exactly one argument forever. Panels are posted, never re-rendered, and no message id is
@@ -488,8 +490,8 @@ async function startOpen(
       replyEphemeral(
         session.to,
         errorStatus(
-          'That button belongs to a ticket panel that no longer exists in this server’s settings, ' +
-            'so nothing was opened. An admin can repost the panel from the Proton dashboard.',
+          'This panel no longer exists, so no ticket was opened. Ask a server admin to post a ' +
+            'new one.',
         ),
       ),
     );
@@ -508,10 +510,10 @@ async function startOpen(
   if (!chosen) {
     const message =
       available.length === 0
-        ? 'That panel has no ticket types attached to it any more, so there is nothing to open. ' +
-          'An admin can fix it in the Proton dashboard under Tickets.'
-        : 'That option is no longer one this panel offers. An admin can repost the panel from the ' +
-          'Proton dashboard so its buttons match the settings again.';
+        ? 'This panel has no ticket types, so there’s nothing to open. Ask a server admin to ' +
+          'add one in the Proton dashboard.'
+        : 'This panel doesn’t offer that option any more. Ask a server admin to post the panel ' +
+          'again so it matches its settings.';
 
     await session.ctx.executor.execute(replyEphemeral(session.to, errorStatus(message)));
     return { action: 'refused', reason: 'the ticket type is gone' };
@@ -552,8 +554,8 @@ async function submitForm(
       replyEphemeral(
         session.to,
         errorStatus(
-          'The ticket type you filled that form in for has been removed from this server’s ' +
-            'settings, so nothing was opened and nothing was recorded.',
+          'That ticket type was removed while you were filling in the form, so no ticket was ' +
+            'opened.',
         ),
       ),
     );
@@ -611,8 +613,8 @@ async function finishOpen(
   await say(
     session,
     successStatus(
-      `Opened ticket #${opened.ticket.number} — <#${opened.ticket.channelId}>. ` +
-        'Everything you say there is visible only to you and the support team.',
+      `Opened ticket #${opened.ticket.number} in <#${opened.ticket.channelId}>. Only you and ` +
+        'staff can see it.',
     ),
     'opened',
   );
@@ -636,11 +638,7 @@ async function runControl(
   }
 
   if (!ticket) {
-    await say(
-      session,
-      errorStatus('There is no ticket attached to this channel any more.'),
-      'refused',
-    );
+    await say(session, errorStatus(NO_TICKET_HERE), 'refused');
     return { action: 'refused', reason: 'no ticket here' };
   }
 
@@ -653,14 +651,7 @@ async function pressClose(session: Session): Promise<PressOutcome> {
 
   if (!allowed.ok || !ticket) {
     await session.ctx.executor.execute(
-      replyEphemeral(
-        session.to,
-        errorStatus(
-          allowed.ok
-            ? 'There is no ticket attached to this channel any more.'
-            : allowed.humanReason,
-        ),
-      ),
+      replyEphemeral(session.to, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason)),
     );
     return { action: 'refused', reason: allowed.ok ? 'no ticket here' : allowed.humanReason };
   }
@@ -683,11 +674,7 @@ async function performClose(session: Session, reason: string | null): Promise<Pr
   const allowed = gate(session, 'close', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -756,7 +743,7 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
   const ticket = await ticketHere(session);
 
   if (!ticket || ticket.closeRequestedAt === null) {
-    await say(session, errorStatus('There is no open request to close this ticket.'), 'refused');
+    await say(session, errorStatus('There’s no pending request to close this ticket.'), 'refused');
     return { action: 'refused', reason: 'no close request pending' };
   }
 
@@ -764,11 +751,7 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
   const mayAnswer = session.actor.userId === ticket.ownerId || gate(session, 'close', ticket).ok;
 
   if (!mayAnswer) {
-    await say(
-      session,
-      errorStatus(`That question is for <@${ticket.ownerId}>, who raised this ticket.`),
-      'refused',
-    );
+    await say(session, errorStatus(`Only <@${ticket.ownerId}> can answer this.`), 'refused');
     return { action: 'refused', reason: 'not the ticket owner' };
   }
 
@@ -786,9 +769,7 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
 
     await say(
       session,
-      successStatus(
-        `Ticket #${ticket.number} stays open. Tell the team what is still wrong with it.`,
-      ),
+      successStatus(`Ticket #${ticket.number} stays open. Let staff know what still needs fixing.`),
       'kept',
     );
     return { action: 'done', reason: 'close request declined' };
@@ -801,8 +782,8 @@ async function confirmClose(session: Session, confirmed: boolean): Promise<Press
     ticket,
     closedBy: session.actor.userId,
     reason: ticket.closeRequestedById
-      ? `confirmed by the member after <@${ticket.closeRequestedById}> asked`
-      : 'confirmed by the member',
+      ? `Confirmed by the member after <@${ticket.closeRequestedById}> asked`
+      : 'Confirmed by the member',
     idempotencyKey: session.to.idempotencyKey,
   });
 
@@ -837,11 +818,7 @@ async function pickMember(session: Session, adding: boolean): Promise<PressOutco
   const allowed = gate(session, action, ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -857,8 +834,8 @@ async function pickMember(session: Session, adding: boolean): Promise<PressOutco
       {
         type: ComponentType.TextDisplay,
         content: adding
-          ? '### Who should be able to see this ticket?'
-          : '### Who should lose access to this ticket?',
+          ? '### Add a member to this ticket'
+          : '### Remove a member from this ticket',
       },
       {
         type: ComponentType.ActionRow,
@@ -885,11 +862,7 @@ async function pickTarget(session: Session, action: 'assign' | 'move'): Promise<
   const allowed = gate(session, action, ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here any more.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -908,10 +881,7 @@ async function pickTarget(session: Session, action: 'assign' | 'move'): Promise<
     [
       {
         type: ComponentType.TextDisplay,
-        content:
-          action === 'assign'
-            ? '### Who should own answering this ticket?'
-            : '### Which category should this ticket live in?',
+        content: action === 'assign' ? '### Assign this ticket' : '### Move this ticket',
       },
       {
         type: ComponentType.ActionRow,
@@ -945,12 +915,7 @@ async function pressRename(session: Session): Promise<PressOutcome> {
 
   if (!allowed.ok || !ticket) {
     await session.ctx.executor.execute(
-      replyEphemeral(
-        session.to,
-        errorStatus(
-          allowed.ok ? 'There is no ticket attached to this channel.' : allowed.humanReason,
-        ),
-      ),
+      replyEphemeral(session.to, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason)),
     );
     return { action: 'refused', reason: 'not permitted' };
   }
@@ -969,11 +934,7 @@ async function pressInfo(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'info', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -999,11 +960,7 @@ async function pressOptions(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'priority', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -1029,11 +986,7 @@ async function pressTranscript(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'transcript', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -1054,9 +1007,7 @@ async function pressTranscript(session: Session): Promise<PressOutcome> {
         applicationId: session.applicationId,
       },
       {
-        ...successStatus(
-          `The transcript of ticket #${ticket.number}, as it stands right now, is attached.`,
-        ),
+        ...successStatus(`Here’s the transcript of ticket #${ticket.number} so far.`),
         files: [
           {
             filename: built.filename,
@@ -1074,7 +1025,7 @@ async function pressTranscript(session: Session): Promise<PressOutcome> {
     await say(
       session,
       errorStatus(
-        `I built the transcript of ticket #${ticket.number} but could not send it: ${
+        `I couldn’t send the transcript of ticket #${ticket.number}: ${
           result.failure?.humanReason ?? 'unknown reason'
         }`,
       ),
@@ -1092,11 +1043,7 @@ async function pressReopen(session: Session): Promise<PressOutcome> {
   const allowed = gate(session, 'reopen', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -1120,11 +1067,7 @@ async function pressDelete(session: Session, confirmed: boolean): Promise<PressO
   const allowed = gate(session, 'delete', ticket);
 
   if (!allowed.ok || !ticket) {
-    await say(
-      session,
-      errorStatus(allowed.ok ? 'There is no ticket here.' : allowed.humanReason),
-      'refused',
-    );
+    await say(session, errorStatus(allowed.ok ? NO_TICKET_HERE : allowed.humanReason), 'refused');
     return { action: 'refused', reason: 'not permitted' };
   }
 
@@ -1141,8 +1084,8 @@ async function pressDelete(session: Session, confirmed: boolean): Promise<PressO
         {
           type: ComponentType.TextDisplay,
           content:
-            `### Delete ticket #${ticket.number}?\nThis removes the channel and everything said ` +
-            'in it, and it cannot be undone.',
+            `### Delete ticket #${ticket.number}?\nThis deletes the channel and everything in ` +
+            'it. It can’t be undone.',
         },
         {
           type: ComponentType.ActionRow,
@@ -1150,7 +1093,7 @@ async function pressDelete(session: Session, confirmed: boolean): Promise<PressO
             {
               type: ComponentType.Button,
               style: 4,
-              label: 'Delete it',
+              label: 'Delete ticket',
               custom_id: encoded.customId,
             },
           ],
@@ -1216,7 +1159,7 @@ async function saveRating(
   // The rating button can arrive by DM, where the channel says nothing about which guild or ticket
   // it belongs to, so the owner check is the only thing standing between a stranger and the score.
   if (!ticket || ticket.ownerId !== session.actor.userId) {
-    await say(session, errorStatus('That rating is not yours to give.'), 'refused');
+    await say(session, errorStatus('Only the ticket’s owner can rate it.'), 'refused');
     return { action: 'refused', reason: 'not the ticket owner' };
   }
 
@@ -1231,8 +1174,8 @@ async function saveRating(
   await say(
     session,
     saved
-      ? successStatus(`Thank you — ${score} out of 5 recorded for ticket #${ticket.number}.`)
-      : errorStatus(`You have already rated ticket #${ticket.number}.`),
+      ? successStatus(`Thanks for rating ticket #${ticket.number} ${score} out of 5.`)
+      : errorStatus(`You’ve already rated ticket #${ticket.number}.`),
     'rated',
   );
 
@@ -1261,8 +1204,8 @@ export function createTicketInteractionListener(deps: TicketsDeps): EventListene
               idempotencyKey: `${MODULE_ID}:${event.id}`,
             },
             errorStatus(
-              'Tickets is disabled in this server, so that button does nothing. An admin can ' +
-                'turn it back on in the Proton dashboard.',
+              'Tickets is off in this server, so this button doesn’t work right now. An admin ' +
+                'can turn it on in the Proton dashboard.',
             ),
           ),
         );

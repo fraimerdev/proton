@@ -13,7 +13,7 @@ const CHANNEL_REF = /^(\d{17,20})?$/;
 // A plain string with a permissive pattern, not a union with z.literal(''): the v1 form generator
 // builds a channel picker from ZodString only, and rejects a union outright.
 const channelRef = () =>
-  z.string().regex(CHANNEL_REF, 'must be a Discord channel id, or empty to inherit').default('');
+  z.string().regex(CHANNEL_REF, 'Must be a Discord channel ID, or empty.').default('');
 
 const categoryChannel = (label: string) =>
   channelRef().register(protonFields, {
@@ -61,7 +61,7 @@ const categoriesShape = z.object({
 
 export const logEventOverrideSchema = z.object({
   enabled: z.boolean().optional(),
-  channelId: z.string().regex(CHANNEL_REF, 'must be a Discord channel id').optional(),
+  channelId: z.string().regex(CHANNEL_REF, 'Must be a Discord channel ID.').optional(),
 });
 
 export type LogEventOverride = z.infer<typeof logEventOverrideSchema>;
@@ -94,13 +94,13 @@ export const serverlogConfigSchema = z.object({
         ctx.addIssue({
           code: 'custom',
           path: [key],
-          message: `'${key}' is not a log Proton knows about — it was probably renamed. Remove it.`,
+          message: 'Proton doesn’t log this event anymore. Remove it to save your changes.',
         });
       }
     }),
 
   ignoredChannelIds: z
-    .array(z.string().regex(/^\d{17,20}$/, 'must be a Discord channel id'))
+    .array(z.string().regex(/^\d{17,20}$/, 'Must be a Discord channel ID.'))
     .max(100)
     .default([])
     .register(protonFields, {
@@ -109,7 +109,7 @@ export const serverlogConfigSchema = z.object({
     }),
 
   ignoredRoleIds: z
-    .array(z.string().regex(/^\d{17,20}$/, 'must be a Discord role id'))
+    .array(z.string().regex(/^\d{17,20}$/, 'Must be a Discord role ID.'))
     .max(50)
     .default([])
     .register(protonFields, {
@@ -118,7 +118,7 @@ export const serverlogConfigSchema = z.object({
     }),
 
   ignoredUserIds: z
-    .array(z.string().regex(/^\d{17,20}$/, 'must be a Discord user id'))
+    .array(z.string().regex(/^\d{17,20}$/, 'Must be a Discord user ID.'))
     .max(100)
     .default([])
     .register(protonFields, {

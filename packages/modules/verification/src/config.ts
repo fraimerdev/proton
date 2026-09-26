@@ -6,6 +6,7 @@ import {
   refineMessage,
   snowflakeSchema,
 } from '@proton/core';
+import { placeholderLinkPaths } from '@proton/core/placeholders';
 import { z } from 'zod';
 
 export const VERIFICATION_MODES = ['button', 'captcha', 'website'] as const;
@@ -52,8 +53,8 @@ export function refineVerificationPanel(
       code: 'custom',
       path: ['v2'],
       message:
-        'the verification panel is posted with Proton’s own verify button attached, and Discord ' +
-        'will not put a button row on a components layout. Build this panel from text and embeds.',
+        'the verification panel can’t use a layout, because Proton adds its verify button to the ' +
+        'panel and Discord won’t put a button row on a layout. Build it from text and embeds.',
     });
   }
 
@@ -62,8 +63,8 @@ export function refineVerificationPanel(
       code: 'custom',
       path: ['components'],
       message:
-        'Proton adds the verify button to this panel itself, so it cannot carry button rows of ' +
-        'its own — a second row would be posted under a button nobody configured.',
+        'Proton adds the verify button to this panel itself, so it can’t have button rows of ' +
+        'its own. Remove them.',
     });
   }
 }
@@ -73,6 +74,16 @@ export const verificationPanelSchema = z.preprocess(
   messageObjectSchema.superRefine((message, ctx) => {
     refineMessage(message, ctx);
     refineVerificationPanel(message, ctx);
+
+    for (const path of placeholderLinkPaths(message)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message:
+          'the verification panel doesn’t fill in placeholders, so this must be a complete ' +
+          'http:// or https:// link',
+      });
+    }
   }),
 );
 
@@ -82,7 +93,7 @@ export type VerificationPanel = z.infer<typeof verificationPanelSchema>;
 // guild's save discovers. The wording is what buildPanelMessage used to compose from panelTitle and
 // panelBody, so a server that never touches this sees the panel it already had.
 export const DEFAULT_PANEL: VerificationPanel = verificationPanelSchema.parse({
-  content: '## Verify to get access\n\nPress the button below to unlock the rest of the server.',
+  content: '## Verify to get access\n\nPress the button below to see the rest of the server.',
 });
 
 /**
@@ -124,7 +135,6 @@ export const verificationConfigSchema = z.object({
   panelChannelId: snowflakeSchema.optional().register(protonFields, {
     field: 'channel-id',
     label: 'Panel channel',
-    description: 'Where Proton posts the panel members use to verify.',
 
     channelTypes: [0, 5],
   }),
@@ -165,13 +175,14 @@ export const verificationConfigSchema = z.object({
   unverifiedRoleId: snowflakeSchema.optional().register(protonFields, {
     field: 'role-id',
     label: 'Unverified role',
-    description:
-      'Removed when a member verifies. Until Proton adds it, new members briefly have full access.',
+    description: 'Removed when a member verifies.',
   }),
 
-  verifiedRoleId: snowflakeSchema
-    .optional()
-    .register(protonFields, { field: 'role-id', label: 'Member role' }),
+  verifiedRoleId: snowflakeSchema.optional().register(protonFields, {
+    field: 'role-id',
+    label: 'Member role',
+    description: 'Given when a member verifies.',
+  }),
 
   applyUnverifiedOnJoin: z
     .boolean()
@@ -183,11 +194,11 @@ export const verificationConfigSchema = z.object({
     .default('channel')
     .register(protonFields, {
       label: 'Send captcha',
-      description: 'Members with DMs closed always get it in the channel.',
+      description: 'Members with closed DMs get it in the channel instead.',
 
       optionLabels: {
         channel: 'Privately in the channel',
-        dm: 'By direct message',
+        dm: 'In a DM',
       },
       showWhen: captchaOnly,
     }),
@@ -222,10 +233,10 @@ export const verificationConfigSchema = z.object({
       description: 'What Proton does when a member runs out of attempts.',
 
       optionLabels: {
-        none: 'Nothing — let them try again',
+        none: 'Let them try again',
         kick: 'Kick',
         ban: 'Ban',
-        timeout: 'Timeout',
+        timeout: 'Time out',
         quarantine: 'Add quarantine role',
       },
       showWhen: captchaOnly,

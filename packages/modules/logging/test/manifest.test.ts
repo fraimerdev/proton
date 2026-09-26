@@ -55,7 +55,7 @@ describe('logging failure paths', () => {
     expect(status.disabledReason?.code).toBe('missing_intent');
 
     expect(status.disabledReason?.humanReason).toContain('Message Content Intent');
-    expect(status.disabledReason?.humanReason).toContain('developer portal');
+    expect(status.disabledReason?.humanReason).toContain('Developer Portal');
   });
 
   test('disables itself and names VIEW_CHANNEL when the permission is missing', () => {

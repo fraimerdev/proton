@@ -12,7 +12,7 @@ export const VERIFICATION_PANEL_SIMULATION: SimulationAdapter<VerificationConfig
     id: 'verification.panel',
     moduleId: 'verification',
     label: 'Verification panel',
-    summary: 'The message members press to verify.',
+    summary: 'The message with the button members press to verify.',
     configPath: 'panel',
     output: 'message',
     delivery: 'channel',
@@ -20,8 +20,8 @@ export const VERIFICATION_PANEL_SIMULATION: SimulationAdapter<VerificationConfig
     subject: false,
     inputs: [],
     note:
-      'A copy, posted where you choose. The real panel keeps its place in the verification ' +
-      'channel and is not touched, and nobody is verified by the button on this one.',
+      'Posts a copy where you choose. The real panel isn’t changed, and the button on the copy ' +
+      'doesn’t verify anyone.',
   },
 
   destination: (config) => config.panelChannelId ?? null,

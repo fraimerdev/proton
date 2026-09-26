@@ -69,7 +69,7 @@ describe('the §9 boundary', () => {
 
 describe('menu ids', () => {
   test('a duplicate is refused, because a custom_id could not say which is meant', () => {
-    expect(messages([menu(), menu()])[0]).toContain("duplicate menu id 'colours'");
+    expect(messages([menu(), menu()])[0]).toContain("already has the ID 'colours'");
     expect(paths([menu(), menu()])).toEqual(['1.id']);
   });
 
@@ -99,7 +99,7 @@ describe('binding keys', () => {
       }),
     ];
 
-    expect(messages(clashing)[0]).toContain("duplicate binding key 'red'");
+    expect(messages(clashing)[0]).toContain("already uses 'red'");
     expect(paths(clashing)).toEqual(['0.bindings.1.key']);
   });
 
@@ -161,7 +161,7 @@ describe('the 100-character custom_id ceiling', () => {
     ];
 
     expect(messages(unaddressable)[0]).toContain(String(MAX_CUSTOM_ID_LENGTH));
-    expect(messages(unaddressable)[0]).toContain('Shorten the menu id or the key');
+    expect(messages(unaddressable)[0]).toContain('Shorten the menu ID or the key');
     expect(paths(unaddressable)).toEqual(['0.bindings.0.key']);
   });
 
@@ -187,7 +187,7 @@ describe('reaction menus', () => {
   test('need the id of the message they react to', () => {
     const unmatched = [menu({ kind: 'reaction' })];
 
-    expect(messages(unmatched)[0]).toContain('a reaction menu needs the id of the message');
+    expect(messages(unmatched)[0]).toContain('A reaction menu needs the ID of the message');
     expect(paths(unmatched)).toEqual(['0.messageId']);
   });
 

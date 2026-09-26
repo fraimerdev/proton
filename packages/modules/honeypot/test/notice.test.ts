@@ -217,10 +217,10 @@ describe('reconciling the notices when the config is saved', () => {
       `POST /channels/${LOUNGE}/messages`,
     ]);
     expect(texts(h.componentsIn(TRAP)).join('\n')).toContain(
-      'Everything you posted in the last day is deleted with you.',
+      'Your messages from the last day are deleted too.',
     );
     expect(texts(h.componentsIn(LOUNGE)).join('\n')).toContain(
-      'Everything you posted in the last day is deleted with you.',
+      'Your messages from the last day are deleted too.',
     );
     expect(h.remembered()[TRAP]?.messageId).not.toBe(h.remembered()[LOUNGE]?.messageId as string);
   });
@@ -338,7 +338,7 @@ describe('the notice is a Components V2 message', () => {
 
     const said = texts(h.componentsIn(TRAP));
     expect(said[0]).toBe('## 🍯  DO NOT SEND MESSAGES IN THIS CHANNEL');
-    expect(said.join('\n')).toContain('There is never a reason to post here.');
+    expect(said.join('\n')).toContain('There’s never a reason to post here.');
   });
 
   test('holds an action row with exactly one button, inside that same container', async () => {
@@ -465,9 +465,7 @@ describe('what the notice promises about the channel it sits in', () => {
 
     await h.saved({ config: armed({ action: 'timeout' }) });
 
-    expect(texts(h.componentsIn(TRAP)).join('\n')).toContain(
-      '**you are timed out and cannot speak**',
-    );
+    expect(texts(h.componentsIn(TRAP)).join('\n')).toContain('**you’re timed out**');
   });
 
   test('promises no purge for an action that deletes nothing', async () => {
@@ -476,8 +474,8 @@ describe('what the notice promises about the channel it sits in', () => {
     await h.saved({ config: armed({ action: 'kick' }) });
 
     const said = texts(h.componentsIn(TRAP)).join('\n');
-    expect(said).toContain('**you are removed from the server**');
-    expect(said).not.toContain('is deleted with you');
+    expect(said).toContain('**you’re removed from the server**');
+    expect(said).not.toContain('are deleted too');
   });
 
   test('promises no purge for a ban whose window purges nothing', async () => {
@@ -485,7 +483,7 @@ describe('what the notice promises about the channel it sits in', () => {
 
     await h.saved({ config: armed({ action: 'ban', deleteMessageSeconds: 0 }) });
 
-    expect(texts(h.componentsIn(TRAP)).join('\n')).not.toContain('is deleted with you');
+    expect(texts(h.componentsIn(TRAP)).join('\n')).not.toContain('are deleted too');
   });
 });
 
@@ -552,8 +550,8 @@ describe('the switches on the warning message', () => {
     const said = texts(h.componentsIn(TRAP)).join('\n');
 
     expect(said).not.toContain('spam bots');
-    expect(said).toContain('There is never a reason to post here.');
-    expect(said).toContain('you are removed from the server and let straight back in');
+    expect(said).toContain('There’s never a reason to post here.');
+    expect(said).toContain('you’re removed from the server, but can rejoin straight away');
   });
 });
 

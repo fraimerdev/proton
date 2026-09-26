@@ -100,7 +100,7 @@ export async function syncNativeRules(input: SyncInput): Promise<SyncOutcome> {
       moduleId: MODULE_ID,
       kind: KIND_OF[op.op],
       actorId: MODULE_ID,
-      reason: input.reason ?? 'Proton automod configuration',
+      reason: input.reason ?? 'Synced with Proton’s Automod settings',
       idempotencyKey: keyFor(ctx.guildId, op),
       dryRun: false,
       // Configuration, not moderation. A case row per rule edit would bury the ledger.

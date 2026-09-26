@@ -12,18 +12,29 @@ import { bindDeps, describeUnbound, type PhishingDeps } from './deps.ts';
 import { MODULE_ID } from './listener.ts';
 import type { BlocklistStats } from './store.ts';
 
+const NOT_MINE = 'This is a problem on my side, not with this server’s settings.';
+
 const NOT_WIRED =
-  'I can’t tell you the state of the phishing blocklist, and no links are being checked in ' +
-  'this server. This is a fault on my side, not a setting in this server.';
+  'I can’t check the phishing blocklist right now, and no links are being checked in this ' +
+  `server. ${NOT_MINE}`;
+
+const DESCRIPTION = 'Check the phishing blocklist and how this server handles a match.';
+
+const ON_MATCH: Record<PhishingConfig['action'], string> = {
+  none: 'log only',
+  timeout: 'timeout',
+  kick: 'kick',
+  ban: 'ban',
+};
 
 export function createPhishingStatusCommand(deps: PhishingDeps): CommandDefinition<PhishingConfig> {
   return {
     name: 'phishing',
-    description: 'Show the state of the phishing blocklist in this server.',
+    description: DESCRIPTION,
 
     data: new SlashCommandBuilder()
       .setName('phishing')
-      .setDescription('Show the state of the phishing blocklist in this server.')
+      .setDescription(DESCRIPTION)
       .setContexts(InteractionContextType.Guild)
 
       .setDefaultMemberPermissions(Permissions.ManageGuild)
@@ -97,9 +108,8 @@ async function describeStats(
 
     return {
       failure:
-        'I could not read the phishing blocklist, so I cannot tell you whether this server is ' +
-        'protected right now. Link checking may still be running. This is a fault on my side, ' +
-        'not a setting in this server.',
+        'I couldn’t read the phishing blocklist, so I can’t tell whether this server is ' +
+        `protected right now. Link checking may still be running. ${NOT_MINE}`,
     };
   }
 
@@ -108,15 +118,14 @@ async function describeStats(
   if (stats.size === 0) {
     lines.push(
       '**No blocklist is loaded, so no links are being checked.** Every feed failed, or the ' +
-        'cached list expired before a refresh succeeded. This is a fault on my side, not ' +
-        'a setting in this server.',
+        `cached list expired before a refresh succeeded. ${NOT_MINE}`,
     );
   } else {
     lines.push(`Links are checked against **${stats.size.toLocaleString('en')} domains**.`);
   }
 
   if (stats.refreshedAt === null) {
-    lines.push('There is no record of when this list was last refreshed.');
+    lines.push('There’s no record of when this list was last refreshed.');
   } else {
     const age = Date.now() - stats.refreshedAt.getTime();
     lines.push(
@@ -126,14 +135,14 @@ async function describeStats(
   }
 
   for (const failure of stats.failures) {
-    lines.push(`Feed failed: \`${failure.url}\` — ${failure.reason}`);
+    lines.push(`Feed failed: \`${failure.url}\` (${failure.reason})`);
   }
 
   if (!config.enabled) {
-    lines.push('Detection is switched **off** for this server in the Proton dashboard.');
+    lines.push('Link checking is **off** in this server.');
   } else {
     lines.push(
-      `On a match: **${config.action}**${
+      `On a match: **${ON_MATCH[config.action]}**${
         config.action === 'timeout' ? ` (${config.timeoutDuration})` : ''
       }. ` +
         `${config.blockDomains.length} extra blocked domain${

@@ -45,8 +45,8 @@ function timeoutMs(raw: string, what: string): number | { unconfigured: string }
   if (ms === null || ms <= 0) {
     return {
       unconfigured:
-        `Honeypot's ${what} is stored as '${raw}', which is not a readable duration. It must ` +
-        'be a number followed by s, m, h, d or w. Fix it in the Proton dashboard under Honeypot.',
+        `Honeypot's ${what} is '${raw}', which isn't a valid duration. Use a number followed by ` +
+        's, m, h, d or w, such as 10m, on the Honeypot page in the Proton dashboard.',
     };
   }
 

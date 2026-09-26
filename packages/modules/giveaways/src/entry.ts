@@ -92,11 +92,13 @@ export type JoinOutcome =
   | { outcome: 'rejected'; failures: string[] }
   | { outcome: 'blacklisted' }
   | { outcome: 'rate-limited' }
+  | { outcome: 'superseded' }
   | { outcome: 'closed' };
 
 export interface JoinInput {
   giveaway: Giveaway;
   ctx: MemberContext;
+  pressedAt: Date;
   requirements: readonly RequirementSpec[];
   multipliers: readonly MultiplierSpec[];
   blacklist: readonly { subjectType: 'user' | 'role'; subjectId: string }[];
@@ -189,11 +191,14 @@ export async function join(deps: JoinDeps, input: JoinInput): Promise<JoinOutcom
     totalEntries,
     breakdown: weight.breakdown,
     memberSnapshot: snapshotOf(ctx),
+    pressedAt: input.pressedAt,
   });
 
   if (entered === 'already-entered') {
     return { outcome: 'already-entered', totalEntries };
   }
+
+  if (entered === 'superseded') return { outcome: 'superseded' };
 
   // The insert carries its own status predicate, so it can refuse a giveaway that stopped running
   // between the check at the top of this function and the write. Reporting that as an entry would
@@ -209,38 +214,44 @@ export async function join(deps: JoinDeps, input: JoinInput): Promise<JoinOutcom
   };
 }
 
+export const BLOCKED_FROM_GIVEAWAYS =
+  'You’re blocked from entering giveaways in this server. Ask a server admin why.';
+
 export function describeJoin(outcome: JoinOutcome, title: string): string {
   switch (outcome.outcome) {
     case 'entered': {
-      const sum = outcome.breakdown.join(' ');
-      const bypass = outcome.bypassed ? ' Your role skipped the requirements.' : '';
+      const sum = outcome.breakdown.join(', ');
+      const bypass = outcome.bypassed ? ' Your role let you skip the requirements.' : '';
 
       return outcome.totalEntries === 1
-        ? `You are in the draw for **${title}**. Good luck.${bypass}`
-        : `You are in the draw for **${title}** with **${outcome.totalEntries} entries** — ` +
-            `${sum}.${bypass}`;
+        ? `You’re in the draw for **${title}**. Good luck.${bypass}`
+        : `You’re in the draw for **${title}** with **${outcome.totalEntries} entries** ` +
+            `(${sum}). Good luck.${bypass}`;
     }
 
     case 'already-entered':
       return (
-        `You are already in the draw for **${title}** with ` +
-        `${outcome.totalEntries === 1 ? 'one entry' : `${outcome.totalEntries} entries`}.`
+        `You’re already in the draw for **${title}** with ` +
+        `${outcome.totalEntries === 1 ? '1 entry' : `${outcome.totalEntries} entries`}.`
       );
 
     // Every failed requirement, never a bare "you don't qualify" (GIVEAWAYS.md §6.4).
     case 'rejected':
       return [
-        `You are not in the draw for **${title}** yet. Here is what is missing:`,
+        `You’re not in the draw for **${title}** yet. Here’s what you’re missing:`,
         ...outcome.failures.map((failure) => `• ${failure}`),
       ].join('\n');
 
     case 'blacklisted':
-      return `You are not eligible for giveaways in this server. Ask a server admin why.`;
+      return BLOCKED_FROM_GIVEAWAYS;
 
     case 'rate-limited':
-      return 'You already pressed that. Give it a second and check again.';
+      return 'You just pressed that. Give it a moment, then try again.';
+
+    case 'superseded':
+      return `You left **${title}** after pressing “Enter giveaway”, so you’re not in the draw.`;
 
     case 'closed':
-      return `**${title}** is not accepting entries any more.`;
+      return `**${title}** isn’t accepting entries any more.`;
   }
 }

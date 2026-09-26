@@ -30,8 +30,8 @@ describe('running out of attempts', () => {
 
     await spendTheLastAttempt(h, LAST_CHANCE);
 
-    expect(h.lastTold()).toContain('You are out of attempts.');
-    expect(h.lastTold()).toContain('Press Verify to start over');
+    expect(h.lastTold()).toContain('You’re out of attempts.');
+    expect(h.lastTold()).toContain('Press the verify button to try again.');
     expect(h.discordCalls()).toEqual([]);
     expect(await h.captcha.get(GUILD, MEMBER)).toBeNull();
   });
@@ -99,7 +99,7 @@ describe('running out of attempts', () => {
     const error = h.logs.find((entry) => entry.level === 'error');
     expect(error?.message).toContain('Quarantine role');
     expect(error?.message).toContain('Proton dashboard');
-    expect(h.lastTold()).toContain('You are out of attempts.');
+    expect(h.lastTold()).toContain('You’re out of attempts.');
   });
 
   test('tells the member before the kick lands — a kick closes the only channel it has', async () => {
@@ -144,7 +144,7 @@ describe('running out of attempts', () => {
     const error = h.logs.find((entry) => entry.level === 'error');
     expect(error?.message).toContain(MEMBER);
     expect(error?.message).toContain('kicked');
-    expect(error?.message).toContain("Discord wouldn't let me do that");
+    expect(error?.message).toContain('Discord refused that');
   });
 });
 

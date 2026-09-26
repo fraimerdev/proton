@@ -32,6 +32,7 @@ export {
   type AutomodSettings,
   automodConfigSchema,
   automodDefaultConfig,
+  CHECK_LABELS,
   DELETE_FROM,
   deletesAt,
   type KeywordPreset,

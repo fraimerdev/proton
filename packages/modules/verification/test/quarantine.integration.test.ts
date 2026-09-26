@@ -102,7 +102,7 @@ describe('/quarantine add and /quarantine remove', () => {
     expect(record?.priorRoleIds).toEqual([]);
 
     expect(h.discordCalls().map((c) => c.method)).toEqual(['PUT']);
-    expect(h.replyContent()).toContain('no roles beyond @everyone');
+    expect(h.replyContent()).toContain('They had no other roles');
 
     await h.run('quarantine', subcommand('remove', [userOption('user', BARE)]), {
       config: QUARANTINED,
@@ -110,7 +110,7 @@ describe('/quarantine add and /quarantine remove', () => {
 
     expect(sorted(h.rolesOf(BARE))).toEqual([EVERYONE_ROLE]);
     expect(await h.quarantine.get(GUILD, BARE)).toBeNull();
-    expect(h.replyContent()).toContain('exactly as they were');
+    expect(h.replyContent()).toContain('only the quarantine role was removed');
   });
 
   test('refuses to quarantine somebody already quarantined, so the record survives', async () => {
@@ -138,7 +138,7 @@ describe('/quarantine add and /quarantine remove', () => {
     });
 
     expect(h.lastStatus()?.color).toBe(STATUS_SUCCESS_COLOUR);
-    expect(h.lastStatus()?.description).toContain(`<@${MEMBER}> has been quarantined`);
+    expect(h.lastStatus()?.description).toContain(`Quarantined <@${MEMBER}>`);
 
     await h.run('quarantine', subcommand('add', [userOption('user', MEMBER)]), {
       config: QUARANTINED,
@@ -177,7 +177,7 @@ describe('/quarantine add and /quarantine remove', () => {
 
     expect(h.replyContent()).toContain(MID_ROLE);
     expect(h.replyContent()).toContain('no longer exist');
-    expect(h.replyContent()).toContain('KEPT');
+    expect(h.replyContent()).toContain('I kept the quarantine record');
     expect(await h.quarantine.get(GUILD, MEMBER)).not.toBeNull();
   });
 
@@ -213,6 +213,6 @@ describe('/quarantine add and /quarantine remove', () => {
       config: { enabled: false },
     });
 
-    expect(h.replyContent()).toContain('disabled');
+    expect(h.replyContent()).toContain('Verification is off in this server');
   });
 });

@@ -1,4 +1,4 @@
-import type { CardDeps, CardDescriptorInput } from '@proton/cards';
+import type { CardBadge, CardDeps, CardDescriptorInput } from '@proton/cards';
 import type { GuildState } from '@proton/core';
 import type { PlaceholderEnvironment } from '@proton/core/placeholders';
 import type { ActivityStore } from './activity.ts';
@@ -29,6 +29,7 @@ export interface LevelingDeps {
   userProfile?: (
     userId: string,
   ) => Promise<{ displayName: string; avatarHash: string | null } | null>;
+  badges?: (guildId: string, userId: string) => Promise<{ badges: CardBadge[]; count: number }>;
   placeholders?: PlaceholderEnvironment;
 }
 

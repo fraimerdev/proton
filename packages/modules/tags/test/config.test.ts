@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { formatCommandLabel } from '@proton/core';
 import { normalisePrefix } from '../src/autocomplete.ts';
 import { renderList } from '../src/commands.ts';
 import { normaliseTagName, TAG_NAME_MAX, tagsConfigSchema } from '../src/config.ts';
@@ -57,6 +58,16 @@ describe('normalisePrefix', () => {
 describe('renderList', () => {
   test('says the server has none rather than showing an empty page', () => {
     expect(renderList([], 1, 0, 25)).toContain('no tags yet');
+    expect(renderList([], 1, 0, 25)).toContain('Create one with `/tags create`.');
+  });
+
+  test('names /tags create as this server has renamed it', () => {
+    const labels = {
+      commandLabel: (key: string, path?: string) =>
+        formatCommandLabel(key, path, key === 'tags' ? 'snippets' : undefined),
+    };
+
+    expect(renderList([], 1, 0, 25, labels)).toContain('Create one with `/snippets create`.');
   });
 
   test('reports the page and the total', () => {

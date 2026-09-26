@@ -55,6 +55,7 @@ async function seeded(entrants: number, over: Partial<CreateGiveawayInput> = {})
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: { roleIds: [], joinedAt: null, premiumSince: null, hasAvatar: true },
+      pressedAt: NOW,
     });
   }
 
@@ -157,6 +158,7 @@ describe('a bonus granted before the member enters', () => {
           Awaited<ReturnType<typeof store.get>>
         >,
         ctx: memberContext(newcomer),
+        pressedAt: NOW,
         requirements: [],
         multipliers: [],
         blacklist: [],
@@ -239,7 +241,7 @@ describe('leaving a giveaway', () => {
   test('a leaver drops out of the count and out of the draw', async () => {
     const store = await seeded(3);
 
-    expect(await store.leave('g1', userId(2), NOW)).toBe(true);
+    expect(await store.leave('g1', userId(2), NOW)).toBe('left');
     expect(await store.entrantCount('g1')).toBe(2);
 
     const drawn = await drawGiveaway(deps(store), {
@@ -263,13 +265,13 @@ describe('leaving a giveaway', () => {
   test('leaving twice reports nothing left to do', async () => {
     const store = await seeded(3);
 
-    expect(await store.leave('g1', userId(2), NOW)).toBe(true);
-    expect(await store.leave('g1', userId(2), NOW)).toBe(false);
+    expect(await store.leave('g1', userId(2), NOW)).toBe('left');
+    expect(await store.leave('g1', userId(2), NOW)).toBe('not-entered');
   });
 
   test('somebody who never entered cannot leave', async () => {
     const store = await seeded(3);
 
-    expect(await store.leave('g1', userId(99), NOW)).toBe(false);
+    expect(await store.leave('g1', userId(99), NOW)).toBe('not-entered');
   });
 });

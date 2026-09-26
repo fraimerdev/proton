@@ -121,7 +121,7 @@ const COUNTER_DEFINITIONS: readonly PlaceholderDefinitionInput[] = [
 ];
 
 const NO_MEMBER_COUNT =
-  'Proton has no member count cached for this server yet; it arrives the next time Proton connects to Discord';
+  'no member count is cached for this server yet, and it arrives with the next connection to Discord';
 
 function counted(value: number | null): ResolvedValue {
   return value === null ? v.unavailable(NO_MEMBER_COUNT) : v.integer(value);

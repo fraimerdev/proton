@@ -1,4 +1,9 @@
-import { MAX_AUTOCOMPLETE_CHOICE_LENGTH, MESSAGE_CONTENT_MAX } from '@proton/core';
+import {
+  labelOf,
+  MAX_AUTOCOMPLETE_CHOICE_LENGTH,
+  MESSAGE_CONTENT_MAX,
+  type ModuleContext,
+} from '@proton/core';
 import type { Reminder } from './store.ts';
 
 const PENDING_CONTENT_MAX = 120;
@@ -33,31 +38,33 @@ function clip(content: string, max: number): string {
 }
 
 export function reminderLabel(reminder: Reminder, now: number): string {
-  const prefix = `${relativeLabel(reminder.remindAt.getTime() - now)} — `;
+  const prefix = `${relativeLabel(reminder.remindAt.getTime() - now)}: `;
 
   return prefix + clip(collapse(reminder.content), MAX_AUTOCOMPLETE_CHOICE_LENGTH - prefix.length);
 }
 
-export function renderPending(pending: readonly Reminder[], total: number): string {
+export function renderPending(
+  pending: readonly Reminder[],
+  total: number,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
+): string {
   if (total === 0) {
     return (
-      'You have no reminders waiting in this server. `/remind 2h take the bread out` sets one, ' +
-      'and I post it right where you set it.'
+      'You have no reminders waiting in this server. ' +
+      `Set one with \`${labelOf(labels, 'remind')}\`, and I’ll post it in the channel where ` +
+      'you set it.'
     );
   }
 
   const trimmed = pending.length < total ? `, showing the ${pending.length} soonest` : '';
   const lines = pending.map(
     (reminder) =>
-      `• <t:${unixSeconds(reminder.remindAt)}:R> — ${clip(collapse(reminder.content), PENDING_CONTENT_MAX)}`,
+      `• <t:${unixSeconds(reminder.remindAt)}:R>: ${clip(collapse(reminder.content), PENDING_CONTENT_MAX)}`,
   );
 
-  return `**Your reminders** — ${total} waiting${trimmed}\n${lines.join('\n')}`;
+  return `**Your reminders** (${total} waiting${trimmed})\n${lines.join('\n')}`;
 }
 
 export function renderDelivery(userId: string, content: string): string {
-  return `<@${userId}> you asked me to remind you: ${collapse(content)}`.slice(
-    0,
-    MESSAGE_CONTENT_MAX,
-  );
+  return `<@${userId}>, here’s your reminder: ${collapse(content)}`.slice(0, MESSAGE_CONTENT_MAX);
 }

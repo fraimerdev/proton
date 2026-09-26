@@ -66,8 +66,8 @@ export function planRestore(input: {
       skipped.push({
         roleId,
         reason:
-          `it sits at position ${role.position} and my own highest role is at position ` +
-          `${botPosition}. Discord only lets me assign roles below my own — drag Proton's ` +
+          `it sits at position ${role.position}, and Proton's highest role is at position ` +
+          `${botPosition}. Discord only lets Proton assign roles below its own, so drag Proton's ` +
           'role above it in Server Settings → Roles.',
       });
       continue;

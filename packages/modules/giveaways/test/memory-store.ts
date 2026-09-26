@@ -15,6 +15,7 @@ import type {
   GiveawayStats,
   GiveawayStatus,
   GiveawayStore,
+  LeaveOutcome,
   ListGiveawaysQuery,
   MultiplierRow,
   NewBonus,
@@ -211,33 +212,50 @@ export class MemoryGiveawayStore implements GiveawayStore {
     const existing = this.entries.find(
       (row) => row.giveawayId === entry.giveawayId && row.userId === entry.userId,
     );
-    if (existing) return 'already-entered';
+    const running = this.giveaways.get(entry.giveawayId)?.status === 'running';
 
-    // Mirrors the Drizzle store's insert-time status predicate, so a test cannot pass here and
-    // fail in Postgres.
-    if (this.giveaways.get(entry.giveawayId)?.status !== 'running') return 'closed';
+    if (!existing) {
+      if (!running) return 'closed';
 
-    this.entries.push({
-      giveawayId: entry.giveawayId,
-      userId: entry.userId,
-      baseEntries: entry.baseEntries,
-      totalEntries: entry.totalEntries,
-      breakdown: entry.breakdown,
-      memberSnapshot: entry.memberSnapshot,
-      joinedAt: new Date(),
-      revalidatedAt: null,
-      disqualifiedAt: null,
-      disqualifyReason: null,
-      leftAt: null,
-    });
+      this.entries.push({
+        giveawayId: entry.giveawayId,
+        userId: entry.userId,
+        baseEntries: entry.baseEntries,
+        totalEntries: entry.totalEntries,
+        breakdown: entry.breakdown,
+        memberSnapshot: entry.memberSnapshot,
+        joinedAt: entry.pressedAt,
+        revalidatedAt: null,
+        disqualifiedAt: null,
+        disqualifyReason: null,
+        leftAt: null,
+      });
 
-    return 'entered';
+      return 'entered';
+    }
+
+    if (existing.leftAt === null) return 'already-entered';
+
+    if (running && existing.leftAt < entry.pressedAt && existing.disqualifiedAt === null) {
+      existing.baseEntries = entry.baseEntries;
+      existing.totalEntries = entry.totalEntries;
+      existing.breakdown = entry.breakdown;
+      existing.memberSnapshot = entry.memberSnapshot;
+      existing.joinedAt = entry.pressedAt;
+      existing.revalidatedAt = null;
+      existing.leftAt = null;
+
+      return 'entered';
+    }
+
+    return running && existing.leftAt >= entry.pressedAt ? 'superseded' : 'closed';
   }
 
   async entry(giveawayId: string, userId: string): Promise<EntrantRow | null> {
     this.#record('entry');
     const row = this.entries.find(
-      (entry) => entry.giveawayId === giveawayId && entry.userId === userId,
+      (entry) =>
+        entry.giveawayId === giveawayId && entry.userId === userId && entry.leftAt === null,
     );
 
     return row
@@ -705,7 +723,7 @@ export class MemoryGiveawayStore implements GiveawayStore {
     return { ...patched };
   }
 
-  async leave(giveawayId: string, userId: string, at: Date): Promise<boolean> {
+  async leave(giveawayId: string, userId: string, pressedAt: Date): Promise<LeaveOutcome> {
     const row = this.entries.find(
       (entry) =>
         entry.giveawayId === giveawayId &&
@@ -713,10 +731,11 @@ export class MemoryGiveawayStore implements GiveawayStore {
         entry.leftAt === null &&
         entry.disqualifiedAt === null,
     );
-    if (!row) return false;
+    if (!row) return 'not-entered';
+    if (row.joinedAt > pressedAt) return 'superseded';
 
-    row.leftAt = at;
-    return true;
+    row.leftAt = pressedAt;
+    return 'left';
   }
 
   async resolve(guildId: string, reference: string): Promise<Giveaway | null> {

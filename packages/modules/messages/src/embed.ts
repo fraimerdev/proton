@@ -145,8 +145,8 @@ function colourFailure(subject: string, color: number | undefined): string | nul
 
   if (!Number.isInteger(color) || color < 0 || color > EMBED_COLOR_MAX) {
     return (
-      `${subject} has a colour of ${color}, which is not a colour Discord takes — it wants a ` +
-      `whole number from 0 to ${EMBED_COLOR_MAX} (#000000 to #ffffff).`
+      `${subject} has a colour of ${color}, which isn’t a colour Discord accepts. Use a whole ` +
+      `number from 0 to ${EMBED_COLOR_MAX} (#000000 to #ffffff).`
     );
   }
 
@@ -182,8 +182,8 @@ export function buildEmbed(
     return {
       ok: false,
       humanReason:
-        `${subject} has nothing in it. An embed needs at least a title, a description, one ` +
-        'field, a footer, an author or an image before Discord will accept it.',
+        `${subject} has nothing in it. Add at least a title, a description, a field, a footer, ` +
+        'an author or an image.',
     };
   }
 
@@ -246,8 +246,8 @@ export function parseEmbedColour(raw: string | undefined): ColourResult {
   return {
     ok: false,
     humanReason:
-      `I could not read “${value}” as a colour. Use a six-digit hex code like #5865F2 or ` +
-      '5865F2, or leave the colour blank.',
+      `Couldn’t read “${value}” as a colour. Use a six-digit hex code like #5865F2, or leave ` +
+      'the colour blank.',
   };
 }
 
@@ -261,8 +261,8 @@ export function parseEmbedLink(raw: string | undefined, what: string): LinkResul
     return {
       ok: false,
       humanReason:
-        `“${value}” is not a link I can put in ${what}. Discord needs a complete address ` +
-        'starting with http:// or https://.',
+        `“${value}” isn’t a link I can put in ${what}. Use a full address starting with ` +
+        'http:// or https://.',
     };
   }
 

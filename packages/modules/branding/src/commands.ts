@@ -3,6 +3,7 @@ import {
   type CommandDefinition,
   errorStatus,
   INTERACTION_CALLBACK_DEFERRED_MESSAGE,
+  labelOf,
   Permissions,
   type StatusBody,
   successStatus,
@@ -20,7 +21,8 @@ import { applyNameStyle } from './name-style-apply.ts';
 import { impersonationReason } from './names.ts';
 import { desiredProfile, readImage } from './profile.ts';
 
-const DESCRIPTION = 'Re-apply how Proton looks in this server, and report what Discord said.';
+const DESCRIPTION =
+  'Re-apply Proton’s nickname and profile in this server and see what Discord accepted.';
 
 function describeStyle(config: BrandingConfig): string {
   const style = config.displayNameStyle;
@@ -98,7 +100,7 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
       if (!ctx.config.enabled) {
         await replyNow(
           ctx,
-          errorStatus('Branding is disabled in this server, so Proton is using its own name.'),
+          errorStatus('Branding is off in this server, so nothing was re-applied.'),
         );
         return;
       }
@@ -107,8 +109,8 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
         await replyNow(
           ctx,
           errorStatus(
-            'Branding is on but nothing is set yet. Add a nickname, avatar, banner, bio or display ' +
-              'name style in the Proton dashboard.',
+            'Branding is on, but nothing is set yet. Add a nickname, avatar, banner, bio or ' +
+              'display name style in the Proton dashboard.',
           ),
         );
         return;
@@ -161,13 +163,13 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
         if (hash === null) continue;
 
         if (!deps.assets) {
-          problems.push(`The ${field} could not be read: Proton has no asset store bound.`);
+          problems.push(`The ${field} couldn’t be read right now.`);
           continue;
         }
 
         const image = await readImage(ctx.guildId, field, deps.assets);
         if (image.dataUri === undefined) {
-          problems.push(`The ${field} could not be read: ${image.failure}.`);
+          problems.push(`The ${field} couldn’t be read: ${image.failure}.`);
           continue;
         }
 
@@ -179,7 +181,7 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
         moduleId: MODULE_ID,
         kind: 'set_bot_profile',
         actorId: BRANDING_ACTOR,
-        reason: `Re-applied by ${ctx.userId} with /branding`,
+        reason: `Re-applied by ${ctx.userId} with ${labelOf(ctx, 'branding')}`,
         payload,
         dryRun: false,
         record: false,
@@ -196,7 +198,7 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
           moduleId: MODULE_ID,
           kind: 'set_bot_nickname',
           actorId: BRANDING_ACTOR,
-          reason: `Re-applied by ${ctx.userId} with /branding`,
+          reason: `Re-applied by ${ctx.userId} with ${labelOf(ctx, 'branding')}`,
           payload: { nickname: desired.nickname },
           dryRun: false,
           record: false,
@@ -227,7 +229,7 @@ export function createBrandingCommand(deps: BrandingDeps = {}): CommandDefinitio
           ...(problems.length === 0
             ? successStatus(`Re-applied.\n${head}`)
             : errorStatus(
-                `${head}\n\nSome of it did not go through:\n${problems
+                `${head}\n\nSome of it didn’t go through:\n${problems
                   .map((p) => `- ${p}`)
                   .join('\n')}`,
               )),

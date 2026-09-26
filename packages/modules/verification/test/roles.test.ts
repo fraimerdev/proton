@@ -53,16 +53,15 @@ describe('checkGrantable — I8 hierarchy for the role, not the member', () => {
     expect(checkGrantable(GUILD_STATE, MID, 'member')).toEqual({ ok: true });
   });
 
-  test('refuses a role above the bot, naming both positions and the fix', () => {
+  test('refuses a role above the bot, naming the role and the fix', () => {
     const check = checkGrantable(GUILD_STATE, ABOVE, 'member');
 
     expect(check.ok).toBe(false);
     if (check.ok) throw new Error('unreachable');
-    expect(check.reason).toContain('position 9');
-    expect(check.reason).toContain('position 6');
+    expect(check.reason).toContain('at or above my highest role');
     expect(check.reason).toContain('Server Settings → Roles');
 
-    expect(check.reason).toContain(ABOVE);
+    expect(check.reason).toContain(`<@&${ABOVE}>`);
   });
 
   test('refuses a role at the bot’s own position — Discord requires strictly lower', () => {
@@ -110,8 +109,8 @@ describe('planQuarantine', () => {
     });
 
     expect(plan.steps).toEqual([
-      { kind: 'remove_role', roleId: MID, what: `removing role ${MID}` },
-      { kind: 'remove_role', roleId: LOW, what: `removing role ${LOW}` },
+      { kind: 'remove_role', roleId: MID, what: `removing <@&${MID}>` },
+      { kind: 'remove_role', roleId: LOW, what: `removing <@&${LOW}>` },
       { kind: 'add_role', roleId: QUARANTINE, what: 'applying the quarantine role' },
     ]);
   });
@@ -159,8 +158,8 @@ describe('planRelease', () => {
     });
 
     expect(plan.steps).toEqual([
-      { kind: 'add_role', roleId: MID, what: `restoring role ${MID}` },
-      { kind: 'add_role', roleId: LOW, what: `restoring role ${LOW}` },
+      { kind: 'add_role', roleId: MID, what: `giving back <@&${MID}>` },
+      { kind: 'add_role', roleId: LOW, what: `giving back <@&${LOW}>` },
       { kind: 'remove_role', roleId: QUARANTINE, what: 'removing the quarantine role' },
     ]);
   });
@@ -188,7 +187,7 @@ describe('planRelease', () => {
 
     expect(plan.vanishedRoleIds).toEqual(['410000000000000099']);
     expect(plan.steps.filter((step) => step.kind === 'add_role')).toEqual([
-      { kind: 'add_role', roleId: MID, what: `restoring role ${MID}` },
+      { kind: 'add_role', roleId: MID, what: `giving back <@&${MID}>` },
     ]);
   });
 

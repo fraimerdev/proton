@@ -30,6 +30,6 @@ export function canManage(
 export function refuseManage(giveaway: Giveaway | null): string {
   return giveaway === null
     ? 'You need a giveaway manager role to do that here.'
-    : `**${giveaway.title}** was set up by <@${giveaway.hostId}>. You need a giveaway manager ` +
+    : `**${giveaway.title}** belongs to <@${giveaway.hostId}>. You need a giveaway manager ` +
         'role to change somebody else’s giveaway.';
 }

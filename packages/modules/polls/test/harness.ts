@@ -2,6 +2,7 @@ import {
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
+  type CommandLabeler,
   createCommandOptions,
   type DedupeStore,
   DefaultActionExecutor,
@@ -183,6 +184,7 @@ export interface RunOverrides {
   deps: PollsDeps;
   idempotencyKey: string;
   botPermissions: bigint;
+  commandLabel: CommandLabeler;
 
   withoutScheduler: boolean;
   scheduleOutcome: ScheduleOutcome;
@@ -355,6 +357,7 @@ export function harness(seed: PollsDeps = {}): Harness {
         options: createCommandOptions([{ name: subcommand, type: OptionType.Subcommand, options }]),
         interaction: { id: INTERACTION, token: 'interaction-token' },
         idempotencyKey: overrides.idempotencyKey ?? newId(),
+        ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
         ...scheduleFns(overrides),
       };
 

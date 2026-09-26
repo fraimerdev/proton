@@ -122,6 +122,7 @@ async function drawn(over: Partial<CreateGiveawayInput> = {}, entrants = 3) {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: new Date(NOW),
     });
   }
 
@@ -211,16 +212,16 @@ describe('the winner message', () => {
 
     const linked = await publish(await drawn({ prizes }), env);
     expect(linked.dms().map((dm) => dm.content)).toEqual([
-      `You won **Nitro**! Congratulations. ${LINK}`,
-      `You won **A *mug***! Congratulations. ${LINK}`,
-      `You won **A *mug***! Congratulations. ${LINK}`,
+      `Congratulations! You won **Nitro**. ${LINK}`,
+      `Congratulations! You won **A *mug***. ${LINK}`,
+      `Congratulations! You won **A *mug***. ${LINK}`,
     ]);
 
     const unlinked = await publish(await drawn({ messageId: null }), env);
     expect(unlinked.dms().map((dm) => dm.content)).toEqual([
-      'You won **Nitro Classic**! Congratulations.',
-      'You won **Nitro Classic**! Congratulations.',
-      'You won **Nitro Classic**! Congratulations.',
+      'Congratulations! You won **Nitro Classic**.',
+      'Congratulations! You won **Nitro Classic**.',
+      'Congratulations! You won **Nitro Classic**.',
     ]);
 
     expect(calls).toEqual({ server: 0, bot: 0, user: 0 });
@@ -408,7 +409,7 @@ describe('the winner message', () => {
     const h = await publish(await drawn({ winMessage: '{server.name}' }, 1));
 
     expect(h.dms().map((dm) => dm.content)).toEqual([
-      `You won **Nitro Classic**! Congratulations. ${LINK}`,
+      `Congratulations! You won **Nitro Classic**. ${LINK}`,
     ]);
     expect(h.warnings).toHaveLength(1);
     expect(h.warnings[0]).toContain('came out empty');

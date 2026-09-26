@@ -1,6 +1,6 @@
 import type { ActionKind, EventListener, EventType } from '@proton/core';
 import type { AutomodHit } from './checks.ts';
-import { type AutomodConfig, readSettings } from './config.ts';
+import { type AutomodConfig, CHECK_LABELS, readSettings } from './config.ts';
 import { type AutomodDeps, bindDeps, describeUnbound, MODULE_ID } from './deps.ts';
 import { isExempt } from './exempt.ts';
 import { readMessage } from './message.ts';
@@ -14,13 +14,14 @@ export const AUTOMOD_EVENT_TYPES: EventType[] = ['message.created', 'message.upd
 const WHAT_THEY_GOT: Partial<Record<ActionKind, string>> = {
   warn: 'They were warned.',
   timeout: 'They were timed out.',
-  kick: 'They were removed from the server.',
+  kick: 'They were kicked.',
   ban: 'They were banned.',
 };
 
 function describe(hit: AutomodHit, also: readonly AutomodHit[]): string {
-  const extra = also.length > 0 ? ` It also matched ${also.map((h) => h.check).join(', ')}.` : '';
-  return `**${hit.check}** (${hit.severity}) — ${hit.humanReason}.${extra}`;
+  const extra =
+    also.length > 0 ? ` It also matched ${also.map((h) => CHECK_LABELS[h.check]).join(', ')}.` : '';
+  return `**${CHECK_LABELS[hit.check]}** (${hit.severity} severity): ${hit.humanReason}.${extra}`;
 }
 
 export function createAutomodListener(deps: AutomodDeps): EventListener<AutomodConfig> {

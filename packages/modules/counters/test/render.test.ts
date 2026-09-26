@@ -257,7 +257,7 @@ describe('renderReport', () => {
   test('counts one channel in the singular', () => {
     const text = renderReport(outcome({ total: 1, unchanged: 1 }));
 
-    expect(text).toContain('1 counter channel —');
+    expect(text).toContain('1 counter channel:');
   });
 
   test('explains a skip instead of hiding it', () => {
@@ -327,7 +327,7 @@ describe('countersConfigSchema', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toContain('cannot share a channel');
+    expect(result.error?.issues[0]?.message).toContain('already used by another counter');
   });
 
   test('caps the list at the highest tier’s allowance', () => {
@@ -384,7 +384,8 @@ describe('countersConfigSchema', () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toContain('cannot share an id');
+    expect(result.error?.issues[0]?.path).toEqual(['counters', 1, 'id']);
+    expect(result.error?.issues[0]?.message).toContain('already used by another counter');
   });
 
   test('does not count two channel-less counters as sharing a channel', () => {

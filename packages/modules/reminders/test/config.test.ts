@@ -66,11 +66,11 @@ describe('resolveDelay', () => {
     expect(resolveDelay('365d', config).ok).toBe(true);
   });
 
-  test('tells an admin which setting to fix when the bounds are unreadable', () => {
+  test('names the unreadable limits and saves nothing when the bounds are unreadable', () => {
     const result = resolveDelay('2h', { ...config, minDuration: 'soon' });
 
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.humanReason).toContain('soon');
-    expect(result.ok === false && result.humanReason).toContain('dashboard');
+    expect(result.ok === false && result.humanReason).toContain('“soon”');
+    expect(result.ok === false && result.humanReason).toContain('Nothing was saved.');
   });
 });

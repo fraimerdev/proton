@@ -1,4 +1,6 @@
 import {
+  type ActionExecutor,
+  type ActionRequest,
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
@@ -32,6 +34,9 @@ export const OWNER = '200000000000000001';
 export const BOT = '300000000000000001';
 export const ADMIN = '100000000000000001';
 export const COMMAND_CHANNEL = '500000000000000001';
+export const APPLICATION = '700000000000000001';
+export const INTERACTION_ID = '600000000000000001';
+export const INTERACTION_TOKEN = 'interaction-token';
 
 export const HIDDEN_CHANNEL = '500000000000000002';
 
@@ -207,29 +212,89 @@ export interface LogLine {
   message: string;
 }
 
+export type Port = 'readLayout' | 'store.save' | 'store.get' | 'store.list' | 'store.prune';
+
 export interface HarnessOptions {
   store?: BackupStore;
 
   layout?: GuildLayout | null;
 
   omit?: Array<keyof BackupDeps>;
+  failing?: Port[];
   botPermissions?: bigint;
   backupId?: string;
+  applicationId?: string | null;
+  eventId?: string;
+  commandLabel?: (key: string, path?: string) => string;
+}
+
+export interface AnswerData {
+  content?: string;
+  embeds?: { description?: string; color?: number }[];
+  flags?: number;
 }
 
 export interface Harness {
   store: BackupStore;
   logs: LogLine[];
   deps: BackupDeps;
+  requests: ActionRequest[];
+  restCalls: RestRequestOptions[];
+  timeline: string[];
 
-  current: { layout: GuildLayout | null };
+  current: { layout: GuildLayout | null; failing: Set<Port> };
   run(options: RawOption[], config?: Partial<BackupConfig>): Promise<void>;
+  initialCallbacks(): ActionRequest[];
+  followups(): ActionRequest[];
+  answers(): AnswerData[];
   replyContent(): string | null;
   replyEmbed(): { description?: string; color?: number } | null;
-  replyData():
-    | { content?: string; embeds?: { description?: string; color?: number }[] }
-    | undefined;
+  replyData(): AnswerData | undefined;
   logged(level: LogLine['level'], fragment: string): boolean;
+}
+
+const INITIAL_CALLBACKS = new Set([4, 5, 6, 7, 9]);
+
+export function payloadOf(request: ActionRequest | undefined): Record<string, unknown> {
+  return (request?.payload ?? {}) as Record<string, unknown>;
+}
+
+export function portFailure(port: Port): string {
+  return `${port} is unreachable`;
+}
+
+function tracked(store: BackupStore, timeline: string[], failing: Set<Port>): BackupStore {
+  const reach = (port: Port) => {
+    timeline.push(port);
+    if (failing.has(port)) throw new Error(portFailure(port));
+  };
+
+  return {
+    save: async (record) => {
+      reach('store.save');
+      return store.save(record);
+    },
+    get: async (guildId, backupId) => {
+      reach('store.get');
+      return store.get(guildId, backupId);
+    },
+    list: async (guildId, limit) => {
+      reach('store.list');
+      return store.list(guildId, limit);
+    },
+    prune: async (guildId, keep) => {
+      reach('store.prune');
+      return store.prune(guildId, keep);
+    },
+  };
+}
+
+function answerOf(call: RestRequestOptions): AnswerData | undefined {
+  if (call.path.startsWith('/interactions/')) {
+    return (call.body as { data?: AnswerData } | undefined)?.data;
+  }
+  if (call.path.startsWith('/webhooks/')) return call.body as AnswerData | undefined;
+  return undefined;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -237,11 +302,16 @@ export function harness(options: HarnessOptions = {}): Harness {
   const recorder = new MemoryRecorder();
   const dedupe = new MemoryDedupe();
   const logs: LogLine[] = [];
+  const requests: ActionRequest[] = [];
+  const timeline: string[] = [];
   const store = options.store ?? new MemoryBackupStore();
   const omit = new Set<keyof BackupDeps>(options.omit ?? []);
+  const applicationId = options.applicationId === undefined ? APPLICATION : options.applicationId;
   const current = {
     layout: options.layout === undefined ? fixtureLayout('guildCreate') : options.layout,
+    failing: new Set<Port>(options.failing ?? []),
   };
+  let eventId = options.eventId ?? newId();
 
   const roles = new Map<string, GuildRole>([
     [EVERYONE_ROLE, { id: EVERYONE_ROLE, permissions: Permissions.ViewChannel, position: 0 }],
@@ -278,8 +348,14 @@ export function harness(options: HarnessOptions = {}): Harness {
     now: () => NOW,
     newBackupId: () => options.backupId ?? '01JBACKUP00000000000000001',
   };
-  if (!omit.has('store')) deps.store = store;
-  if (!omit.has('readLayout')) deps.readLayout = async () => current.layout;
+  if (!omit.has('store')) deps.store = tracked(store, timeline, current.failing);
+  if (!omit.has('readLayout')) {
+    deps.readLayout = async () => {
+      timeline.push('readLayout');
+      if (current.failing.has('readLayout')) throw new Error(portFailure('readLayout'));
+      return current.layout;
+    };
+  }
 
   const executor = new DefaultActionExecutor({
     dedupe,
@@ -298,32 +374,72 @@ export function harness(options: HarnessOptions = {}): Harness {
     },
   });
 
+  const scoped = executor.scoped({
+    channelId: COMMAND_CHANNEL,
+    appPermissions: options.botPermissions ?? BOT_PERMISSIONS,
+  });
+  const recording: ActionExecutor = {
+    async execute(request) {
+      requests.push(request);
+      const callback = payloadOf(request).callbackType;
+      timeline.push(callback === undefined ? request.kind : `${request.kind}:${callback}`);
+      return scoped.execute(request);
+    },
+  };
+
   return {
     store,
     logs,
     deps,
+    requests,
+    restCalls: rest.calls,
+    timeline,
     current,
 
     async run(raw, config = {}) {
       const command = createBackupCommands(deps)[0];
       if (!command) throw new Error('the backup module declares no commands');
 
+      requests.length = 0;
+      timeline.length = 0;
+      if (options.eventId === undefined) eventId = newId();
+
       const ctx: CommandContext<BackupConfig> = {
         guildId: GUILD,
         channelId: COMMAND_CHANNEL,
         userId: ADMIN,
         config: { ...backupDefaultConfig, ...config },
-        executor: executor.scoped({
-          channelId: COMMAND_CHANNEL,
-          appPermissions: options.botPermissions ?? BOT_PERMISSIONS,
-        }),
+        executor: recording,
         logger,
         options: createCommandOptions(raw),
-        interaction: { id: '600000000000000001', token: 'interaction-token' },
-        idempotencyKey: newId(),
+        interaction: { id: INTERACTION_ID, token: INTERACTION_TOKEN },
+        ...(applicationId === null ? {} : { applicationId }),
+        ...(options.commandLabel ? { commandLabel: options.commandLabel } : {}),
+        idempotencyKey: eventId,
       };
 
       await command.handler(ctx);
+    },
+
+    initialCallbacks() {
+      return requests.filter(
+        (request) =>
+          request.kind === 'interaction_reply' &&
+          INITIAL_CALLBACKS.has(Number(payloadOf(request).callbackType ?? 4)),
+      );
+    },
+
+    followups() {
+      return requests.filter((request) => request.kind === 'interaction_followup');
+    },
+
+    answers() {
+      return rest.calls
+        .map(answerOf)
+        .filter(
+          (data): data is AnswerData =>
+            data !== undefined && (data.content !== undefined || data.embeds !== undefined),
+        );
     },
 
     replyContent() {
@@ -336,12 +452,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     },
 
     replyData() {
-      const call = rest.calls.filter((c) => c.path.startsWith('/interactions/')).at(-1);
-      return (
-        call?.body as
-          | { data?: { content?: string; embeds?: { description?: string; color?: number }[] } }
-          | undefined
-      )?.data;
+      return this.answers().at(-1);
     },
 
     logged: (level, fragment) =>

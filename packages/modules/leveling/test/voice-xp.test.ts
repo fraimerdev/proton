@@ -304,6 +304,112 @@ function available(members?: unknown[]): ProtonEvent {
   };
 }
 
+const AFK = '300000000000000007';
+
+function guildWithAfk(afkChannelId: string | null): NonNullable<LevelingDeps['guildState']> {
+  return {
+    async get(guildId) {
+      return {
+        guildId,
+        ownerId: USER,
+        everyoneRoleId: guildId,
+        roles: new Map(),
+        botRoleIds: [],
+        channels: new Map(),
+        afkChannelId,
+        updatedAt: 0,
+      };
+    },
+  };
+}
+
+describe('voice XP and AFK channels', () => {
+  test('the channel Leveling is told is the AFK channel earns nothing', async () => {
+    const sessions = new FakeSessions();
+
+    const { xp } = await session({ afkChannelId: AFK }, { sessions }, [
+      voiceEvent('join', T, AFK),
+      voiceEvent('leave', T + 30 * MINUTE, null),
+    ]);
+
+    expect(xp.credits).toEqual([]);
+  });
+
+  test('the server’s own AFK channel earns nothing either, with no Leveling setting', async () => {
+    const sessions = new FakeSessions();
+
+    const { xp } = await session({}, { sessions, guildState: guildWithAfk(AFK) }, [
+      voiceEvent('join', T, AFK),
+      voiceEvent('leave', T + 30 * MINUTE, null),
+    ]);
+
+    expect(xp.credits).toEqual([]);
+    expect(await sessions.get(GUILD, USER)).toBeNull();
+  });
+
+  test('being moved into the server’s AFK channel pays for the time before it and stops there', async () => {
+    const sessions = new FakeSessions();
+
+    const { xp } = await session({}, { sessions, guildState: guildWithAfk(AFK) }, [
+      voiceEvent('join', T, VOICE),
+      voiceEvent('idle', T + 10 * MINUTE, AFK),
+      voiceEvent('leave', T + 40 * MINUTE, null),
+    ]);
+
+    expect(xp.credits).toHaveLength(1);
+    expect(xp.credits[0]).toMatchObject({ amount: 10 * 5, seconds: 10 * 60 });
+  });
+
+  test('a member found in the server’s AFK channel on reconnect is not adopted', async () => {
+    const sessions = new FakeSessions();
+
+    await session({}, { sessions, guildState: guildWithAfk(AFK) }, [
+      {
+        id: 'available',
+        type: 'guild.available',
+        guildId: GUILD,
+        occurredAt: T,
+        payload: { id: GUILD, voice_states: [{ ...PARTIAL_VOICE_STATE, channel_id: AFK }] },
+      },
+    ]);
+
+    expect(await sessions.get(GUILD, USER)).toBeNull();
+  });
+
+  test('a server with no AFK channel earns everywhere', async () => {
+    const sessions = new FakeSessions();
+
+    const { xp } = await session({}, { sessions, guildState: guildWithAfk(null) }, [
+      voiceEvent('join', T, VOICE),
+      voiceEvent('leave', T + 10 * MINUTE, null),
+    ]);
+
+    expect(xp.credits[0]).toMatchObject({ amount: 10 * 5 });
+  });
+
+  test('guild state that cannot be read costs only the AFK check, and says so', async () => {
+    const sessions = new FakeSessions();
+
+    const { xp, logs } = await session(
+      {},
+      {
+        sessions,
+        guildState: {
+          get: async () => {
+            throw new Error('redis is down');
+          },
+        },
+      },
+      [voiceEvent('join', T, VOICE), voiceEvent('leave', T + 10 * MINUTE, null)],
+    );
+
+    expect(xp.credits[0]).toMatchObject({ amount: 10 * 5 });
+    expect(logs.some((line) => line.startsWith('warn:') && line.includes('redis is down'))).toBe(
+      true,
+    );
+  });
+});
+
 describe('voice sessions adopted when a guild becomes available', () => {
   test('take their roles from the members list, since those voice states carry no member', async () => {
     const sessions = new FakeSessions();

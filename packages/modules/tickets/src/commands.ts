@@ -1,9 +1,15 @@
 import {
+  type ActionResult,
   type CommandContext,
   type CommandDefinition,
+  deferEphemeral,
   errorStatus,
+  followUp,
   formatDuration,
+  type InteractionMessage,
+  labelOf,
   parseDuration,
+  type RespondTo,
   type StatusBody,
   successStatus,
   TICKET_PRIORITIES,
@@ -66,44 +72,93 @@ const NOT_WIRED =
   'I can’t reach this server’s tickets right now. Nothing was changed. This is a fault on my ' +
   'side, not a setting in this server.';
 
-const NOT_A_TICKET =
-  'Run this inside a ticket channel — the one I opened when somebody pressed a ticket ' +
-  'panel button — or name a ticket with `number:`.';
+const NOT_A_TICKET = 'Run this in a ticket channel, or give a ticket number with `number:`.';
 
-async function reply(
+const TICKET_NUMBER = 'The ticket’s number. Leave empty for the ticket you’re in.';
+
+const NO_MEMBER = 'Choose a member for this command.';
+
+// One key for every outcome: Discord accepts a second followup, unlike a second callback.
+const ANSWER = 'answer';
+
+type Answer = (message: InteractionMessage, slot?: string) => Promise<ActionResult>;
+
+interface Invocation extends CommandContext<TicketsConfig> {
+  answer: Answer;
+}
+
+function failed(result: ActionResult): boolean {
+  return result.status === 'failed_precheck' || result.status === 'failed_api';
+}
+
+function warnUnanswered(ctx: CommandContext<TicketsConfig>, result: ActionResult): void {
+  if (!failed(result)) return;
+
+  ctx.logger.warn(
+    `tickets could not answer the invoker: ${result.failure?.humanReason ?? 'unknown reason'}`,
+    { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
+  );
+}
+
+async function acknowledge(
   ctx: CommandContext<TicketsConfig>,
-  message: string | StatusBody,
-  suffix = 'reply',
-): Promise<void> {
-  const body = typeof message === 'string' ? { content: message.slice(0, 2000) } : message;
+  deps: TicketsDeps,
+): Promise<Invocation> {
+  const applicationId = ctx.applicationId ?? deps.applicationId;
 
-  const result = await ctx.executor.execute({
+  // Without an application id there is no followup webhook, so the one callback must be the answer.
+  if (!applicationId) {
+    return {
+      ...ctx,
+      answer: (message, slot = ANSWER) =>
+        ctx.executor.execute({
+          guildId: ctx.guildId,
+          moduleId: MODULE_ID,
+          kind: 'interaction_reply',
+          actorId: ctx.userId,
+          idempotencyKey: `${ctx.idempotencyKey}:${slot}`,
+          dryRun: false,
+          record: false,
+          payload: {
+            interactionId: ctx.interaction.id,
+            interactionToken: ctx.interaction.token,
+            ...message,
+            ephemeral: true,
+          },
+        }),
+    };
+  }
+
+  const to: RespondTo = {
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
-    kind: 'interaction_reply',
     actorId: ctx.userId,
-    idempotencyKey: `${ctx.idempotencyKey}:${suffix}`,
-    dryRun: false,
-    record: false,
-    payload: {
-      interactionId: ctx.interaction.id,
-      interactionToken: ctx.interaction.token,
-      ...body,
-      ephemeral: true,
-      allowedMentions: { parse: [] },
-    },
-  });
+    interaction: ctx.interaction,
+    idempotencyKey: ctx.idempotencyKey,
+  };
 
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    ctx.logger.warn(
-      `tickets could not answer the invoker: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
-    );
-  }
+  warnUnanswered(ctx, await ctx.executor.execute(deferEphemeral(to)));
+
+  return {
+    ...ctx,
+    answer: (message, slot = ANSWER) =>
+      ctx.executor.execute(
+        followUp(
+          { ...to, idempotencyKey: `${ctx.idempotencyKey}:${slot}`, applicationId },
+          { ...message, ephemeral: true },
+        ),
+      ),
+  };
+}
+
+async function reply(ctx: Invocation, message: string | StatusBody, slot?: string): Promise<void> {
+  const body = typeof message === 'string' ? { content: message.slice(0, 2000) } : message;
+
+  warnUnanswered(ctx, await ctx.answer({ ...body, allowedMentions: { parse: [] } }, slot));
 }
 
 async function ready(
-  ctx: CommandContext<TicketsConfig>,
+  ctx: Invocation,
   deps: TicketsDeps,
   what: string,
 ): Promise<TicketStore | null> {
@@ -130,10 +185,7 @@ export function actorOf(ctx: CommandContext<TicketsConfig>): TicketActor {
   };
 }
 
-async function resolve(
-  ctx: CommandContext<TicketsConfig>,
-  store: TicketStore,
-): Promise<Ticket | null> {
+async function resolve(ctx: Invocation, store: TicketStore): Promise<Ticket | null> {
   const number = ctx.options.getInteger('number');
 
   const ticket =
@@ -147,7 +199,8 @@ async function resolve(
       errorStatus(
         number === null
           ? NOT_A_TICKET
-          : `This server has no ticket #${number}. \`/ticket list\` shows the open ones.`,
+          : `Couldn’t find ticket #${number}. \`${labelOf(ctx, 'ticket', 'list')}\` shows the ` +
+              'open ones.',
       ),
     );
     return null;
@@ -157,7 +210,7 @@ async function resolve(
 }
 
 async function permitted(
-  ctx: CommandContext<TicketsConfig>,
+  ctx: Invocation,
   action: TicketAction,
   ticket: Ticket | null,
 ): Promise<boolean> {
@@ -174,12 +227,12 @@ async function permitted(
 
   if (decision.allowed) return true;
 
-  await reply(ctx, errorStatus(decision.humanReason), 'refused');
+  await reply(ctx, errorStatus(decision.humanReason));
   return false;
 }
 
 function controlInput(
-  ctx: CommandContext<TicketsConfig>,
+  ctx: Invocation,
   store: TicketStore,
   deps: TicketsDeps,
   ticket: Ticket,
@@ -187,13 +240,12 @@ function controlInput(
   return { ctx, store, deps, ticket, actorId: ctx.userId, idempotencyKey: ctx.idempotencyKey };
 }
 
-async function report(ctx: CommandContext<TicketsConfig>, outcome: ControlOutcome): Promise<void> {
+async function report(ctx: Invocation, outcome: ControlOutcome): Promise<void> {
   await reply(
     ctx,
     outcome.ok && !outcome.partial
       ? successStatus(outcome.message)
       : errorStatus(outcome.ok ? outcome.message : outcome.humanReason),
-    outcome.ok && !outcome.partial ? 'done' : 'refused',
   );
 }
 
@@ -210,7 +262,7 @@ function builder(): SlashCommandBuilder {
       .addStringOption((option) =>
         option
           .setName('panel')
-          .setDescription('Which configured panel to post.')
+          .setDescription('The panel to post.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(PANEL_ID_MAX),
@@ -224,7 +276,7 @@ function builder(): SlashCommandBuilder {
       .addStringOption((option) =>
         option
           .setName('type')
-          .setDescription('What kind of ticket to open.')
+          .setDescription('The type of ticket to open.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(TYPE_ID_MAX),
@@ -237,12 +289,12 @@ function builder(): SlashCommandBuilder {
   command.addSubcommand((sub) =>
     sub
       .setName('close')
-      .setDescription('Close the ticket you are in, or any ticket by its number.')
+      .setDescription('Close this ticket, or another one by its number.')
       .addStringOption((option) =>
-        option.setName('reason').setDescription('Why it is being closed.').setMaxLength(512),
+        option.setName('reason').setDescription('Why it’s being closed.').setMaxLength(512),
       )
       .addIntegerOption((option) =>
-        option.setName('number').setDescription('Close this ticket number.').setMinValue(1),
+        option.setName('number').setDescription(TICKET_NUMBER).setMinValue(1),
       ),
   );
 
@@ -251,7 +303,7 @@ function builder(): SlashCommandBuilder {
       .setName('reopen')
       .setDescription('Reopen a closed ticket.')
       .addIntegerOption((option) =>
-        option.setName('number').setDescription('Which ticket number.').setMinValue(1),
+        option.setName('number').setDescription(TICKET_NUMBER).setMinValue(1),
       ),
   );
 
@@ -260,29 +312,34 @@ function builder(): SlashCommandBuilder {
       .setName('delete')
       .setDescription('Delete a ticket and its channel for good.')
       .addIntegerOption((option) =>
-        option.setName('number').setDescription('Which ticket number.').setMinValue(1),
+        option.setName('number').setDescription(TICKET_NUMBER).setMinValue(1),
       )
       .addStringOption((option) =>
-        option.setName('reason').setDescription('Why it is being deleted.').setMaxLength(512),
+        option.setName('reason').setDescription('Why it’s being deleted.').setMaxLength(512),
       ),
   );
 
-  command.addSubcommand((sub) => sub.setName('claim').setDescription('Take this ticket.'));
-  command.addSubcommand((sub) => sub.setName('unclaim').setDescription('Let this ticket go.'));
+  command.addSubcommand((sub) => sub.setName('claim').setDescription('Claim this ticket.'));
+  command.addSubcommand((sub) =>
+    sub.setName('unclaim').setDescription('Unclaim this ticket so other staff can take it.'),
+  );
 
   command.addSubcommand((sub) =>
     sub
       .setName('assign')
       .setDescription('Assign this ticket to a staff member.')
       .addUserOption((option) =>
-        option.setName('user').setDescription('Leave empty to unassign.').setRequired(false),
+        option
+          .setName('user')
+          .setDescription('The staff member. Leave empty to unassign.')
+          .setRequired(false),
       ),
   );
 
   command.addSubcommand((sub) =>
     sub
       .setName('transfer')
-      .setDescription('Hand ownership of this ticket to somebody else.')
+      .setDescription('Give ownership of this ticket to another member.')
       .addUserOption((option) =>
         option.setName('user').setDescription('The new owner.').setRequired(true),
       ),
@@ -291,18 +348,18 @@ function builder(): SlashCommandBuilder {
   command.addSubcommand((sub) =>
     sub
       .setName('add')
-      .setDescription('Give somebody access to this ticket.')
+      .setDescription('Give a member access to this ticket.')
       .addUserOption((option) =>
-        option.setName('user').setDescription('Who to add.').setRequired(true),
+        option.setName('user').setDescription('The member to add.').setRequired(true),
       ),
   );
 
   command.addSubcommand((sub) =>
     sub
       .setName('remove')
-      .setDescription('Take somebody’s access to this ticket away.')
+      .setDescription('Remove a member’s access to this ticket.')
       .addUserOption((option) =>
-        option.setName('user').setDescription('Who to remove.').setRequired(true),
+        option.setName('user').setDescription('The member to remove.').setRequired(true),
       ),
   );
 
@@ -311,18 +368,22 @@ function builder(): SlashCommandBuilder {
       .setName('rename')
       .setDescription('Rename this ticket’s channel.')
       .addStringOption((option) =>
-        option.setName('name').setDescription('The new name.').setRequired(true).setMaxLength(100),
+        option
+          .setName('name')
+          .setDescription('The new channel name.')
+          .setRequired(true)
+          .setMaxLength(100),
       ),
   );
 
   command.addSubcommand((sub) =>
     sub
       .setName('move')
-      .setDescription('Move this ticket into another category.')
+      .setDescription('Move this ticket to another category.')
       .addChannelOption((option) =>
         option
           .setName('category')
-          .setDescription('Where it should live.')
+          .setDescription('The category to move it to.')
           .setRequired(true)
           .addChannelTypes(CATEGORY_CHANNEL_TYPE),
       ),
@@ -331,11 +392,11 @@ function builder(): SlashCommandBuilder {
   command.addSubcommand((sub) =>
     sub
       .setName('priority')
-      .setDescription('Change how urgent this ticket is.')
+      .setDescription('Change this ticket’s priority.')
       .addStringOption((option) =>
         option
           .setName('level')
-          .setDescription('How urgent it is.')
+          .setDescription('The new priority.')
           .setRequired(true)
           .addChoices(
             ...TICKET_PRIORITIES.map((level) => ({ name: PRIORITY_LABELS[level], value: level })),
@@ -344,37 +405,37 @@ function builder(): SlashCommandBuilder {
   );
 
   command.addSubcommand((sub) =>
-    sub.setName('lock').setDescription('Stop the member posting without closing the ticket.'),
+    sub.setName('lock').setDescription('Let only staff post in this ticket, without closing it.'),
   );
   command.addSubcommand((sub) =>
-    sub.setName('unlock').setDescription('Let the member post again.'),
+    sub.setName('unlock').setDescription('Let members post in this ticket again.'),
   );
 
   command.addSubcommand((sub) =>
-    sub.setName('transcript').setDescription('Get a transcript of this ticket as it stands.'),
+    sub.setName('transcript').setDescription('Get a transcript of this ticket so far.'),
   );
 
   command.addSubcommand((sub) =>
     sub
       .setName('info')
-      .setDescription('Show everything Proton knows about a ticket.')
+      .setDescription('Show a ticket’s details.')
       .addIntegerOption((option) =>
-        option.setName('number').setDescription('Which ticket number.').setMinValue(1),
+        option.setName('number').setDescription(TICKET_NUMBER).setMinValue(1),
       ),
   );
 
   command.addSubcommand((sub) =>
-    sub.setName('list').setDescription('List the tickets that are currently open.'),
+    sub.setName('list').setDescription('List open tickets. Members see only their own.'),
   );
 
   command.addSubcommand((sub) =>
     sub
       .setName('response')
-      .setDescription('Post one of this server’s saved replies into the ticket.')
+      .setDescription('Post a quick response in this ticket.')
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('Which saved reply.')
+          .setDescription('The quick response to post.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(32),
@@ -384,11 +445,11 @@ function builder(): SlashCommandBuilder {
   command.addSubcommand((sub) =>
     sub
       .setName('stats')
-      .setDescription('Support statistics for this server.')
+      .setDescription('Show ticket stats for this server.')
       .addIntegerOption((option) =>
         option
           .setName('days')
-          .setDescription('How far back to look. Defaults to 30.')
+          .setDescription('How many days back to look. Defaults to 30.')
           .setMinValue(1)
           .setMaxValue(365),
       ),
@@ -397,21 +458,21 @@ function builder(): SlashCommandBuilder {
   command.addSubcommandGroup((group) =>
     group
       .setName('blacklist')
-      .setDescription('Stop members opening tickets.')
+      .setDescription('Block members from opening tickets.')
       .addSubcommand((sub) =>
         sub
           .setName('add')
-          .setDescription('Stop a member opening tickets.')
+          .setDescription('Block a member from opening tickets.')
           .addUserOption((option) =>
-            option.setName('user').setDescription('Who to block.').setRequired(true),
+            option.setName('user').setDescription('The member to block.').setRequired(true),
           )
           .addStringOption((option) =>
-            option.setName('reason').setDescription('Why they are blocked.').setMaxLength(512),
+            option.setName('reason').setDescription('Why they’re blocked.').setMaxLength(512),
           )
           .addStringOption((option) =>
             option
               .setName('duration')
-              .setDescription('How long, e.g. 7d. Leave empty for permanent.')
+              .setDescription('How long, like 7d or 12h. Leave empty to block them permanently.')
               .setMaxLength(16),
           ),
       )
@@ -420,10 +481,12 @@ function builder(): SlashCommandBuilder {
           .setName('remove')
           .setDescription('Let a member open tickets again.')
           .addUserOption((option) =>
-            option.setName('user').setDescription('Who to unblock.').setRequired(true),
+            option.setName('user').setDescription('The member to unblock.').setRequired(true),
           ),
       )
-      .addSubcommand((sub) => sub.setName('list').setDescription('Show who cannot open tickets.')),
+      .addSubcommand((sub) =>
+        sub.setName('list').setDescription('List members who can’t open tickets.'),
+      ),
   );
 
   return command;
@@ -436,7 +499,9 @@ export function ticketCommand(deps: TicketsDeps): Command {
 
     data: builder().toJSON(),
 
-    async handler(ctx) {
+    async handler(command) {
+      const ctx = await acknowledge(command, deps);
+
       const store = await ready(ctx, deps, 'the ticket commands');
       if (!store) return;
 
@@ -498,13 +563,16 @@ export function ticketCommand(deps: TicketsDeps): Command {
         case 'stats':
           return stats(ctx, store, deps);
         default:
-          await reply(ctx, errorStatus('That is not a `/ticket` subcommand I know.'));
+          await reply(
+            ctx,
+            errorStatus(`I don’t recognise that \`${labelOf(ctx, 'ticket')}\` subcommand.`),
+          );
       }
     },
   };
 }
 
-async function postPanel(ctx: CommandContext<TicketsConfig>): Promise<void> {
+async function postPanel(ctx: Invocation): Promise<void> {
   if (!(await permitted(ctx, 'post-panel', null))) return;
 
   const panelId = ctx.options.getString('panel') ?? '';
@@ -517,9 +585,9 @@ async function postPanel(ctx: CommandContext<TicketsConfig>): Promise<void> {
       ctx,
       errorStatus(
         known.length === 0
-          ? 'This server has no ticket panels configured yet. An admin can add one in the Proton ' +
+          ? 'This server has no ticket panels yet. An admin can create one in the Proton ' +
               'dashboard under Tickets.'
-          : `There is no panel called **${panelId}**. This server has ${known.join(', ')}.`,
+          : `Couldn’t find a panel called **${panelId}**. Panels here: ${known.join(', ')}.`,
       ),
     );
     return;
@@ -536,23 +604,14 @@ async function postPanel(ctx: CommandContext<TicketsConfig>): Promise<void> {
       errorStatus(
         `I couldn't post the **${found.name}** panel in <#${found.channelId}>: ${posted.humanReason}`,
       ),
-      'refused',
     );
     return;
   }
 
-  await reply(
-    ctx,
-    successStatus(`Posted the **${found.name}** panel in <#${found.channelId}>.`),
-    'done',
-  );
+  await reply(ctx, successStatus(`Posted the **${found.name}** panel in <#${found.channelId}>.`));
 }
 
-async function create(
-  ctx: CommandContext<TicketsConfig>,
-  store: TicketStore,
-  deps: TicketsDeps,
-): Promise<void> {
+async function create(ctx: Invocation, store: TicketStore, deps: TicketsDeps): Promise<void> {
   const typeId = ctx.options.getString('type') ?? '';
   const type = typeFor(ctx.config, typeId);
 
@@ -563,9 +622,10 @@ async function create(
       ctx,
       errorStatus(
         known.length === 0
-          ? 'This server has no ticket types configured yet. An admin can add one in the Proton ' +
+          ? 'This server has no ticket types yet. An admin can create one in the Proton ' +
               'dashboard under Tickets.'
-          : `There is no ticket type called **${typeId}**. This server has ${known.join(', ')}.`,
+          : `Couldn’t find a ticket type called **${typeId}**. Ticket types here: ` +
+              `${known.join(', ')}.`,
       ),
     );
     return;
@@ -583,22 +643,39 @@ async function create(
     subject: ctx.options.getString('subject'),
   });
 
-  if (opened.status === 'duplicate') return;
+  if (opened.status === 'duplicate') {
+    const earlier = await openedEarlier(ctx, store, type.id);
+    if (earlier) await reply(ctx, openedStatus(earlier));
+    return;
+  }
 
-  await reply(
-    ctx,
-    opened.status === 'refused'
-      ? refusalBody(opened)
-      : successStatus(`Opened ticket #${opened.ticket.number} — <#${opened.ticket.channelId}>.`),
-    opened.status === 'refused' ? 'refused' : 'done',
-  );
+  await reply(ctx, opened.status === 'refused' ? refusalBody(opened) : openedStatus(opened.ticket));
 }
 
-async function close(
-  ctx: CommandContext<TicketsConfig>,
+function openedStatus(ticket: Ticket): StatusBody {
+  return successStatus(`Opened ticket #${ticket.number} in <#${ticket.channelId}>.`);
+}
+
+async function openedEarlier(
+  ctx: Invocation,
   store: TicketStore,
-  deps: TicketsDeps,
-): Promise<void> {
+  typeId: string,
+): Promise<Ticket | null> {
+  const newest = (await store.listOpen(ctx.guildId))
+    .filter(
+      (ticket) =>
+        ticket.openerId === ctx.userId && ticket.typeId === typeId && ticket.panelId === '',
+    )
+    .reduce<Ticket | null>(
+      (top, ticket) => (top && top.number > ticket.number ? top : ticket),
+      null,
+    );
+
+  // Its own id means the first delivery is mid-open: never fall back to an older ticket.
+  return newest && newest.channelId !== newest.id ? newest : null;
+}
+
+async function close(ctx: Invocation, store: TicketStore, deps: TicketsDeps): Promise<void> {
   const ticket = await resolve(ctx, store);
   if (!ticket) return;
 
@@ -623,15 +700,14 @@ async function close(
     ctx,
     successStatus(
       outcome.replayed
-        ? `Ticket #${outcome.ticket.number} was already marked closed, so I finished the parts ` +
-            'that had not run. Anything that had already happened was left alone.'
+        ? `Ticket #${outcome.ticket.number} was already closed, so I finished the steps that ` +
+            'hadn’t run yet.'
         : `Closed ticket #${outcome.ticket.number}.`,
     ),
-    'done',
   );
 }
 
-async function reopen(ctx: CommandContext<TicketsConfig>, store: TicketStore): Promise<void> {
+async function reopen(ctx: Invocation, store: TicketStore): Promise<void> {
   const ticket = await resolve(ctx, store);
   if (!ticket) return;
 
@@ -644,15 +720,10 @@ async function reopen(ctx: CommandContext<TicketsConfig>, store: TicketStore): P
     outcome.ok
       ? successStatus(`Reopened ticket #${outcome.ticket.number}.`)
       : errorStatus(outcome.humanReason),
-    outcome.ok ? 'done' : 'refused',
   );
 }
 
-async function remove(
-  ctx: CommandContext<TicketsConfig>,
-  store: TicketStore,
-  deps: TicketsDeps,
-): Promise<void> {
+async function remove(ctx: Invocation, store: TicketStore, deps: TicketsDeps): Promise<void> {
   const ticket = await resolve(ctx, store);
   if (!ticket) return;
 
@@ -672,12 +743,11 @@ async function remove(
     outcome.ok
       ? successStatus(`Deleted ticket #${outcome.ticket.number} and its channel.`)
       : errorStatus(outcome.humanReason),
-    outcome.ok ? 'done' : 'refused',
   );
 }
 
 async function control(
-  ctx: CommandContext<TicketsConfig>,
+  ctx: Invocation,
   store: TicketStore,
   deps: TicketsDeps,
   action: TicketAction,
@@ -692,7 +762,7 @@ async function control(
 }
 
 async function withUser(
-  ctx: CommandContext<TicketsConfig>,
+  ctx: Invocation,
   store: TicketStore,
   deps: TicketsDeps,
   action: TicketAction,
@@ -701,22 +771,21 @@ async function withUser(
   const userId = ctx.options.getUserId('user');
 
   if (userId === null) {
-    await reply(ctx, errorStatus('Name the member this command should act on.'));
+    await reply(ctx, errorStatus(NO_MEMBER));
     return;
   }
 
   await control(ctx, store, deps, action, (input) => run(input, userId));
 }
 
-async function priority(
-  ctx: CommandContext<TicketsConfig>,
-  store: TicketStore,
-  deps: TicketsDeps,
-): Promise<void> {
+async function priority(ctx: Invocation, store: TicketStore, deps: TicketsDeps): Promise<void> {
   const level = ctx.options.getString('level') ?? '';
 
   if (!(TICKET_PRIORITIES as readonly string[]).includes(level)) {
-    await reply(ctx, errorStatus(`**${level}** is not a priority I know.`));
+    await reply(
+      ctx,
+      errorStatus(`**${level}** isn’t a priority I know. Choose Low, Medium, High or Urgent.`),
+    );
     return;
   }
 
@@ -725,11 +794,7 @@ async function priority(
   );
 }
 
-async function transcript(
-  ctx: CommandContext<TicketsConfig>,
-  store: TicketStore,
-  deps: TicketsDeps,
-): Promise<void> {
+async function transcript(ctx: Invocation, store: TicketStore, deps: TicketsDeps): Promise<void> {
   const ticket = await resolve(ctx, store);
   if (!ticket) return;
 
@@ -744,32 +809,20 @@ async function transcript(
     actorId: ctx.userId,
   });
 
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'interaction_reply',
-    actorId: ctx.userId,
-    idempotencyKey: `${ctx.idempotencyKey}:transcript`,
-    dryRun: false,
-    record: false,
-    payload: {
-      interactionId: ctx.interaction.id,
-      interactionToken: ctx.interaction.token,
-      ...successStatus(`The transcript of ticket #${ticket.number} is attached.`),
-      ephemeral: true,
-      files: [
-        {
-          filename: built.filename,
-          contentType: 'text/html',
-          data: new TextEncoder().encode(built.html),
-          description: `Transcript of ticket #${ticket.number}`,
-        },
-      ],
-      allowedMentions: { parse: [] },
-    },
+  const result = await ctx.answer({
+    ...successStatus(`Here’s the transcript of ticket #${ticket.number}.`),
+    files: [
+      {
+        filename: built.filename,
+        contentType: 'text/html',
+        data: new TextEncoder().encode(built.html),
+        description: `Transcript of ticket #${ticket.number}`,
+      },
+    ],
+    allowedMentions: { parse: [] },
   });
 
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
+  if (failed(result)) {
     ctx.logger.error(
       `the transcript for ticket #${ticket.number} was built but could not be sent: ${
         result.failure?.humanReason ?? 'unknown reason'
@@ -779,7 +832,7 @@ async function transcript(
   }
 }
 
-async function info(ctx: CommandContext<TicketsConfig>, store: TicketStore): Promise<void> {
+async function info(ctx: Invocation, store: TicketStore): Promise<void> {
   const ticket = await resolve(ctx, store);
   if (!ticket) return;
 
@@ -798,49 +851,38 @@ async function info(ctx: CommandContext<TicketsConfig>, store: TicketStore): Pro
 
   const rating = await store.getRating(ticket.id);
 
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'interaction_reply',
-    actorId: ctx.userId,
-    idempotencyKey: `${ctx.idempotencyKey}:info`,
-    dryRun: false,
-    record: false,
-    payload: {
-      interactionId: ctx.interaction.id,
-      interactionToken: ctx.interaction.token,
-      components: buildInfoComponents(view, {
-        messageCount: ticket.messageCount,
-        rating: rating?.rating ?? null,
-      }),
-      flags: 32768 | 64,
-      ephemeral: true,
-    },
+  const result = await ctx.answer({
+    components: buildInfoComponents(view, {
+      messageCount: ticket.messageCount,
+      rating: rating?.rating ?? null,
+    }),
+    flags: 32768 | 64,
   });
 
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
+  if (failed(result)) {
     await reply(
       ctx,
       errorStatus(
         `I couldn't show ticket #${ticket.number}: ${result.failure?.humanReason ?? 'unknown reason'}`,
       ),
+      'info-failed',
     );
   }
 }
 
 export function renderOpenList(tickets: readonly Ticket[], everyones = true): string {
   if (tickets.length === 0) {
-    return everyones
-      ? 'No tickets are open in this server right now.'
-      : 'You have no open tickets in this server right now.';
+    return everyones ? 'No tickets are open right now.' : 'You have no open tickets right now.';
   }
 
+  const noun = tickets.length === 1 ? 'ticket' : 'tickets';
+
   return (
-    `**${tickets.length} open ticket(s)${everyones ? '' : ' of yours'}**\n` +
+    `**${tickets.length} open ${noun}${everyones ? '' : ' of yours'}**\n` +
     tickets
       .map(
         (ticket) =>
-          `#${ticket.number} — <#${ticket.channelId}> · ${describePriority(ticket.priority)} · ` +
+          `#${ticket.number} <#${ticket.channelId}> · ${describePriority(ticket.priority)} · ` +
           `${describeStatus(ticket)}, opened by <@${ticket.openerId}> ` +
           `<t:${Math.floor(ticket.openedAt.getTime() / 1000)}:R>` +
           (ticket.claimedById ? ` · claimed by <@${ticket.claimedById}>` : ''),
@@ -850,7 +892,7 @@ export function renderOpenList(tickets: readonly Ticket[], everyones = true): st
   );
 }
 
-async function list(ctx: CommandContext<TicketsConfig>, store: TicketStore): Promise<void> {
+async function list(ctx: Invocation, store: TicketStore): Promise<void> {
   const open = await store.listOpen(ctx.guildId);
 
   // A ticket channel is private, and its name and opener are not. Showing the whole queue to
@@ -870,7 +912,7 @@ async function list(ctx: CommandContext<TicketsConfig>, store: TicketStore): Pro
 }
 
 async function quickResponse(
-  ctx: CommandContext<TicketsConfig>,
+  ctx: Invocation,
   store: TicketStore,
   deps: TicketsDeps,
 ): Promise<void> {
@@ -891,9 +933,10 @@ async function quickResponse(
       ctx,
       errorStatus(
         known.length === 0
-          ? 'This server has no saved replies yet. An admin can add them in the Proton dashboard ' +
-              'under Tickets.'
-          : `There is no saved reply called **${name}**. This server has ${known.join(', ')}.`,
+          ? 'This server has no quick responses yet. An admin can create them in the Proton ' +
+              'dashboard under Tickets.'
+          : `Couldn’t find a quick response called **${name}**. Quick responses here: ` +
+              `${known.join(', ')}.`,
       ),
     );
     return;
@@ -930,15 +973,14 @@ async function quickResponse(
     },
   });
 
-  if (posted.status === 'failed_precheck' || posted.status === 'failed_api') {
+  if (failed(posted)) {
     await reply(
       ctx,
       errorStatus(
-        `I couldn't post the **${saved.label}** reply in <#${ticket.channelId}>: ${
+        `I couldn't post **${saved.label}** in <#${ticket.channelId}>: ${
           posted.failure?.humanReason ?? 'unknown reason'
         }`,
       ),
-      'refused',
     );
     return;
   }
@@ -951,22 +993,18 @@ async function quickResponse(
     data: { responseId: saved.id },
   });
 
-  await reply(
-    ctx,
-    successStatus(`Posted the **${saved.label}** reply in <#${ticket.channelId}>.`),
-    'done',
-  );
+  await reply(ctx, successStatus(`Posted **${saved.label}** in <#${ticket.channelId}>.`));
 }
 
 function duration(ms: number | null): string {
-  return ms === null ? '—' : formatDuration(Math.round(ms));
+  return ms === null ? 'None yet' : formatDuration(Math.round(ms));
 }
 
-async function stats(
-  ctx: CommandContext<TicketsConfig>,
-  store: TicketStore,
-  deps: TicketsDeps,
-): Promise<void> {
+function counted(total: number, one: string, many: string): string {
+  return `${total} ${total === 1 ? one : many}`;
+}
+
+async function stats(ctx: Invocation, store: TicketStore, deps: TicketsDeps): Promise<void> {
   if (!(await permitted(ctx, 'stats', null))) return;
 
   const days = ctx.options.getInteger('days') ?? 30;
@@ -977,7 +1015,7 @@ async function stats(
   const staff = await Promise.all(
     summary.byStaff.slice(0, 10).map(async (entry) => {
       const name = await nameOf(deps, entry.userId);
-      return `${name} — ${entry.claimed} claimed, ${entry.closed} closed`;
+      return `${name}: ${entry.claimed} claimed, ${entry.closed} closed`;
     }),
   );
 
@@ -991,22 +1029,22 @@ async function stats(
 
   await reply(
     ctx,
-    `**Tickets in the last ${days} day(s)**\n` +
+    `**Tickets in the last ${counted(days, 'day', 'days')}**\n` +
       `Opened: ${summary.opened} · Closed: ${summary.closed} · Reopened: ${summary.reopened} · ` +
       `Still open: ${summary.open}\n` +
       `Average time to resolve: ${duration(summary.averageResolutionMs)}\n` +
       `Average first reply: ${duration(summary.averageFirstResponseMs)}\n` +
       (summary.ratings > 0
-        ? `Rating: ${summary.averageRating?.toFixed(2)} from ${summary.ratings} response(s)\n`
+        ? `Average rating: ${summary.averageRating?.toFixed(2)} from ` +
+          `${counted(summary.ratings, 'rating', 'ratings')}\n`
         : '') +
       (byType ? `\n**By type**\n${byType}\n` : '') +
       (byPriority ? `\n**By priority**\n${byPriority}\n` : '') +
       (staff.length > 0 ? `\n**By staff member**\n${staff.join('\n')}` : ''),
-    'stats',
   );
 }
 
-async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore): Promise<void> {
+async function blacklist(ctx: Invocation, store: TicketStore): Promise<void> {
   if (!(await permitted(ctx, 'blacklist', null))) return;
 
   const action = ctx.options.getSubcommand();
@@ -1017,12 +1055,12 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
     await reply(
       ctx,
       entries.length === 0
-        ? 'Nobody is blocked from opening tickets in this server.'
-        : `**${entries.length} member${entries.length === 1 ? '' : 's'} blocked**\n` +
+        ? 'No one is blocked from opening tickets.'
+        : `**${counted(entries.length, 'member', 'members')} blocked**\n` +
             entries
               .map(
                 (entry) =>
-                  `<@${entry.userId}>${entry.reason ? ` — ${entry.reason}` : ''}` +
+                  `<@${entry.userId}>${entry.reason ? `: ${entry.reason}` : ''}` +
                   (entry.expiresAt
                     ? ` (lifts <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>)`
                     : ' (permanent)'),
@@ -1035,7 +1073,7 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
 
   const userId = ctx.options.getUserId('user');
   if (userId === null) {
-    await reply(ctx, errorStatus('Name the member this command should act on.'));
+    await reply(ctx, errorStatus(NO_MEMBER));
     return;
   }
 
@@ -1046,8 +1084,7 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
       ctx,
       lifted
         ? successStatus(`<@${userId}> can open tickets again.`)
-        : errorStatus(`<@${userId}> was not blocked from opening tickets.`),
-      lifted ? 'done' : 'refused',
+        : errorStatus(`<@${userId}> isn’t blocked from opening tickets.`),
     );
     return;
   }
@@ -1057,7 +1094,7 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
   if (raw !== null && tryParseDuration(raw) === null) {
     await reply(
       ctx,
-      errorStatus(`**${raw}** is not a duration. Use something like \`7d\`, \`12h\` or \`30m\`.`),
+      errorStatus(`**${raw}** isn’t a duration I can read. Try \`7d\`, \`12h\` or \`30m\`.`),
     );
     return;
   }
@@ -1075,11 +1112,10 @@ async function blacklist(ctx: CommandContext<TicketsConfig>, store: TicketStore)
   await reply(
     ctx,
     successStatus(
-      `<@${userId}> can no longer open tickets` +
+      `<@${userId}> can’t open tickets` +
         (expiresAt ? ` until <t:${Math.floor(expiresAt.getTime() / 1000)}:f>` : '') +
-        '. Their existing tickets were left alone.',
+        '. Their open tickets stay open.',
     ),
-    'done',
   );
 }
 

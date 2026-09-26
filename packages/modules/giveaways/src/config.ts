@@ -30,8 +30,8 @@ export const DEFAULT_CLAIM_WINDOW_SECONDS = 24 * 60 * 60;
 // proxy does that; this only stops a busy giveaway from queueing behind itself.
 export const COUNT_FLUSH_INTERVAL_MS = 5_000;
 
-export function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? '' : 's'}`;
+export function plural(count: number, word: string, many = `${word}s`): string {
+  return `${count} ${count === 1 ? word : many}`;
 }
 
 export function describeWait(ms: number): string {
@@ -55,8 +55,8 @@ export function parseGiveawayDuration(raw: string): DurationResult {
     return {
       ok: false,
       humanReason:
-        `“${raw}” is not a length of time I understand. Give a number followed by s, m, h, d ` +
-        'or w — for example 30m, 12h or 7d.',
+        `“${raw}” isn’t a length of time I understand. Use a number followed by s, m, h, d ` +
+        'or w, like 30m, 12h or 7d.',
     };
   }
 
@@ -64,8 +64,8 @@ export function parseGiveawayDuration(raw: string): DurationResult {
     return {
       ok: false,
       humanReason:
-        `A giveaway has to run for at least ${describeWait(MIN_DURATION_MS)}, and “${raw}” is ` +
-        'shorter than that. Anything briefer ends before most members have seen it.',
+        `A giveaway must run for at least ${describeWait(MIN_DURATION_MS)}, and “${raw}” is ` +
+        'shorter than that.',
     };
   }
 
@@ -74,7 +74,7 @@ export function parseGiveawayDuration(raw: string): DurationResult {
       ok: false,
       humanReason:
         `A giveaway can run for at most ${describeWait(MAX_DURATION_MS)}, and “${raw}” is ` +
-        'longer than that. Pick a shorter one, or run a second giveaway afterwards.',
+        'longer than that.',
     };
   }
 
@@ -97,17 +97,11 @@ export const giveawaysConfigSchema = z.object({
       label: 'Default number of winners',
     }),
 
-  managerRoleIds: z
-    .array(snowflakeSchema)
-    .max(ROLE_LIST_MAX)
-    .default([])
-    .register(protonFields, {
-      field: 'role-id',
-      label: 'Manager roles',
-      description:
-        'Can pause, edit, end, cancel and reroll any giveaway, not only their own. ' +
-        'Set who can use /giveaway in Permissions.',
-    }),
+  managerRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
+    field: 'role-id',
+    label: 'Manager roles',
+    description: 'Can pause, edit, end, cancel and reroll any giveaway, not only their own.',
+  }),
 
   bypassRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
     field: 'role-id',
@@ -118,8 +112,7 @@ export const giveawaysConfigSchema = z.object({
   blacklistRoleIds: z.array(snowflakeSchema).max(ROLE_LIST_MAX).default([]).register(protonFields, {
     field: 'role-id',
     label: 'Blacklisted roles',
-    description:
-      'Cannot enter any giveaway. Proton checks this before requirements and bypass roles.',
+    description: 'Can’t enter any giveaway, even with a bypass role.',
   }),
 
   announceInChannel: z.boolean().default(true).register(protonFields, {
@@ -140,8 +133,7 @@ export const giveawaysConfigSchema = z.object({
     .optional()
     .register(protonFields, {
       label: 'Claim window',
-      description:
-        'Winners must claim their prize in time. Unclaimed wins are forfeited and rerolled.',
+      description: 'Winners must claim in time. Unclaimed wins are forfeited and rerolled.',
     }),
 
   logChannelId: snowflakeSchema.optional().register(protonFields, {

@@ -53,9 +53,9 @@ describe('a burst above the threshold', () => {
     );
 
     expect(messageCalls(h)).toHaveLength(1);
-    expect(h.alertContent()).toContain('Raid mode');
+    expect(h.alertContent()).toContain('Raid detected');
     expect(h.alertContent()).toContain('10 accounts joined within 10s');
-    expect(h.alertContent()).toContain('being quarantined for staff review');
+    expect(h.alertContent()).toContain('being quarantined for moderators to review');
   });
 
   test('records why, in the words the member and the audit log get', async () => {
@@ -67,7 +67,7 @@ describe('a burst above the threshold', () => {
     const acted = h.cases().find((c) => c.kind === 'add_role');
     expect(acted?.moduleId).toBe('antiraid');
     expect(acted?.actorId).toBe('proton:antiraid');
-    expect(acted?.reason).toContain('Anti-raid 4/5');
+    expect(acted?.reason).toContain('Anti-Raid 4/5');
     expect(acted?.reason).toContain('10 accounts joined within 10s');
     expect(acted?.reason).toContain('The account has no avatar.');
   });
@@ -151,8 +151,8 @@ describe('the response ladder', () => {
 
     expect(h.memberCalls()).toHaveLength(0);
     const error = h.logs.find((line) => line.level === 'error');
-    expect(error?.message).toContain('a verification role');
-    expect(error?.message).toContain('Anti-raid page of the Proton dashboard');
+    expect(error?.message).toContain('No verification role is set');
+    expect(error?.message).toContain('Anti-Raid page of the Proton dashboard');
   });
 });
 
@@ -173,7 +173,7 @@ describe('failure paths', () => {
     expect(warning?.message).toContain('Manage Roles');
     expect(warning?.message).toContain('this server');
 
-    expect(h.alertContent()).toContain('Raid mode');
+    expect(h.alertContent()).toContain('Raid detected');
   });
 
   test('a member above the bot is refused by the hierarchy precheck, not acted on', async () => {
@@ -189,7 +189,7 @@ describe('failure paths', () => {
 
     expect(h.memberCalls()).toHaveLength(0);
     expect(h.logs.find((line) => line.level === 'warn')?.message).toContain(
-      'above or equal to mine',
+      "above or equal to Proton's",
     );
   });
 });

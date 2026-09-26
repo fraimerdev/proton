@@ -3,6 +3,7 @@ import {
   describeMultipliers,
   describeRequirements,
   errorStatus,
+  labelOf,
   newId,
   successStatus,
 } from '@proton/core';
@@ -15,9 +16,10 @@ import {
   parseGiveawayDuration,
   plural,
 } from './config.ts';
-import { bindDraw, type GiveawaysDeps } from './deps.ts';
+import { bindDraw, clockOf, type GiveawaysDeps } from './deps.ts';
 import { publishBonus } from './events.ts';
 import {
+  EDITABLE,
   editGiveawayFields,
   type ManageDeps,
   type ManageOutcome,
@@ -26,7 +28,13 @@ import {
   type ShiftOutcome,
   shiftDeadline,
 } from './manage.ts';
-import { NOT_WIRED, reply, replyWithFile } from './perform.ts';
+import {
+  acknowledgeCommand,
+  acknowledgeToggleable,
+  type CommandAnswer,
+  NOT_WIRED,
+  reply,
+} from './perform.ts';
 import {
   ENTRANT_PAGE_SIZE,
   EXPORT_ROW_MAX,
@@ -40,6 +48,7 @@ import {
   BONUS_MIN,
   type Giveaway,
   type GiveawayPatch,
+  type GiveawayStatus,
   type GiveawayStore,
 } from './store.ts';
 
@@ -64,6 +73,8 @@ function manageDeps(deps: GiveawaysDeps): ManageDeps | null {
   };
 }
 
+const NOT_FOUND = 'Couldn’t find a giveaway with that ID or code in this server.';
+
 /** Resolves the giveaway the command names, then checks the invoker may act on it. */
 async function target(
   ctx: Ctx,
@@ -71,32 +82,64 @@ async function target(
 ): Promise<{ giveaway: Giveaway } | { refusal: string }> {
   const giveaway = await store.resolve(ctx.guildId, ctx.options.getString('giveaway') ?? '');
 
-  if (!giveaway) return { refusal: 'There is no giveaway in this server with that id or code.' };
+  if (!giveaway) return { refusal: NOT_FOUND };
   if (!canManage(ctx.config, actorOf(ctx), giveaway)) return { refusal: refuseManage(giveaway) };
 
   return { giveaway };
 }
 
-function describeManage(outcome: ManageOutcome | ShiftOutcome, verb: string): string {
+const STATE_WORDS: Record<GiveawayStatus, string> = {
+  scheduled: 'hasn’t started yet',
+  running: 'is already running',
+  paused: 'is already paused',
+  drawing: 'is being drawn right now',
+  ended: 'has already ended',
+  cancelled: 'was cancelled',
+};
+
+function describeManage(ctx: Ctx, outcome: ManageOutcome | ShiftOutcome, verb: string): string {
   switch (outcome.outcome) {
     case 'missing':
-      return 'There is no giveaway in this server with that id or code.';
+      return NOT_FOUND;
 
-    case 'wrong-state':
-      return (
-        `**${outcome.giveaway.title}** is ${outcome.giveaway.status}, so it cannot be ${verb}. ` +
-        'Run `/giveaway info` to see where it actually is.'
-      );
+    case 'wrong-state': {
+      const { status, title } = outcome.giveaway;
+      const already =
+        (status === 'paused' && verb === 'paused') || (status === 'running' && verb === 'resumed');
+
+      return already
+        ? `**${title}** ${STATE_WORDS[status]}.`
+        : `**${title}** ${STATE_WORDS[status]}, so it can’t be ${verb}.`;
+    }
 
     case 'too-short':
       return (
-        `That would put **${outcome.giveaway.title}** in the past. Use ` +
-        '`/giveaway end` if you want to draw it now.'
+        `That would move the end of **${outcome.giveaway.title}** into the past. To draw it ` +
+        `now, use \`${labelOf(ctx, 'giveaway', 'end')}\`.`
       );
 
     case 'ok':
       return '';
   }
+}
+
+async function refuse(ctx: Ctx, text: string): Promise<void> {
+  await reply(ctx, errorStatus(text), { ephemeral: true });
+}
+
+async function settle(
+  ctx: Ctx,
+  answer: CommandAnswer,
+  outcome: ManageOutcome | ShiftOutcome,
+  verb: string,
+  confirmation: (giveaway: Giveaway) => string,
+): Promise<void> {
+  if (outcome.outcome === 'ok') {
+    await answer.answer(successStatus(confirmation(outcome.giveaway)));
+    return;
+  }
+
+  await answer.refuse(errorStatus(describeManage(ctx, outcome, verb)));
 }
 
 export async function pauseCommand(
@@ -106,30 +149,38 @@ export async function pauseCommand(
 ): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await refuse(ctx, found.refusal);
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, errorStatus(NOT_WIRED));
+    await refuse(ctx, NOT_WIRED);
     return;
   }
 
+  const { giveaway } = found;
+  if (giveaway.status !== 'running') {
+    await refuse(ctx, describeManage(ctx, { outcome: 'wrong-state', giveaway }, 'paused'));
+    return;
+  }
+
+  const answer = await acknowledgeToggleable(ctx, deps, 'pause');
+
   const outcome = await pauseGiveaway(ctx, manage, {
-    giveawayId: found.giveaway.id,
+    giveawayId: giveaway.id,
     by: ctx.userId,
     reason: ctx.options.getString('reason'),
   });
 
-  await reply(
+  await settle(
     ctx,
-    outcome.outcome === 'ok'
-      ? successStatus(
-          `**${outcome.giveaway.title}** has been paused. Nobody can enter until you resume it, ` +
-            'and the time it has left is held where it is.',
-        )
-      : errorStatus(describeManage(outcome, 'paused')),
+    answer,
+    outcome,
+    'paused',
+    (paused) =>
+      `**${paused.title}** has been paused. Nobody can enter until you resume it, and its ` +
+      'time left is kept.',
   );
 }
 
@@ -140,29 +191,35 @@ export async function resumeCommand(
 ): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await refuse(ctx, found.refusal);
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, errorStatus(NOT_WIRED));
+    await refuse(ctx, NOT_WIRED);
     return;
   }
 
+  const { giveaway } = found;
+  if (giveaway.status !== 'paused') {
+    await refuse(ctx, describeManage(ctx, { outcome: 'wrong-state', giveaway }, 'resumed'));
+    return;
+  }
+
+  const answer = await acknowledgeToggleable(ctx, deps, 'resume');
+
   const outcome = await resumeGiveaway(ctx, manage, {
-    giveawayId: found.giveaway.id,
+    giveawayId: giveaway.id,
     by: ctx.userId,
   });
 
-  await reply(
+  await settle(
     ctx,
-    outcome.outcome === 'ok'
-      ? successStatus(
-          `**${outcome.giveaway.title}** is running again — drawn ` +
-            `<t:${seconds(outcome.giveaway.endsAt)}:R>.`,
-        )
-      : errorStatus(describeManage(outcome, 'resumed')),
+    answer,
+    outcome,
+    'resumed',
+    (resumed) => `**${resumed.title}** is running again and ends <t:${seconds(resumed.endsAt)}:R>.`,
   );
 }
 
@@ -174,35 +231,50 @@ export async function shiftCommand(
 ): Promise<void> {
   const duration = parseGiveawayDuration(ctx.options.getString('duration') ?? '');
   if (!duration.ok) {
-    await reply(ctx, errorStatus(duration.humanReason));
+    await refuse(ctx, duration.humanReason);
     return;
   }
 
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await refuse(ctx, found.refusal);
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, errorStatus(NOT_WIRED));
+    await refuse(ctx, NOT_WIRED);
     return;
   }
 
+  const verb = direction === 1 ? 'extended' : 'shortened';
+  const byMs = duration.ms * direction;
+  const { giveaway } = found;
+
+  if (giveaway.endsAt.getTime() + byMs <= clockOf(deps)()) {
+    await refuse(ctx, describeManage(ctx, { outcome: 'too-short', giveaway }, verb));
+    return;
+  }
+
+  if (!EDITABLE.includes(giveaway.status)) {
+    await refuse(ctx, describeManage(ctx, { outcome: 'wrong-state', giveaway }, verb));
+    return;
+  }
+
+  const answer = await acknowledgeToggleable(ctx, deps, direction === 1 ? 'extend' : 'shorten');
+
   const outcome = await shiftDeadline(ctx, manage, {
-    giveawayId: found.giveaway.id,
-    byMs: duration.ms * direction,
+    giveawayId: giveaway.id,
+    byMs,
     by: ctx.userId,
   });
 
-  await reply(
+  await settle(
     ctx,
-    outcome.outcome === 'ok'
-      ? successStatus(
-          `**${outcome.giveaway.title}** now ends <t:${seconds(outcome.giveaway.endsAt)}:R>.`,
-        )
-      : errorStatus(describeManage(outcome, direction === 1 ? 'extended' : 'shortened')),
+    answer,
+    outcome,
+    verb,
+    (shifted) => `**${shifted.title}** now ends <t:${seconds(shifted.endsAt)}:R>.`,
   );
 }
 
@@ -213,7 +285,7 @@ export async function editCommand(
 ): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await refuse(ctx, found.refusal);
     return;
   }
 
@@ -234,30 +306,31 @@ export async function editCommand(
   };
 
   if (Object.keys(patch).length === 0) {
-    await reply(ctx, errorStatus('Name at least one thing to change.'));
+    await refuse(ctx, 'Choose at least one thing to change.');
     return;
   }
 
   const manage = manageDeps(deps);
   if (!manage) {
-    await reply(ctx, errorStatus(NOT_WIRED));
+    await refuse(ctx, NOT_WIRED);
     return;
   }
 
+  const { giveaway } = found;
+  if (!EDITABLE.includes(giveaway.status)) {
+    await refuse(ctx, describeManage(ctx, { outcome: 'wrong-state', giveaway }, 'edited'));
+    return;
+  }
+
+  const answer = await acknowledgeToggleable(ctx, deps, 'edit');
+
   const outcome = await editGiveawayFields(ctx, manage, {
-    giveawayId: found.giveaway.id,
+    giveawayId: giveaway.id,
     patch,
     by: ctx.userId,
   });
 
-  await reply(
-    ctx,
-    outcome.outcome === 'ok'
-      ? successStatus(
-          `**${outcome.giveaway.title}** has been updated, and the giveaway message with it.`,
-        )
-      : errorStatus(describeManage(outcome, 'edited')),
-  );
+  await settle(ctx, answer, outcome, 'edited', (edited) => `**${edited.title}** has been updated.`);
 }
 
 export async function infoCommand(
@@ -267,7 +340,7 @@ export async function infoCommand(
 ): Promise<void> {
   const giveaway = await store.resolve(ctx.guildId, ctx.options.getString('giveaway') ?? '');
   if (!giveaway) {
-    await reply(ctx, errorStatus('There is no giveaway in this server with that id or code.'));
+    await reply(ctx, errorStatus(NOT_FOUND), { ephemeral: true });
     return;
   }
 
@@ -303,7 +376,7 @@ export async function infoCommand(
   const bullets = (lines: readonly string[]): string => lines.map((line) => `• ${line}`).join('\n');
 
   const lines = [
-    `**${giveaway.title}** — \`${code}\``,
+    `**${giveaway.title}** (\`${code}\`)`,
     `Status: **${giveaway.status}** · Channel: <#${giveaway.channelId}> · ` +
       `Host: <@${giveaway.hostId}>`,
     giveaway.startsAt === null ? '' : `Starts <t:${seconds(giveaway.startsAt)}:F>`,
@@ -313,13 +386,14 @@ export async function infoCommand(
     giveaway.pausedAt === null
       ? ''
       : `Paused by <@${giveaway.pausedBy ?? giveaway.hostId}>` +
-        `${giveaway.pauseReason === null ? '' : ` — ${giveaway.pauseReason}`}`,
+        `${giveaway.pauseReason === null ? '' : `: ${giveaway.pauseReason}`}`,
     giveaway.maxEntriesPerUser === null
       ? ''
-      : `Entries are capped at ${giveaway.maxEntriesPerUser} each.`,
+      : `Each member can have up to ${giveaway.maxEntriesPerUser} entries.`,
     requirements.length === 0
-      ? 'No requirements — anybody here can enter.'
-      : `**Requirements** (${giveaway.requirementLogic})\n${bullets(requirements)}`,
+      ? 'No requirements, so anybody here can enter.'
+      : `**Requirements** (${giveaway.requirementLogic === 'any' ? 'any one' : 'all'})\n` +
+        bullets(requirements),
     multipliers.length === 0 ? '' : `**Bonus entries**\n${bullets(multipliers)}`,
     draws.length === 0 ? '' : `Drawn ${plural(draws.length, 'time')}.`,
     giveaway.messageId === null
@@ -328,13 +402,18 @@ export async function infoCommand(
         `${giveaway.messageId}`,
   ];
 
-  await reply(ctx, lines.filter((line) => line.length > 0).join('\n'));
+  await reply(ctx, lines.filter((line) => line.length > 0).join('\n'), { ephemeral: true });
 }
 
-export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: string): Promise<void> {
+export async function bonusCommand(
+  ctx: Ctx,
+  deps: GiveawaysDeps,
+  store: GiveawayStore,
+  action: string,
+): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await reply(ctx, errorStatus(found.refusal), { ephemeral: true });
     return;
   }
 
@@ -345,7 +424,9 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
     const live = grants.filter((grant) => grant.revokedAt === null);
 
     if (live.length === 0) {
-      await reply(ctx, `Nobody has been granted extra entries in **${giveaway.title}**.`);
+      await reply(ctx, `Nobody has been given extra entries in **${giveaway.title}**.`, {
+        ephemeral: true,
+      });
       return;
     }
 
@@ -353,7 +434,7 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
       .slice(0, BONUS_LIST_MAX)
       .map(
         (grant) =>
-          `• <@${grant.userId}> — **+${grant.amount}**` +
+          `• <@${grant.userId}>: **+${grant.amount}**` +
           `${grant.reason === null ? '' : ` · ${grant.reason}`}` +
           ` · by <@${grant.grantedBy}>`,
       );
@@ -362,49 +443,61 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
 
     await reply(
       ctx,
-      [`**Extra entries — ${giveaway.title}**`, ...lines, more > 0 ? `…and ${more} more.` : '']
+      [`**Extra entries in ${giveaway.title}**`, ...lines, more > 0 ? `…and ${more} more.` : '']
         .filter((line) => line.length > 0)
         .join('\n'),
+      { ephemeral: true },
     );
     return;
   }
 
   const userId = ctx.options.getUserId('member');
   if (userId === null) {
-    await reply(ctx, errorStatus('Say which member to grant extra entries to, or take them from.'));
+    await reply(
+      ctx,
+      errorStatus('Choose which member to give extra entries to or take them from.'),
+      { ephemeral: true },
+    );
     return;
   }
 
   if (action === 'remove') {
+    const answer = await acknowledgeCommand(ctx, deps, { path: 'bonus.remove', ephemeral: true });
     const taken = await store.revokeBonus(giveaway.id, userId, ctx.userId, new Date());
 
-    if (taken > 0) {
-      await publishBonus(ctx, store, giveaway, {
-        actorId: ctx.userId,
-        subjectId: userId,
-        amount: taken,
-        reason: null,
-        revoked: true,
-      });
+    if (taken === 0) {
+      await answer.refuse(
+        errorStatus(`<@${userId}> has no extra entries in **${giveaway.title}** to take back.`),
+      );
+      return;
     }
 
-    await reply(
-      ctx,
-      taken === 0
-        ? errorStatus(`<@${userId}> has no extra entries in **${giveaway.title}** to take back.`)
-        : successStatus(
-            `Took back **${taken}** extra ${taken === 1 ? 'entry' : 'entries'} from ` +
-              `<@${userId}> in **${giveaway.title}**.`,
-          ),
+    await publishBonus(ctx, store, giveaway, {
+      actorId: ctx.userId,
+      subjectId: userId,
+      amount: taken,
+      reason: null,
+      revoked: true,
+    });
+
+    await answer.answer(
+      successStatus(
+        `Took back **${taken}** extra ${taken === 1 ? 'entry' : 'entries'} from ` +
+          `<@${userId}> in **${giveaway.title}**.`,
+      ),
     );
     return;
   }
 
   const amount = ctx.options.getInteger('entries');
   if (amount === null || amount < BONUS_MIN || amount > BONUS_MAX) {
-    await reply(ctx, errorStatus(`Grant between ${BONUS_MIN} and ${BONUS_MAX} extra entries.`));
+    await reply(ctx, errorStatus(`Grant between ${BONUS_MIN} and ${BONUS_MAX} extra entries.`), {
+      ephemeral: true,
+    });
     return;
   }
+
+  const answer = await acknowledgeCommand(ctx, deps, { path: 'bonus.add', ephemeral: true });
 
   // Granting to somebody who has not entered yet is deliberate and supported — the entry picks the
   // bonus up when they join.
@@ -427,77 +520,86 @@ export async function bonusCommand(ctx: Ctx, store: GiveawayStore, action: strin
 
   const entered = (await store.entry(giveaway.id, userId)) !== null;
 
-  await reply(
-    ctx,
+  await answer.answer(
     successStatus(
       `<@${userId}> now has **+${grant.amount}** extra ` +
         `${grant.amount === 1 ? 'entry' : 'entries'} in **${giveaway.title}**` +
-        `${grant.reason === null ? '' : ` — ${grant.reason}`}.` +
-        `${entered ? '' : ' They are not in the draw yet; it will count when they enter.'}`,
+        `${grant.reason === null ? '' : ` (${grant.reason})`}.` +
+        `${entered ? '' : ' They aren’t in the draw yet, so these count once they enter.'}`,
     ),
   );
 }
 
-export async function entrantsCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
+export async function entrantsCommand(
+  ctx: Ctx,
+  deps: GiveawaysDeps,
+  store: GiveawayStore,
+): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await refuse(ctx, found.refusal);
     return;
   }
 
   const { giveaway } = found;
+  const answer = await acknowledgeCommand(ctx, deps, { path: 'entrants', ephemeral: true });
   const page = await entrantPage(store, giveaway.id, ctx.options.getInteger('page') ?? 1);
 
   if (page.total === 0) {
-    await reply(ctx, `Nobody has entered **${giveaway.title}** yet.`);
+    await answer.answer(`Nobody has entered **${giveaway.title}** yet.`);
     return;
   }
 
   const start = (page.page - 1) * ENTRANT_PAGE_SIZE;
   const lines = page.rows.map(
     (row, index) =>
-      `\`${String(start + index + 1).padStart(3)}.\` <@${row.userId}> — ` +
-      `${plural(row.totalEntries, 'entry')}`,
+      `\`${String(start + index + 1).padStart(3)}.\` <@${row.userId}> · ` +
+      `${plural(row.totalEntries, 'entry', 'entries')}`,
   );
 
-  await reply(
-    ctx,
+  await answer.answer(
     [
-      `**${giveaway.title}** — ${plural(page.total, 'entrant')}`,
+      `**${giveaway.title}** · ${plural(page.total, 'entrant')}`,
       ...lines,
-      page.pages > 1 ? `Page ${page.page} of ${page.pages}.` : '',
+      page.pages > 1
+        ? `Page ${page.page} of ${page.pages}. Use the page option to see the others.`
+        : '',
     ]
       .filter((line) => line.length > 0)
       .join('\n'),
   );
 }
 
-export async function exportCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
+export async function exportCommand(
+  ctx: Ctx,
+  deps: GiveawaysDeps,
+  store: GiveawayStore,
+): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await refuse(ctx, found.refusal);
     return;
   }
 
   const { giveaway } = found;
+  const answer = await acknowledgeCommand(ctx, deps, { path: 'export', ephemeral: true });
   const exported = await exportEntrants(store, giveaway.id);
 
   if (exported.rows === 0) {
-    await reply(
-      ctx,
-      errorStatus(`Nobody has entered **${giveaway.title}**, so there is nothing to export.`),
+    await answer.refuse(
+      errorStatus(`Nobody has entered **${giveaway.title}**, so there’s nothing to export.`),
     );
     return;
   }
 
   const code = formatShortCode(giveaway.shortCode) ?? giveaway.id;
 
-  await replyWithFile(
-    ctx,
+  await answer.answer(
     successStatus(
-      `**${giveaway.title}** — ${plural(exported.rows, 'entrant')} exported.` +
+      `Exported ${plural(exported.rows, 'entrant')} from **${giveaway.title}**.` +
         (exported.truncated
-          ? ` Capped at ${EXPORT_ROW_MAX} rows, so this is not the whole list.`
+          ? ` The file stops at ${EXPORT_ROW_MAX.toLocaleString('en-GB')} rows, so it isn’t the ` +
+            'whole list.'
           : ''),
     ),
     {
@@ -509,7 +611,7 @@ export async function exportCommand(ctx: Ctx, store: GiveawayStore): Promise<voi
 }
 
 export async function statsCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
-  await reply(ctx, renderStats(await store.stats(ctx.guildId)));
+  await reply(ctx, renderStats(await store.stats(ctx.guildId), ctx), { ephemeral: true });
 }
 
 const HISTORY_WORDS: Record<string, string> = {
@@ -523,17 +625,21 @@ const HISTORY_WORDS: Record<string, string> = {
   cancelled: 'cancelled',
   drawn: 'drawn',
   rerolled: 'rerolled',
-  'bonus-granted': 'granted extra entries',
-  'bonus-revoked': 'took back extra entries',
+  'bonus-granted': 'extra entries given',
+  'bonus-revoked': 'extra entries taken back',
   claimed: 'claimed',
   forfeited: 'forfeited',
-  orphaned: 'lost its message',
+  orphaned: 'message deleted',
+};
+
+const AUTOMATIC_WHY: Record<string, string> = {
+  'proton:claim-expiry': ' because a winner didn’t claim in time',
 };
 
 export async function historyCommand(ctx: Ctx, store: GiveawayStore): Promise<void> {
   const found = await target(ctx, store);
   if ('refusal' in found) {
-    await reply(ctx, errorStatus(found.refusal));
+    await reply(ctx, errorStatus(found.refusal), { ephemeral: true });
     return;
   }
 
@@ -544,23 +650,24 @@ export async function historyCommand(ctx: Ctx, store: GiveawayStore): Promise<vo
     await reply(
       ctx,
       `**${giveaway.title}** has no recorded history. Giveaways started before history was ` +
-        'added carry none.',
+        'added don’t have any.',
+      { ephemeral: true },
     );
     return;
   }
 
   const lines = events.map((event) => {
+    const what = HISTORY_WORDS[event.kind] ?? event.kind;
     const who = event.actorId.startsWith('proton:')
-      ? `_${event.actorId.slice('proton:'.length)}_`
-      : `<@${event.actorId}>`;
+      ? (AUTOMATIC_WHY[event.actorId] ?? '')
+      : ` by <@${event.actorId}>`;
 
-    return `<t:${Math.floor(event.at.getTime() / 1000)}:f> — ${
-      HISTORY_WORDS[event.kind] ?? event.kind
-    } by ${who}`;
+    return `<t:${Math.floor(event.at.getTime() / 1000)}:f> · ${what}${who}`;
   });
 
   await reply(
     ctx,
-    [`**${giveaway.title}** — history`, ...lines].join('\n').slice(0, MESSAGE_CONTENT_MAX),
+    [`**History of ${giveaway.title}**`, ...lines].join('\n').slice(0, MESSAGE_CONTENT_MAX),
+    { ephemeral: true },
   );
 }

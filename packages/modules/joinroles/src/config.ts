@@ -1,11 +1,16 @@
 import { protonFields } from '@proton/core';
 import { z } from 'zod';
 
-export const JOINROLES_SCHEMA_VERSION = 2;
+export const JOINROLES_SCHEMA_VERSION = 3;
 
 export const MAX_MEMBER_ROLES = 10;
 export const MAX_BOT_ROLES = 10;
 export const MAX_STICKY_ROLES = 25;
+export const MAX_SYNC_EXCLUDE_ROLES = 25;
+
+export const SYNC_INTERVALS = ['daily', 'weekly'] as const;
+
+export type SyncInterval = (typeof SYNC_INTERVALS)[number];
 
 // A fresh schema per field: `.register()` mutates the instance it is called on, so registering
 // field metadata on a shared snowflake schema would tag it as a role picker everywhere.
@@ -13,7 +18,7 @@ const roleIdArray = () =>
   z.array(
     z
       .string()
-      .regex(/^\d{17,20}$/, 'must be a Discord role id')
+      .regex(/^\d{17,20}$/, 'must be a Discord role ID')
       .register(protonFields, {
         field: 'role-id',
       }),
@@ -44,6 +49,26 @@ export const joinrolesConfigSchema = z.object({
     label: 'Roles to restore',
     description: 'Leave empty to restore every role the member had.',
   }),
+
+  syncExcludeEnabled: z.boolean().default(false).register(protonFields, {
+    label: 'Skip members with certain roles',
+  }),
+
+  syncExcludeRoleIds: roleIdArray().max(MAX_SYNC_EXCLUDE_ROLES).default([]).register(protonFields, {
+    label: 'Roles to skip',
+  }),
+
+  syncScheduleEnabled: z.boolean().default(false).register(protonFields, {
+    label: 'Sync on a schedule',
+  }),
+
+  syncInterval: z
+    .enum(SYNC_INTERVALS)
+    .default('weekly')
+    .register(protonFields, {
+      label: 'How often',
+      optionLabels: { daily: 'Daily', weekly: 'Weekly' },
+    }),
 });
 
 export type JoinrolesConfig = z.infer<typeof joinrolesConfigSchema>;

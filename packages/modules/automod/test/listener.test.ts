@@ -5,7 +5,7 @@ import type { AutomodDeps } from '../src/deps.ts';
 import { createAutomodExecutionListener } from '../src/execution.ts';
 import { createAutomodListener } from '../src/listener.ts';
 import { RULE_NAMES } from '../src/native.ts';
-import { BOT, config, GUILD, harness, MEMBER, protonEvent } from './harness.ts';
+import { BOT, config, GUILD, type Harness, harness, MEMBER, protonEvent } from './harness.ts';
 
 const NEVER_TRIPS: RateWindowStore = {
   async hit(_input: RateWindowHit): Promise<RateWindowResult> {
@@ -48,6 +48,11 @@ function message(over: Record<string, unknown> = {}) {
     attachments: [],
     ...over,
   };
+}
+
+function alertContent(h: Harness): string {
+  const alert = h.executor.requests.find((request) => request.kind === 'send');
+  return (alert?.payload as { content: string } | undefined)?.content ?? '';
 }
 
 describe('createAutomodListener', () => {
@@ -204,8 +209,61 @@ describe('createAutomodListener', () => {
     const alert = h.executor.requests.find((request) => request.kind === 'send');
     const payload = alert?.payload as { content: string; allowedMentions: { parse: string[] } };
 
-    expect(payload.content).toContain('invites');
+    expect(payload.content).toContain('Invite links');
     expect(payload.allowedMentions.parse).toEqual([]);
+  });
+
+  test('a delete that finds the message already gone counts as deleted', async () => {
+    const h = harness(
+      config({
+        invitesSeverity: 'high',
+        highResponse: 'warn',
+        alertChannelId: '500000000000000009',
+      }),
+    );
+    h.executor.results.delete_message = {
+      status: 'failed_api',
+      failure: { code: 'discord_404', humanReason: 'gone' },
+    };
+    const listener = createAutomodListener(deps());
+
+    await listener.handler(
+      protonEvent('message.created', message({ content: 'join discord.gg/abcdef' })),
+      h.ctx,
+    );
+
+    const content = alertContent(h);
+
+    expect(content).toContain('The message was deleted.');
+    expect(content).not.toContain('left up');
+    expect(content).not.toContain('⚠');
+    expect(h.logs.join('\n')).not.toContain('Couldn’t delete');
+  });
+
+  test('a refused delete still warns that the message was left up', async () => {
+    const h = harness(
+      config({
+        invitesSeverity: 'high',
+        highResponse: 'warn',
+        alertChannelId: '500000000000000009',
+      }),
+    );
+    h.executor.results.delete_message = {
+      status: 'failed_api',
+      failure: { code: 'discord_403', humanReason: 'refused' },
+    };
+    const listener = createAutomodListener(deps());
+
+    await listener.handler(
+      protonEvent('message.created', message({ content: 'join discord.gg/abcdef' })),
+      h.ctx,
+    );
+
+    const content = alertContent(h);
+
+    expect(content).toContain('The message was left up.');
+    expect(content).toContain('⚠ Couldn’t delete the message: refused');
+    expect(h.logs.join('\n')).toContain('Couldn’t delete the message: refused');
   });
 
   test('an exempt role is never acted on', async () => {

@@ -8,7 +8,7 @@ export const TEMPVC_NAME_SIMULATION: SimulationAdapter<TempVcConfig> = {
     id: 'tempvc.channel_name',
     moduleId: 'tempvc',
     label: 'Temporary channel name',
-    summary: 'What a temporary channel will be called when somebody joins this creator channel.',
+    summary: 'What a temporary channel will be called when someone joins this creator channel.',
     surfaceId: TEMPVC_NAME_SURFACE.id,
     configPath: 'hubs.*.nameTemplate',
     output: 'text',
@@ -25,7 +25,7 @@ export const TEMPVC_NAME_SIMULATION: SimulationAdapter<TempVcConfig> = {
         fixed: true,
       },
     ],
-    note: 'No channel is created and nobody is moved — this only works out the name.',
+    note: 'No channel is created and no one is moved. This only works out the name.',
   },
 
   build(config, scene: SimulationScene): SimulationBuild {

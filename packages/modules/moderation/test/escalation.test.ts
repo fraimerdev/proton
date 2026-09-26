@@ -7,6 +7,7 @@ import {
 } from '../src/config.ts';
 import { escalationRules, moderationPresetRules } from '../src/escalation.ts';
 import { moderationModule } from '../src/index.ts';
+import { HIGH_ROLE, LOW_ROLE, MOD_ROLE } from './harness.ts';
 
 describe('warn escalation as preset rules', () => {
   test('every preset rule is a valid rule definition', () => {
@@ -32,7 +33,7 @@ describe('warn escalation as preset rules', () => {
         actions: [
           {
             kind: 'timeout',
-            reason: 'Warning 3 within 30d — automatic escalation',
+            reason: 'Warning 3 within 30d (automatic escalation)',
             duration: '1h',
           },
         ],
@@ -46,7 +47,7 @@ describe('warn escalation as preset rules', () => {
         actions: [
           {
             kind: 'timeout',
-            reason: 'Warning 5 within 30d — automatic escalation',
+            reason: 'Warning 5 within 30d (automatic escalation)',
             duration: '1d',
           },
         ],
@@ -129,6 +130,81 @@ describe('warn escalation as preset rules', () => {
   });
 });
 
+describe('immunity applies to automatic escalation', () => {
+  const ladder = {
+    escalationWindow: '7d',
+    escalationLadder: [
+      { atWarnings: 2, action: 'timeout' as const, duration: '10m' },
+      { atWarnings: 4, action: 'kick' as const },
+      { atWarnings: 6, action: 'ban' as const },
+    ],
+  };
+
+  function immune(useHierarchy: boolean) {
+    return moderationConfigSchema.parse({
+      ...ladder,
+      punish: {
+        immunity: {
+          useHierarchy,
+          global: [MOD_ROLE],
+          timeout: [LOW_ROLE, MOD_ROLE],
+          ban: [HIGH_ROLE],
+        },
+      },
+    });
+  }
+
+  test('each rung excludes the global immune roles plus its own action’s', () => {
+    const rules = escalationRules(immune(false));
+
+    expect(rules.map((rule) => rule.conditions)).toEqual([
+      [
+        { kind: 'rate-over-window', limit: 2, window: '7d' },
+        { kind: 'role-lacks', roleIds: [MOD_ROLE, LOW_ROLE] },
+      ],
+      [
+        { kind: 'rate-over-window', limit: 4, window: '7d' },
+        { kind: 'role-lacks', roleIds: [MOD_ROLE] },
+      ],
+      [
+        { kind: 'rate-over-window', limit: 6, window: '7d' },
+        { kind: 'role-lacks', roleIds: [MOD_ROLE, HIGH_ROLE] },
+      ],
+    ]);
+    for (const rule of rules) expect(ruleDefinitionSchema.safeParse(rule).success).toBe(true);
+  });
+
+  test('the role lists still apply when hierarchy immunity is on', () => {
+    expect(escalationRules(immune(true))).toEqual(escalationRules(immune(false)));
+  });
+
+  test('a rung with no immune roles for its action gets no role condition', () => {
+    const config = moderationConfigSchema.parse({
+      ...ladder,
+      punish: { immunity: { useHierarchy: true, ban: [HIGH_ROLE] } },
+    });
+
+    const rules = escalationRules(config);
+
+    expect(rules.map((rule) => rule.conditions.map((condition) => condition.kind))).toEqual([
+      ['rate-over-window'],
+      ['rate-over-window'],
+      ['rate-over-window', 'role-lacks'],
+    ]);
+  });
+
+  test('the manifest compiles a guild’s immunity into its rules', () => {
+    const config = immune(false);
+
+    expect(moderationModule.compileRules?.(config)).toEqual(escalationRules(config));
+    expect(
+      moderationModule
+        .compileRules?.(config)[0]
+        ?.conditions.some((condition) => condition.kind === 'role-lacks'),
+    ).toBe(true);
+  });
+});
+
 describe('moderation owns the ladder it escalates with', () => {
   test('every rung action is a kind moderation declares, so the invite asks for it', () => {
     for (const action of ESCALATION_ACTIONS) {
@@ -151,14 +227,7 @@ describe('moderation owns the ladder it escalates with', () => {
 
     const paths = registry.descriptors(moderationModule.id).map((d) => d.path);
 
-    expect(paths).toEqual([
-      'enabled',
-      'requireReason',
-      'publicReplies',
-      'defaultTimeoutDuration',
-      'defaultBanDeleteDays',
-      'escalationWindow',
-    ]);
+    expect(paths).toEqual(['enabled', 'publicReplies', 'escalationWindow']);
     expect(paths).not.toContain('escalationLadder');
   });
 });

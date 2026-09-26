@@ -1,4 +1,5 @@
-import type { ActionResult, ModuleContext } from '@proton/core';
+import { type ActionResult, type ModuleContext, snowflakeSchema } from '@proton/core';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import { APPEALS_ACTOR, type AppealPanel, type AppealsConfig, MODULE_ID } from './config.ts';
 import type { AppealsDeps } from './deps.ts';
 import { buildReviewCard } from './review.ts';
@@ -10,6 +11,14 @@ function succeeded(result: ActionResult): boolean {
     result.status === 'dry_run' ||
     result.status === 'skipped_duplicate'
   );
+}
+
+// Discord 404s an unban for somebody no longer banned, which is the state accepting asked for.
+function alreadyUnbanned(panel: AppealPanel, result: ActionResult): boolean {
+  if (panel.onApprove !== 'unban' || result.failure?.code !== 'discord_404') return false;
+
+  const discordCode = result.failure.discordCode;
+  return discordCode === undefined || discordCode === RESTJSONErrorCodes.UnknownBan;
 }
 
 export interface ApplyOutcome {
@@ -32,11 +41,13 @@ export async function applyDecision(
     return { lifted: false, unblocked: false, humanReason: null };
   }
 
+  const decider = snowflakeSchema.safeParse(appeal.decidedBy);
+
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
     kind: panel.onApprove,
-    actorId: APPEALS_ACTOR,
+    actorId: decider.success ? decider.data : APPEALS_ACTOR,
     targetId: appeal.userId,
     reason: `Appeal #${appeal.number} was accepted.`,
     payload: { userId: appeal.userId },
@@ -44,13 +55,21 @@ export async function applyDecision(
     idempotencyKey: `${MODULE_ID}:${appeal.id}:${panel.onApprove}`,
   });
 
-  if (!succeeded(result)) {
+  if (alreadyUnbanned(panel, result)) {
+    ctx.logger.info(
+      `appeal #${appeal.number} was accepted and ${appeal.userId} was no longer banned, so there ` +
+        'was no ban left to lift.',
+      { guildId: ctx.guildId, moduleId: MODULE_ID, userId: appeal.userId },
+    );
+  } else if (!succeeded(result)) {
     const humanReason = result.failure?.humanReason ?? 'Discord gave no reason.';
+
+    const unban = panel.onApprove === 'unban';
 
     ctx.logger.error(
       `appeal #${appeal.number} was accepted but ${appeal.userId} could NOT be ` +
-        `${panel.onApprove === 'unban' ? 'unbanned' : 'untimed out'}: ${humanReason}. A ` +
-        'moderator has to do it by hand, or press Accept again.',
+        `${unban ? 'unbanned' : 'untimed out'}: ${humanReason} A moderator has to lift the ` +
+        `${unban ? 'ban' : 'timeout'} by hand if it is still in place.`,
       { guildId: ctx.guildId, moduleId: MODULE_ID, userId: appeal.userId },
     );
 
@@ -81,8 +100,6 @@ export async function applyDecision(
   return { lifted: true, unblocked, humanReason: null };
 }
 
-// Stamped last, on purpose. A half-finished decision keeps its live buttons, so a moderator can
-// see it did not complete and press again.
 export async function stampCard(
   ctx: ModuleContext<AppealsConfig>,
   store: AppealStore,
@@ -102,7 +119,9 @@ export async function stampCard(
     actorId: APPEALS_ACTOR,
     dryRun: false,
     record: false,
-    idempotencyKey: `${MODULE_ID}:${appeal.id}:card:${fresh.status}`,
+    idempotencyKey:
+      `${MODULE_ID}:${appeal.id}:card:${fresh.status}:` +
+      (fresh.outcomeApplied ? 'applied' : 'pending'),
     payload: {
       channelId: appeal.cardChannelId,
       messageId: appeal.cardMessageId,

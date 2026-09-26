@@ -6,6 +6,9 @@ import {
   joinrolesDefaultConfig,
 } from './config.ts';
 import { createJoinRolesListener, type JoinRolesDeps } from './listeners.ts';
+import { createAutosyncHandler, JOINROLES_AUTOSYNC_JOB } from './sync/autosync.ts';
+import { createJoinRolesSyncListener } from './sync/listener.ts';
+import { createSyncBatchHandler, JOINROLES_SYNC_JOB } from './sync/run.ts';
 
 export {
   JOINROLES_SCHEMA_VERSION,
@@ -15,9 +18,18 @@ export {
   MAX_BOT_ROLES,
   MAX_MEMBER_ROLES,
   MAX_STICKY_ROLES,
+  MAX_SYNC_EXCLUDE_ROLES,
+  SYNC_INTERVALS,
+  type SyncInterval,
 } from './config.ts';
 export { DrizzleStickyRoleStore } from './drizzle-store.ts';
-export { type GrantPlan, planGrant } from './grant.ts';
+export {
+  type GrantableRoles,
+  type GrantPlan,
+  type GrantRefusal,
+  grantableRoles,
+  planGrant,
+} from './grant.ts';
 export {
   createJoinRolesListener,
   JOINROLES_ACTOR,
@@ -36,13 +48,51 @@ export {
 } from './pending.ts';
 export { planRestore, type RestorePlan } from './restore.ts';
 export type { StickyRoleStore } from './store.ts';
+export {
+  AUTOSYNC_BUSY_RETRY_MS,
+  AUTOSYNC_OVERDUE_MS,
+  autosyncRunId,
+  createAutosyncHandler,
+  JOINROLES_AUTOSYNC_JOB,
+  JOINROLES_AUTOSYNC_KEY,
+  SYNC_INTERVAL_MS,
+} from './sync/autosync.ts';
+export { createJoinRolesSyncListener, JOINROLES_SYNC_EVENT_TYPES } from './sync/listener.ts';
+export {
+  type MemberPlan,
+  planMember,
+  type SyncPlanInput,
+  syncPlanInput,
+} from './sync/plan.ts';
+export { preflightSync, type SyncPreflight } from './sync/preflight.ts';
+export {
+  createSyncBatchHandler,
+  JOINROLES_SYNC_JOB,
+  SYNC_ATTEMPTS,
+  SYNC_COUNT_PAGES_PER_TICK,
+  SYNC_FAILURES,
+  SYNC_GRANTS_PER_TICK,
+  SYNC_PAGE,
+  SYNC_TICK_BUDGET_MS,
+  type SyncBatchData,
+  syncBatchKey,
+  syncGrantKey,
+} from './sync/run.ts';
+export { type StartOutcome, startRun } from './sync/start.ts';
+export {
+  claimRun,
+  JOINROLES_SYNC_PREFIX,
+  type JoinRolesRunStore,
+  RedisJoinRolesRunStore,
+  type SyncClaim,
+} from './sync/store.ts';
 
 export function createJoinRolesModule(
   deps: JoinRolesDeps = {},
 ): ModuleManifest<typeof joinrolesConfigSchema> {
   return {
     id: 'joinroles',
-    name: 'Join roles',
+    name: 'Join Roles',
     category: 'utility',
     configSchema: joinrolesConfigSchema,
     defaultConfig: joinrolesDefaultConfig,
@@ -53,7 +103,13 @@ export function createJoinRolesModule(
     requiredPermissions: [Permissions.ManageRoles],
     actionKinds: ['add_role'],
 
-    listeners: [createJoinRolesListener(deps)],
+    listeners: [createJoinRolesListener(deps), createJoinRolesSyncListener(deps)],
+
+    schedules: [JOINROLES_SYNC_JOB, JOINROLES_AUTOSYNC_JOB],
+    scheduledHandlers: {
+      [JOINROLES_SYNC_JOB]: createSyncBatchHandler(deps),
+      [JOINROLES_AUTOSYNC_JOB]: createAutosyncHandler(deps),
+    },
 
     dashboard: {
       icon: 'user-plus',
@@ -64,6 +120,16 @@ export function createJoinRolesModule(
           fields: ['enabled', 'memberRoleIds', 'botRoleIds', 'grantWhenScreeningPasses'],
         },
         { id: 'sticky', title: 'Sticky roles', fields: ['stickyEnabled', 'stickyRoleIds'] },
+        {
+          id: 'sync',
+          title: 'Sync',
+          fields: [
+            'syncExcludeEnabled',
+            'syncExcludeRoleIds',
+            'syncScheduleEnabled',
+            'syncInterval',
+          ],
+        },
       ],
     },
   };

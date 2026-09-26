@@ -10,15 +10,13 @@ export const SUGGESTION_NUMBER_MAX = 1_000_000;
 
 export type ContentResult = { ok: true; content: string } | { ok: false; humanReason: string };
 
-export function normaliseSuggestion(raw: string): ContentResult {
+export function normaliseSuggestion(raw: string, suggest: string): ContentResult {
   const content = raw.trim();
 
   if (content.length === 0) {
     return {
       ok: false,
-      humanReason:
-        'A suggestion needs some text and yours was empty. Say what you would like changed and ' +
-        'why it would help.',
+      humanReason: 'Your suggestion is empty. Say what you’d like to change and why it would help.',
     };
   }
 
@@ -26,8 +24,8 @@ export function normaliseSuggestion(raw: string): ContentResult {
     return {
       ok: false,
       humanReason:
-        `A suggestion is capped at ${SUGGESTION_CONTENT_MAX} characters and yours is ` +
-        `${content.length}. Trim it and run \`/suggest\` again — nothing was posted.`,
+        `Suggestions can be up to ${SUGGESTION_CONTENT_MAX} characters, and yours has ` +
+        `${content.length}. Nothing was posted. Shorten it and run \`${suggest}\` again.`,
     };
   }
 
@@ -51,7 +49,8 @@ export const suggestionsConfigSchema = z.object({
 
   createThread: z.boolean().default(false).register(protonFields, {
     label: 'Create discussion threads',
-    description: 'Also needs Create Public Threads in the suggestion channel.',
+    description:
+      'Open a thread under each suggestion. Needs Create Public Threads in the suggestion channel.',
   }),
 
   allowSelfVote: z
@@ -59,15 +58,10 @@ export const suggestionsConfigSchema = z.object({
     .default(true)
     .register(protonFields, { label: 'Let members vote on their own suggestion' }),
 
-  anonymous: z
-    .boolean()
-    .default(false)
-    .register(protonFields, {
-      label: 'Attribution',
-      description:
-        'Choose whether suggestions show who wrote them. Proton still stores the author and can ' +
-        'tell staff on request.',
-    }),
+  anonymous: z.boolean().default(false).register(protonFields, {
+    label: 'Attribution',
+    description: 'Choose whether suggestions show who wrote them. Proton still stores the author.',
+  }),
 });
 
 export type SuggestionsConfig = z.infer<typeof suggestionsConfigSchema>;

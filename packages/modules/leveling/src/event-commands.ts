@@ -5,6 +5,7 @@ import {
   deferEphemeral,
   errorStatus,
   followUp,
+  labelOf,
   type RespondTo,
   replyEphemeral,
   type StatusBody,
@@ -38,11 +39,14 @@ const NOT_WIRED =
   "I can't run XP events right now. Nothing was changed. This is a fault on my side, not a " +
   'setting in this server.';
 
-const STORE_FAILED =
-  "Something went wrong reading or saving this server's XP events. Run /xp event list to see " +
-  'where things stand, then try again.';
+function storeFailed(ctx: Ctx): string {
+  return (
+    "Couldn't read or save this server's XP events. Run " +
+    `${labelOf(ctx, 'xp', 'event.list')} to see where things stand, then try again.`
+  );
+}
 
-const CANCEL_ON_DASHBOARD = 'cancel it on the Leveling page of the Proton dashboard';
+const DASHBOARD_PAGE = 'the Leveling page of the Proton dashboard';
 
 export function xpEventId(interactionId: string): string {
   return `command:${interactionId}`;
@@ -61,9 +65,7 @@ export function addXpEventGroup(
         .addNumberOption((option) =>
           option
             .setName('multiplier')
-            .setDescription(
-              'How much XP counts for, from 0.1 to 5 in steps of 0.1 — for example 2.',
-            )
+            .setDescription('From 0.1 to 5, in steps of 0.1. For example, 2 for double XP.')
             .setRequired(true)
             .setMinValue(XP_EVENT_MULTIPLIER_MIN)
             .setMaxValue(XP_EVENT_MULTIPLIER_MAX),
@@ -71,7 +73,7 @@ export function addXpEventGroup(
         .addStringOption((option) =>
           option
             .setName('duration')
-            .setDescription('How long it runs, from 10m to 14d — for example 2h.')
+            .setDescription('How long it runs, from 10m to 14d. For example, 2h.')
             .setRequired(true)
             .setMaxLength(16),
         )
@@ -86,7 +88,7 @@ export function addXpEventGroup(
     )
     .addSubcommand((sub) => sub.setName('end').setDescription('End every XP event running now.'))
     .addSubcommand((sub) =>
-      sub.setName('list').setDescription('List the active and scheduled XP events.'),
+      sub.setName('list').setDescription('List the running and scheduled XP events.'),
     );
 }
 
@@ -125,7 +127,7 @@ function plain(text: string): string {
 function describeCreated(event: XpEvent, now: number): string {
   const end = unix(event.endsAt);
   const rule =
-    'While it runs, members earn the highest multiplier that applies to them — a 0× role or ' +
+    'While it runs, members get the highest multiplier that applies to them. A 0× role or ' +
     'channel still earns nothing.';
 
   if (xpEventStatus(event, now) === 'scheduled') {
@@ -146,15 +148,16 @@ async function start(ctx: Ctx, store: XpEventStore, now: number): Promise<Status
 
   if (multiplier === null || durationText === null) {
     return errorStatus(
-      'I need a multiplier and a duration, for example `/xp event start multiplier:2 duration:2h`.',
+      'I need a multiplier and a duration, for example ' +
+        `\`${labelOf(ctx, 'xp', 'event.start')} multiplier:2 duration:2h\`.`,
     );
   }
 
   const parsed = xpEventMultiplierSchema.safeParse(multiplier);
   if (!parsed.success) {
     return errorStatus(
-      `The multiplier must be between ${XP_EVENT_MULTIPLIER_MIN} and ${XP_EVENT_MULTIPLIER_MAX} ` +
-        `in steps of 0.1, like 1.5 or 2 — ${multiplier} is not. Nothing was started.`,
+      `${multiplier} isn't a valid multiplier. Use a number from ${XP_EVENT_MULTIPLIER_MIN} to ` +
+        `${XP_EVENT_MULTIPLIER_MAX} in steps of 0.1, like 1.5 or 2. Nothing was started.`,
     );
   }
 
@@ -165,17 +168,16 @@ async function start(ctx: Ctx, store: XpEventStore, now: number): Promise<Status
     duration > XP_EVENT_MAX_DURATION_MS
   ) {
     return errorStatus(
-      `\`${plain(durationText)}\` is not a duration an XP event can run for. It must be between ` +
-        '10m and 14d — a number followed by m, h or d, for example 30m, 2h or 3d. Nothing was ' +
-        'started.',
+      `\`${plain(durationText)}\` isn't a valid duration. Use 10m to 14d: a number followed by ` +
+        'm, h or d, like 30m, 2h or 3d. Nothing was started.',
     );
   }
 
   const lead = leadText === null ? 0 : tryParseDuration(leadText);
   if (lead === null || lead > XP_EVENT_MAX_LEAD_MS) {
     return errorStatus(
-      `\`${plain(leadText ?? '')}\` is not a wait an XP event can have. starts_in must be at most ` +
-        '30d — a number followed by m, h or d, for example 45m or 2d. Nothing was started.',
+      `\`${plain(leadText ?? '')}\` isn't a valid wait for starts_in. Use up to 30d: a number ` +
+        'followed by m, h or d, like 45m or 2d. Nothing was started.',
     );
   }
 
@@ -184,7 +186,8 @@ async function start(ctx: Ctx, store: XpEventStore, now: number): Promise<Status
 
   const issue = xpEventBoundsIssue({ startsAt, endsAt }, now);
   if (issue) {
-    return errorStatus(`That XP event cannot be started: its ${issue.path} ${issue.message}.`);
+    const part = issue.path === 'startsAt' ? 'start' : 'end';
+    return errorStatus(`Couldn't start that XP event: the ${part} ${issue.message}.`);
   }
 
   const result = await createXpEvent(
@@ -210,9 +213,10 @@ async function start(ctx: Ctx, store: XpEventStore, now: number): Promise<Status
 
   if (result.status === 'full') {
     return errorStatus(
-      `This server already has ${result.pending} XP events active or scheduled, and ` +
-        `${XP_EVENT_MAX_PENDING} is the most it can have. End the running ones with /xp event end, ` +
-        `${CANCEL_ON_DASHBOARD} for a scheduled one, or wait for one to finish. Nothing was started.`,
+      `This server already has ${result.pending} XP events running or scheduled, and ` +
+        `${XP_EVENT_MAX_PENDING} is the most it can have. End running ones with ` +
+        `${labelOf(ctx, 'xp', 'event.end')}, cancel a scheduled one on ${DASHBOARD_PAGE}, or ` +
+        'wait for one to finish. Nothing was started.',
     );
   }
 
@@ -243,11 +247,13 @@ async function end(ctx: Ctx, store: XpEventStore, now: number): Promise<StatusBo
   const still =
     scheduled === 0
       ? ''
-      : ` ${scheduled} scheduled XP event${scheduled === 1 ? ' is' : 's are'} untouched and will ` +
-        `still start — ${CANCEL_ON_DASHBOARD} to stop one.`;
+      : scheduled === 1
+        ? ` 1 scheduled XP event will still start. To stop it, cancel it on ${DASHBOARD_PAGE}.`
+        : ` ${scheduled} scheduled XP events will still start. To stop one, cancel it on ` +
+          `${DASHBOARD_PAGE}.`;
 
   if (ended === 0) {
-    return errorStatus(`No XP event is running right now, so there was nothing to end.${still}`);
+    return errorStatus(`No XP event is running, so there was nothing to end.${still}`);
   }
 
   ctx.logger.info(`/xp event end ended ${ended} event(s)`, {
@@ -262,16 +268,20 @@ async function end(ctx: Ctx, store: XpEventStore, now: number): Promise<StatusBo
 async function list(ctx: Ctx, store: XpEventStore, now: number): Promise<string> {
   const pending = await store.pending(ctx.guildId, now);
   if (pending.length === 0) {
-    return 'There are no active or scheduled XP events. Start one with /xp event start.';
+    return (
+      'No XP events are running or scheduled. Start one with ' +
+      `${labelOf(ctx, 'xp', 'event.start')}.`
+    );
   }
 
   const lines = pending.map((event) => {
+    const running = xpEventStatus(event, now) === 'active';
     const by = snowflakeSchema.safeParse(event.createdBy).success
-      ? ` — by <@${event.createdBy}>`
+      ? ` · ${running ? 'started' : 'scheduled'} by <@${event.createdBy}>`
       : '';
 
-    return xpEventStatus(event, now) === 'active'
-      ? `**Active** · ${times(event.multiplier)} XP, ends <t:${unix(event.endsAt)}:R>${by}`
+    return running
+      ? `**Running** · ${times(event.multiplier)} XP, ends <t:${unix(event.endsAt)}:R>${by}`
       : `**Scheduled** · ${times(event.multiplier)} XP, starts <t:${unix(event.startsAt)}:R> and ` +
           `runs until <t:${unix(event.endsAt)}:f>${by}`;
   });
@@ -303,6 +313,7 @@ export async function runXpEventCommand(ctx: Ctx, deps: LevelingDeps): Promise<v
         {
           ...(typeof message === 'string' ? { content: message } : message),
           allowedMentions: MENTIONS_OFF,
+          ephemeral: true,
         },
       ),
     );
@@ -322,7 +333,10 @@ export async function runXpEventCommand(ctx: Ctx, deps: LevelingDeps): Promise<v
         answer = await list(ctx, bound.xpEvents, now);
         break;
       default:
-        answer = errorStatus('Use /xp event start, /xp event end or /xp event list.');
+        answer = errorStatus(
+          `Use ${labelOf(ctx, 'xp', 'event.start')}, ${labelOf(ctx, 'xp', 'event.end')} or ` +
+            `${labelOf(ctx, 'xp', 'event.list')}.`,
+        );
     }
   } catch (error) {
     ctx.logger.error(
@@ -331,7 +345,7 @@ export async function runXpEventCommand(ctx: Ctx, deps: LevelingDeps): Promise<v
       }`,
       { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: ctx.userId },
     );
-    answer = errorStatus(STORE_FAILED);
+    answer = errorStatus(storeFailed(ctx));
   }
 
   await say(answer);

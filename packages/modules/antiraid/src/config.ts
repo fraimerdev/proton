@@ -75,9 +75,7 @@ export const antiraidConfigSchema = z
     ctx.addIssue({
       code: 'custom',
       path: ['brandNewAccountAge'],
-      message:
-        `must not be longer than the new-account age (${config.newAccountAge}) — brand-new ` +
-        'accounts are a subset of new ones, and the heavier score belongs to the younger set',
+      message: `Can’t be longer than the new account age (${config.newAccountAge}).`,
     });
   });
 

@@ -1,6 +1,11 @@
 import {
+  type ActionResult,
   type CommandContext,
   type CommandDefinition,
+  deferEphemeral,
+  type FollowUpTo,
+  followUp,
+  labelOf,
   Permissions,
   type StatusKind,
   statusBody,
@@ -30,50 +35,45 @@ export { MODULE_ID };
 
 const CONTENT_MAX = 2000;
 
-const DISABLED =
-  'Backups are disabled in this server. An admin can turn the Backup module back on from ' +
-  'the Proton dashboard.';
+const DISABLED = 'Backup is off in this server. An admin can turn it on in the Proton dashboard.';
 
 const NO_LAYOUT =
-  'I don’t have this server’s channel and role list yet, so there is nothing to snapshot. It ' +
-  'arrives once Proton finishes connecting to Discord — try again in a moment. Nothing has ' +
-  'been saved.';
+  'I don’t have this server’s channel and role list yet. It arrives once I finish connecting ' +
+  'to Discord, so try again in a moment.';
 
-const PREVIEW_ONLY =
-  'Run the same command with `confirm: true` to create those roles and channels in this server.';
+const PREVIEW_ONLY = 'To go ahead, run the same command with `confirm: true`.';
 
 const NOT_WIRED =
-  'I can’t reach this server’s backups. Nothing was saved or changed. This is a fault on my ' +
+  'I can’t reach this server’s backups. Nothing was saved or changed. This is a problem on my ' +
   'side, not a setting in this server.';
 
 const STORE_UNREADABLE =
   'I couldn’t read this server’s snapshots, so I don’t know which ones it has. Nothing was ' +
-  'changed. This is a fault on my side, not a setting in this server.';
+  'changed. This is a problem on my side, not a setting in this server.';
 
 const STORE_UNWRITABLE =
-  'The snapshot could not be saved, so this server has NO new backup. Nothing else was changed. ' +
-  'Try again in a moment.';
+  'Couldn’t save the snapshot, so this server has **no** new backup. Try again in a moment.';
 
 const WRONG_SERVER =
-  "I read another server's structure while snapshotting this one, so I stopped rather than save " +
-  'something wrong. Nothing has been saved. This is a Proton problem, not a setting in this ' +
+  'I read another server’s layout while taking this snapshot, so I stopped rather than save ' +
+  'something wrong. Nothing was saved. This is a problem on my side, not a setting in this ' +
   'server.';
 
 export function createBackupCommands(deps: BackupDeps): CommandDefinition<BackupConfig>[] {
   return [
     {
       name: 'backup',
-      description: 'Snapshot this server’s channels and roles, or preview restoring one.',
+      description: 'Snapshot this server’s channels and roles, and restore missing ones.',
 
       data: new SlashCommandBuilder()
         .setName('backup')
-        .setDescription('Snapshot this server’s channels and roles, or preview restoring one.')
+        .setDescription('Snapshot this server’s channels and roles, and restore missing ones.')
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions(Permissions.ManageGuild)
         .addSubcommand((sub) =>
           sub
             .setName('create')
-            .setDescription('Take a snapshot of every channel, role and permission overwrite.'),
+            .setDescription('Take a snapshot of every channel, role and channel permission.'),
         )
         .addSubcommand((sub) =>
           sub.setName('list').setDescription('Show the snapshots this server has kept.'),
@@ -81,11 +81,11 @@ export function createBackupCommands(deps: BackupDeps): CommandDefinition<Backup
         .addSubcommand((sub) =>
           sub
             .setName('restore')
-            .setDescription('Recreate the channels and roles from a snapshot.')
+            .setDescription('Recreate the missing channels and roles from a snapshot.')
             .addStringOption((option) =>
               option
                 .setName('backup_id')
-                .setDescription('The id from /backup list.')
+                .setDescription('The snapshot ID from /backup list.')
                 .setRequired(true)
                 .setMaxLength(64),
             )
@@ -93,32 +93,35 @@ export function createBackupCommands(deps: BackupDeps): CommandDefinition<Backup
               option
                 .setName('confirm')
                 .setDescription(
-                  'Create the missing channels and roles for real. Leave off to preview first.',
+                  'Set to True to recreate them. Leave it out to see a preview first.',
                 ),
             ),
         )
         .toJSON(),
 
       async handler(ctx) {
+        const answer = await acknowledge(ctx);
+
         switch (ctx.options.getSubcommand()) {
           case 'list':
-            return list(ctx, deps);
+            return list(ctx, deps, answer);
           case 'restore':
-            return restore(ctx, deps);
+            return restore(ctx, deps, answer);
           default:
-            return create(ctx, deps);
+            return create(ctx, deps, answer);
         }
       },
     },
   ];
 }
 
-async function bound(
-  ctx: CommandContext<BackupConfig>,
-  deps: BackupDeps,
-): Promise<BoundBackupDeps | null> {
+type Ctx = CommandContext<BackupConfig>;
+
+type Answer = (lines: readonly string[], kind?: StatusKind) => Promise<void>;
+
+async function bound(ctx: Ctx, deps: BackupDeps, answer: Answer): Promise<BoundBackupDeps | null> {
   if (!ctx.config.enabled) {
-    await reply(ctx, [DISABLED], 'error');
+    await answer([DISABLED], 'error');
     return null;
   }
 
@@ -128,19 +131,19 @@ async function bound(
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    await reply(ctx, [NOT_WIRED], 'error');
+    await answer([NOT_WIRED], 'error');
     return null;
   }
 
   return result.deps;
 }
 
-async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Promise<void> {
-  const ports = await bound(ctx, deps);
+async function create(ctx: Ctx, deps: BackupDeps, answer: Answer): Promise<void> {
+  const ports = await bound(ctx, deps, answer);
   if (!ports) return;
 
   const layout = await ports.readLayout(ctx.guildId);
-  if (!layout) return reply(ctx, [NO_LAYOUT], 'error');
+  if (!layout) return answer([NO_LAYOUT], 'error');
 
   if (layout.guildId !== ctx.guildId) {
     ctx.logger.error(
@@ -148,7 +151,7 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
         'save it',
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    return reply(ctx, [WRONG_SERVER], 'error');
+    return answer([WRONG_SERVER], 'error');
   }
 
   const capturedAt = ports.now();
@@ -170,10 +173,10 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    return reply(ctx, [STORE_UNWRITABLE], 'error');
+    return answer([STORE_UNWRITABLE], 'error');
   }
 
-  const lines = [`Backup \`${backupId}\` saved.`, ...describeCapture(report)];
+  const lines = [`Backup \`${backupId}\` saved.`, ...describeCapture(report, ctx)];
 
   if (report.obfuscatedChannelIds.length > 0) {
     ctx.logger.warn(
@@ -191,23 +194,27 @@ async function create(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Prom
     );
   }
 
-  await reply(ctx, lines, 'success');
+  await answer(lines, 'success');
 }
 
-async function list(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Promise<void> {
-  const ports = await bound(ctx, deps);
+async function list(ctx: Ctx, deps: BackupDeps, answer: Answer): Promise<void> {
+  const ports = await bound(ctx, deps, answer);
   if (!ports) return;
 
   const records = await ports.store.list(ctx.guildId, ctx.config.retainBackups);
 
   if (records.length === 0) {
-    return reply(ctx, [
-      'This server has no snapshots. Run `/backup create` to take one — and take it before you ' +
-        'need it.',
+    return answer([
+      `This server has no snapshots. Run \`${labelOf(ctx, 'backup', 'create')}\` to take one ` +
+        'before you need it.',
     ]);
   }
 
-  await reply(ctx, ['Snapshots, newest first:', ...records.map(summarise)]);
+  await answer(['Snapshots, newest first:', ...records.map(summarise)]);
+}
+
+function counted(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
 function summarise(record: BackupRecord): string {
@@ -216,24 +223,25 @@ function summarise(record: BackupRecord): string {
   const who = record.createdBy ? `<@${record.createdBy}>` : 'Proton';
   const hidden =
     coverage.obfuscatedChannelIds.length > 0
-      ? `, ${coverage.obfuscatedChannelIds.length} channel${
-          coverage.obfuscatedChannelIds.length === 1 ? '' : 's'
-        } NOT captured`
+      ? `, **${counted(coverage.obfuscatedChannelIds.length, 'channel')} not captured**`
       : '';
 
   return (
-    `- \`${record.id}\` — <t:${when}:f>, by ${who} — ${coverage.channelsCaptured} channels, ` +
-    `${coverage.rolesCaptured} roles${hidden}`
+    `- \`${record.id}\` · <t:${when}:f> by ${who} · ` +
+    `${counted(coverage.channelsCaptured, 'channel')}, ${counted(coverage.rolesCaptured, 'role')}` +
+    hidden
   );
 }
 
-async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Promise<void> {
-  const ports = await bound(ctx, deps);
+async function restore(ctx: Ctx, deps: BackupDeps, answer: Answer): Promise<void> {
+  const ports = await bound(ctx, deps, answer);
   if (!ports) return;
+
+  const listing = labelOf(ctx, 'backup', 'list');
 
   const backupId = ctx.options.getString('backup_id');
   if (!backupId) {
-    return reply(ctx, ['I need the id of a snapshot. Run `/backup list` to see them.'], 'error');
+    return answer([`I need a snapshot ID. Run \`${listing}\` to see them.`], 'error');
   }
 
   let record: BackupRecord | null;
@@ -245,22 +253,21 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
     });
-    return reply(ctx, [STORE_UNREADABLE], 'error');
+    return answer([STORE_UNREADABLE], 'error');
   }
 
   if (!record) {
-    return reply(
-      ctx,
+    return answer(
       [
-        `This server has no snapshot with the id \`${backupId}\`. Run \`/backup list\` to see the ` +
-          'ones it does have.',
+        `This server has no snapshot with the ID \`${backupId}\`. Run \`${listing}\` to see the ` +
+          'ones it has.',
       ],
       'error',
     );
   }
 
   const layout = await ports.readLayout(ctx.guildId);
-  if (!layout) return reply(ctx, [NO_LAYOUT], 'error');
+  if (!layout) return answer([NO_LAYOUT], 'error');
 
   const confirmed = ctx.options.getBoolean('confirm') === true;
 
@@ -271,7 +278,7 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
     dryRun: restoreIsDryRun(confirmed),
   });
 
-  if (isRestoreRefusal(planned)) return reply(ctx, [planned.refusal], 'error');
+  if (isRestoreRefusal(planned)) return answer([planned.refusal], 'error');
 
   const counts = summariseRestore(planned);
 
@@ -281,7 +288,7 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
         `and ${counts.channels} channel(s) to recreate, ${planned.skipped.length} skipped`,
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
-    return reply(ctx, [...describeRestore(planned), PREVIEW_ONLY]);
+    return answer([...describeRestore(planned), PREVIEW_ONLY]);
   }
 
   ctx.logger.info(
@@ -301,24 +308,31 @@ async function restore(ctx: CommandContext<BackupConfig>, deps: BackupDeps): Pro
 
   if (applied.failures.length > 0) {
     lines.push(
-      `${applied.failures.length} did not go through:`,
-      ...applied.failures.map((failure) => `• ${failure}`),
+      `${applied.failures.length} didn’t go through:`,
+      ...applied.failures.map((failure) => `- ${failure}`),
     );
   }
 
-  await reply(ctx, lines, applied.failures.length > 0 ? 'error' : 'success');
+  // Red when anything in the plan did not land: a restore that recreated half a server is not a
+  // restore, and the lines above already name every op that failed.
+  await answer(lines, applied.failures.length > 0 ? 'error' : 'success');
 }
 
-// Red when anything in the plan did not land: a restore that recreated half a server is not a
-// restore, and the lines above already name every op that failed.
-async function reply(
-  ctx: CommandContext<BackupConfig>,
-  lines: readonly string[],
-  kind?: StatusKind,
-): Promise<void> {
+function bodyOf(lines: readonly string[], kind: StatusKind | undefined) {
   const content = clamp(lines.join('\n'));
-  const body = kind === undefined ? { content } : statusBody(kind, content);
+  return kind === undefined ? { content } : statusBody(kind, content);
+}
 
+function warnUnanswered(ctx: Ctx, result: ActionResult): void {
+  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
+    ctx.logger.warn(
+      `backup could not answer the invoker: ${result.failure?.humanReason ?? 'unknown reason'}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
+    );
+  }
+}
+
+async function reply(ctx: Ctx, lines: readonly string[], kind?: StatusKind): Promise<void> {
   const result = await ctx.executor.execute({
     guildId: ctx.guildId,
     moduleId: MODULE_ID,
@@ -330,22 +344,40 @@ async function reply(
     payload: {
       interactionId: ctx.interaction.id,
       interactionToken: ctx.interaction.token,
-      ...body,
+      ...bodyOf(lines, kind),
       ephemeral: true,
     },
   });
 
-  if (result.status === 'failed_precheck' || result.status === 'failed_api') {
-    ctx.logger.warn(
-      `backup could not answer the invoker: ${result.failure?.humanReason ?? 'unknown reason'}`,
-      { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
+  warnUnanswered(ctx, result);
+}
+
+async function acknowledge(ctx: Ctx): Promise<Answer> {
+  const applicationId = ctx.applicationId;
+  // Without an application id there is no followup webhook, so the one callback must be the answer.
+  if (!applicationId) return (lines, kind) => reply(ctx, lines, kind);
+
+  const to: FollowUpTo = {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    actorId: ctx.userId,
+    interaction: ctx.interaction,
+    idempotencyKey: ctx.idempotencyKey,
+    applicationId,
+  };
+
+  warnUnanswered(ctx, await ctx.executor.execute(deferEphemeral(to)));
+
+  return async (lines, kind) =>
+    warnUnanswered(
+      ctx,
+      await ctx.executor.execute(followUp(to, { ...bodyOf(lines, kind), ephemeral: true })),
     );
-  }
 }
 
 function clamp(content: string): string {
   if (content.length <= CONTENT_MAX) return content;
 
-  const notice = `\n… report truncated; ${content.length - CONTENT_MAX} characters omitted.`;
+  const notice = '\n…and more that doesn’t fit in one message.';
   return `${content.slice(0, CONTENT_MAX - notice.length)}${notice}`;
 }

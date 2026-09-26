@@ -42,16 +42,15 @@ import { followUpTo, MODULE_ID, respondTo, run, succeeded, VERIFICATION_ACTOR } 
 import type { CaptchaChallenge } from './store.ts';
 
 const SWITCHED_OFF =
-  'Verification is disabled in this server, so there is nothing to pass. An admin can turn ' +
-  'it on from the Proton dashboard.';
+  'Verification is off in this server. An admin can turn it on in the Proton dashboard.';
 
 const NOT_WIRED =
-  'I can’t verify you right now. Nothing was changed. This is a fault on my side, not anything ' +
-  'you did.';
+  'I can’t verify you right now. Nothing was changed, and it’s not anything you did.';
 
-const EXPIRED = 'That captcha has expired or been replaced. Press Verify again to get a fresh one.';
+const EXPIRED =
+  'This captcha has expired or was replaced. Press the verify button again to get a new one.';
 
-const WRONG = 'That is not the code in the image.';
+const WRONG = 'That’s not the code in the image.';
 
 export type InteractionOutcome =
   | { action: 'ignored'; reason: string }
@@ -84,11 +83,7 @@ export async function handleComponent(
   const to = respondTo(ctx, interactionRef(facts), facts.userId, event.id);
 
   if (!ctx.config.enabled) {
-    await run(
-      ctx,
-      replyEphemeral(to, errorStatus(SWITCHED_OFF)),
-      'answer a press while disabled',
-    );
+    await run(ctx, replyEphemeral(to, errorStatus(SWITCHED_OFF)), 'answer a press while disabled');
     return { action: 'refused', reason: 'verification is off in this server' };
   }
 
@@ -119,10 +114,7 @@ async function startVerification(
   if (verifiedRoleId && roleIds?.includes(verifiedRoleId)) {
     await run(
       ctx,
-      replyEphemeral(
-        to,
-        errorStatus("You're already verified — you have full access to this server."),
-      ),
+      replyEphemeral(to, errorStatus("You're already verified.")),
       'tell a verified member they are verified',
     );
     return { action: 'refused', reason: 'the member already holds the member role' };
@@ -203,8 +195,8 @@ async function pressCaptcha(
       followUp(
         followTo,
         errorStatus(
-          'I could not draw your captcha, so nothing has changed. Please try again in a moment — ' +
-            'if it keeps happening, tell a moderator.',
+          'I couldn’t create your captcha. Try again in a moment, and if it keeps happening, tell ' +
+            'a moderator.',
         ),
       ),
       'apologise for a failed captcha render',
@@ -360,11 +352,7 @@ export async function handleModal(
   const to = respondTo(ctx, interactionRef(facts), facts.userId, event.id);
 
   if (!ctx.config.enabled) {
-    await run(
-      ctx,
-      replyEphemeral(to, errorStatus(SWITCHED_OFF)),
-      'answer a modal while disabled',
-    );
+    await run(ctx, replyEphemeral(to, errorStatus(SWITCHED_OFF)), 'answer a modal while disabled');
     return { action: 'refused', reason: 'verification is off in this server' };
   }
 
@@ -421,7 +409,7 @@ async function rejectAnswer(
     const built = buildCaptchaMessage(challenge.challengeId, attemptsLeft - 1);
     const retry = built.ok
       ? { ...errorStatus(`${WRONG} ${built.content}`), components: built.components }
-      : errorStatus(`${WRONG} Press Verify again to start over.`);
+      : errorStatus(`${WRONG} Press the verify button again to start over.`);
 
     await run(ctx, replyEphemeral(to, retry), 'offer another captcha attempt');
     return { action: 'failed', attemptsUsed };
@@ -429,7 +417,7 @@ async function rejectAnswer(
 
   await deps.captcha.clear(ctx.guildId, challenge.userId);
 
-  const spent = `${WRONG} You are out of attempts.`;
+  const spent = `${WRONG} You’re out of attempts.`;
   const failure = planFailure(ctx.config, challenge.userId, deps.now());
 
   if (failure === null || 'unconfigured' in failure) {
@@ -439,7 +427,7 @@ async function rejectAnswer(
 
     await run(
       ctx,
-      replyEphemeral(to, errorStatus(`${spent} Press Verify to start over with a new one.`)),
+      replyEphemeral(to, errorStatus(`${spent} Press the verify button to try again.`)),
       'tell the member they are out of attempts',
     );
     return { action: 'failed', attemptsUsed };
@@ -558,7 +546,7 @@ async function deliverByDm(
       moduleId: MODULE_ID,
       kind: 'send',
       actorId: VERIFICATION_ACTOR,
-      payload: { channelId, ...message },
+      payload: { channelId, ...message, directMessage: true },
       dryRun: false,
       record: false,
       idempotencyKey: `${MODULE_ID}:${eventId}:dm-send`,
@@ -570,7 +558,7 @@ async function deliverByDm(
 
   await run(
     ctx,
-    followUp(to, 'I have sent your captcha by direct message. Open our DMs to answer it.'),
+    followUp(to, 'I sent your captcha in a DM. Answer it there.'),
     'point the member at their DMs',
   );
 

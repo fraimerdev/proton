@@ -31,14 +31,9 @@ function uniquePairs(rewards: readonly RoleReward[]): boolean {
   return seen.size === rewards.length;
 }
 
-export const roleRewardsSchema = z
-  .array(roleRewardSchema)
-  .max(50)
-  .refine(uniquePairs, {
-    message:
-      'the same role cannot be listed twice at the same level — one of the two entries would ' +
-      'never do anything.',
-  });
+export const roleRewardsSchema = z.array(roleRewardSchema).max(50).refine(uniquePairs, {
+  message: 'the same role is listed twice for one level. Remove one of them.',
+});
 
 export const XP_MULTIPLIER_MIN = 0;
 export const XP_MULTIPLIER_MAX = 5;
@@ -53,7 +48,7 @@ function onStep(value: number): boolean {
   return Math.abs(steps - Math.round(steps)) < 1e-6;
 }
 
-const STEP_MESSAGE = 'must be a multiple of 0.1 — for example 0.5, 1.5 or 2';
+const STEP_MESSAGE = 'must be a multiple of 0.1, like 0.5, 1.5 or 2';
 
 export const xpMultiplierSchema = z
   .number()
@@ -99,8 +94,7 @@ export const roleMultipliersSchema = z
       ctx.addIssue({
         code: 'custom',
         path: [index, 'roleId'],
-        message:
-          'this role already has a multiplier — a role has one, so remove one of the two entries.',
+        message: 'this role already has a multiplier. Remove one of the two.',
       });
     }
   });
@@ -113,9 +107,7 @@ export const channelMultipliersSchema = z
       ctx.addIssue({
         code: 'custom',
         path: [index, 'channelId'],
-        message:
-          'this channel already has a multiplier — a channel has one, so remove one of the two ' +
-          'entries.',
+        message: 'this channel already has a multiplier. Remove one of the two.',
       });
     }
   });
@@ -159,21 +151,15 @@ export function xpEventBoundsIssue(
   window: { startsAt: number; endsAt: number },
   now: number,
 ): XpEventBoundsIssue | null {
-  if (!Number.isFinite(window.startsAt)) return { path: 'startsAt', message: 'is not a date' };
-  if (!Number.isFinite(window.endsAt)) return { path: 'endsAt', message: 'is not a date' };
+  if (!Number.isFinite(window.startsAt)) return { path: 'startsAt', message: 'isn’t a date' };
+  if (!Number.isFinite(window.endsAt)) return { path: 'endsAt', message: 'isn’t a date' };
 
   if (window.startsAt < now - XP_EVENT_START_GRACE_MS) {
-    return {
-      path: 'startsAt',
-      message: 'is in the past — an XP event can start now or later, never earlier',
-    };
+    return { path: 'startsAt', message: 'is in the past' };
   }
 
   if (window.startsAt - now > XP_EVENT_MAX_LEAD_MS) {
-    return {
-      path: 'startsAt',
-      message: 'is more than 30 days away — an XP event can be scheduled at most 30 days ahead',
-    };
+    return { path: 'startsAt', message: 'must be within 30 days from now' };
   }
 
   const duration = window.endsAt - window.startsAt;
@@ -221,9 +207,8 @@ export function liftLevelUpMessage(value: unknown): unknown {
 }
 
 const NO_INTERACTIVE =
-  'a level-up message can carry link buttons and nothing else: Proton does not watch for presses ' +
-  'on a level-up announcement, so any other button would do nothing when a member pressed it. ' +
-  'Make it a link button, or post the interactive message with the Messages module instead.';
+  'a level-up message can only have link buttons. Change other buttons to links, or remove them ' +
+  'and any dropdowns.';
 
 export function isSilentLevelUp(message: {
   content?: string | undefined;
@@ -316,6 +301,14 @@ const levelingShape = {
 
   cardShowTotalXp: z.boolean().default(true).register(protonFields, { label: 'Show total XP' }),
 
+  cardShowBadges: z.boolean().default(true).register(protonFields, {
+    label: 'Show achievement badges',
+  }),
+
+  levelUpAnnounce: z.boolean().default(true).register(protonFields, {
+    label: 'Announce level-ups',
+  }),
+
   levelUpMessage: levelUpMessageSchema.default(DEFAULT_LEVEL_UP),
 
   levelUpChannelId: snowflakeSchema.optional().register(protonFields, {
@@ -362,8 +355,8 @@ const levelingShape = {
   roleMultipliers: roleMultipliersSchema.default([]).register(protonFields, {
     label: 'Role multipliers',
     description:
-      'Scale the XP members with these roles earn, from 0× (no XP at all) to 5×. When several ' +
-      'multipliers apply, the highest wins — unless one of them is 0×.',
+      'Scale the XP that members with these roles earn, from ×0 (no XP) to ×5. When several ' +
+      'multipliers apply, the highest wins, but ×0 always wins.',
   }),
 
   channelMultipliers: channelMultipliersSchema.default([]).register(protonFields, {
@@ -379,9 +372,7 @@ export const levelingConfigSchema = z.object(levelingShape).superRefine((config,
     ctx.addIssue({
       code: 'custom',
       path: ['xpPerMessageMin'],
-      message:
-        `must not exceed the maximum (${config.xpPerMessageMax}) — the two bounds are a range ` +
-        'to roll inside, and an inverted one describes no range at all.',
+      message: `can’t be more than the maximum (${config.xpPerMessageMax})`,
     });
   }
 });
@@ -404,8 +395,10 @@ export const levelingDefaultConfig: LevelingConfig = {
   cardShowRank: true,
   cardShowPercent: true,
   cardShowTotalXp: true,
+  cardShowBadges: true,
   xpPerMessageMax: 25,
   messageCooldown: '60s',
+  levelUpAnnounce: true,
   levelUpMessage: DEFAULT_LEVEL_UP,
   excludedChannelIds: [],
   excludedRoleIds: [],

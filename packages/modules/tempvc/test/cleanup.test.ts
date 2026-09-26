@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'bun:test';
-import { armPatrol, patrol, sweep } from '../src/cleanup.ts';
+import {
+  armPatrol,
+  DELETE_ATTEMPTS,
+  PATROL_INTERVAL_MS,
+  PATROL_KEY,
+  patrol,
+  sweep,
+} from '../src/cleanup.ts';
 import type { PresenceStore } from '../src/store.ts';
 import { callsOf, GUILD, harness, member } from './harness.ts';
 
@@ -7,13 +14,21 @@ const NOW = new Date('2026-08-23T12:00:00Z');
 const LATER = new Date(NOW.getTime() + 10_000);
 
 function presence(occupants: string[] = []): PresenceStore {
+  const refusals = new Map<string, number>();
+
   return {
     locate: async () => null,
+    where: async () => null,
     place: async () => undefined,
     enter: async () => occupants.length,
     leave: async () => occupants.length,
     occupants: async () => occupants,
     reset: async () => undefined,
+    refusedDelete: async (_guildId, rowId) => {
+      refusals.set(rowId, (refusals.get(rowId) ?? 0) + 1);
+      return refusals.get(rowId) ?? 0;
+    },
+    deleteRefusals: async (_guildId, rowId) => refusals.get(rowId) ?? 0,
   };
 }
 
@@ -69,6 +84,83 @@ describe('the deferred delete', () => {
 
     expect(report.deleted).toBe(0);
     expect(callsOf(fake, 'delete_channel')).toHaveLength(0);
+  });
+
+  test('a delete Discord refuses goes back to live, and the patrol tries it again', async () => {
+    const { fake, row, deps } = await emptied();
+    fake.refuse('delete_channel', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await sweep(fake.ctx, deps, row.id, LATER)).toMatchObject({ deleted: 0 });
+    expect(fake.row(row.id)).toMatchObject({ status: 'live', deleteAfter: null });
+
+    await patrol(fake.ctx, deps, LATER);
+    expect(fake.row(row.id).deleteAfter).not.toBeNull();
+
+    const report = await sweep(fake.ctx, deps, undefined, new Date(LATER.getTime() + 120_000));
+
+    expect(report.deleted).toBe(1);
+    expect(callsOf(fake, 'delete_channel')).toHaveLength(2);
+    expect(fake.repository.rows.size).toBe(0);
+  });
+
+  test('a patrol that ran while the delete was in flight does not strand the row', async () => {
+    const { fake, row, deps } = await emptied();
+
+    const scheduled: string[] = [];
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const inner = fake.ctx.executor;
+    const ctx = {
+      ...fake.ctx,
+      schedule: async (_jobId: string, _runAt: Date, naturalKey: string) => {
+        scheduled.push(naturalKey);
+        return { scheduled: true, replaced: false };
+      },
+      executor: {
+        ...inner,
+        async execute(request: Parameters<typeof inner.execute>[0]) {
+          if (request.kind !== 'delete_channel') return inner.execute(request);
+
+          await gate;
+          return {
+            status: 'failed_api' as const,
+            failure: { code: 'discord_403', humanReason: 'Discord refused.' },
+          };
+        },
+      },
+    };
+
+    const deleting = sweep(ctx, deps, row.id, LATER);
+    await Bun.sleep(5);
+
+    await patrol(ctx, deps, LATER);
+    expect(scheduled).not.toContain(PATROL_KEY);
+
+    release();
+    await deleting;
+
+    expect(fake.row(row.id)).toMatchObject({ status: 'live', deleteAfter: null });
+    expect(scheduled).toContain(PATROL_KEY);
+  });
+
+  test('a delete Discord keeps refusing is retried a bounded number of times', async () => {
+    const { fake, row, deps } = await emptied();
+
+    let now = LATER.getTime();
+    for (let round = 0; round < 4 * DELETE_ATTEMPTS; round += 1) {
+      fake.refuse('delete_channel', 'discord_403', 'Discord refused.', 'failed_api');
+      await patrol(fake.ctx, deps, new Date(now));
+      now += 2 * PATROL_INTERVAL_MS;
+    }
+
+    expect(callsOf(fake, 'delete_channel')).toHaveLength(DELETE_ATTEMPTS);
+    expect(fake.row(row.id)).toMatchObject({ status: 'live', deleteAfter: null });
+    expect(
+      fake.logs.filter((entry) => entry.message.includes('will not try again on its own')),
+    ).toHaveLength(1);
   });
 
   test('a channel with no deadline is left alone entirely', async () => {

@@ -184,8 +184,8 @@ export function descriptorsToModal(
     return {
       ok: false,
       humanReason:
-        `That setting has ${descriptors.length} fields and a Discord modal holds at most ` +
-        `${MAX_COMPONENTS_PER_MODAL}. Configure it from the dashboard instead.`,
+        `That option has ${descriptors.length} settings, but a Discord form holds at most ` +
+        `${MAX_COMPONENTS_PER_MODAL}, so it can’t be set up here.`,
     };
   }
 
@@ -218,21 +218,21 @@ function readNumber(
   if (trimmed.length === 0 || !Number.isFinite(value)) {
     return {
       ok: false,
-      humanReason: `“${raw}” is not a number. ${descriptor.label} needs a plain number like 5.`,
+      humanReason: `“${raw}” isn’t a number. ${descriptor.label} needs a plain number, like 5.`,
     };
   }
 
   if (descriptor.min !== undefined && value < descriptor.min) {
     return {
       ok: false,
-      humanReason: `${descriptor.label} has to be at least ${descriptor.min}, and you gave ${value}.`,
+      humanReason: `${descriptor.label} must be at least ${descriptor.min}. You entered ${value}.`,
     };
   }
 
   if (descriptor.max !== undefined && value > descriptor.max) {
     return {
       ok: false,
-      humanReason: `${descriptor.label} can be at most ${descriptor.max}, and you gave ${value}.`,
+      humanReason: `${descriptor.label} can be at most ${descriptor.max}. You entered ${value}.`,
     };
   }
 
@@ -315,8 +315,8 @@ export function readDescriptorValues(
           return {
             ok: false,
             humanReason:
-              `“${text}” is not a colour I can read. Give a hex code like #5865F2, or a plain ` +
-              'number between 0 and 16777215.',
+              `“${text}” isn’t a colour I can read. Use a hex code like #5865F2, or a number ` +
+              'from 0 to 16777215.',
           };
         }
 
@@ -336,8 +336,8 @@ export function readDescriptorValues(
           return {
             ok: false,
             humanReason:
-              `“${text}” is not a length of time I understand. Give a number followed by ` +
-              's, m, h, d or w — for example 30m, 12h or 7d.',
+              `“${text}” isn’t a length of time I understand. Use a number followed by ` +
+              's, m, h, d or w, like 30m, 12h or 7d.',
           };
         }
 
@@ -348,7 +348,7 @@ export function readDescriptorValues(
       default: {
         if (text === undefined || text.trim().length === 0) {
           if (!descriptor.optional) {
-            return { ok: false, humanReason: `${descriptor.label} cannot be left empty.` };
+            return { ok: false, humanReason: `${descriptor.label} can’t be empty.` };
           }
           break;
         }

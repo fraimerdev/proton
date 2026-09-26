@@ -18,8 +18,8 @@ import {
 } from './placeholders.ts';
 
 const NOTHING_TO_POST =
-  'this greeting is empty and no card is attached, so a real event would post nothing. Write ' +
-  'something, or switch the card on, before testing it.';
+  'this message is empty and no card is attached, so a real event would post nothing. Write ' +
+  'something or turn on the card first.';
 
 interface Occasion {
   surface: PlaceholderSurface<GreetingPlaceholderFacts>;
@@ -67,9 +67,8 @@ const OCCASIONS: Record<GreetingOccasion, Occasion> = {
       subject: true,
       inputs: [],
       note:
-        'Nobody leaves. The example member stays in the server — the test only renders the ' +
-        'message with the facts a departure leaves behind, which is why their nickname, roles and ' +
-        'join date come out empty here, exactly as they would on the day.',
+        'Nobody actually leaves. The test only uses what Proton still knows after a member ' +
+        'leaves, so their nickname, roles and join date come out empty, just like a real goodbye.',
     },
   },
   boost: {
@@ -107,8 +106,8 @@ const OCCASIONS: Record<GreetingOccasion, Occasion> = {
         },
       ],
       note:
-        'No boost is recorded and the server keeps the boosts it really has. With no boost ' +
-        'channel set, a real boost posts wherever Discord put its own notice, so pick a channel ' +
+        'No boost is recorded, and the server’s real boosts don’t change. With no boost channel ' +
+        'set, a real boost message goes where Discord posts its boost notice, so choose a channel ' +
         'for the test.',
     },
   },

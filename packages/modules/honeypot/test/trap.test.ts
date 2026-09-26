@@ -223,7 +223,7 @@ describe('the incident log', () => {
 
     const fields = fieldsOf(embed);
     expect(fields.get('Action')).toBe('Softban');
-    expect(fields.get('Messages deleted')).toBe('the last 7 days');
+    expect(fields.get('Messages deleted')).toBe('The last 7 days');
     expect(fields.get('Result')).toBe('Done');
   });
 
@@ -276,7 +276,7 @@ describe('when the unban fails', () => {
     const embed = h.embedIn(LOG);
     expect(embed?.color).toBe(HONEYPOT_COLOUR);
     expect(embed?.color).not.toBe(HONEYPOT_OK);
-    expect(fieldsOf(embed).get('Result')).toBe('FAILED — the member is still banned');
+    expect(fieldsOf(embed).get('Result')).toBe('FAILED: the member is still banned');
   });
 
   test('tells the rest of Proton that the member is still banned', async () => {
@@ -342,7 +342,7 @@ describe('when Proton cannot act', () => {
 
     expect(h.deleted()).toEqual([`${TRAP}/${MESSAGE}`]);
     expect(h.embedIn(LOG)?.color).toBe(HONEYPOT_ALARM);
-    expect(fieldsOf(h.embedIn(LOG)).get('Result')).toBe('Could not be carried out');
+    expect(fieldsOf(h.embedIn(LOG)).get('Result')).toBe('Failed');
   });
 
   test('refuses on a member ranked above the bot, naming the fix', async () => {
@@ -350,7 +350,7 @@ describe('when Proton cannot act', () => {
 
     const outcome = await h.trip({ config: armed(), authorId: ABOVE });
 
-    expect(refusal(outcome)).toContain('above or equal to mine');
+    expect(refusal(outcome)).toContain("above or equal to Proton's");
     expect(refusal(outcome)).toContain('Server Settings → Roles');
     expect(h.calls().some((call) => call.includes('/bans/'))).toBe(false);
     expect(h.deleted()).toEqual([`${TRAP}/${MESSAGE}`]);

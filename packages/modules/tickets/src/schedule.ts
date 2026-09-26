@@ -87,6 +87,9 @@ export function schedulesTimers(config: TicketsConfig): boolean {
   );
 }
 
+export const PURGE_JOB_ID = 'purge-captured-messages';
+export const PURGE_CRON = '25 * * * *';
+
 export async function armTicketTimers(
   ctx: ModuleContext<TicketsConfig>,
   type: TicketType | undefined,

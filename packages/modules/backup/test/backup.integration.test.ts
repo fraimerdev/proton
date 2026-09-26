@@ -170,7 +170,7 @@ describe('Gate 2, end to end', () => {
     await bot.run(subcommand('create'));
 
     const created = bot.replyContent() ?? '';
-    expect(created).toContain('1 channel could NOT be backed up');
+    expect(created).toContain('1 channel couldn’t be backed up');
     expect(created).toContain(`<#${HIDDEN_CHANNEL}>`);
 
     const stored = await store.list(GUILD, 1);
@@ -183,7 +183,7 @@ describe('Gate 2, end to end', () => {
 
     const restored = bot.replyContent() ?? '';
     expect(restored).toContain('recreate 0 roles and 1 channel');
-    expect(restored).toContain('cannot be restored');
+    expect(restored).toContain('can’t be restored');
     expect(restored).toContain(`<#${HIDDEN_CHANNEL}>`);
     expect(restored).toContain('View Channel');
   });
@@ -199,7 +199,7 @@ describe('Gate 2, end to end', () => {
 
     const reply = bot.replyContent() ?? '';
     expect(reply).toContain('Backed up 0 channels');
-    expect(reply).toContain('2 channels could NOT be backed up');
+    expect(reply).toContain('2 channels couldn’t be backed up');
     expect(reply).toContain('View Channel');
     expect(bot.logged('warn', 'could not capture 2 channel(s)')).toBe(true);
   });

@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { Permissions } from '@proton/core';
+import { DELETE_ATTEMPTS, DELETE_RETRY_WINDOW_MS, PATROL_KEY } from '../src/cleanup.ts';
 import { TemporaryVoiceService } from '../src/service.ts';
 import { ADA, BEN, BOT, CREATED, callsOf, GUILD, HUB, harness, member } from './harness.ts';
+
+const ELSEWHERE = '600000000000000077';
 
 describe('creating a temporary channel', () => {
   test('reserves, creates, attaches, moves — in that order', async () => {
@@ -220,7 +223,12 @@ describe('deleting', () => {
     const outcome = await fake.service.create(fake.ctx, fake.hub, member());
     if (!('created' in outcome)) throw new Error('expected a channel');
 
-    fake.refuse('delete_channel', 'not_found', 'That channel does not exist.');
+    fake.refuse(
+      'delete_channel',
+      'discord_404',
+      'Discord says that channel no longer exists.',
+      'failed_api',
+    );
     const row = fake.row(outcome.created.id);
 
     expect(await fake.service.destroy(fake.ctx, row, 'empty')).toBe(true);
@@ -237,8 +245,83 @@ describe('deleting', () => {
 
     expect(await fake.service.destroy(fake.ctx, row, 'empty')).toBe(false);
     expect(fake.repository.rows.size).toBe(1);
+    expect(fake.row(row.id)).toMatchObject({ status: 'live', deleteAfter: null });
+  });
+
+  test('a delete Discord refuses leaves the row live, so the next attempt can remove it', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.refuse('delete_channel', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await fake.service.destroy(fake.ctx, fake.row(outcome.created.id), 'empty')).toBe(false);
+    expect(fake.row(outcome.created.id).status).toBe('live');
+    expect(await fake.repository.ownedBy(GUILD, ADA)).toHaveLength(1);
+
+    expect(await fake.service.destroy(fake.ctx, fake.row(outcome.created.id), 'empty')).toBe(true);
+    expect(callsOf(fake, 'delete_channel')).toHaveLength(2);
+    expect(fake.repository.rows.size).toBe(0);
+  });
+
+  test('a failed delete of a reservation does not promote it to live', async () => {
+    const fake = harness();
+    const reservation = await fake.repository.reserve({
+      id: 'reserved',
+      guildId: GUILD,
+      hubChannelId: HUB,
+      ownerId: ADA,
+      maxChannelsPerUser: 1,
+    });
+    if (!('reserved' in reservation)) throw new Error('expected a reservation');
+    fake.repository.rows.set('reserved', { ...reservation.reserved, channelId: CREATED });
+
+    fake.refuse('delete_channel', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await fake.service.destroy(fake.ctx, fake.row('reserved'), 'empty')).toBe(false);
+    expect(fake.row('reserved').status).toBe('reserving');
+  });
+
+  test('a refused delete arms the patrol itself, so the retry never depends on one already pending', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    const scheduled: string[] = [];
+    const ctx = { ...fake.ctx, schedule: scheduleSpy(scheduled) };
+    fake.refuse('delete_channel', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await fake.service.destroy(ctx, fake.row(outcome.created.id), 'empty')).toBe(false);
+    expect(scheduled).toEqual([PATROL_KEY]);
+  });
+
+  test('once the retries run out, a refused delete stops arming the patrol and says so', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    const rowId = outcome.created.id;
+    for (let i = 1; i < DELETE_ATTEMPTS; i += 1) {
+      await fake.presence.refusedDelete(GUILD, rowId, DELETE_RETRY_WINDOW_MS);
+    }
+
+    const scheduled: string[] = [];
+    const ctx = { ...fake.ctx, schedule: scheduleSpy(scheduled) };
+    fake.refuse('delete_channel', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await fake.service.destroy(ctx, fake.row(rowId), 'empty')).toBe(false);
+    expect(scheduled).toEqual([]);
+    expect(fake.row(rowId)).toMatchObject({ status: 'live', deleteAfter: null });
+    expect(fake.logs.at(-1)?.message).toContain('will not try again on its own');
   });
 });
+
+function scheduleSpy(keys: string[]) {
+  return async (_jobId: string, _runAt: Date, naturalKey: string) => {
+    keys.push(naturalKey);
+    return { scheduled: true, replaced: false };
+  };
+}
 
 describe('ownership', () => {
   test('claiming an ownerless channel works exactly once', async () => {
@@ -293,6 +376,7 @@ describe('trust and block survive as rows, not as guesses', () => {
     const outcome = await fake.service.create(fake.ctx, fake.hub, member());
     if (!('created' in outcome)) throw new Error('expected a channel');
 
+    fake.voice.set(BEN, CREATED);
     fake.calls.length = 0;
     await fake.service.setAccess(fake.ctx, outcome.created, BEN, 'block', 'public');
 
@@ -304,6 +388,24 @@ describe('trust and block survive as rows, not as guesses', () => {
     expect(callsOf(fake, 'move_member')[0]?.payload.channelId).toBeNull();
   });
 
+  test('blocking somebody sitting in another channel blocks them without disconnecting them', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.voice.set(BEN, ELSEWHERE);
+    fake.calls.length = 0;
+
+    expect(await fake.service.setAccess(fake.ctx, outcome.created, BEN, 'block', 'public')).toEqual(
+      { applied: true, disconnect: 'not_in_channel' },
+    );
+    expect(await fake.repository.access(outcome.created.id)).toEqual([
+      { userId: BEN, kind: 'block' },
+    ]);
+    expect(callsOf(fake, 'edit_channel')).toHaveLength(1);
+    expect(callsOf(fake, 'move_member')).toHaveLength(0);
+  });
+
   test('trusting somebody does not disconnect them', async () => {
     const fake = harness();
     const outcome = await fake.service.create(fake.ctx, fake.hub, member());
@@ -313,6 +415,70 @@ describe('trust and block survive as rows, not as guesses', () => {
     await fake.service.setAccess(fake.ctx, outcome.created, BEN, 'trust', 'locked');
 
     expect(callsOf(fake, 'move_member')).toHaveLength(0);
+  });
+
+  test('a member Proton last saw in another voice channel is never disconnected', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.voice.set(BEN, ELSEWHERE);
+    fake.calls.length = 0;
+
+    expect(await fake.service.disconnect(fake.ctx, outcome.created, BEN)).toBe('not_in_channel');
+    expect(callsOf(fake, 'move_member')).toHaveLength(0);
+  });
+
+  test('a member who is not in voice at all is never disconnected', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.calls.length = 0;
+
+    expect(await fake.service.disconnect(fake.ctx, outcome.created, BEN)).toBe('not_in_channel');
+    expect(callsOf(fake, 'move_member')).toHaveLength(0);
+  });
+
+  test('a member in the owner’s channel is disconnected', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.voice.set(BEN, CREATED);
+    fake.calls.length = 0;
+
+    expect(await fake.service.disconnect(fake.ctx, outcome.created, BEN)).toBe('disconnected');
+    expect(callsOf(fake, 'move_member')[0]).toMatchObject({
+      targetId: BEN,
+      payload: { userId: BEN, channelId: null },
+    });
+  });
+
+  test('a disconnect Discord refuses is reported as failed', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.voice.set(BEN, CREATED);
+    fake.refuse('move_member', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await fake.service.disconnect(fake.ctx, outcome.created, BEN)).toEqual({
+      failed: 'discord_403',
+    });
+  });
+
+  test('a block whose disconnect Discord refuses still reports the block, with the refusal', async () => {
+    const fake = harness();
+    const outcome = await fake.service.create(fake.ctx, fake.hub, member());
+    if (!('created' in outcome)) throw new Error('expected a channel');
+
+    fake.voice.set(BEN, CREATED);
+    fake.refuse('move_member', 'discord_403', 'Discord refused.', 'failed_api');
+
+    expect(await fake.service.setAccess(fake.ctx, outcome.created, BEN, 'block', 'public')).toEqual(
+      { applied: true, disconnect: { failed: 'discord_403' } },
+    );
   });
 
   test('clearing access removes the row', async () => {

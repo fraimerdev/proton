@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'bun:test';
-import type { ActionExecutor, ActionRequest, ActionResult, ModuleContext } from '@proton/core';
+import {
+  type ActionExecutor,
+  type ActionRequest,
+  type ActionResult,
+  DefaultActionExecutor,
+  type GuildState,
+  type ModuleContext,
+  resolvePrecheckContext,
+} from '@proton/core';
 import {
   formatTemplateIssues,
   PLACEHOLDER_LIMITS,
@@ -295,7 +303,7 @@ describe('what the member who appealed must never see', () => {
       [DENIED_PATH, 'restricted'],
     ]);
     expect(formatTemplateIssues(report)).toStartWith(
-      `${APPROVED_PATH} Accepted message: {appeal.decided_by} may only be shown to staff, but this destination is seen by the member it is about`,
+      `${APPROVED_PATH} Accepted message: {appeal.decided_by} can only be shown to staff, but this can be seen by the member it is about`,
     );
   });
 
@@ -787,6 +795,7 @@ describe('the direct message is sent as before', () => {
       channelId: DM_CHANNEL,
       content: `${HEADING}Appeal #12 on Ban appeal was accepted in 2026.\n\n${REJOIN}`,
       allowedMentions: { parse: [] },
+      directMessage: true,
     });
   });
 
@@ -806,6 +815,71 @@ describe('the direct message is sent as before', () => {
       channelId: DM_CHANNEL,
       content: `${HEADING}${TURNED_DOWN}`,
       allowedMentions: { parse: [] },
+      directMessage: true,
     });
+  });
+
+  test('reaches the appellant from a server that grants Proton nothing, which a DM does not need', async () => {
+    const calls: string[] = [];
+    const claimed = new Set<string>();
+    const state: GuildState = {
+      guildId: GUILD,
+      ownerId: MODERATOR,
+      everyoneRoleId: GUILD,
+      roles: new Map([[GUILD, { id: GUILD, permissions: 0n, position: 0 }]]),
+      botRoleIds: [],
+      channels: new Map(),
+      updatedAt: SAMPLE_NOW,
+    };
+
+    const executor = new DefaultActionExecutor({
+      dedupe: {
+        claim: async (key) => {
+          if (claimed.has(key)) return false;
+          claimed.add(key);
+          return true;
+        },
+        release: async (key) => {
+          claimed.delete(key);
+        },
+        has: async (key) => claimed.has(key),
+      },
+      rest: {
+        request: async ({ method, path }) => {
+          calls.push(`${method} ${path}`);
+          return { status: 200, body: { id: DM_CHANNEL } };
+        },
+      },
+      recorder: { record: async () => ({ caseId: 'case' }) },
+      resolveContext: async (request) => {
+        const resolved = await resolvePrecheckContext(
+          {
+            store: {
+              get: async () => state,
+              put: async () => undefined,
+              patch: async () => undefined,
+              delete: async () => undefined,
+            },
+            botUserId: '300000000000000001',
+          },
+          request,
+        );
+        return 'context' in resolved ? resolved.context : resolved;
+      },
+    });
+
+    const config = configWith();
+    const [panel] = config.panels;
+    if (panel === undefined) throw new Error('the form did not parse');
+
+    const outcome = await tellAppellant(
+      contextFor(executor, config),
+      dmStore().store,
+      record({ dmChannelId: null }),
+      panel,
+    );
+
+    expect(outcome).toBe('sent');
+    expect(calls).toEqual(['POST /users/@me/channels', `POST /channels/${DM_CHANNEL}/messages`]);
   });
 });

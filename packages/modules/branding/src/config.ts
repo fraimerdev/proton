@@ -22,29 +22,20 @@ const assetHash = z.string().max(64).optional();
 const editable = {
   enabled: z.boolean().default(false).register(protonFields, { label: 'Enabled' }),
 
-  nickname: z
-    .string()
-    .min(1)
-    .max(NICKNAME_MAX)
-    .optional()
-    .register(protonFields, {
-      label: 'Server nickname',
-      description: `Leave empty to use Proton’s own name. Up to ${NICKNAME_MAX} characters.`,
-    }),
+  nickname: z.string().min(1).max(NICKNAME_MAX).optional().register(protonFields, {
+    label: 'Server nickname',
+    description: 'Leave empty to use Proton’s own name.',
+  }),
 
-  bio: z
-    .string()
-    .max(BIO_MAX)
-    .optional()
-    .register(protonFields, {
-      label: 'Server bio',
-      description: `Shown as “About me” on Proton’s profile. Up to ${BIO_MAX} characters.`,
-    }),
+  bio: z.string().max(BIO_MAX).optional().register(protonFields, {
+    label: 'Server bio',
+    description: 'Shown as “About me” on Proton’s profile.',
+  }),
 
   displayNameStyle: displayNameStyleSchema.nullable().default(null),
 
   restoreOnDisable: z.boolean().default(true).register(protonFields, {
-    label: 'Reset when disabled',
+    label: 'Reset when turned off',
     description: 'Remove the server nickname, avatar, banner, bio and display name style.',
   }),
 };

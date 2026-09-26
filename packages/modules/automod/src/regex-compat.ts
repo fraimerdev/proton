@@ -22,7 +22,7 @@ export function classifyRegex(pattern: string): RegexVerdict {
   if (pattern.length > NATIVE_REGEX_MAX_LENGTH) {
     return {
       native: false,
-      reason: `it is ${pattern.length} characters and Discord accepts at most ${NATIVE_REGEX_MAX_LENGTH}`,
+      reason: `it's ${pattern.length} characters, and Discord accepts at most ${NATIVE_REGEX_MAX_LENGTH}`,
     };
   }
 
@@ -30,7 +30,7 @@ export function classifyRegex(pattern: string): RegexVerdict {
     if (test.test(pattern)) {
       return {
         native: false,
-        reason: `it uses ${reason}, which Discord's engine has no support for`,
+        reason: `Discord doesn't support ${reason}`,
       };
     }
   }

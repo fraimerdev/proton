@@ -12,9 +12,8 @@ export const APPEAL_KEY = 'honeypot-appeal';
 export const INVITE_KEY = 'honeypot-invite';
 
 const ONLY_LINK_BUTTONS =
-  'a honeypot layout can carry link buttons and nothing else. Proton watches for presses on the ' +
-  'buttons it adds itself — the counter, the appeal and the way back in — and it has no handler ' +
-  'for one you place, so it would do nothing when a member pressed it.';
+  'This layout can only have link buttons. Proton adds the counter, Appeal and Rejoin buttons ' +
+  'itself, and any other button would do nothing when pressed.';
 
 export function refineHoneypotLayout(
   message: { components: unknown[]; v2?: V2Component[] | undefined },
@@ -28,15 +27,15 @@ export function refineHoneypotLayout(
 export const NOTICE_HEADING = `## ${HONEYPOT_POT}  DO NOT SEND MESSAGES IN THIS CHANNEL`;
 
 export const NOTICE_BODY =
-  'This channel is used to catch spam bots and compromised accounts, which post in every ' +
-  'channel they can see. Any message sent here means **{consequence}**.{purge}\n\n' +
-  'There is never a reason to post here.';
+  'This channel catches spam bots and hacked accounts, which post in every channel they can ' +
+  'see. If you send a message here, **{consequence}**.{purge}\n\n' +
+  'There’s never a reason to post here.';
 
 // What the notice says when an admin would rather not advertise that the channel is a trap. Same
 // warning, no mechanism.
 export const QUIET_NOTICE_BODY =
-  'Nobody has any reason to post in this channel. Anything sent here means **{consequence}**.' +
-  '{purge}\n\nThere is never a reason to post here.';
+  'If you send a message in this channel, **{consequence}**.{purge}\n\n' +
+  'There’s never a reason to post here.';
 
 export const DEFAULT_NOTICE_LAYOUT = {
   mentions: { everyone: false, roles: false, users: false },
@@ -55,10 +54,9 @@ export const DEFAULT_NOTICE_LAYOUT = {
 export const DM_HEADING = '## Honeypot triggered';
 
 export const DM_BODY =
-  'A message was sent from your account in **{server}**, in a channel that exists only to catch ' +
-  'spam bots. You were **{action}** as a result.\n\nIf you did not send it, your account is very ' +
-  'likely compromised. Somebody holding your session token can post as you without ever knowing ' +
-  'your password.';
+  'A message was sent from your account in **{server}**, in a channel that only exists to catch ' +
+  'spam bots. You were **{action}** as a result.\n\nIf you didn’t send it, your account has ' +
+  'probably been hacked. Anyone who has your token can post as you without knowing your password.';
 
 export const RECOVERY_ADVICE =
   '**What to do now**\nChange your password, log out of every other session, and check which ' +

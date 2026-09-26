@@ -54,7 +54,7 @@ export function createLoggingModule(
 ): ModuleManifest<typeof loggingConfigSchema> {
   return {
     id: 'logging',
-    name: 'Message logs',
+    name: 'Logging',
     category: 'logging',
     configSchema: loggingConfigSchema,
     defaultConfig: loggingDefaultConfig,

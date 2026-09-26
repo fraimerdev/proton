@@ -279,12 +279,11 @@ describe('legacy notices render byte-identically', () => {
     });
     const said = texts(legacyNotice(ban, 7, 'plus')).join('\n');
 
-    expect(said).toContain('Everything you posted in the last day is deleted with you.');
+    expect(said).toContain('Your messages from the last day are deleted too.');
     expect(said).toContain('Not {server}, {action} or {nobody}.');
     expect(texts(legacyNotice({ ...ban, hideWhatIsAHoneypot: true }, 7, 'plus'))).toContain(
-      'Nobody has any reason to post in this channel. Anything sent here means **you are banned ' +
-        'from the server**. Everything you posted in the last day is deleted with you.\n\n' +
-        'There is never a reason to post here.',
+      'If you send a message in this channel, **you’re banned from the server**. Your messages ' +
+        'from the last day are deleted too.\n\nThere’s never a reason to post here.',
     );
   });
 });
@@ -366,7 +365,7 @@ describe('the appeal link is private to the member it is about', () => {
       [PATH, 'restricted'],
     ]);
     expect(formatTemplateIssues(report)).toStartWith(
-      `${PATH} Text: {honeypot.appeal_url} may only be shown to`,
+      `${PATH} Text: {honeypot.appeal_url} can only be shown to`,
     );
   });
 

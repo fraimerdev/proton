@@ -17,6 +17,7 @@ import { createLevelingProviders } from './providers.ts';
 import { createPruneHandler, createPruneListener, PRUNE_JOB_ID } from './prune.ts';
 import { levelingSimulations } from './simulation.ts';
 import { createVoiceXpListener } from './voice-xp.ts';
+import { createXpGrantListener } from './xp-grant.ts';
 
 export {
   ACTIVITY_RETENTION_DAYS,
@@ -176,13 +177,20 @@ export type {
   AdjustInput,
   AwardInput,
   AwardResult,
+  GrantInput,
+  GrantResult,
   Instant,
   MemberXpStore,
   VoiceCreditInput,
   XP_ADJUSTMENTS,
   XpAdjustment,
 } from './store.ts';
-export type { VoiceSession, VoiceSessionStore } from './voice-session.ts';
+export {
+  MAX_PAID_SESSION_MS,
+  VOICE_SESSION_PREFIX,
+  type VoiceSession,
+  type VoiceSessionStore,
+} from './voice-session.ts';
 export {
   createVoiceXpListener,
   readVoiceState,
@@ -205,6 +213,7 @@ export {
   type XpEventStore,
   xpEventStatus,
 } from './xp-events.ts';
+export { createXpGrantListener, XP_GRANT_EVENT_TYPES } from './xp-grant.ts';
 
 export function createLevelingModule(
   deps: LevelingDeps = {},
@@ -232,6 +241,7 @@ export function createLevelingModule(
     listeners: [
       createMessageXpListener(deps),
       createVoiceXpListener(deps),
+      createXpGrantListener(deps),
       ...(deps.activity ? [createPruneListener(deps)] : []),
     ],
 
@@ -248,7 +258,7 @@ export function createLevelingModule(
         }
       : {}),
 
-    emits: ['xp.level_gained'],
+    emits: ['xp.level_gained', 'xp.awarded', 'xp.granted'],
 
     templates: levelingTemplates,
     simulations: levelingSimulations,
@@ -281,7 +291,11 @@ export function createLevelingModule(
           title: 'XP multipliers',
           fields: ['roleMultipliers', 'channelMultipliers'],
         },
-        { id: 'announce', title: 'Level-up announcement', fields: ['levelUpChannelId'] },
+        {
+          id: 'announce',
+          title: 'Level-up announcement',
+          fields: ['levelUpAnnounce', 'levelUpChannelId'],
+        },
         {
           id: 'exclusions',
           title: 'Exclusions',

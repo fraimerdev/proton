@@ -6,21 +6,21 @@ import { bindService, describeUnbound, type TempVcDeps } from './deps.ts';
 import type { TempVcOwner } from './placeholders.ts';
 import type { TempVoiceRepository } from './repository.ts';
 import type { TemporaryVoiceService } from './service.ts';
-import type { PresenceStore } from './store.ts';
+import type { PresenceStore, Seen } from './store.ts';
 import type { TempVoiceChannelRow } from './table.ts';
 
 /** The slice of the presence cache a transition needs, so tests can hand in a plain object. */
 export interface Presence {
-  locate(guildId: string, userId: string): Promise<string | null>;
-  place(guildId: string, userId: string, channelId: string | null): Promise<void>;
+  where(guildId: string, userId: string): Promise<Seen | null>;
+  place(guildId: string, userId: string, channelId: string | null, at: number): Promise<void>;
   enter(guildId: string, channelId: string, userId: string): Promise<number>;
   leaveAndList(guildId: string, channelId: string, userId: string): Promise<string[]>;
 }
 
 export function presenceOf(store: PresenceStore): Presence {
   return {
-    locate: (guildId, userId) => store.locate(guildId, userId),
-    place: (guildId, userId, channelId) => store.place(guildId, userId, channelId),
+    where: (guildId, userId) => store.where(guildId, userId),
+    place: (guildId, userId, channelId, at) => store.place(guildId, userId, channelId, at),
     enter: (guildId, channelId, userId) => store.enter(guildId, channelId, userId),
 
     async leaveAndList(guildId, channelId, userId) {
@@ -193,15 +193,25 @@ export async function handleVoiceState(
   deps: TempVcDeps,
 ): Promise<void> {
   const member = readVoiceMember(event.payload);
-  if (member === null || member.isBot) return;
+  if (member === null) return;
 
   // The payload says where they are now and nothing about where they were, so the channel they
   // left comes from the presence cache. Read before it is rewritten, or every leave looks like a
   // member who came from nowhere and their old channel is never emptied.
   const to = member.channelId;
-  const from = await presence.locate(ctx.guildId, member.userId);
+  const seen = await presence.where(ctx.guildId, member.userId);
 
-  if (from === to) return;
+  // A replayed event older than the last one applied would undo a move the member already made.
+  if (seen !== null && event.occurredAt < seen.at) return;
+
+  const from = seen?.channelId ?? null;
+
+  // Bots are located so an owner can kick one, but never counted: no bot keeps a channel alive.
+  if (member.isBot || from === to) {
+    if (to !== null && !member.isBot) await presence.enter(ctx.guildId, to, member.userId);
+    await presence.place(ctx.guildId, member.userId, to, event.occurredAt);
+    return;
+  }
 
   const fromRow = from === null ? null : await repo.byChannel(ctx.guildId, from);
   const toRow = to === null ? null : await repo.byChannel(ctx.guildId, to);
@@ -210,7 +220,7 @@ export async function handleVoiceState(
   const remaining =
     from === null ? [] : await presence.leaveAndList(ctx.guildId, from, member.userId);
   if (to !== null) await presence.enter(ctx.guildId, to, member.userId);
-  await presence.place(ctx.guildId, member.userId, to);
+  await presence.place(ctx.guildId, member.userId, to, event.occurredAt);
 
   const owned = await repo.ownedBy(ctx.guildId, member.userId);
 

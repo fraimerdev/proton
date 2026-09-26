@@ -3,6 +3,7 @@ import {
   type ActionRequest,
   type ActionResult,
   type CommandContext,
+  type CommandReplyPolicy,
   errorStatus,
   isScopedActionExecutor,
   parseDuration,
@@ -12,6 +13,22 @@ import {
 import type { ModerationConfig } from './config.ts';
 
 export const MODULE_ID = 'moderation';
+
+export function moderationReply(
+  toggleable: readonly string[],
+): CommandReplyPolicy<ModerationConfig> {
+  return {
+    default: (config) => (config.publicReplies ? 'public' : 'private'),
+    toggleable,
+    inheritsFrom: { label: 'Moderation → Reply publicly', moduleId: MODULE_ID },
+  };
+}
+
+export function repliesPrivately(
+  ctx: Pick<CommandContext<ModerationConfig>, 'config' | 'privateReply'>,
+): boolean {
+  return ctx.privateReply ?? !ctx.config.publicReplies;
+}
 
 export function everyoneRoleId(guildId: string): string {
   return guildId;
@@ -57,7 +74,7 @@ export function readSpan(raw: string): { ms: number } | Refusal {
   try {
     return { ms: parseDuration(raw) };
   } catch (error) {
-    return { refusal: error instanceof Error ? error.message : `'${raw}' is not a duration.` };
+    return { refusal: error instanceof Error ? error.message : `'${raw}' isn't a duration.` };
   }
 }
 
@@ -65,13 +82,11 @@ const REASON_REQUIRED =
   'This server requires a reason for moderation actions. Run the command again with ' +
   'the `reason` option filled in.';
 
-// Exported for the paths that do not go through perform — a mass role run is a scheduled job, not
-// one action with one reply, so it has to fail this gate for itself.
-export function reasonRefusal(
-  ctx: CommandContext<ModerationConfig>,
-  reason: string | null | undefined,
-): Refusal | null {
-  return ctx.config.requireReason && !reason ? { refusal: REASON_REQUIRED } : null;
+export function refusalOf(config: ModerationConfig, plan: PlanResult): string | null {
+  if (isRefusal(plan)) return plan.refusal;
+
+  const types: Partial<Record<ActionKind, { forceReason: boolean }>> = config.punish.types;
+  return types[plan.kind]?.forceReason && !plan.reason ? REASON_REQUIRED : null;
 }
 
 export function readDuration(raw: string, label: string): { ms: number } | Refusal {
@@ -79,26 +94,23 @@ export function readDuration(raw: string, label: string): { ms: number } | Refus
   if (isRefusal(span)) return span;
 
   if (span.ms <= 0) {
-    return { refusal: `${label} needs to be longer than zero — '${raw}' expires immediately.` };
+    return { refusal: `${label} needs to be longer than zero, but '${raw}' ends immediately.` };
   }
 
   return span;
 }
 
+export type Answer = (body: StatusBody) => Promise<void>;
+
 export async function perform(
   ctx: CommandContext<ModerationConfig>,
   plan: PlanResult,
+  answer: Answer = (body) => reply(ctx, body),
 ): Promise<void> {
-  if (isRefusal(plan)) {
-    await reply(ctx, errorStatus(plan.refusal));
-    return;
-  }
+  if (isRefusal(plan)) return answer(errorStatus(plan.refusal));
 
-  const missingReason = reasonRefusal(ctx, plan.reason);
-  if (missingReason) {
-    await reply(ctx, errorStatus(missingReason.refusal));
-    return;
-  }
+  const refusal = refusalOf(ctx.config, plan);
+  if (refusal !== null) return answer(errorStatus(refusal));
 
   const request: ActionRequest = {
     guildId: ctx.guildId,
@@ -147,7 +159,7 @@ export async function perform(
     }
   }
 
-  await reply(ctx, describe(plan, result, followUpFailed));
+  await answer(describe(plan, result, followUpFailed));
 }
 
 function stamped(text: string, result: ActionResult): string {
@@ -174,13 +186,13 @@ function describe(plan: ActionPlan, result: ActionResult, followUpFailed = false
     case 'dry_run':
       return errorStatus(
         stamped(
-          `${plan.success}\n\nDiscord was not called — the case was recorded as a rehearsal.`,
+          `${plan.success}\n\nDiscord wasn't called. The case was recorded as a rehearsal.`,
           result,
         ),
       );
 
     case 'skipped_duplicate':
-      return errorStatus('I had already handled this command, so I did nothing a second time.');
+      return errorStatus("I already handled this command, so I didn't run it again.");
 
     case 'failed_precheck':
     case 'failed_api':
@@ -208,11 +220,9 @@ export async function reply(
       interactionToken: ctx.interaction.token,
 
       ...body,
-      ephemeral: !ctx.config.publicReplies,
+      ephemeral: repliesPrivately(ctx),
 
-      // Rendered, but notifying nobody. These replies name the member acted on and the role
-      // handed out, and under publicReplies they are ordinary channel messages — /role add
-      // announcing a mentionable role would otherwise ping everybody already in it.
+      // A public text reply naming a mentionable role would ping everyone in it.
       allowedMentions: { parse: [] },
     },
   });

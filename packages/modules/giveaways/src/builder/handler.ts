@@ -2,7 +2,9 @@ import {
   type AvailableProvider,
   encodeCustomId,
   errorStatus,
+  labelOf,
   type ModuleAvailability,
+  type ModuleContext,
   newId,
   type ProviderRegistry,
   parseCustomId,
@@ -18,7 +20,7 @@ import {
   WINNER_COUNT_MAX,
 } from '../config.ts';
 import { renderCard } from '../embed.ts';
-import { viewOf } from '../message.ts';
+import { notPosted, viewOf } from '../message.ts';
 import { type Ctx, postGiveaway, sentMessageId, succeeded } from '../perform.ts';
 import { END_JOB_ID, START_JOB_ID } from '../schedule.ts';
 import type { GiveawayStore } from '../store.ts';
@@ -118,6 +120,8 @@ function refused(text: string): BuilderReply {
   return { kind: 'message', body: errorStatus(text) };
 }
 
+const GONE = 'That option isn’t available any more because its module was turned off.';
+
 async function screenFor(
   deps: BuilderDeps,
   draft: GiveawayDraft,
@@ -164,6 +168,7 @@ export interface ComponentInput {
 export async function handleBuilderComponent(
   deps: BuilderDeps,
   input: ComponentInput,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
 ): Promise<BuilderReply> {
   const key = draftKey(input.guildId, input.userId);
   const draft = await deps.drafts.get(key);
@@ -171,7 +176,7 @@ export async function handleBuilderComponent(
   if (!draft) {
     return refused(
       'That builder has expired or belongs to somebody else. Start a new one with ' +
-        '`/giveaway create`.',
+        `\`${labelOf(labels, 'giveaway', 'create')}\`.`,
     );
   }
 
@@ -257,11 +262,7 @@ export async function handleBuilderComponent(
       const available = await deps.providers.listAvailable(draft.guildId, deps.availability);
       const provider = pickerFor(available, providerId);
 
-      if (!provider) {
-        return refused(
-          'That option is no longer available — the module that provides it was disabled.',
-        );
-      }
+      if (!provider) return refused(GONE);
 
       const kind = input.action === BUILDER_ADD_REQUIREMENT ? 'r' : 'm';
 
@@ -417,19 +418,15 @@ async function pickProvider(
   // in the builder and only discover the limit when saving the giveaway as a template.
   if (held >= cap) {
     return refused(
-      `A giveaway can hold ${cap} ${kind === 'r' ? 'requirements' : 'bonus-entry rules'}, and ` +
-        'this one is full. Remove one before adding another.',
+      `A giveaway can have up to ${cap} ${kind === 'r' ? 'requirements' : 'bonus entry rules'}, ` +
+        `and this one already has ${cap}.`,
     );
   }
 
   const available = await deps.providers.listAvailable(draft.guildId, deps.availability);
   const provider = pickerFor(available, providerId);
 
-  if (!provider) {
-    return refused(
-      'That option is no longer available — the module that provides it was disabled.',
-    );
-  }
+  if (!provider) return refused(GONE);
 
   // A provider with no settings is fully configured by picking it, and Discord refuses a modal
   // with no components — so it is added straight away instead.
@@ -463,15 +460,11 @@ async function editItem(
 
   const provider = deps.providers.get(item.providerId);
   if (!provider) {
-    return refused(
-      'That rule is no longer available — the module that provides it was disabled.',
-    );
+    return refused('That rule isn’t available any more because its module was turned off.');
   }
 
   if (provider.builder.length === 0) {
-    return refused(
-      `“${provider.label}” has nothing to configure. Remove it if you no longer want it.`,
-    );
+    return refused(`“${provider.label}” has no settings to change.`);
   }
 
   const encoded = encodeCustomId(MODULE_ID, ITEM_MODAL, kind, provider.id, String(index));
@@ -529,12 +522,15 @@ export interface ModalInput {
 export async function handleBuilderModal(
   deps: BuilderDeps,
   input: ModalInput,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
 ): Promise<BuilderReply> {
   const key = draftKey(input.guildId, input.userId);
   const draft = await deps.drafts.get(key);
 
   if (!draft) {
-    return refused('That builder has expired. Start a new one with `/giveaway create`.');
+    return refused(
+      `That builder has expired. Start a new one with \`${labelOf(labels, 'giveaway', 'create')}\`.`,
+    );
   }
 
   if (input.action === STEP_MODAL) {
@@ -552,9 +548,7 @@ export async function handleBuilderModal(
 
   if (input.action === BASICS_MODAL) {
     const title = (input.fields[TITLE_FIELD] ?? '').trim();
-    if (title.length === 0) {
-      return refused('A giveaway needs a prize. Say what is being given away.');
-    }
+    if (title.length === 0) return refused('The prize can’t be blank.');
 
     const duration = parseGiveawayDuration((input.fields[DURATION_FIELD] ?? '').trim());
     if (!duration.ok) return refused(duration.humanReason);
@@ -562,8 +556,8 @@ export async function handleBuilderModal(
     const winners = Number((input.fields[WINNERS_FIELD] ?? '').trim());
     if (!Number.isInteger(winners) || winners < 1 || winners > WINNER_COUNT_MAX) {
       return refused(
-        `“${input.fields[WINNERS_FIELD]}” is not a number of winners I can use. Give a whole ` +
-          `number between 1 and ${WINNER_COUNT_MAX}.`,
+        `“${input.fields[WINNERS_FIELD]}” isn’t a number of winners I can use. Use a whole ` +
+          `number from 1 to ${WINNER_COUNT_MAX}.`,
       );
     }
 
@@ -585,11 +579,7 @@ export async function handleBuilderModal(
   if (!item) return { kind: 'ignored' };
 
   const provider = deps.providers.get(item.providerId);
-  if (!provider) {
-    return refused(
-      'That option is no longer available — the module that provides it was disabled.',
-    );
-  }
+  if (!provider) return refused(GONE);
 
   const read = readDescriptorValues(provider.builder, input.fields, input.values);
   if (!read.ok) return refused(read.humanReason);
@@ -677,7 +667,7 @@ export async function startFromDraft(
   if (!rendered.ok) {
     return {
       ok: false,
-      body: errorStatus(`I could not build the giveaway message: ${rendered.humanReason}`),
+      body: errorStatus(`Couldn’t build the giveaway message: ${rendered.humanReason}`),
     };
   }
 
@@ -691,11 +681,7 @@ export async function startFromDraft(
   if (!succeeded(posted)) {
     return {
       ok: false,
-      body: errorStatus(
-        `**${draft.title}** was created but I could not post it in <#${draft.channelId}>: ${
-          posted.failure?.humanReason ?? 'Discord refused the message.'
-        }`,
-      ),
+      body: errorStatus(notPosted(ctx, draft.title, draft.channelId, posted.failure?.humanReason)),
     };
   }
 
@@ -717,12 +703,12 @@ export async function startFromDraft(
     endsAt,
     body: successStatus(
       startsAt === null
-        ? `**${draft.title}** is live in <#${draft.channelId}> — ` +
-            `${plural(draft.winnerCount, 'winner')}, drawn ` +
+        ? `**${draft.title}** is live in <#${draft.channelId}>. ` +
+            `${plural(draft.winnerCount, 'winner')} will be drawn ` +
             `<t:${Math.floor(endsAt.getTime() / 1000)}:R>.`
-        : `**${draft.title}** is scheduled in <#${draft.channelId}> — ` +
-            `${plural(draft.winnerCount, 'winner')}, opening ` +
-            `<t:${Math.floor(startsAt.getTime() / 1000)}:R> and drawn ` +
+        : `**${draft.title}** is scheduled in <#${draft.channelId}>. It opens ` +
+            `<t:${Math.floor(startsAt.getTime() / 1000)}:R>, and ` +
+            `${plural(draft.winnerCount, 'winner')} will be drawn ` +
             `<t:${Math.floor(endsAt.getTime() / 1000)}:R>.`,
     ),
   };

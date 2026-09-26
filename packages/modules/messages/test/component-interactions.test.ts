@@ -393,7 +393,7 @@ describe('embeds component presses', () => {
     expect(outcome).toEqual({ action: 'refused', reason: "no saved message 'gone'" });
     expect(h.roleCalls()).toHaveLength(0);
     expect(h.lastSaid()).toContain("'gone'");
-    expect(h.lastSaid()).toContain('Modules → Messages');
+    expect(h.lastSaid()).toContain('Proton dashboard under Messages');
   });
 
   test('a press on a key the message no longer carries says which key is gone', async () => {
@@ -406,7 +406,7 @@ describe('embeds component presses', () => {
     expect(outcome).toEqual({ action: 'refused', reason: "no component 'green' on 'roles'" });
     expect(h.roleCalls()).toHaveLength(0);
     expect(h.lastSaid()).toContain("'green'");
-    expect(h.lastSaid()).toContain('Modules → Messages');
+    expect(h.lastSaid()).toContain('post the template again with `/message post`');
   });
 
   test('a press while the module is disabled says so instead of failing silently', async () => {
@@ -421,7 +421,7 @@ describe('embeds component presses', () => {
       reason: 'embeds is disabled in this server',
     });
     expect(h.roleCalls()).toHaveLength(0);
-    expect(h.lastSaid()).toContain('disabled in this server');
+    expect(h.lastSaid()).toContain('Messages is off in this server');
   });
 
   test('a press on another module’s component is left alone', async () => {

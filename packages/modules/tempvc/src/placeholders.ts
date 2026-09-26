@@ -76,7 +76,7 @@ const NAME_DEFINITIONS: readonly PlaceholderDefinitionInput[] = [
   {
     key: 'tempvc.hub_mention',
     label: 'Creator channel',
-    description: 'The creator channel they joined; a channel name shows its name',
+    description: 'The creator channel they joined, shown as its name in a channel name',
     group: HUB_GROUP,
     type: 'mention',
     example: v.channel(SAMPLE_HUB, SAMPLE_TEMPVC.hubName),
@@ -84,7 +84,7 @@ const NAME_DEFINITIONS: readonly PlaceholderDefinitionInput[] = [
   ...serverDefinitions().filter(({ key }) => key === 'server.name'),
 ];
 
-const NO_GLOBAL_NAME = "Proton did not read this member's display name";
+const NO_GLOBAL_NAME = "Proton didn't read this member's display name";
 
 function ownerValues(owner: TempVcOwner): Record<string, ResolvedValue> {
   return {

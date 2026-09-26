@@ -29,6 +29,20 @@ export const AUTOMOD_CHECKS = [
 ] as const;
 export type AutomodCheck = (typeof AUTOMOD_CHECKS)[number];
 
+export const CHECK_LABELS: Record<AutomodCheck, string> = {
+  flood: 'Message flood',
+  duplicate: 'Duplicate messages',
+  mentions: 'Mass mentions',
+  invites: 'Invite links',
+  links: 'Blocked links',
+  attachments: 'Attachments',
+  patterns: 'Custom patterns',
+  zalgo: 'Zalgo text',
+  caps: 'Shouting',
+  emoji: 'Emoji spam',
+  walls: 'Walls of text',
+};
+
 export const RESPONSES = ['none', 'warn', 'timeout', 'kick', 'ban'] as const;
 export type Response = (typeof RESPONSES)[number];
 
@@ -44,7 +58,7 @@ const automodShape = {
   enabled: z.boolean().default(false).register(protonFields, {
     label: 'Enabled',
     description:
-      'Switching on creates Proton’s Discord AutoMod rules, and switching off deletes them.',
+      'Turning it on creates Proton’s Discord AutoMod rules, and turning it off deletes them.',
   }),
 
   exemptRoleIds: z
@@ -104,7 +118,7 @@ const automodShape = {
     description: 'Let Discord block messages it considers spam.',
   }),
 
-  floodSeverity: severity('Message flood'),
+  floodSeverity: severity(CHECK_LABELS.flood),
   floodCount: z.number().int().min(2).max(50).default(6).register(protonFields, {
     label: 'Message limit',
   }),
@@ -113,7 +127,7 @@ const automodShape = {
     label: 'Flood window',
   }),
 
-  duplicateSeverity: severity('Duplicate messages'),
+  duplicateSeverity: severity(CHECK_LABELS.duplicate),
   duplicateCount: z.number().int().min(2).max(50).default(3).register(protonFields, {
     label: 'Repeat limit',
   }),
@@ -122,14 +136,14 @@ const automodShape = {
     label: 'Duplicate window',
   }),
 
-  mentionsSeverity: severity('Mass mentions'),
+  mentionsSeverity: severity(CHECK_LABELS.mentions),
   mentionsLimit: z.number().int().min(1).max(50).default(8).register(protonFields, {
     label: 'Mention limit',
   }),
 
-  invitesSeverity: severity('Invite links'),
+  invitesSeverity: severity(CHECK_LABELS.invites),
 
-  linksSeverity: severity('Blocked links'),
+  linksSeverity: severity(CHECK_LABELS.links),
   linkBlockDomains: z
     .array(z.string().min(1).max(253))
     .max(200)
@@ -147,7 +161,7 @@ const automodShape = {
       description: 'Ignore links to these domains, even when a parent domain is blocked.',
     }),
 
-  attachmentsSeverity: severity('Attachments'),
+  attachmentsSeverity: severity(CHECK_LABELS.attachments),
   attachmentExtensions: z
     .array(z.string().min(1).max(16))
     .max(100)
@@ -158,23 +172,23 @@ const automodShape = {
         'Acts on files whose last extension is on this list, and on disguised double extensions such as invoice.exe.pdf.',
     }),
 
-  patternsSeverity: severity('Custom patterns'),
+  patternsSeverity: severity(CHECK_LABELS.patterns),
   regexPatterns: z.array(z.string().min(1).max(260)).max(10).default([]).register(protonFields, {
     label: 'Regex patterns',
   }),
 
-  zalgoSeverity: severity('Zalgo text'),
-  capsSeverity: severity('Shouting'),
+  zalgoSeverity: severity(CHECK_LABELS.zalgo),
+  capsSeverity: severity(CHECK_LABELS.caps),
   capsRatio: z.number().int().min(50).max(100).default(70).register(protonFields, {
     label: 'Capital letter limit',
   }),
 
-  emojiSeverity: severity('Emoji spam'),
+  emojiSeverity: severity(CHECK_LABELS.emoji),
   emojiLimit: z.number().int().min(1).max(100).default(12).register(protonFields, {
     label: 'Emoji limit',
   }),
 
-  wallsSeverity: severity('Walls of text'),
+  wallsSeverity: severity(CHECK_LABELS.walls),
   wallMaxLines: z.number().int().min(2).max(200).default(15).register(protonFields, {
     label: 'Line limit',
   }),
@@ -213,12 +227,11 @@ export const automodConfigSchema = automodFormSchema.superRefine((config, ctx) =
     try {
       new RegExp(pattern);
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
       ctx.addIssue({
         code: 'custom',
         path: ['regexPatterns'],
-        message: `'${pattern}' is not a valid regular expression: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        message: `'${pattern}' isn’t a valid regular expression: ${detail.split(': ').pop()}.`,
       });
       continue;
     }
@@ -231,8 +244,8 @@ export const automodConfigSchema = automodFormSchema.superRefine((config, ctx) =
         code: 'custom',
         path: ['regexPatterns'],
         message:
-          `'${pattern}' nests one unbounded repeat inside another, which can take exponential ` +
-          'time on a message crafted to exploit it. Rewrite it without the nested + or *.',
+          `'${pattern}' nests one repeat inside another, which a crafted message could use to ` +
+          'make matching hang. Rewrite it without the nested + or *.',
       });
     }
   }

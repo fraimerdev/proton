@@ -42,6 +42,7 @@ export const COUNTER_A = '500000000000000002';
 export const COUNTER_B = '500000000000000003';
 export const CREATED = '500000000000000004';
 export const INTERACTION = '600000000000000001';
+export const APPLICATION = '400000000000000001';
 
 export const EVERYONE_ROLE = GUILD;
 export const BOT_ROLE = '410000000000000005';
@@ -200,17 +201,36 @@ export interface RunOverrides {
   tier: EntitlementTier;
   deps: CountersDeps;
   idempotencyKey: string;
+  applicationId: string | null;
+  commandLabel: (key: string, path?: string) => string;
 
   scheduler: boolean;
 }
 
+export interface MessageBody {
+  content?: string;
+  flags?: number;
+  embeds?: { description?: string; color?: number }[];
+  allowed_mentions?: { parse?: string[] };
+}
+
 export interface CallBody {
   name?: string;
-  data?: {
-    content?: string;
-    flags?: number;
-    embeds?: { description?: string; color?: number }[];
-  };
+  type?: number;
+  data?: MessageBody;
+}
+
+const INITIAL_CALLBACKS = new Set([4, 5, 6, 7, 9]);
+
+const isCallback = (call: RestRequestOptions) =>
+  call.path.startsWith('/interactions/') && call.path.endsWith('/callback');
+
+const isFollowup = (call: RestRequestOptions) => call.path.startsWith(`/webhooks/${APPLICATION}/`);
+
+function answerBody(call: RestRequestOptions): MessageBody | undefined {
+  return isFollowup(call)
+    ? (call.body as MessageBody | undefined)
+    : (call.body as CallBody | undefined)?.data;
 }
 
 export interface HarnessOptions {
@@ -234,6 +254,10 @@ export interface Harness {
   replyContent(): string | null;
   replyEmbed(): { description?: string; color?: number } | null;
 
+  initialCallbacks(): RestRequestOptions[];
+  followups(): RestRequestOptions[];
+  answers(): MessageBody[];
+
   run(options: RawOption[], overrides?: Partial<RunOverrides>): Promise<void>;
   refresh(overrides?: Partial<RunOverrides>): Promise<void>;
   listen(event: ProtonEvent, overrides?: Partial<RunOverrides>): Promise<void>;
@@ -248,6 +272,14 @@ export function harness(options: HarnessOptions = {}): Harness {
   const dedupe = new MemoryDedupe();
   const scheduler = new FakeScheduler();
   const logs: Array<{ level: string; message: string }> = [];
+
+  const answers = (): MessageBody[] =>
+    rest.calls
+      .filter((call) => isCallback(call) || isFollowup(call))
+      .map(answerBody)
+      .filter(
+        (body): body is MessageBody => body?.content !== undefined || body?.embeds !== undefined,
+      );
 
   const logger: Logger = {
     info: (message) => logs.push({ level: 'info', message }),
@@ -317,19 +349,28 @@ export function harness(options: HarnessOptions = {}): Harness {
       rest.calls.filter((call) => call.method === 'PUT' && call.path.includes('/permissions/')),
 
     replyContent: () => {
-      const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      const data = (call?.body as CallBody | undefined)?.data;
+      const data = answers()[0];
       return data?.content || data?.embeds?.[0]?.description || null;
     },
 
-    replyEmbed: () => {
-      const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      return (call?.body as CallBody | undefined)?.data?.embeds?.[0] ?? null;
-    },
+    replyEmbed: () => answers()[0]?.embeds?.[0] ?? null,
+
+    initialCallbacks: () =>
+      rest.calls.filter(
+        (call) =>
+          isCallback(call) && INITIAL_CALLBACKS.has((call.body as CallBody | undefined)?.type ?? 4),
+      ),
+
+    followups: () => rest.calls.filter(isFollowup),
+
+    answers,
 
     async run(raw, overrides = {}) {
       const definition = countersCommands(depsOf(overrides))[0];
       if (!definition) throw new Error('the counters module declares no commands');
+
+      const applicationId =
+        overrides.applicationId === undefined ? APPLICATION : overrides.applicationId;
 
       const ctx: CommandContext<CountersConfig> = {
         guildId: GUILD,
@@ -341,6 +382,8 @@ export function harness(options: HarnessOptions = {}): Harness {
         logger,
         options: createCommandOptions(raw),
         interaction: { id: INTERACTION, token: 'interaction-token' },
+        ...(applicationId === null ? {} : { applicationId }),
+        ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
         idempotencyKey: overrides.idempotencyKey ?? newId(),
 
         ...scheduling(overrides),

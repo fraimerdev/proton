@@ -134,7 +134,7 @@ export async function changeRoles(
       kind: step.kind,
       actorId: input.userId,
       targetId: input.userId,
-      reason: `Saved message '${input.messageName}': the member chose this themselves.`.slice(
+      reason: `Template '${input.messageName}': the member chose this themselves.`.slice(
         0,
         REASON_MAX,
       ),
@@ -146,9 +146,9 @@ export async function changeRoles(
     if (succeeded(result)) {
       (step.kind === 'add_role' ? report.added : report.removed).push(step.roleId);
     } else {
-      const what = step.kind === 'add_role' ? 'giving you' : 'taking away';
+      const what = step.kind === 'add_role' ? "Couldn't give you" : "Couldn't take away";
       report.failures.push(
-        `${what} <@&${step.roleId}>: ${result.failure?.humanReason ?? 'no reason was reported'}`,
+        `${what} <@&${step.roleId}>. ${result.failure?.humanReason ?? 'No reason was given.'}`,
       );
     }
   }
@@ -165,13 +165,11 @@ export function describeReport(report: RoleChangeReport): string {
   if (report.removed.length > 0) {
     parts.push(`Took away ${report.removed.map((id) => `<@&${id}>`).join(', ')}.`);
   }
-  if (report.failures.length > 0) {
-    parts.push(`I couldn't finish: ${report.failures.join(' | ')}`);
-  }
+  parts.push(...report.failures);
 
   return parts.length > 0
     ? parts.join(' ')
-    : 'Nothing changed — you already had exactly the roles that were set up here.';
+    : 'Nothing changed. You already have the roles set up here.';
 }
 
 export interface PostEmbedInput {

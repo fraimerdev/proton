@@ -6,6 +6,7 @@ import {
   type CustomIdFor,
   type EventListener,
   type EventType,
+  isBoostMessageType,
   type Logger,
   type ModuleContext,
   type ProtonEvent,
@@ -24,7 +25,6 @@ import {
   type UserFacts,
   usedKeys,
 } from '@proton/core/placeholders';
-import { MessageType } from 'discord-api-types/v10';
 import {
   type GreetingFacts,
   type GreetingMessage,
@@ -48,13 +48,6 @@ export const WELCOME_ACTOR = 'proton:welcome';
 export const WELCOME_EVENT_TYPES: EventType[] = ['member.joined', 'member.left'];
 
 export const BOOST_EVENT_TYPES: EventType[] = ['message.created'];
-
-export const BOOST_MESSAGE_TYPES: ReadonlySet<number> = new Set([
-  MessageType.GuildBoost,
-  MessageType.GuildBoostTier1,
-  MessageType.GuildBoostTier2,
-  MessageType.GuildBoostTier3,
-]);
 
 // Only a link button survives greetingMessageSchema, and link buttons never ask for a custom_id,
 // so reaching this means the config was written around the dashboard.
@@ -138,8 +131,7 @@ export function readGreetingTarget(
 }
 
 export function isBoostNotice(payload: unknown): boolean {
-  const type = nested(payload, 'type');
-  return typeof type === 'number' && BOOST_MESSAGE_TYPES.has(type);
+  return isBoostMessageType(nested(payload, 'type'));
 }
 
 export function readBoosterTarget(

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  formatCommandLabel,
   ModuleRegistry,
   Permissions,
+  type RawOption,
   STATUS_ERROR_COLOUR,
   STATUS_ERROR_EMOJI,
   STATUS_SUCCESS_COLOUR,
@@ -12,17 +14,24 @@ import { MODULE_ID, REFRESH_INTERVAL_MS } from '../src/config.ts';
 import { createCountersModule } from '../src/index.ts';
 import { REFRESH_JOB, REFRESH_KEY } from '../src/refresh.ts';
 import {
+  APPLICATION,
   BOT_PERMISSIONS,
+  type CallBody,
   COUNTER_A,
   COUNTER_B,
   CREATED,
   GUILD,
+  type Harness,
+  type HarnessOptions,
   harness,
   MEMBER_COUNT,
   NO_CACHED_STATE,
   protonEvent,
+  type RunOverrides,
   subcommand,
 } from './harness.ts';
+
+const EPHEMERAL = 64;
 
 const MEMBERS = {
   id: COUNTER_A,
@@ -122,7 +131,7 @@ describe('/counters refresh', () => {
 
     const reply = h.replyContent() ?? '';
     expect(reply).toContain('1 renamed');
-    expect(reply).toContain('1 refused');
+    expect(reply).toContain('1 failed');
     expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
   });
 
@@ -144,7 +153,23 @@ describe('/counters refresh', () => {
 
     expect(h.patches()).toHaveLength(0);
     expect(h.replyContent()).toContain('/counters destroy');
+    expect(h.replyContent()).toContain('The only one is `/counters refresh`.');
     expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('names both subcommands as this server has renamed the command', async () => {
+    const h = harness();
+
+    await h.run(subcommand('destroy'), {
+      config: { counters: [MEMBERS] },
+      commandLabel: (key, path) =>
+        formatCommandLabel(key, path, key === 'counters' ? 'stats' : undefined),
+    });
+
+    expect(h.replyContent()).toContain(
+      'I don’t know a `/stats destroy` subcommand. The only one is `/stats refresh`.',
+    );
+    expect(h.replyContent()).not.toContain('/counters');
   });
 
   test('points an admin at the dashboard when nothing is configured', async () => {
@@ -167,7 +192,7 @@ describe('/counters refresh', () => {
     });
 
     expect(h.patches()).toHaveLength(0);
-    expect(h.replyContent()).toContain("don't have this server's channel list cached");
+    expect(h.replyContent()).toContain("I'm still loading this server's channels");
   });
 
   test('names the missing wiring when guild state was never bound', async () => {
@@ -176,7 +201,7 @@ describe('/counters refresh', () => {
     await h.run(refreshSubcommand, { config: { counters: [MEMBERS] } });
 
     expect(h.patches()).toHaveLength(0);
-    expect(h.replyContent()).toContain('nowhere to come from');
+    expect(h.replyContent()).toContain('fault on my side');
     expect(
       h.logs.some((line) => line.level === 'error' && line.message.includes('guildState')),
     ).toBe(true);
@@ -198,6 +223,153 @@ describe('/counters refresh', () => {
     await h.run(refreshSubcommand, { config: { counters: [MEMBERS] }, idempotencyKey });
 
     expect(h.patches()).toHaveLength(1);
+  });
+});
+
+interface AckCase {
+  name: string;
+  options?: HarnessOptions;
+  arrange?: (h: Harness) => void;
+  raw?: RawOption[];
+  overrides: Partial<RunOverrides>;
+  says?: string;
+}
+
+const ACK_CASES: AckCase[] = [
+  { name: 'a refresh that renames a counter', overrides: { config: { counters: [MEMBERS] } } },
+  { name: 'a refresh with nothing configured', overrides: { config: { counters: [] } } },
+  {
+    name: 'a subcommand the module does not know',
+    raw: subcommand('destroy'),
+    overrides: { config: { counters: [MEMBERS] } },
+  },
+  {
+    name: 'a refresh with no guild state bound',
+    overrides: { config: { counters: [MEMBERS] }, deps: {} },
+  },
+  {
+    name: 'a refresh before the channel list is cached',
+    overrides: { config: { counters: [MEMBERS] }, deps: { guildState: NO_CACHED_STATE } },
+  },
+  {
+    name: 'a refresh Discord refuses a new channel for',
+    arrange: (h) => {
+      h.rest.createResponse = { status: 403, body: { message: 'Missing Permissions' } };
+    },
+    overrides: { config: { counters: [OWNED] } },
+  },
+  {
+    name: 'a refresh the bot lacks Manage Channels for',
+    options: { botPermissions: Permissions.ViewChannel | Permissions.SendMessages },
+    overrides: { config: { counters: [MEMBERS] } },
+  },
+  {
+    name: 'a refresh that cannot read which channels it made',
+    arrange: (h) => {
+      h.owned.failOn = 'list';
+    },
+    overrides: { config: { counters: [MEMBERS] } },
+    says: 'rather than risk creating duplicates',
+  },
+  {
+    name: 'a refresh that made a channel but could not record it',
+    arrange: (h) => {
+      h.owned.failOn = 'attach';
+    },
+    overrides: { config: { counters: [OWNED] } },
+    says: "I created it but couldn't keep track of it",
+  },
+  {
+    name: 'a refresh that renamed one counter and was refused another',
+    arrange: (h) => {
+      h.state.boostCount = null;
+    },
+    overrides: { config: { counters: [MEMBERS, BOOSTS] } },
+    says: '1 failed',
+  },
+];
+
+async function ran(c: AckCase, applicationId?: string | null): Promise<Harness> {
+  const h = harness(c.options);
+  c.arrange?.(h);
+
+  await h.run(c.raw ?? refreshSubcommand, {
+    ...c.overrides,
+    ...(applicationId === undefined ? {} : { applicationId }),
+  });
+
+  return h;
+}
+
+describe('/counters acknowledges each interaction exactly once', () => {
+  for (const c of ACK_CASES) {
+    test(`${c.name}: one private defer, then the same answer as one private followup`, async () => {
+      const h = await ran(c);
+
+      const initial = h.initialCallbacks();
+      expect(initial).toHaveLength(1);
+      expect(initial[0]?.body).toEqual({ type: 5, data: { flags: EPHEMERAL } });
+      expect(h.calls()[0]).toBe(initial[0]);
+
+      const followups = h.followups();
+      expect(followups).toHaveLength(1);
+      expect(followups[0]?.path).toBe(`/webhooks/${APPLICATION}/interaction-token`);
+
+      const answers = h.answers();
+      expect(answers).toHaveLength(1);
+      expect(answers[0]?.flags).toBe(EPHEMERAL);
+      expect(answers[0]?.allowed_mentions).toEqual({ parse: [] });
+      expect(h.replyContent()).not.toBeNull();
+      if (c.says) expect(h.replyContent()).toContain(c.says);
+
+      const replied = await ran(c, null);
+      expect(answers[0]).toEqual(replied.answers()[0]);
+    });
+  }
+
+  test('the defer goes out before the first rename', async () => {
+    const h = harness();
+
+    await h.run(refreshSubcommand, { config: { counters: [MEMBERS] } });
+
+    const order = h
+      .calls()
+      .map((call) =>
+        call.path.startsWith('/interactions/')
+          ? 'defer'
+          : call.path.startsWith('/webhooks/')
+            ? 'answer'
+            : call.method,
+      );
+    expect(order).toEqual(['defer', 'PATCH', 'answer']);
+  });
+
+  test('without an application id there is no defer, and the one callback is the answer', async () => {
+    const h = harness();
+
+    await h.run(refreshSubcommand, { config: { counters: [MEMBERS] }, applicationId: null });
+
+    const initial = h.initialCallbacks();
+    expect(initial).toHaveLength(1);
+    expect((initial[0]?.body as CallBody | undefined)?.type).toBe(4);
+    expect(h.followups()).toHaveLength(0);
+
+    expect(h.answers()).toHaveLength(1);
+    expect(h.answers()[0]?.flags).toBe(EPHEMERAL);
+    expect(h.answers()[0]?.allowed_mentions).toEqual({ parse: [] });
+    expect(h.replyContent()).toContain('1 renamed');
+    expect(h.replyEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
+  });
+
+  test('a redelivered /counters refresh acknowledges and answers once', async () => {
+    const h = harness();
+    const idempotencyKey = 'interaction-1';
+
+    await h.run(refreshSubcommand, { config: { counters: [MEMBERS] }, idempotencyKey });
+    await h.run(refreshSubcommand, { config: { counters: [MEMBERS] }, idempotencyKey });
+
+    expect(h.initialCallbacks()).toHaveLength(1);
+    expect(h.followups()).toHaveLength(1);
   });
 });
 
@@ -327,7 +499,7 @@ describe('a counter Proton makes the channel for', () => {
     await h.run(refreshSubcommand, { config: { counters: [OWNED] } });
 
     expect(h.owned.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('could not make the channel');
+    expect(h.replyContent()).toContain("Couldn't set up the channel");
     expect(h.replyContent()).toContain(`Members: ${MEMBER_COUNT}`);
     expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
@@ -353,7 +525,7 @@ describe('a counter Proton makes the channel for', () => {
 
     expect(h.creates()).toHaveLength(0);
     expect(h.patches()).toHaveLength(1);
-    expect(h.replyContent()).toContain('nowhere to record');
+    expect(h.replyContent()).toContain('keep track of new counter channels');
   });
 
   test('leaves every counter alone rather than duplicating when the record cannot be read', async () => {
@@ -375,7 +547,7 @@ describe('a counter Proton makes the channel for', () => {
 
     expect(h.creates()).toHaveLength(1);
     expect(h.owned.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('could not record it');
+    expect(h.replyContent()).toContain("couldn't keep track of it");
   });
 
   test('refuses to make a second channel for a counter whose first was never filed', async () => {
@@ -503,6 +675,7 @@ describe('the counters manifest', () => {
     const registry = registered();
 
     expect(registry.mayExecute(MODULE_ID, 'interaction_reply')).toBe(true);
+    expect(registry.mayExecute(MODULE_ID, 'interaction_followup')).toBe(true);
     expect(registry.mayExecute(MODULE_ID, 'edit_channel')).toBe(true);
   });
 

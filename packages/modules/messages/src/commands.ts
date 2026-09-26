@@ -3,6 +3,8 @@ import {
   type CommandDefinition,
   errorStatus,
   type InteractionRef,
+  labelOf,
+  type ModuleContext,
   Permissions,
   type RespondTo,
   successStatus,
@@ -52,16 +54,20 @@ const POSTABLE_CHANNELS = [
   ChannelType.AnnouncementThread,
 ] as const;
 
-const MESSAGE_DESCRIPTION =
-  'Post one of this server’s saved messages, or compose one now. Needs Manage Messages.';
+const MESSAGE_DESCRIPTION = 'Post a template or compose a new message. Needs Manage Messages.';
 
-const CROSS_CHANNEL_GATE =
-  ' `/message` is limited to members with Manage Messages, and posting into a channel other than ' +
-  'the one you are in also needs me to be able to see and post there.';
+type Labels = Pick<ModuleContext, 'commandLabel'>;
+
+function crossChannelGate(labels: Labels): string {
+  return (
+    ` \`${labelOf(labels, 'message')}\` is limited to members with Manage Messages, and to post ` +
+    'in another channel I need View Channel and Send Messages there.'
+  );
+}
 
 const NOT_WIRED =
-  'I can’t post that: I would have no way to tell you afterwards whether it worked. Nothing ' +
-  'was posted. This is a fault on my side, not a setting in this server.';
+  'I can’t post that right now, so nothing was posted. This is a fault on my side, not a ' +
+  'setting in this server.';
 
 function interactionOf(ctx: CommandContext<MessagesConfig>): InteractionRef {
   return {
@@ -75,31 +81,35 @@ function replyTo(ctx: CommandContext<MessagesConfig>): RespondTo {
   return respondTo(ctx, interactionOf(ctx), ctx.userId, ctx.idempotencyKey);
 }
 
-export function describeUnknown(saved: readonly SavedMessage[], name: string): string {
+export function describeUnknown(
+  saved: readonly SavedMessage[],
+  name: string,
+  labels: Labels = {},
+): string {
   if (saved.length === 0) {
     return (
-      `This server has no saved messages yet, so there is nothing called “${name}” to post. An ` +
-      'admin can save one on the Proton dashboard, or you can compose a one-off right now with ' +
-      '`/message send`.'
+      `This server has no templates yet, so there’s nothing called “${name}” to post. An admin ` +
+      'can create one on the Proton dashboard, or you can compose a one-off message now with ' +
+      `\`${labelOf(labels, 'message', 'send')}\`.`
     );
   }
 
   return (
-    `There is no saved message called “${name}” in this server. These are saved: ` +
+    `Couldn’t find a template called “${name}”. Templates in this server: ` +
     `${renderNames(saved.map((message) => message.name))}.`
   );
 }
 
-export function describeList(saved: readonly SavedMessage[]): string {
+export function describeList(saved: readonly SavedMessage[], labels: Labels = {}): string {
   if (saved.length === 0) {
     return (
-      'This server has no saved messages yet. An admin saves them on the Proton dashboard, and ' +
-      '`/message send` composes a one-off without saving it.'
+      'This server has no templates yet. An admin can create them on the Proton dashboard, and ' +
+      `\`${labelOf(labels, 'message', 'send')}\` composes a one-off message without saving it.`
     );
   }
 
   return (
-    `**Saved messages** — ${saved.length} in this server\n` +
+    `**${saved.length} ${saved.length === 1 ? 'template' : 'templates'} in this server**\n` +
     renderNames(
       saved.map((message) => message.name),
       TEMPLATE_LIST_SHOWN,
@@ -117,11 +127,11 @@ function messageBuilder(): SlashCommandBuilder {
   builder.addSubcommand((sub) =>
     sub
       .setName('post')
-      .setDescription('Post a saved message.')
+      .setDescription('Post a template.')
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('Which saved message to post.')
+          .setDescription('The template to post.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(TEMPLATE_NAME_MAX),
@@ -135,11 +145,11 @@ function messageBuilder(): SlashCommandBuilder {
   );
 
   builder.addSubcommand((sub) =>
-    sub.setName('list').setDescription('List this server’s saved messages.'),
+    sub.setName('list').setDescription('List this server’s templates.'),
   );
 
   builder.addSubcommand((sub) =>
-    sub.setName('send').setDescription('Compose a one-off message and post it here.'),
+    sub.setName('send').setDescription('Compose a one-off embed and post it in this channel.'),
   );
 
   return builder;
@@ -188,13 +198,17 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
 
   const name = ctx.options.getString('name');
   if (name === null || name.trim().length === 0) {
-    await replyEphemeral(ctx, to, errorStatus('Name the saved message you want me to post.'));
+    await replyEphemeral(ctx, to, errorStatus('Choose a template to post.'));
     return;
   }
 
   const saved = findTemplate(ctx.config.templates, name);
   if (!saved) {
-    await replyEphemeral(ctx, to, errorStatus(describeUnknown(ctx.config.templates, name.trim())));
+    await replyEphemeral(
+      ctx,
+      to,
+      errorStatus(describeUnknown(ctx.config.templates, name.trim(), ctx)),
+    );
     return;
   }
 
@@ -228,8 +242,8 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
       to,
       bound.deps.applicationId,
       errorStatus(
-        `I could not post **${saved.name}** in <#${channelId}>, because ${rendered.humanReason} ` +
-          'Nothing was posted. An admin can fix it in the Proton dashboard under Messages → Templates.',
+        `Couldn’t post **${saved.name}** in <#${channelId}> because ${rendered.humanReason} ` +
+          'Nothing was posted. An admin can fix it on the Proton dashboard under Messages → Templates.',
       ),
     );
     return;
@@ -249,9 +263,9 @@ async function post(ctx: CommandContext<MessagesConfig>, deps: MessagesDeps): Pr
     succeeded(result)
       ? successStatus(`Posted **${saved.name}** in <#${channelId}>.`)
       : errorStatus(
-          `I could not post **${saved.name}** in <#${channelId}>. ${
+          `Couldn’t post **${saved.name}** in <#${channelId}>. ${
             result.failure?.humanReason ?? 'Discord refused it and gave no reason.'
-          }${channelId === ctx.channelId ? '' : CROSS_CHANNEL_GATE}`,
+          }${channelId === ctx.channelId ? '' : crossChannelGate(ctx)}`,
         ),
   );
 }
@@ -260,7 +274,7 @@ async function list(ctx: CommandContext<MessagesConfig>): Promise<void> {
   // A listing, not a status, so it stays plain text — but the names in it are admin-authored free
   // text, and one saved as @everyone would ping the server on its way back out.
   await replyEphemeral(ctx, replyTo(ctx), {
-    content: describeList(ctx.config.templates),
+    content: describeList(ctx.config.templates, ctx),
     allowedMentions: { parse: [] },
   });
 }
@@ -278,8 +292,8 @@ async function send(ctx: CommandContext<MessagesConfig>): Promise<void> {
       ctx,
       to,
       errorStatus(
-        'I could not open the message composer, so nothing was posted. This is a fault on my ' +
-          'side, not a setting in this server.',
+        'Couldn’t open the composer, so nothing was posted. This is a fault on my side, not a ' +
+          'setting in this server.',
       ),
     );
     return;
@@ -307,7 +321,7 @@ export function messageCommand(deps: MessagesDeps): Command {
           await replyEphemeral(
             ctx,
             replyTo(ctx),
-            errorStatus('That is not a `/message` subcommand I know.'),
+            errorStatus(`I don’t know that \`${labelOf(ctx, 'message')}\` subcommand.`),
           );
       }
     },

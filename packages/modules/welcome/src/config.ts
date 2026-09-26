@@ -24,9 +24,9 @@ export const DEFAULT_GOODBYE_MESSAGE = '{username} has left {server}.';
 export const DEFAULT_BOOST_MESSAGE = 'Thanks for boosting **{server}**, {user}!';
 
 const ONLY_LINK_BUTTONS =
-  'a welcome, goodbye or boost message can carry link buttons and nothing else: Proton does not ' +
-  'watch for presses on a greeting, so any other button would do nothing when a member pressed ' +
-  'it. Make this a link button, or post the interactive message with the Messages module instead.';
+  'welcome, goodbye and boost messages can only have link buttons, because Proton doesn’t respond ' +
+  'to presses on them. Make this a link button, or use the Messages module for an interactive ' +
+  'message.';
 
 export function liftLegacyGreeting(value: unknown): unknown {
   // A greeting stored before it could hold embeds is a bare string, and z.object would strip it to
@@ -92,7 +92,7 @@ export const DEFAULT_BOOST_GREETING: GreetingMessage =
 
 const channelId = z
   .string()
-  .regex(/^\d{17,20}$/, 'must be a Discord channel id')
+  .regex(/^\d{17,20}$/, 'must be a Discord channel ID')
   .register(protonFields, { field: 'channel-id' });
 
 const welcomeShape = {
@@ -117,7 +117,7 @@ const welcomeShape = {
 
   card: z.boolean().default(false).register(protonFields, {
     label: 'Attach a card',
-    description: 'Costs an extra image render per join.',
+    description: 'Goes with welcome and goodbye messages, never boosts.',
   }),
 
   preset: z.enum(CARD_PRESETS).default('midnight').register(protonFields, { label: 'Card style' }),

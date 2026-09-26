@@ -21,7 +21,10 @@ export const appealQuestionSchema = z.object({
     .trim()
     .min(1)
     .max(32)
-    .regex(/^[A-Za-z0-9][A-Za-z0-9_-]*$/, 'letters, digits, hyphens and underscores only'),
+    .regex(
+      /^[A-Za-z0-9][A-Za-z0-9_-]*$/,
+      'Start with a letter or number, and use only letters, numbers, hyphens and underscores.',
+    ),
 
   label: z.string().trim().min(1).max(120),
   placeholder: z.string().trim().max(100).optional(),
@@ -83,7 +86,7 @@ export const appealPanelsSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'id'],
-          message: `two forms are both called '${panel.id}'. A honeypot points at one by its id.`,
+          message: `Another form already uses the ID '${panel.id}'.`,
         });
       }
       seen.add(panel.id);
@@ -94,9 +97,7 @@ export const appealPanelsSchema = z
           ctx.addIssue({
             code: 'custom',
             path: [index, 'questions', at, 'key'],
-            message:
-              `two questions are both keyed '${question.key}', so one answer would ` +
-              'overwrite the other.',
+            message: `Another question already uses the answer key '${question.key}'.`,
           });
         }
         keys.add(question.key);

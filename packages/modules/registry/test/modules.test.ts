@@ -23,6 +23,7 @@ const SHIPPED_MODULE_IDS = [
   'automod',
 
   'leveling',
+  'achievements',
   'joinroles',
   'rolemenu',
   'starboard',
@@ -30,6 +31,7 @@ const SHIPPED_MODULE_IDS = [
 
   'tags',
   'tickets',
+  'applications',
   'tempvc',
   'reminders',
   'messages',

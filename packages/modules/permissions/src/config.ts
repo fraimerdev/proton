@@ -12,8 +12,8 @@ export const commandOverridesSchema = z
   .catchall(z.array(snowflakeSchema))
   .refine((overrides) => Object.keys(overrides).every(isCommandName), {
     message:
-      'override keys must be Discord command names: lowercase, 1-32 characters, no spaces and ' +
-      "no leading slash — 'ban', not '/Ban'",
+      'Command names must be lowercase, 1 to 32 characters, with no spaces or leading slash. ' +
+      "Use 'ban', not '/Ban'.",
   });
 
 export type CommandOverrides = z.infer<typeof commandOverridesSchema>;
@@ -21,7 +21,7 @@ export type CommandOverrides = z.infer<typeof commandOverridesSchema>;
 export const permissionsConfigSchema = z.object({
   enabled: z.boolean().default(true).register(protonFields, {
     label: 'Enabled',
-    description: 'Switch off to use Discord’s own command permissions instead.',
+    description: 'Turn it off to use only Discord’s own command permissions.',
   }),
 
   overrides: commandOverridesSchema.default({}),

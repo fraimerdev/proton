@@ -1,8 +1,10 @@
 import { type ModuleManifest, ModuleRegistry, type ModuleRegistryOptions } from '@proton/core';
+import { type AchievementsDeps, createAchievementsModule } from '@proton/module-achievements';
 import { type AfkDeps, createAfkModule } from '@proton/module-afk';
 import { type AntinukeDeps, createAntinukeModule } from '@proton/module-antinuke';
 import { type AntiraidDeps, createAntiraidModule } from '@proton/module-antiraid';
 import { type AppealsDeps, createAppealsModule } from '@proton/module-appeals';
+import { type ApplicationsDeps, createApplicationsModule } from '@proton/module-applications';
 import { type AutomodDeps, createAutomodModule } from '@proton/module-automod';
 import { type BackupDeps, createBackupModule } from '@proton/module-backup';
 import { type BrandingDeps, createBrandingModule } from '@proton/module-branding';
@@ -48,6 +50,7 @@ export interface ModuleBindings {
   serverlog?: ServerlogDeps;
 
   leveling?: LevelingDeps;
+  achievements?: AchievementsDeps;
   joinroles?: JoinRolesDeps;
   rolemenu?: RolemenuDeps;
   starboard?: StarboardDeps;
@@ -55,6 +58,7 @@ export interface ModuleBindings {
 
   tags?: TagsDeps;
   tickets?: TicketsDeps;
+  applications?: ApplicationsDeps;
   tempvc?: TempVcDeps;
   reminders?: RemindersDeps;
   messages?: MessagesDeps;
@@ -86,6 +90,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
     createAutomodModule(bindings.automod ?? {}) as ModuleManifest,
 
     createLevelingModule(bindings.leveling ?? {}) as ModuleManifest,
+    createAchievementsModule(bindings.achievements ?? {}) as ModuleManifest,
     createJoinRolesModule(bindings.joinroles ?? {}) as ModuleManifest,
     createRolemenuModule(bindings.rolemenu ?? {}) as ModuleManifest,
     createStarboardModule(bindings.starboard ?? {}) as ModuleManifest,
@@ -93,6 +98,7 @@ export function buildModules(bindings: ModuleBindings = {}): ModuleManifest[] {
 
     createTagsModule(bindings.tags ?? {}) as ModuleManifest,
     createTicketsModule(bindings.tickets ?? {}) as ModuleManifest,
+    createApplicationsModule(bindings.applications ?? {}) as ModuleManifest,
     createTempVcModule(bindings.tempvc ?? {}) as ModuleManifest,
     createRemindersModule(bindings.reminders ?? {}) as ModuleManifest,
     createMessagesModule(bindings.messages ?? {}) as ModuleManifest,

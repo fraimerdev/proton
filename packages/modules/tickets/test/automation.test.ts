@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { encodeCustomId, newId } from '@proton/core';
 import { ticketTypeSchema } from '../src/config.ts';
 import { createTicketsModule } from '../src/index.ts';
-import { patrol } from '../src/reconcile.ts';
+import { patrol, purgeCapturedMessages } from '../src/reconcile.ts';
 import {
   AUTO_CLOSE_JOB,
   AUTO_DELETE_JOB,
@@ -245,7 +245,7 @@ describe('auto-delete', () => {
       h.deps,
       stale,
       'proton:tickets',
-      'tidied up automatically',
+      'Deleted automatically after closing',
       ['closed', 'archived'],
     );
 
@@ -316,6 +316,33 @@ describe('the patrol', () => {
 
     expect(result.purged).toBe(1);
     expect(await h.store.listMessages(ticket.id)).toHaveLength(0);
+  });
+});
+
+describe('the captured-message purge', () => {
+  test('deletes every expired captured message in one run and keeps the rest', async () => {
+    const h = harness({ config: typed({ captureMessages: true }) });
+    const ticket = await open(h);
+    const count = 520;
+
+    for (let index = 0; index <= count; index++) {
+      await h.store.captureMessage({
+        ticketId: ticket.id,
+        messageId: String(700000000000000100n + BigInt(index)),
+        authorId: MEMBER,
+        authorName: 'Member',
+        authorBot: false,
+        content: `message ${index}`,
+        attachments: [],
+        embeds: [],
+        replyToId: null,
+        createdAt: h.now(),
+        expiresAt: new Date(h.now().getTime() + (index === count ? HOUR : -1000)),
+      });
+    }
+
+    expect(await purgeCapturedMessages(h.store, h.now())).toBe(count);
+    expect(await h.store.listMessages(ticket.id)).toHaveLength(1);
   });
 });
 

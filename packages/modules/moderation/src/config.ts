@@ -1,5 +1,15 @@
-import { durationStringSchema, protonFields } from '@proton/core';
+import { type ConfigWriteIssue, durationStringSchema, protonFields } from '@proton/core';
 import { z } from 'zod';
+import {
+  PUNISH_DEFAULTS,
+  PUNISH_DIRECTIONS,
+  punishConfigSchema,
+  refinePunishWrite,
+} from './punish/config.ts';
+import { REPORTS_DEFAULTS, refineReportsWrite, reportsConfigSchema } from './reports/config.ts';
+
+export * from './punish/config.ts';
+export * from './reports/config.ts';
 
 export const ESCALATION_ACTIONS = ['timeout', 'kick', 'ban'] as const;
 
@@ -27,12 +37,11 @@ export const escalationLadderSchema = z
   .max(20)
   .refine(strictlyIncreasing, {
     message:
-      'rungs must be ordered by atWarnings, strictly increasing — two rungs at the same ' +
-      'warning count would both fire on it.',
+      'Each step needs a higher warning count than the one before it. Two steps at the same ' +
+      'count would both run.',
   })
   .refine(timeoutsHaveDuration, {
-    message:
-      "a 'timeout' rung needs a duration, e.g. 1h — Discord timeouts are an expiry, not a flag.",
+    message: 'A timeout step needs a duration, like 1h.',
   });
 
 export const moderationConfigSchema = z.object({
@@ -40,33 +49,9 @@ export const moderationConfigSchema = z.object({
     label: 'Enabled',
   }),
 
-  requireReason: z.boolean().default(false).register(protonFields, {
-    label: 'Require a reason',
-  }),
-
   publicReplies: z.boolean().default(false).register(protonFields, {
     label: 'Reply publicly',
   }),
-
-  defaultTimeoutDuration: durationStringSchema.default('1h').register(protonFields, {
-    field: 'duration',
-    label: 'Default timeout duration',
-    description:
-      'Used when /timeout add is run without a duration. Discord caps timeouts at 28 days.',
-  }),
-
-  defaultBanDeleteDays: z
-    .number()
-    .int()
-    .min(0)
-    .max(7)
-    .default(0)
-    .register(protonFields, {
-      label: 'Delete messages on ban',
-      description:
-        'How many days of messages /ban add deletes when no number is given. Discord allows ' +
-        'at most 7 days.',
-    }),
 
   escalationWindow: durationStringSchema.default('30d').register(protonFields, {
     field: 'duration',
@@ -78,38 +63,105 @@ export const moderationConfigSchema = z.object({
     { atWarnings: 3, action: 'timeout', duration: '1h' },
     { atWarnings: 5, action: 'timeout', duration: '1d' },
   ]),
+
+  punish: punishConfigSchema.prefault({}),
+
+  reports: reportsConfigSchema.prefault({}),
 });
 
 export type ModerationConfig = z.infer<typeof moderationConfigSchema>;
 
-export const moderationFormSchema = moderationConfigSchema.omit({ escalationLadder: true });
+export const moderationFormSchema = moderationConfigSchema.omit({
+  escalationLadder: true,
+  punish: true,
+  reports: true,
+});
 
-// A page loaded before moderation owned the ladder posts neither key, and parsing that alone resets it.
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function legacyPunish(
+  source: Record<string, unknown>,
+  current: Record<string, unknown> | undefined,
+): Record<string, unknown> | null {
+  const read = (key: string) => (Object.hasOwn(source, key) ? source[key] : current?.[key]);
+
+  const requireReason = read('requireReason');
+  const timeout = read('defaultTimeoutDuration');
+  const banDays = read('defaultBanDeleteDays');
+
+  const forced = typeof requireReason === 'boolean' ? { forceReason: requireReason } : null;
+  const timeoutDefault = typeof timeout === 'string' ? { defaultDuration: timeout } : null;
+  const banDelete = typeof banDays === 'number' ? { deleteMessageDays: banDays } : null;
+
+  if (!forced && !timeoutDefault && !banDelete) return null;
+
+  const types: Record<string, Record<string, unknown>> = {};
+  for (const direction of PUNISH_DIRECTIONS) types[direction] = { ...forced };
+
+  types.timeout = { ...types.timeout, ...timeoutDefault };
+  types.ban = { ...types.ban, ...banDelete };
+
+  return { types };
+}
+
+// v2's flat keys count only when there is no punish to carry: a stale tab must not undo per-type.
 export function liftStoredConfig(raw: unknown, current?: Record<string, unknown>): unknown {
-  if (current === undefined || typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return raw;
+  const source = record(raw);
+  if (!source) return raw;
+
+  const lifted: Record<string, unknown> = { ...source };
+  let changed = false;
+
+  if (current !== undefined && !('escalationWindow' in source) && !('escalationLadder' in source)) {
+    lifted.escalationWindow = current.escalationWindow;
+    lifted.escalationLadder = current.escalationLadder;
+    changed = true;
   }
 
-  if ('escalationWindow' in raw || 'escalationLadder' in raw) return raw;
+  if (source.punish === undefined) {
+    const punish = record(current?.punish) ?? legacyPunish(source, current);
+    if (punish) {
+      lifted.punish = punish;
+      changed = true;
+    }
+  }
 
-  return {
-    ...raw,
-    escalationWindow: current.escalationWindow,
-    escalationLadder: current.escalationLadder,
-  };
+  if (source.reports === undefined && current?.reports !== undefined) {
+    lifted.reports = current.reports;
+    changed = true;
+  }
+
+  return changed ? lifted : raw;
 }
 
 export const moderationDefaultConfig: ModerationConfig = {
   enabled: true,
-  requireReason: false,
   publicReplies: false,
-  defaultTimeoutDuration: '1h',
-  defaultBanDeleteDays: 0,
   escalationWindow: '30d',
   escalationLadder: [
     { atWarnings: 3, action: 'timeout', duration: '1h' },
     { atWarnings: 5, action: 'timeout', duration: '1d' },
   ],
+  punish: PUNISH_DEFAULTS,
+  reports: REPORTS_DEFAULTS,
 };
 
-export const MODERATION_SCHEMA_VERSION = 2;
+export const MODERATION_SCHEMA_VERSION = 3;
+
+function writeIssues(config: ModerationConfig): ConfigWriteIssue[] {
+  return [...refinePunishWrite(config.punish), ...refineReportsWrite(config.reports)];
+}
+
+// A stored issue never blocks saving the rest: a lifted v2 row can hold a timeout past 28 days.
+export function refineModerationWrite(
+  next: ModerationConfig,
+  before: ModerationConfig,
+): ConfigWriteIssue[] {
+  const standing = new Set(writeIssues(before).map((issue) => `${issue.path}\n${issue.message}`));
+
+  return writeIssues(next).filter((issue) => !standing.has(`${issue.path}\n${issue.message}`));
+}

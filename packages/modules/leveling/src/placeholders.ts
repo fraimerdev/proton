@@ -1,3 +1,4 @@
+import type { XpSource } from '@proton/core';
 import {
   type BotFacts,
   type BuildEnv,
@@ -57,7 +58,7 @@ export interface LevelUpPlaceholderFacts {
   previousLevel: number;
   xp: number;
   gained?: number | undefined;
-  source: 'message' | 'voice' | 'admin';
+  source: XpSource;
   rank?: LevelUpRank | null | undefined;
   rankedMemberCount?: number | null | undefined;
   rewards?: LevelUpRewards | undefined;
@@ -78,7 +79,7 @@ export const LEVEL_UP_RANKED_COUNT_KEY = 'level.ranked_member_count';
 const SNOWFLAKE = /^\d{17,20}$/;
 
 const ROLE_PING_NOTE =
-  "In message text these ping each role whenever this message's mention settings allow role pings, which is the default.";
+  'In message text, these ping each role unless Roles is turned off under Mentions.';
 
 type Entry = readonly [key: string, label: string, description: string, example: PlaceholderValue];
 
@@ -87,12 +88,7 @@ const LEVEL_ENTRIES: readonly Entry[] = [
   ['level.previous', 'Previous level', 'The level they had before this level-up', v.integer(4)],
   ['level.gained', 'Levels gained', 'How many levels this level-up jumped', v.integer(1)],
   ['level.next', 'Next level', 'The level after this one', v.integer(6)],
-  [
-    'level.is_max',
-    'Is max level',
-    'Yes when they have reached the highest level',
-    v.boolean(false),
-  ],
+  ['level.is_max', 'Is max level', 'Yes when they’ve reached the highest level', v.boolean(false)],
   ['xp.total', 'Total XP', 'Their XP in this server', v.integer(1234)],
   ['xp.into_level', 'XP into level', 'XP earned since reaching this level', v.integer(234)],
   ['xp.level_span', 'XP for this level', 'XP between this level and the next', v.integer(350)],
@@ -109,13 +105,18 @@ const LEVEL_ENTRIES: readonly Entry[] = [
     'The XP that brought them to this level; empty after /xp set',
     v.integer(23),
   ],
-  ['level.source', 'How they levelled', "'message', 'voice' or 'admin'", v.text('message')],
+  [
+    'level.source',
+    'How they levelled',
+    "'message', 'voice', 'admin' or 'reward'",
+    v.text('message'),
+  ],
   ['level.rank', 'Rank', "Their place on this server's leaderboard", v.integer(12)],
   ['level.messages', 'Messages', 'How many of their messages have earned XP', v.integer(812)],
   [
     'level.voice_seconds',
     'Voice time',
-    'How long they have earned XP in voice',
+    'How long they’ve earned XP in voice',
     v.duration(18_000_000),
   ],
   [

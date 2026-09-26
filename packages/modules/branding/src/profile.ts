@@ -103,7 +103,7 @@ export async function readImage(
   const asset = await assets.get(guildId, kind);
   if (!asset) {
     return {
-      failure: `this server's ${kind} is set in its settings but its image is not in Proton's store, so there is nothing to send. Upload it again.`,
+      failure: `the saved ${kind} image is missing, so there was nothing to send. Upload it again`,
     };
   }
 

@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { STATUS_ERROR_COLOUR, STATUS_SUCCESS_COLOUR } from '@proton/core';
+import { type PunishDirection, punishConfigSchema } from '../src/config.ts';
 import { moderationModule } from '../src/index.ts';
-import type { StandingWarning } from '../src/store.ts';
+import type { LedgerCase } from '../src/punish/store.ts';
 import {
   ABOVE_BOT,
   GUILD,
+  type Harness,
   harness,
   MEMBER,
   MODERATOR,
@@ -13,20 +15,36 @@ import {
   subcommand,
   userOption,
 } from './harness.ts';
+import { MemoryCaseLedger } from './punish-stores.ts';
 
 const CASE_ID = 'K7f3M2q';
 
-function standing(overrides: Partial<StandingWarning> = {}): StandingWarning {
-  return {
-    caseId: CASE_ID,
-    caseNumber: 12,
-    targetId: MEMBER,
-    reason: 'spamming',
-    createdAt: new Date('2026-01-01T00:00:00.000Z'),
-    revertedAt: null,
-    revertedBy: null,
-    ...overrides,
-  };
+function forcing(kind: PunishDirection) {
+  return { punish: punishConfigSchema.parse({ types: { [kind]: { forceReason: true } } }) };
+}
+
+function ledgerFor(h: Harness, warning: Partial<LedgerCase> | null = {}): MemoryCaseLedger {
+  const ledger = new MemoryCaseLedger(h.now);
+  ledger.follow(h.recorder);
+
+  if (warning) {
+    ledger.seed({
+      caseId: CASE_ID,
+      guildId: GUILD,
+      kind: 'warn',
+      targetId: MEMBER,
+      reason: 'spamming',
+      ...warning,
+    });
+  }
+
+  return ledger;
+}
+
+class UnstampableLedger extends MemoryCaseLedger {
+  override async closeOpen(): Promise<LedgerCase[]> {
+    return [];
+  }
 }
 
 describe('/warn add', () => {
@@ -112,31 +130,42 @@ describe('/warn add', () => {
     expect(h.published).toHaveLength(1);
   });
 
-  test('honours the server’s require-reason policy', async () => {
+  test('honours the server’s forced reason for warnings', async () => {
     const h = harness();
 
     await h.run('warn', subcommand('add', [userOption('user', MEMBER)]), {
-      config: { requireReason: true },
+      config: forcing('warn'),
     });
 
     expect(h.cases()).toEqual([]);
     expect(h.published).toEqual([]);
     expect(h.replyContent()).toContain('requires a reason');
   });
+
+  test('a reason forced for another punishment does not stop a warning', async () => {
+    const h = harness();
+
+    await h.run('warn', subcommand('add', [userOption('user', MEMBER)]), {
+      config: forcing('ban'),
+    });
+
+    expect(h.cases()).toHaveLength(1);
+  });
 });
 
 describe('/warn remove', () => {
   test('withdraws the warning and records the withdrawal as its own case', async () => {
     const h = harness();
-    h.warnings.seed(GUILD, standing());
+    const ledger = ledgerFor(h);
 
     await h.run(
       'warn',
       subcommand('remove', [stringOption('case', CASE_ID), stringOption('reason', 'appealed')]),
+      { deps: { ledger } },
     );
 
     expect(h.discordCalls()).toEqual([]);
-    expect(await h.warnings.find(GUILD, CASE_ID)).toMatchObject({ revertedBy: MODERATOR });
+    expect(await ledger.find(GUILD, CASE_ID)).toMatchObject({ revertedBy: MODERATOR });
     expect(h.cases()).toHaveLength(1);
     expect(h.cases()[0]?.kind).toBe('unwarn');
     expect(h.cases()[0]?.targetId).toBe(MEMBER);
@@ -147,17 +176,23 @@ describe('/warn remove', () => {
 
   test('publishes nothing — a withdrawal must not feed the escalation ladder', async () => {
     const h = harness();
-    h.warnings.seed(GUILD, standing());
+    const ledger = ledgerFor(h);
 
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]));
+    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), {
+      deps: { ledger },
+    });
 
+    expect(h.cases()).toHaveLength(1);
     expect(h.published).toEqual([]);
   });
 
   test('names the case id back when nothing in this server carries it', async () => {
     const h = harness();
+    const ledger = ledgerFor(h, null);
 
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]));
+    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), {
+      deps: { ledger },
+    });
 
     expect(h.cases()).toEqual([]);
     expect(h.replyContent()).toContain(CASE_ID);
@@ -166,9 +201,11 @@ describe('/warn remove', () => {
 
   test('will not withdraw a warning twice, and says who withdrew it', async () => {
     const h = harness();
-    h.warnings.seed(GUILD, standing({ revertedAt: new Date(), revertedBy: OWNER }));
+    const ledger = ledgerFor(h, { revertedAt: h.now(), revertedBy: OWNER });
 
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]));
+    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), {
+      deps: { ledger },
+    });
 
     expect(h.cases()).toEqual([]);
     expect(h.replyContent()).toContain('already withdrawn');
@@ -181,32 +218,32 @@ describe('/warn remove', () => {
     await h.run('warn', subcommand('remove', [stringOption('case', 'that one time')]));
 
     expect(h.cases()).toEqual([]);
-    expect(h.replyContent()).toContain('case id');
+    expect(h.replyContent()).toContain('case ID');
   });
 
   test('require-reason refuses before the warning is withdrawn, not after', async () => {
     const h = harness();
-    h.warnings.seed(GUILD, standing());
+    const ledger = ledgerFor(h);
 
     await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), {
-      config: { requireReason: true },
+      config: forcing('unwarn'),
+      deps: { ledger },
     });
 
     expect(h.cases()).toEqual([]);
-    expect(await h.warnings.find(GUILD, CASE_ID)).toMatchObject({ revertedAt: null });
+    expect(await ledger.find(GUILD, CASE_ID)).toMatchObject({ revertedAt: null });
     expect(h.replyContent()).toContain('requires a reason');
   });
 
   test('a redelivered interaction withdraws once and records once', async () => {
     const h = harness();
-    h.warnings.seed(GUILD, standing());
+    const ledger = ledgerFor(h);
     const idempotencyKey = 'fixed-interaction-key';
+    const options = subcommand('remove', [stringOption('case', CASE_ID)]);
 
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), { idempotencyKey });
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), { idempotencyKey });
+    await h.run('warn', options, { idempotencyKey, deps: { ledger } });
+    await h.run('warn', options, { idempotencyKey, deps: { ledger } });
 
-    // One reply, not two: the second delivery is refused as already withdrawn, and that refusal
-    // is deduped on the same interaction token the first answer already spent.
     expect(h.cases()).toHaveLength(1);
     expect(h.rest.calls.filter((call) => call.path.startsWith('/interactions/'))).toHaveLength(1);
     expect(h.replyContent()).toContain('Withdrew');
@@ -215,41 +252,36 @@ describe('/warn remove', () => {
   test('says so rather than going quiet when the ledger is not bound', async () => {
     const h = harness();
 
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), { warnings: null });
+    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]));
 
     expect(h.cases()).toEqual([]);
-    expect(h.replyContent()).toContain('case ledger');
+    expect(h.replyContent()).toContain("can't read this server's cases");
   });
 
-  // The stamp and the ledger entry cannot share a transaction, so the ledger goes first and the
-  // moderator is told plainly when the half they care about did not land.
   test('says the warning still stands when the ledger entry landed but the stamp did not', async () => {
     const h = harness();
-    const seeded = standing();
+    const ledger = new UnstampableLedger(h.now);
+    ledger.follow(h.recorder);
+    ledger.seed({ caseId: CASE_ID, guildId: GUILD, kind: 'warn', targetId: MEMBER });
 
     await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), {
-      warnings: {
-        find: async () => seeded,
-        withdraw: async () => false,
-      },
+      deps: { ledger },
     });
 
     expect(h.cases()).toHaveLength(1);
     expect(h.cases()[0]?.kind).toBe('unwarn');
-    expect(h.replyContent()).toContain('still standing');
+    expect(h.replyContent()).toContain('still stands');
     expect(h.replyContent()).not.toContain('Withdrew');
-    expect(h.logs.some((entry) => entry.level === 'error')).toBe(true);
-
-    // Red although the unwarn case was recorded: the withdrawal the moderator asked for is the
-    // follow-up that failed, so nothing they wanted actually happened.
     expect(h.replyMessage()?.embeds?.[0]?.color).toBe(STATUS_ERROR_COLOUR);
   });
 
   test('withdrawing does not check hierarchy — a promoted member can still be cleared', async () => {
     const h = harness();
-    h.warnings.seed(GUILD, standing({ targetId: ABOVE_BOT }));
+    const ledger = ledgerFor(h, { targetId: ABOVE_BOT });
 
-    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]));
+    await h.run('warn', subcommand('remove', [stringOption('case', CASE_ID)]), {
+      deps: { ledger },
+    });
 
     expect(h.cases()).toHaveLength(1);
     expect(h.cases()[0]?.kind).toBe('unwarn');

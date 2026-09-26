@@ -1,4 +1,9 @@
 import {
+  type BlockedMember,
+  type BlockedMemberList,
+  type BlockedMemberQuery,
+  type BlockedMemberStore,
+  type BlockMemberInput,
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
@@ -9,6 +14,8 @@ import {
   type GuildRole,
   type GuildState,
   type GuildStateStore,
+  type LiftBlockInput,
+  type LiftBlockResult,
   type Logger,
   type ModuleContext,
   newId,
@@ -59,6 +66,10 @@ export const APPLICATION = '800000000000000001';
 
 export const INTERACTION = '600000000000000002';
 
+export const COMMAND_INTERACTION = '600000000000000001';
+
+export const INTERACTION_TOKEN = 'interaction-token';
+
 export const PANEL_MESSAGE = '700000000000000001';
 
 export const MEMBER = '400000000000000001';
@@ -86,6 +97,8 @@ export const CAPTCHA_PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0
 export const CAPTCHA_TTL_MS = 5 * 60 * 1000;
 
 const MESSAGE_PATH = /^\/channels\/\d+\/messages\/\d+$/;
+
+const DEFERRALS = new Set([5, 6]);
 
 const POSITIONS: Record<string, number> = {
   [EVERYONE_ROLE]: 0,
@@ -161,6 +174,43 @@ export class MemoryQuarantineStore implements QuarantineStore {
 
   async clear(guildId: string, userId: string): Promise<void> {
     this.records.delete(`${guildId}:${userId}`);
+  }
+}
+
+export class MemoryBlockedMemberStore implements BlockedMemberStore {
+  readonly live = new Map<string, BlockedMember>();
+
+  block(_input: BlockMemberInput): Promise<{ blocked: boolean }> {
+    throw new Error('verification never writes to the blocked list');
+  }
+
+  async find(guildId: string, userId: string): Promise<BlockedMember | null> {
+    return this.live.get(`${guildId}:${userId}`) ?? null;
+  }
+
+  list(_guildId: string, _query: BlockedMemberQuery): Promise<BlockedMemberList> {
+    throw new Error('verification never lists the blocked list');
+  }
+
+  lift(_input: LiftBlockInput): Promise<LiftBlockResult> {
+    throw new Error('verification never lifts from the blocked list');
+  }
+
+  add(guildId: string, userId: string): void {
+    this.live.set(`${guildId}:${userId}`, {
+      id: 'block-1',
+      guildId,
+      userId,
+      moduleId: 'honeypot',
+      blockedBy: 'proton:honeypot',
+      reason: 'Posted in a honeypot channel.',
+      caseId: null,
+      evidence: null,
+      createdAt: '2026-02-01T12:00:00.000Z',
+      liftedAt: null,
+      liftedBy: null,
+      liftReason: null,
+    });
   }
 }
 
@@ -295,6 +345,10 @@ export interface RunOverrides {
   idempotencyKey: string;
 
   userId: string;
+
+  applicationId: string | null;
+
+  commandLabel: (key: string, path?: string) => string;
 }
 
 export interface PressOverrides {
@@ -396,6 +450,10 @@ export interface Harness {
   lastTold(): string | null;
 
   callbackTypes(): number[];
+
+  callbacks(): RestRequestOptions[];
+
+  followups(): RestRequestOptions[];
 
   modalOpened(): Record<string, unknown> | null;
 
@@ -583,7 +641,10 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
     payload,
   });
 
-  const discordCalls = () => rest.calls.filter((call) => !call.path.startsWith('/interactions/'));
+  const discordCalls = () =>
+    rest.calls.filter(
+      (call) => !call.path.startsWith('/interactions/') && !call.path.startsWith('/webhooks/'),
+    );
 
   const spoken = (data: Record<string, unknown> | undefined): string => {
     const content = typeof data?.content === 'string' ? data.content : '';
@@ -596,10 +657,11 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
     return typeof embed?.description === 'string' ? embed.description : '';
   };
 
-  const replies = (): string[] =>
-    rest.calls
-      .filter((call) => call.path.startsWith('/interactions/'))
-      .map((call) => spoken((call.body as { data?: Record<string, unknown> } | undefined)?.data));
+  const callbacks = (): RestRequestOptions[] =>
+    rest.calls.filter((call) => call.path.startsWith('/interactions/'));
+
+  const followups = (): RestRequestOptions[] =>
+    rest.calls.filter((call) => call.path.startsWith('/webhooks/'));
 
   const facing = (): RestRequestOptions[] =>
     rest.calls.filter(
@@ -613,6 +675,11 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
 
     return (body.data ?? {}) as Record<string, unknown>;
   };
+
+  const replies = (): string[] =>
+    facing()
+      .filter((call) => !DEFERRALS.has(Number((call.body as { type?: unknown } | undefined)?.type)))
+      .map((call) => spoken(dataOf(call)));
 
   const shown = (): ShownMessage[] =>
     facing().map((call) => {
@@ -721,14 +788,16 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
         .at(-1) ?? null,
 
     callbackTypes: () =>
-      rest.calls
-        .filter((call) => call.path.startsWith('/interactions/'))
+      callbacks()
         .map((call) => (call.body as { type?: number } | undefined)?.type)
         .filter((type): type is number => typeof type === 'number'),
 
+    callbacks,
+
+    followups,
+
     modalOpened: () => {
-      const callback = rest.calls
-        .filter((call) => call.path.startsWith('/interactions/'))
+      const callback = callbacks()
         .map((call) => call.body as { type?: number; data?: Record<string, unknown> } | undefined)
         .findLast((body) => body?.type === 9);
 
@@ -751,6 +820,9 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
       const definition = module.commands?.find((c) => c.name === command);
       if (!definition) throw new Error(`no such verification command: ${command}`);
 
+      const applicationId =
+        overrides.applicationId === undefined ? APPLICATION : overrides.applicationId;
+
       const ctx: CommandContext<VerificationConfig> = {
         guildId: GUILD,
         channelId: CHANNEL,
@@ -762,7 +834,9 @@ export function harness(options: { deleteRole?: string; botPermissions?: bigint 
         }),
         logger,
         options: createCommandOptions(commandOptions),
-        interaction: { id: '600000000000000001', token: 'interaction-token' },
+        interaction: { id: COMMAND_INTERACTION, token: INTERACTION_TOKEN },
+        ...(applicationId === null ? {} : { applicationId }),
+        ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
         idempotencyKey: overrides.idempotencyKey ?? newId(),
       };
 

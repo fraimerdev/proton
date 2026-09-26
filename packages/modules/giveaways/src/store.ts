@@ -181,9 +181,12 @@ export interface NewEntry {
   totalEntries: number;
   breakdown: EntryBreakdown[];
   memberSnapshot: MemberSnapshot | null;
+  pressedAt: Date;
 }
 
-export type EnterOutcome = 'entered' | 'already-entered' | 'closed';
+export type EnterOutcome = 'entered' | 'already-entered' | 'superseded' | 'closed';
+
+export type LeaveOutcome = 'left' | 'superseded' | 'not-entered';
 
 export interface EntrantRow {
   userId: string;
@@ -349,8 +352,7 @@ export interface GiveawayStore {
   requirements(giveawayId: string): Promise<RequirementRow[]>;
   multipliers(giveawayId: string): Promise<MultiplierRow[]>;
 
-  // Insert and let the composite primary key refuse the second row: a read-then-insert lets two
-  // presses a millisecond apart both pass the read, and the member is entered twice.
+  // A conditional upsert, not read-then-write: two presses a millisecond apart both pass a read.
   enter(entry: NewEntry): Promise<EnterOutcome>;
   entry(giveawayId: string, userId: string): Promise<EntrantRow | null>;
   entrantCount(giveawayId: string): Promise<number>;
@@ -443,7 +445,7 @@ export interface GiveawayStore {
   ): Promise<Giveaway | null>;
 
   /** Soft — the row stays so entry history and the loss-streak multiplier stay honest. */
-  leave(giveawayId: string, userId: string, at: Date): Promise<boolean>;
+  leave(giveawayId: string, userId: string, pressedAt: Date): Promise<LeaveOutcome>;
 
   /** Resolves a short code (`G-7X29`) or a raw id to one giveaway. */
   resolve(guildId: string, reference: string): Promise<Giveaway | null>;

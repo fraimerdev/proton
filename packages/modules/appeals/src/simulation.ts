@@ -13,7 +13,7 @@ export const APPEALS_DECISION_SIMULATION: SimulationAdapter<AppealsConfig> = {
     id: 'appeals.decision',
     moduleId: 'appeals',
     label: 'Decision message',
-    summary: 'The direct message an appellant gets once their appeal is decided.',
+    summary: 'The DM sent once an appeal is accepted or turned down.',
     surfaceId: APPEAL_DECISION_SURFACE.id,
     configPath: 'panels.*.approvedMessage',
     output: 'message',
@@ -42,8 +42,8 @@ export const APPEALS_DECISION_SIMULATION: SimulationAdapter<AppealsConfig> = {
       { key: 'number', label: 'Appeal number', kind: 'integer', min: 1, max: 99_999, fallback: 7 },
     ],
     note:
-      'Sent to you, never to an appellant: there is no real appeal behind this, so there is nobody ' +
-      'else it could honestly go to. No appeal is filed, decided, unbanned or unblocked.',
+      'Sent to you, since there’s no real appeal behind it. Nothing is filed, decided, unbanned or ' +
+      'unblocked.',
   },
 
   build(config, scene: SimulationScene): SimulationBuild {
@@ -54,7 +54,7 @@ export const APPEALS_DECISION_SIMULATION: SimulationAdapter<AppealsConfig> = {
       return {
         ok: false,
         humanReason:
-          'that appeal form is no longer in this server’s settings. Reload and try again.',
+          'that appeal form isn’t in this server’s settings any more. Reload the page and try again.',
         diagnostics: [],
       };
     }

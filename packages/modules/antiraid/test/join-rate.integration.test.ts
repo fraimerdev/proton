@@ -57,7 +57,7 @@ describe('the join-rate window on real Redis', () => {
     expect(h.memberCalls()).toHaveLength(JOINS - THRESHOLD + 1);
 
     expect(h.calls().filter((call) => call.path.endsWith('/messages'))).toHaveLength(1);
-    expect(h.alertContent()).toContain('Raid mode');
+    expect(h.alertContent()).toContain('Raid detected');
   });
 
   test('the window is one counter for the whole guild, not one per joiner', async () => {

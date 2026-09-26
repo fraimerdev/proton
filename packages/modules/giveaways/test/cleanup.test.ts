@@ -139,6 +139,7 @@ describe('a deleted giveaway message', () => {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
 
     await handleMessageDeleted(event('message.deleted', { id: MESSAGE }), harness().ctx, deps);

@@ -2,14 +2,19 @@ import {
   type ActionRequest,
   type ActionResult,
   type AllowedMentions,
+  type Attachment,
+  defer as buildDefer,
   deferEphemeral as buildDeferEphemeral,
   followUp as buildFollowUp,
   openModal as buildOpenModal,
   replyEphemeral as buildReplyEphemeral,
   updateMessage as buildUpdateMessage,
   type CommandContext,
+  type FollowUpTo,
+  type InteractionMessage,
   type InteractionRef,
   isStatusBody,
+  labelOf,
   MESSAGE_CONTENT_MAX,
   type Modal,
   type ModuleContext,
@@ -18,6 +23,7 @@ import {
 } from '@proton/core';
 import { clipGraphemes } from '@proton/core/placeholders';
 import { type GiveawaysConfig, MODULE_ID } from './config.ts';
+import type { GiveawaysDeps } from './deps.ts';
 import { type MessageComponent, V2_FLAGS } from './message.ts';
 
 export { MODULE_ID } from './config.ts';
@@ -25,8 +31,8 @@ export { MODULE_ID } from './config.ts';
 export const MENTIONS_OFF: AllowedMentions = { parse: [] };
 
 export const NOT_WIRED =
-  'I can’t reach this server’s giveaways. Nothing was changed. This is a fault on my side, not ' +
-  'a setting in this server.';
+  'I can’t run giveaways right now. Nothing was changed. This is a fault on my side, not a ' +
+  'setting in this server.';
 
 export type Ctx = ModuleContext<GiveawaysConfig>;
 
@@ -62,7 +68,7 @@ async function run(ctx: Ctx, request: ActionRequest, attempt: string): Promise<A
 }
 
 export interface ReplyOptions {
-  ephemeral?: boolean;
+  ephemeral: boolean;
   allowedMentions?: AllowedMentions;
   suffix?: string;
 }
@@ -74,7 +80,7 @@ function bodyOf(message: string | StatusBody): { content: string } | StatusBody 
 export async function reply(
   ctx: CommandContext<GiveawaysConfig>,
   message: string | StatusBody,
-  options: ReplyOptions = {},
+  options: ReplyOptions,
 ): Promise<ActionResult> {
   return run(
     ctx,
@@ -90,7 +96,7 @@ export async function reply(
         interactionId: ctx.interaction.id,
         interactionToken: ctx.interaction.token,
         ...bodyOf(message),
-        ephemeral: options.ephemeral ?? true,
+        ephemeral: options.ephemeral,
         allowedMentions: options.allowedMentions ?? MENTIONS_OFF,
       },
     },
@@ -103,7 +109,7 @@ export async function reply(
 export async function replyWithFile(
   ctx: CommandContext<GiveawaysConfig>,
   message: string | StatusBody,
-  file: { filename: string; contentType: string; data: Uint8Array },
+  file: Attachment,
 ): Promise<ActionResult> {
   return run(
     ctx,
@@ -154,6 +160,111 @@ export async function replyWithComponents(
     },
     'open the giveaway builder',
   );
+}
+
+export interface CommandAnswer {
+  answer(message: string | StatusBody, file?: Attachment): Promise<void>;
+  refuse(message: string | StatusBody): Promise<void>;
+}
+
+export interface AcknowledgeOptions {
+  path: string;
+  ephemeral: boolean;
+}
+
+function followUpBody(
+  message: string | StatusBody,
+  ephemeral: boolean,
+  file?: Attachment,
+): InteractionMessage {
+  return {
+    ...bodyOf(message),
+    ...(file ? { files: [file] } : {}),
+    ephemeral,
+    allowedMentions: MENTIONS_OFF,
+  };
+}
+
+export async function acknowledgeCommand(
+  ctx: CommandContext<GiveawaysConfig>,
+  deps: Pick<GiveawaysDeps, 'applicationId'>,
+  options: AcknowledgeOptions,
+): Promise<CommandAnswer> {
+  const { ephemeral } = options;
+  const applicationId = ctx.applicationId ?? deps.applicationId;
+
+  if (!applicationId) {
+    return {
+      async answer(message, file) {
+        if (file) await replyWithFile(ctx, message, file);
+        else await reply(ctx, message, { ephemeral });
+      },
+      async refuse(message) {
+        await reply(ctx, message, { ephemeral: true });
+      },
+    };
+  }
+
+  const to: RespondTo = {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    actorId: ctx.userId,
+    interaction: ctx.interaction,
+    idempotencyKey: ctx.idempotencyKey,
+  };
+
+  await run(
+    ctx,
+    buildDefer(to, { ephemeral }),
+    'acknowledge the command within the three seconds Discord allows',
+  );
+
+  const target: FollowUpTo = { ...to, applicationId };
+  const say = (body: InteractionMessage, slot: string): Promise<ActionResult> =>
+    run(ctx, buildFollowUp(target, body, slot), 'answer the invoker');
+
+  return {
+    async answer(message, file) {
+      await say(followUpBody(message, ephemeral, file), 'answer');
+    },
+    async refuse(message) {
+      if (ephemeral) {
+        await say(followUpBody(message, true), 'answer');
+        return;
+      }
+
+      const label = labelOf(ctx, 'giveaway', options.path);
+
+      // The first followup fills the public "thinking…" message whatever its own flag says.
+      const notice = await say(
+        {
+          content: `\`${label}\` didn’t go through.`,
+          ephemeral: false,
+          allowedMentions: MENTIONS_OFF,
+        },
+        'answer',
+      );
+
+      if (!succeeded(notice)) {
+        ctx.logger.warn(
+          `Giveaways did not tell the invoker why ${label} didn’t finish: the public notice did ` +
+            'not post, so the private reason would have gone out publicly in its place.',
+          { guildId: ctx.guildId, moduleId: MODULE_ID, code: notice.failure?.code },
+        );
+        return;
+      }
+
+      await say(followUpBody(message, true), 'detail');
+    },
+  };
+}
+
+export async function acknowledgeToggleable(
+  ctx: CommandContext<GiveawaysConfig>,
+  deps: Pick<GiveawaysDeps, 'applicationId'>,
+  path: string,
+): Promise<CommandAnswer> {
+  return acknowledgeCommand(ctx, deps, { path, ephemeral: ctx.privateReply ?? true });
 }
 
 export function respondTo(
@@ -441,6 +552,7 @@ export async function dmWinner(
         channelId,
         content: clipGraphemes(content, MESSAGE_CONTENT_MAX),
         allowedMentions: MENTIONS_OFF,
+        directMessage: true,
       },
     },
     'send a winner their direct message',

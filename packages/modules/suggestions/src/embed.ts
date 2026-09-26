@@ -149,5 +149,5 @@ export function buildVoteRow(suggestionId: string, status: SuggestionStatus): Co
 
 export function threadName(view: SuggestionView): string {
   const summary = view.content.replaceAll(/\s+/g, ' ').trim();
-  return `Suggestion #${view.number} — ${summary}`.slice(0, 100);
+  return `Suggestion #${view.number}: ${summary}`.slice(0, 100);
 }

@@ -293,26 +293,64 @@ describe('reading back what Discord did', () => {
         'discord_refused',
       ],
       [
-        '404',
+        '403 other code',
+        { status: 403, body: { message: 'Bots cannot use this endpoint', code: 20001 } },
+        'rejected',
+        'discord_refused',
+      ],
+      [
+        '404 unknown member',
         { status: 404, body: { message: 'Unknown Member', code: 10007 } },
-        'rejected',
-        'discord_refused',
-      ],
-      ['proxied 403', proxied('Missing Permissions'), 'rejected', 'missing_change_nickname'],
-      ['proxied 50001', proxied('Missing Access'), 'rejected', 'missing_change_nickname'],
-      [
-        'proxied 400',
-        proxied('Invalid Form Body\ndisplay_name_colors[0][NUMBER_TYPE_MAX]: Too big'),
-        'rejected',
-        'discord_refused',
+        'unverified',
+        'no_answer',
       ],
       [
-        'proxied field error',
-        proxied('display_name_font_id[BASE_TYPE_CHOICES]: Not a choice'),
-        'rejected',
-        'discord_refused',
+        '404 unknown guild',
+        { status: 404, body: { message: 'Unknown Guild', code: 10004 } },
+        'unverified',
+        'no_answer',
       ],
-      ['proxied 404', proxied('Unknown Member'), 'rejected', 'discord_refused'],
+      [
+        '403 50001',
+        { status: 403, body: { message: 'Missing Access', code: 50001 } },
+        'unverified',
+        'no_answer',
+      ],
+      [
+        '403 cloudflare',
+        { status: 403, body: { message: 'internal network error', code: 40333 } },
+        'unverified',
+        'no_answer',
+      ],
+      [
+        '404 general',
+        { status: 404, body: { message: '404: Not Found', code: 0 } },
+        'unverified',
+        'no_answer',
+      ],
+      [
+        '400 disabled',
+        {
+          status: 400,
+          body: { message: 'This feature has been temporarily disabled', code: 40006 },
+        },
+        'unverified',
+        'no_answer',
+      ],
+      [
+        '400 overloaded',
+        { status: 400, body: { message: 'API resource overloaded', code: 130000 } },
+        'unverified',
+        'no_answer',
+      ],
+      [
+        '401',
+        { status: 401, body: { message: '401: Unauthorized', code: 0 } },
+        'unverified',
+        'no_answer',
+      ],
+      ['403 no code', { status: 403, body: 'error code: 40333' }, 'unverified', 'no_answer'],
+      ['404 empty', { status: 404, body: undefined }, 'unverified', 'no_answer'],
       ['proxied abort', proxied('This operation was aborted'), 'unverified', 'no_answer'],
       ['proxied 5xx', proxied('Internal Server Error'), 'unverified', 'no_answer'],
       ['bare 502', { status: 502, body: 'Bad Gateway' }, 'unverified', 'no_answer'],
@@ -339,6 +377,26 @@ describe('reading back what Discord did', () => {
           confirmedAt: before.confirmedAt,
         },
       });
+    }
+  });
+
+  test('never says Discord did not answer when it answered without judging the style', async () => {
+    for (const answer of [
+      { status: 401, body: { message: '401: Unauthorized', code: 0 } },
+      { status: 403, body: 'error code: 40333' },
+      { status: 403, body: { message: 'Missing Access', code: 50001 } },
+    ]) {
+      const h = harness();
+      h.rest.styleAnswer = answer;
+
+      await h.listen(styleOnly(), { displayNameStyle: NEON });
+
+      expect(h.logs).toContainEqual({
+        level: 'warn',
+        message:
+          'Proton could not confirm its display name style with Discord in this server. It will check again when the server next reconnects.',
+      });
+      expect(h.logs.some((line) => line.message.includes('did not answer'))).toBe(false);
     }
   });
 

@@ -6,11 +6,14 @@ import {
   cachedMessageSchema,
   type EventListener,
   type EventType,
+  labelOf,
   MESSAGE_CACHE_DEFAULT_TTL_MS,
   type MessageContentCache,
   type ModuleContext,
   type PendingLog,
+  type ProtonActionExecuted,
   type ProtonEvent,
+  protonActionExecutedSchema,
   RATE_WINDOW_GUILD_SCOPE,
   type RateWindowStore,
   toCachedMessage,
@@ -21,12 +24,16 @@ import {
   LOG_TRIGGER_TYPES,
   type LogEventSpec,
   specByKey,
+  specForAction,
   specsForAuditAction,
   specsForEvent,
 } from './catalogue.ts';
 import type { ServerlogConfig } from './config.ts';
 import type { LogExecutor } from './embed.ts';
 import { DEFAULT_EMOJIS, type EmojiSet } from './emoji.ts';
+import { actionExecutorId } from './executors.ts';
+import { renderModerationAction } from './render/actions.ts';
+import type { RenderInput, RenderResult } from './render/types.ts';
 import { isIgnored, resolveDestination } from './routing.ts';
 import type { ScreeningStore } from './screening.ts';
 
@@ -53,6 +60,7 @@ export interface ServerlogDeps {
   botUserId?: string;
   burst?: RateWindowStore;
   screening?: ScreeningStore;
+  dashboardUrl?: string;
 
   cache?: MessageContentCache;
   cacheTtlMs?: number;
@@ -98,6 +106,74 @@ function auditFacts(entry: AuditEntry): EventFacts {
   return { channelId: null, actorId: entry.actorId, actorIsBot: false };
 }
 
+function byProton(deps: ServerlogDeps, entry: AuditEntry): boolean {
+  return deps.botUserId !== undefined && entry.actorId === deps.botUserId;
+}
+
+function awaitsAction(deps: ServerlogDeps, spec: LogEventSpec, entry: AuditEntry): boolean {
+  return spec.actionKinds !== undefined && byProton(deps, entry);
+}
+
+// Negated: Discord's audit action types are all positive, so a mark never meets a real pending log.
+function markSlot(spec: LogEventSpec): number | null {
+  const actionType = spec.auditActions?.[0];
+  return spec.primary === 'entity' && actionType !== undefined ? -actionType : null;
+}
+
+async function markLoggedAsAction(
+  deps: ServerlogDeps,
+  guildId: string,
+  spec: LogEventSpec,
+  action: ProtonActionExecuted,
+  occurredAt: number,
+): Promise<void> {
+  const slot = markSlot(spec);
+  if (!deps.correlation || slot === null || !action.targetId || action.dryRun) return;
+
+  await deps.correlation.putPending(guildId, slot, action.targetId, {
+    logKey: spec.key,
+    guildId,
+    entity: action,
+    occurredAt,
+  });
+}
+
+async function loggedAsAction(
+  deps: ServerlogDeps,
+  guildId: string,
+  spec: LogEventSpec,
+  targetId: string,
+): Promise<boolean> {
+  const slot = markSlot(spec);
+  if (!deps.correlation || slot === null || !spec.actionKinds) return false;
+
+  const mark = await deps.correlation.takePending(guildId, slot, targetId);
+  if (mark) await deps.correlation.putPending(guildId, slot, targetId, mark);
+
+  return mark !== null;
+}
+
+async function takeCorrelated(
+  store: CorrelationStore,
+  guildId: string,
+  actions: readonly number[],
+  targetId: string,
+): Promise<AuditEntry | null> {
+  for (const actionType of actions) {
+    const entry = await store.takeAudit(guildId, actionType, targetId);
+    if (!entry) continue;
+
+    // Put back: a ban is also a leave, and each of those logs correlates with this one entry.
+    if (entitySpecsForAuditAction(actionType).length > 1) {
+      await store.putAudit(guildId, actionType, targetId, entry);
+    }
+
+    return entry;
+  }
+
+  return null;
+}
+
 export function createServerlogListener(deps: ServerlogDeps): EventListener<ServerlogConfig> {
   return {
     types: SERVERLOG_EVENT_TYPES,
@@ -106,6 +182,11 @@ export function createServerlogListener(deps: ServerlogDeps): EventListener<Serv
 
       if (event.type === 'audit.entry') {
         await onAudit(deps, ctx, event);
+        return;
+      }
+
+      if (event.type === 'proton.action_executed') {
+        await onAction(deps, ctx, event);
         return;
       }
 
@@ -126,11 +207,9 @@ async function onAudit(
   if (isIgnored(ctx.config, auditFacts(entry))) return;
 
   // Proton's own actions arrive twice: once as this audit entry, once as proton.action_executed
-  // with the case id and the module attached. The second is strictly better, so the first is
-  // dropped rather than logged alongside it.
-  const byProton = deps.botUserId !== undefined && entry.actorId === deps.botUserId;
-
-  for (const spec of byProton ? [] : specsForAuditAction(entry.actionType)) {
+  // with the case id, the module and the moderator who asked attached. The second is strictly
+  // better, so the first is dropped rather than logged alongside it.
+  for (const spec of byProton(deps, entry) ? [] : specsForAuditAction(entry.actionType)) {
     await emit(deps, ctx, spec, {
       entity: null,
       audit: entry,
@@ -139,30 +218,63 @@ async function onAudit(
     });
   }
 
-  if (!entry.targetId || !deps.correlation) return;
+  const entitySpecs = entitySpecsForAuditAction(entry.actionType);
+  if (!entry.targetId || !deps.correlation || entitySpecs.length === 0) return;
 
-  for (const spec of entitySpecsForAuditAction(entry.actionType)) {
-    const pending = await deps.correlation.takePending(
-      entry.guildId,
-      entry.actionType,
-      entry.targetId,
-    );
+  const pending = await deps.correlation.takePending(
+    entry.guildId,
+    entry.actionType,
+    entry.targetId,
+  );
+  const spec = pending ? specByKey(pending.logKey) : undefined;
 
-    if (pending) {
-      if (spec.suppressWhenCorrelated) continue;
+  // Put back for its flush, which by then knows whether proton.action_executed logged it.
+  if (pending && spec && awaitsAction(deps, spec, entry)) {
+    await deps.correlation.putPending(entry.guildId, entry.actionType, entry.targetId, pending);
+    await deps.correlation.putAudit(entry.guildId, entry.actionType, entry.targetId, entry);
+    return;
+  }
 
-      await emit(deps, ctx, spec, {
-        entity: pending.entity,
-        audit: entry,
-        cached: cachedOf(pending),
-        naturalKey: keyOf(spec, pending.entity, entry),
-        occurredAt: pending.occurredAt,
-      });
-      continue;
-    }
+  if (pending && spec && !spec.suppressWhenCorrelated) {
+    await emit(deps, ctx, spec, {
+      entity: pending.entity,
+      audit: entry,
+      cached: cachedOf(pending),
+      naturalKey: keyOf(spec, pending.entity, entry),
+      occurredAt: pending.occurredAt,
+    });
+  }
 
+  // Kept even after a pending log took it: the leave that follows a ban correlates with it too.
+  if (!pending || entitySpecs.length > 1) {
     await deps.correlation.putAudit(entry.guildId, entry.actionType, entry.targetId, entry);
   }
+}
+
+async function onAction(
+  deps: ServerlogDeps,
+  ctx: ModuleContext<ServerlogConfig>,
+  event: ProtonEvent,
+): Promise<void> {
+  const parsed = protonActionExecutedSchema.safeParse(event.payload);
+  if (!parsed.success) return;
+
+  const action = parsed.data;
+  const spec = specForAction(action.kind);
+  if (!spec) return;
+
+  await markLoggedAsAction(deps, ctx.guildId, spec, action, event.occurredAt);
+
+  if (isIgnored(ctx.config, { actorId: action.actorId })) return;
+
+  await emit(deps, ctx, spec, {
+    entity: event.payload,
+    audit: null,
+    executorId: actionExecutorId(event.payload, deps.botUserId ?? null),
+    naturalKey: event.id,
+    occurredAt: event.occurredAt,
+    ...(spec.actionKinds ? { render: renderModerationAction } : {}),
+  });
 }
 
 async function onEntity(
@@ -188,6 +300,7 @@ async function onEntity(
       await emit(deps, ctx, spec, {
         entity: event.payload,
         audit: null,
+        executorId: spec.executorId?.(event.payload, deps.botUserId ?? null) ?? null,
         cached,
         naturalKey: event.id,
         occurredAt: event.occurredAt,
@@ -210,14 +323,9 @@ async function onEntity(
     }
 
     const actions = spec.auditActions ?? [];
-    let correlated: AuditEntry | null = null;
+    const correlated = await takeCorrelated(deps.correlation, guildId, actions, targetId);
 
-    for (const actionType of actions) {
-      correlated = await deps.correlation.takeAudit(guildId, actionType, targetId);
-      if (correlated) break;
-    }
-
-    if (correlated) {
+    if (correlated && !awaitsAction(deps, spec, correlated)) {
       if (spec.suppressWhenCorrelated) continue;
 
       await emit(deps, ctx, spec, {
@@ -232,6 +340,11 @@ async function onEntity(
 
     const primaryAction = actions[0];
     if (primaryAction === undefined) continue;
+
+    // Proton's own ban waits for its flush like an uncorrelated log, and keeps its entry for it.
+    if (correlated) {
+      await deps.correlation.putAudit(guildId, correlated.actionType, targetId, correlated);
+    }
 
     await deps.correlation.putPending(guildId, primaryAction, targetId, {
       logKey: spec.key,
@@ -319,11 +432,21 @@ export async function flushPending(
   const spec = specByKey(pending.logKey);
   if (spec?.primary !== 'entity') return;
 
-  // No audit entry turned up. That is the normal path for a voluntary leave, a self-deleted
-  // message or an expiring invite, so the log still goes out — with an unknown executor.
+  if (await loggedAsAction(deps, request.guildId, spec, request.targetId)) return;
+
+  // Proton's own ban waits here with its entry, and a leave is keyed as a kick but may be a ban.
+  const audit = await takeCorrelated(
+    deps.correlation,
+    request.guildId,
+    spec.auditActions ?? [],
+    request.targetId,
+  );
+  if (audit && spec.suppressWhenCorrelated) return;
+
+  // Still posted with no entry: a voluntary leave or a self-deleted message never gets one.
   await emit(deps, ctx, spec, {
     entity: pending.entity,
-    audit: null,
+    audit,
     cached: cachedOf(pending),
     naturalKey: request.targetId,
     occurredAt: pending.occurredAt,
@@ -378,9 +501,11 @@ function keyOf(spec: LogEventSpec, entity: unknown, entry: AuditEntry): string {
 interface EmitInput {
   entity: unknown;
   audit: AuditEntry | null;
+  executorId?: string | null;
   cached?: CachedMessage | null;
   naturalKey: string;
   occurredAt: number;
+  render?(input: RenderInput): RenderResult | null;
 }
 
 async function emit(
@@ -392,9 +517,9 @@ async function emit(
   const destination = resolveDestination(ctx.config, spec);
   if (!destination) return;
 
-  const executor = await resolveExecutor(deps, input.audit);
+  const executor = await resolveExecutor(deps, input.audit?.actorId ?? input.executorId ?? null);
 
-  const rendered = spec.render({
+  const rendered = (input.render ?? spec.render)({
     guildId: ctx.guildId,
     entity: input.entity,
     audit: input.audit,
@@ -402,6 +527,8 @@ async function emit(
     executor,
     occurredAt: input.occurredAt,
     emojis: deps.emojis ?? DEFAULT_EMOJIS,
+    commandLabel: (key, path) => labelOf(ctx, key, path),
+    dashboardUrl: deps.dashboardUrl,
   });
   if (!rendered) return;
 
@@ -438,9 +565,8 @@ async function emit(
 
 async function resolveExecutor(
   deps: ServerlogDeps,
-  audit: AuditEntry | null,
+  actorId: string | null,
 ): Promise<LogExecutor | null> {
-  const actorId = audit?.actorId;
   if (!actorId || !deps.users) return null;
 
   const profile = await deps.users.resolve(actorId);
@@ -484,8 +610,8 @@ async function overBurstLimit(
       payload: {
         channelId,
         content:
-          `Proton is logging more than ${LOG_BURST_LIMIT} events a minute in this server, so ` +
-          'detailed logs are paused until the burst passes. Nothing else has changed.',
+          `Server Logs reached ${LOG_BURST_LIMIT} logs in a minute, so it’s paused until ` +
+          'activity slows down. Events in the meantime aren’t logged.',
         allowedMentions: { parse: [] },
       },
     });

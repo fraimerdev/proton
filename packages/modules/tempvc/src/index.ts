@@ -19,6 +19,8 @@ export {
   armPatrol,
   armSweep,
   createSweepHandler,
+  DELETE_ATTEMPTS,
+  DELETE_RETRY_WINDOW_MS,
   PATROL_INTERVAL_MS,
   PATROL_KEY,
   patrol,
@@ -155,14 +157,16 @@ export {
   type TempVoiceRepository,
 } from './repository.ts';
 export {
+  type AccessOutcome,
   type CooldownGate,
   type CreateOutcome,
+  type DisconnectOutcome,
   type Occupancy,
   type ServiceDeps,
   TemporaryVoiceService,
 } from './service.ts';
 export { TEMPVC_NAME_SIMULATION, tempvcSimulations } from './simulation.ts';
-export type { PresenceStore } from './store.ts';
+export type { PresenceStore, Seen } from './store.ts';
 export {
   ACCESS_KINDS,
   type AccessKind,
@@ -193,7 +197,7 @@ export function createTempVcModule(
 ): ModuleManifest<typeof tempVcConfigSchema> {
   return {
     id: 'tempvc',
-    name: 'Temporary voice channels',
+    name: 'Temporary Voice Channels',
     category: 'utility',
     configSchema: tempVcConfigSchema,
     formSchema: tempVcFormSchema,

@@ -1,6 +1,12 @@
 import type { GuildStateStore, ModuleContext, PermissionOverwriteSpec } from '@proton/core';
 import { type PlaceholderEnvironment, serverFactsFrom, usedKeys } from '@proton/core/placeholders';
-import { SWEEP_JOB_ID } from './cleanup.ts';
+import {
+  DELETE_ATTEMPTS,
+  DELETE_RETRY_WINDOW_MS,
+  PATROL_INTERVAL_MS,
+  PATROL_KEY,
+  SWEEP_JOB_ID,
+} from './cleanup.ts';
 import {
   allows,
   cooldownMsOf,
@@ -22,6 +28,7 @@ import {
   type TempVcNameFacts,
 } from './placeholders.ts';
 import type { TempVoiceRepository } from './repository.ts';
+import type { PresenceStore } from './store.ts';
 import type { AccessKind, TempVoiceChannelRow } from './table.ts';
 import type { VoiceMember } from './voice.ts';
 
@@ -42,6 +49,10 @@ export interface ServiceDeps {
 
   guildState?: Pick<GuildStateStore, 'get'> | undefined;
 
+  presence?: Pick<PresenceStore, 'locate'> | undefined;
+
+  refusals?: Pick<PresenceStore, 'refusedDelete'> | undefined;
+
   placeholders?: Pick<PlaceholderEnvironment, 'now'> | undefined;
 
   now?(): Date;
@@ -54,6 +65,12 @@ export type CreateOutcome =
       refused: 'at_limit' | 'cooldown' | 'no_hub' | 'create_failed' | 'moved_existing';
       detail: string;
     };
+
+export type DisconnectOutcome = 'disconnected' | 'not_in_channel' | { failed: string | undefined };
+
+export type AccessOutcome =
+  | { applied: false }
+  | { applied: true; disconnect: DisconnectOutcome | null };
 
 const COOLDOWN_PREFIX = 'tempvc:cooldown';
 
@@ -262,12 +279,15 @@ export class TemporaryVoiceService {
   ): Promise<void> {
     if (!row.channelId) return;
 
-    const message = panelMessage({
-      hub,
-      tempChannelId: row.id,
-      ownerCommands: ctx.config.ownerCommands,
-      ownerId: row.ownerId,
-    });
+    const message = panelMessage(
+      {
+        hub,
+        tempChannelId: row.id,
+        ownerCommands: ctx.config.ownerCommands,
+        ownerId: row.ownerId,
+      },
+      ctx,
+    );
 
     const result = await ctx.executor.execute({
       guildId: ctx.guildId,
@@ -336,24 +356,31 @@ export class TemporaryVoiceService {
     userId: string,
     kind: AccessKind | null,
     privacy: PrivacyMode,
-  ): Promise<boolean> {
+  ): Promise<AccessOutcome> {
     if (kind === null) await this.#deps.repository.clearAccess(row.id, userId);
     else await this.#deps.repository.setAccess(row.id, userId, kind);
 
-    const applied = await this.applyAccess(ctx, row, privacy);
+    if (!(await this.applyAccess(ctx, row, privacy))) return { applied: false };
 
     // Blocking somebody sitting in the channel has to remove them too, or the overwrite only stops
     // them coming back.
-    if (applied && kind === 'block' && row.channelId) await this.disconnect(ctx, row, userId);
-
-    return applied;
+    return {
+      applied: true,
+      disconnect: kind === 'block' ? await this.disconnect(ctx, row, userId) : null,
+    };
   }
 
   async disconnect(
     ctx: ModuleContext<TempVcConfig>,
     row: TempVoiceChannelRow,
     userId: string,
-  ): Promise<boolean> {
+  ): Promise<DisconnectOutcome> {
+    if (!row.channelId) return 'not_in_channel';
+
+    // Discord disconnects from any channel, so without this an owner could reach anyone in voice.
+    const at = await this.#deps.presence?.locate(ctx.guildId, userId);
+    if (at !== row.channelId) return 'not_in_channel';
+
     const result = await ctx.executor.execute({
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
@@ -368,7 +395,7 @@ export class TemporaryVoiceService {
       payload: { userId, channelId: null },
     });
 
-    return result.status === 'executed';
+    return result.status === 'executed' ? 'disconnected' : { failed: result.failure?.code };
   }
 
   async rename(
@@ -565,20 +592,41 @@ export class TemporaryVoiceService {
       const gone =
         result.status === 'executed' ||
         result.status === 'skipped_duplicate' ||
-        result.failure?.code === 'not_found';
+        result.failure?.code === 'discord_404';
 
       if (!gone) {
+        await repo.cancelDelete(row.id);
+        await repo.reopen(row.id);
+
+        const refusals =
+          (await this.#deps.refusals?.refusedDelete(ctx.guildId, row.id, DELETE_RETRY_WINDOW_MS)) ??
+          DELETE_ATTEMPTS;
+        const retrying = refusals < DELETE_ATTEMPTS;
+
         ctx.logger.error(
-          `an empty temporary voice channel could not be removed: ${
-            result.failure?.humanReason ?? `the action ended as ${result.status}`
-          }`,
-          { guildId: ctx.guildId, moduleId: MODULE_ID, channelId: row.channelId },
+          `a temporary voice channel could not be removed (attempt ${refusals} this hour), ` +
+            `so ${
+              retrying
+                ? 'Proton will try again in about two minutes'
+                : 'Proton will not try again on its own until the hour is up'
+            }: ${result.failure?.humanReason ?? `the action ended as ${result.status}`}`,
+          {
+            guildId: ctx.guildId,
+            moduleId: MODULE_ID,
+            channelId: row.channelId,
+            code: result.failure?.code,
+          },
         );
 
-        // Back to live so the sweeper tries again rather than the row being stuck in `closing`
-        // and its owner locked out of ever getting another channel.
-        await repo.cancelDelete(row.id);
-        await repo.setOwner(row.id, row.ownerId);
+        if (retrying) {
+          await ctx.schedule?.(
+            SWEEP_JOB_ID,
+            new Date(this.#now().getTime() + PATROL_INTERVAL_MS),
+            PATROL_KEY,
+            {},
+          );
+        }
+
         return false;
       }
     }

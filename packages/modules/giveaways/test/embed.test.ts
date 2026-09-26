@@ -216,6 +216,22 @@ describe('each state says what it is', () => {
     expect(text).toContain('requirements');
   });
 
+  test.each(['ended', 'rerolled', 'no-winners'] as const)(
+    'a %s card counts its entries in English',
+    (card: GiveawayCard) => {
+      const one = JSON.stringify(
+        render(card, { winnerIds: ['400000000000000002'], entrantCount: 1 }),
+      );
+      const three = JSON.stringify(
+        render(card, { winnerIds: ['400000000000000002'], entrantCount: 3 }),
+      );
+
+      expect(one).toContain(`\u{1F3AB} 1 entry · hosted by <@${VIEW.hostId}>`);
+      expect(three).toContain(`\u{1F3AB} 3 entries · hosted by <@${VIEW.hostId}>`);
+      expect(three).not.toContain('entrys');
+    },
+  );
+
   // An ended giveaway with an empty winner list is the no-winners card, never a blank podium.
   test('ended with no winners falls through to the no-winners card', () => {
     expect(JSON.stringify(render('ended', { winnerIds: [] }))).toContain('Nobody won');

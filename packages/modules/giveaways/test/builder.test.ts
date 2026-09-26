@@ -196,7 +196,7 @@ describe('reading a submitted modal', () => {
     const read = readDescriptorValues(descriptors, { min: 'five' }, { window: ['30d'] });
 
     expect(read.ok).toBe(false);
-    if (!read.ok) expect(read.humanReason).toContain('is not a number');
+    if (!read.ok) expect(read.humanReason).toContain('isn’t a number');
   });
 
   // Discord cannot enforce a numeric range on a text input, so the range check has to live here.
@@ -294,7 +294,7 @@ describe('the builder screen', () => {
     // Core conditions are always there, so the requirement picker is live; the multiplier one is
     // the disabled-but-explained case.
     const disabled = selects.find((select) => select.disabled === true);
-    expect(String(disabled?.placeholder)).toContain('switch on a module that provides them');
+    expect(String(disabled?.placeholder)).toContain('Turn on a module that provides them');
 
     // Discord rejects a select with no options, so even the disabled one has to carry a filler.
     const filler = (disabled?.options ?? []) as unknown[];
@@ -536,14 +536,14 @@ describe('builder interactions', () => {
       values: {},
     });
 
-    expect(statusText(reply)).toContain('disabled');
+    expect(statusText(reply)).toContain('turned off');
     expect(statusColour(reply)).toBe(STATUS_ERROR_COLOUR);
   });
 });
 
 describe('the winner message step', () => {
   const WIN_HINT =
-    'Empty for the default. Try {giveaway.prize} or {user.mention}; {{ is a literal {.';
+    'Sent only if Send winners a DM is on. Try {giveaway.prize}. Type {{ for a literal {.';
 
   function winnersDraft(over: Partial<GiveawayDraft> = {}): GiveawayDraft {
     return { ...emptyDraft(GUILD, CHANNEL, HOST, { winnerCount: 1 }, NOW), ...over };
@@ -562,7 +562,7 @@ describe('the winner message step', () => {
     });
 
     expect(statusText(reply)).toStartWith(
-      `${STATUS_ERROR_EMOJI} The winner message was not saved: `,
+      `${STATUS_ERROR_EMOJI} The winner message wasn’t saved: `,
     );
     expect(statusText(reply)).toContain('{giveaway.prize:upper(3)}');
     expect(statusText(reply)).toContain(':upper');
@@ -588,7 +588,7 @@ describe('the winner message step', () => {
     expect(problem?.code).toBe('invalid_argument');
     expect(applied).toEqual({
       ok: false,
-      humanReason: `The winner message was not saved: ${problem?.message}`,
+      humanReason: `The winner message wasn’t saved: ${problem?.message}`,
     });
   });
 
@@ -630,7 +630,7 @@ describe('the winner message step', () => {
     );
 
     expect(label?.description).toBe(WIN_HINT);
-    expect(WIN_HINT).toHaveLength(81);
+    expect(WIN_HINT).toHaveLength(84);
   });
 
   test('every Label in every step modal fits Discord’s caps, empty or filled in', () => {

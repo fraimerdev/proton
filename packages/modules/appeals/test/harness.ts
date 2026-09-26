@@ -1,7 +1,9 @@
 import type {
   ActionRequest,
   ActionResult,
+  BlockedMemberStore,
   EventType,
+  LiftBlockInput,
   ModuleContext,
   ProtonEvent,
 } from '@proton/core';
@@ -167,8 +169,10 @@ export class MemoryAppealStore implements AppealStore {
 
 export interface Call {
   kind: string;
+  actorId: string;
   payload: Record<string, unknown>;
   idempotencyKey: string;
+  status: ActionResult['status'];
 }
 
 export interface Press {
@@ -188,12 +192,17 @@ export interface Fake {
   calls: Call[];
   logs: Array<{ level: string; message: string }>;
   published: Array<{ type: EventType; naturalKey: string }>;
+  lifts: LiftBlockInput[];
 
   file(overrides?: Partial<FileAppealInput>): Promise<AppealRecord>;
 
   press(options?: Press): Promise<ReviewOutcome>;
 
-  refuse(kind: string, code: string, humanReason: string): void;
+  refuse(kind: string, code: string, humanReason: string, answered?: Answered): void;
+}
+
+export interface Answered {
+  discordCode?: number;
 }
 
 export interface HarnessOptions {
@@ -201,13 +210,22 @@ export interface HarnessOptions {
   panels?: AppealPanel[];
   store?: boolean;
   applicationId?: boolean;
+  blocked?: boolean;
+}
+
+interface Refusal {
+  code: string;
+  humanReason: string;
+  answered?: Answered;
 }
 
 export function harness(options: HarnessOptions = {}): Fake {
   const calls: Call[] = [];
   const logs: Array<{ level: string; message: string }> = [];
   const published: Array<{ type: EventType; naturalKey: string }> = [];
-  const refusals = new Map<string, { code: string; humanReason: string }>();
+  const lifts: LiftBlockInput[] = [];
+  const refusals = new Map<string, Refusal>();
+  const held = new Set<string>();
 
   const store = new MemoryAppealStore();
 
@@ -219,23 +237,45 @@ export function harness(options: HarnessOptions = {}): Fake {
     panels: options.panels ?? [panel()],
   };
 
+  const answer = (request: ActionRequest): ActionResult => {
+    if (held.has(request.idempotencyKey)) return { status: 'skipped_duplicate' };
+
+    const refusal = refusals.get(request.kind);
+    if (refusal) {
+      refusals.delete(request.kind);
+      const { answered, ...failure } = refusal;
+
+      return answered
+        ? {
+            status: 'failed_api',
+            failure: {
+              ...failure,
+              ...(answered.discordCode === undefined ? {} : { discordCode: answered.discordCode }),
+            },
+          }
+        : { status: 'failed_precheck', failure };
+    }
+
+    held.add(request.idempotencyKey);
+
+    if (request.kind === 'create_dm') return { status: 'executed', body: { id: DM_CHANNEL } };
+
+    return { status: 'executed' };
+  };
+
   const executor = {
     async execute(request: ActionRequest): Promise<ActionResult> {
+      const result = answer(request);
+
       calls.push({
         kind: request.kind,
+        actorId: request.actorId,
         payload: (request.payload ?? {}) as Record<string, unknown>,
         idempotencyKey: request.idempotencyKey,
+        status: result.status,
       });
 
-      const refusal = refusals.get(request.kind);
-      if (refusal) {
-        refusals.delete(request.kind);
-        return { status: 'failed_precheck', failure: refusal } as ActionResult;
-      }
-
-      if (request.kind === 'create_dm') return { status: 'executed', body: { id: DM_CHANNEL } };
-
-      return { status: 'executed' };
+      return result;
     },
   };
 
@@ -254,9 +294,24 @@ export function harness(options: HarnessOptions = {}): Fake {
     },
   } as unknown as ModuleContext<AppealsConfig>;
 
+  const unused = async (): Promise<never> => {
+    throw new Error('appeals only lifts a block');
+  };
+
+  const blocked: BlockedMemberStore = {
+    block: unused,
+    find: unused,
+    list: unused,
+    lift: async (input) => {
+      lifts.push(input);
+      return { lifted: true, userId: input.userId };
+    },
+  };
+
   const deps: AppealsDeps = {
     ...(options.store === false ? {} : { store }),
     ...(options.applicationId === false ? {} : { applicationId: APPLICATION }),
+    ...(options.blocked ? { blocked } : {}),
     now: () => NOW,
   };
 
@@ -269,6 +324,7 @@ export function harness(options: HarnessOptions = {}): Fake {
     calls,
     logs,
     published,
+    lifts,
 
     file: async (overrides = {}) => {
       const { appeal } = await store.file({
@@ -313,7 +369,8 @@ export function harness(options: HarnessOptions = {}): Fake {
       return handleReviewPress(event, ctx, deps);
     },
 
-    refuse: (kind, code, humanReason) => refusals.set(kind, { code, humanReason }),
+    refuse: (kind, code, humanReason, answered) =>
+      refusals.set(kind, { code, humanReason, ...(answered ? { answered } : {}) }),
   };
 }
 

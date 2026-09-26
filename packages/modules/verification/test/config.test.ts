@@ -173,6 +173,20 @@ describe('what the panel may carry', () => {
     expect(parsed.success).toBe(false);
   });
 
+  test('refuses a link that only a placeholder would fill in, since the panel fills in none', () => {
+    const parsed = verificationPanelSchema.safeParse({
+      embeds: [{ title: 'Verify', thumbnailUrl: '{user.avatar_url}' }],
+    });
+
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toContain('doesn’t fill in placeholders');
+    expect(
+      verificationPanelSchema.safeParse({
+        embeds: [{ title: 'Verify', thumbnailUrl: 'https://example.com/{id}.png' }],
+      }).success,
+    ).toBe(true);
+  });
+
   test('takes text and embeds, which is what the builder offers here', () => {
     const parsed = verificationPanelSchema.safeParse({
       content: 'Read the rules.',

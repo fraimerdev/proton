@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  formatCommandLabel,
   NEVER_RECORDED_KINDS,
   Permissions,
   STATUS_ERROR_COLOUR,
@@ -13,6 +14,7 @@ import { brandingModule } from '../src/index.ts';
 import { impersonationReason, normaliseName } from '../src/names.ts';
 import { diverges, fingerprint, observedProfile } from '../src/profile.ts';
 import {
+  ADMIN,
   AVATAR_HASH,
   BANNER_HASH,
   BOT,
@@ -398,6 +400,36 @@ describe('/branding answers with a status embed', () => {
     expect(h.reportEmbed()?.color).toBe(STATUS_SUCCESS_COLOUR);
   });
 
+  const auditReasons = (h: ReturnType<typeof harness>) =>
+    h
+      .patches()
+      .filter((call) => call.path.endsWith('/members/@me'))
+      .map((call) => decodeURIComponent(String(call.headers?.['x-audit-log-reason'])));
+
+  test('the audit log names /branding when it has not been renamed', async () => {
+    const h = harness();
+
+    await h.command(FULL);
+
+    expect(auditReasons(h)).toEqual([
+      `Re-applied by ${ADMIN} with /branding`,
+      `Re-applied by ${ADMIN} with /branding`,
+    ]);
+  });
+
+  test('the audit log names /branding as this server has renamed it', async () => {
+    const h = harness();
+
+    await h.command(FULL, (key, path) =>
+      formatCommandLabel(key, path, key === 'branding' ? 'look' : undefined),
+    );
+
+    expect(auditReasons(h)).toEqual([
+      `Re-applied by ${ADMIN} with /look`,
+      `Re-applied by ${ADMIN} with /look`,
+    ]);
+  });
+
   test('red, naming the leg, when a leg was refused', async () => {
     const h = harness({ botPermissions: WITHOUT_NICKNAME });
 
@@ -415,7 +447,7 @@ describe('/branding answers with a status embed', () => {
     await h.command({ ...FULL, enabled: false });
 
     expect(h.reply()).toBe(
-      `${STATUS_ERROR_EMOJI} Branding is disabled in this server, so Proton is using its own name.`,
+      `${STATUS_ERROR_EMOJI} Branding is off in this server, so nothing was re-applied.`,
     );
     expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
     expect(h.patches()).toHaveLength(0);
@@ -427,7 +459,7 @@ describe('/branding answers with a status embed', () => {
 
     await h.command();
 
-    expect(h.reply()).toStartWith(`${STATUS_ERROR_EMOJI} Branding is on but nothing is set yet.`);
+    expect(h.reply()).toStartWith(`${STATUS_ERROR_EMOJI} Branding is on, but nothing is set yet.`);
     expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
     expect(h.patches()).toHaveLength(0);
   });

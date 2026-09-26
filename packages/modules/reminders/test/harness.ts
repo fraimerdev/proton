@@ -2,6 +2,7 @@ import {
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
+  type CommandLabeler,
   createCommandOptions,
   type DedupeStore,
   DefaultActionExecutor,
@@ -199,6 +200,7 @@ export interface RunOverrides {
   deps: RemindersDeps;
   idempotencyKey: string;
   userId: string;
+  commandLabel: CommandLabeler;
 
   scheduler: boolean;
 }
@@ -327,6 +329,7 @@ export function harness(options: HarnessOptions = {}): Harness {
         options: createCommandOptions(options_),
         interaction: { id: INTERACTION, token: 'interaction-token' },
         idempotencyKey: overrides.idempotencyKey ?? newId(),
+        ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
 
         ...(overrides.scheduler === false
           ? {}

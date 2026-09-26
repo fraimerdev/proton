@@ -63,7 +63,7 @@ describe('a link that is not', () => {
 
     expect(view).toEqual({
       state: 'closed',
-      humanReason: 'This server is not taking appeals at the moment.',
+      humanReason: 'This server isn’t taking appeals right now.',
     });
   });
 
@@ -108,7 +108,7 @@ describe('a link that has already been used', () => {
     const view = appealView(input({ existing: filed() }));
 
     expect(view.state).toBe('filed');
-    expect('humanReason' in view && view.humanReason).toContain('sent to the moderators');
+    expect('humanReason' in view && view.humanReason).toContain('sent to the server’s staff');
   });
 
   test('still shows it after the window has elapsed', () => {

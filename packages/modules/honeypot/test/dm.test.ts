@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { type ContainerChild, type ModuleContext, substitute } from '@proton/core';
+import { type ContainerChild, type ModuleContext, Permissions, substitute } from '@proton/core';
 import {
   type PlaceholderEnvironment,
   PROTON_SUPPORT_URL,
@@ -13,6 +13,7 @@ import { DM_ATTEMPTS_MAX } from '../src/store.ts';
 import {
   armed,
   BOT,
+  BOT_PERMISSIONS,
   config,
   DM_CHANNEL,
   GUILD,
@@ -102,6 +103,15 @@ describe('telling the member', () => {
     expect(h.sentIn(DM_CHANNEL)[0]?.allowed_mentions).toEqual({ parse: [] });
   });
 
+  test('reaches them on a server that denies Proton Send Messages, which a DM does not need', async () => {
+    const h = harness({ botPermissions: BOT_PERMISSIONS & ~Permissions.SendMessages });
+
+    await h.trip({ config: TELLS });
+
+    expect(h.sentIn(DM_CHANNEL)).toHaveLength(1);
+    expect(JSON.stringify(h.sentIn(DM_CHANNEL))).not.toContain('directMessage');
+  });
+
   test('sends nothing at all when the server switched it off', async () => {
     const h = harness();
 
@@ -161,7 +171,112 @@ describe('a member who cannot be reached', () => {
     const outcome = await h.trip({ config: { ...TELLS, logChannelId: LOG } });
 
     expect(outcome).toEqual({ action: 'sprung', kind: 'softban' });
-    expect(JSON.stringify(h.embedIn(LOG))).toContain('direct messages are closed');
+    expect(JSON.stringify(h.embedIn(LOG))).toContain('their DMs are closed');
+  });
+
+  test('whose inbox refuses the message itself is logged as closed, not as a refusal', async () => {
+    const h = harness();
+    h.rest.fail(
+      (call) => call.method === 'POST' && call.path === `/channels/${DM_CHANNEL}/messages`,
+      { status: 403, body: { code: 50007, message: 'Cannot send messages to this user' } },
+    );
+
+    const outcome = await h.trip({ config: { ...TELLS, logChannelId: LOG } });
+
+    expect(outcome).toEqual({ action: 'sprung', kind: 'softban' });
+    expect(h.calls()).toContain(`PUT /guilds/${GUILD}/bans/${MEMBER}`);
+
+    const logged = JSON.stringify(h.embedIn(LOG));
+    expect(logged).toContain('their DMs are closed');
+    expect(logged).not.toContain('Discord refused the DM');
+    expect(h.said('warn')).toContain(
+      `honeypot could not tell ${MEMBER}: their direct messages are closed.`,
+    );
+  });
+
+  test('whose message fails for any other reason is still logged as a refusal', async () => {
+    const h = harness();
+    h.rest.fail(
+      (call) => call.method === 'POST' && call.path === `/channels/${DM_CHANNEL}/messages`,
+      { status: 404, body: { code: 10003, message: 'Unknown Channel' } },
+    );
+
+    const outcome = await h.trip({ config: { ...TELLS, logChannelId: LOG } });
+
+    expect(outcome).toEqual({ action: 'sprung', kind: 'softban' });
+
+    const logged = JSON.stringify(h.embedIn(LOG));
+    expect(logged).toContain('Discord refused the DM');
+    expect(logged).not.toContain('their DMs are closed');
+  });
+
+  test('is not blamed on their inbox when Discord refuses Proton itself with a 403', async () => {
+    const h = harness();
+    h.rest.fail(
+      (call) => call.method === 'POST' && call.path === `/channels/${DM_CHANNEL}/messages`,
+      {
+        status: 403,
+        body: { code: 40004, message: 'Send messages has been temporarily disabled' },
+      },
+    );
+
+    await h.trip({ config: { ...TELLS, logChannelId: LOG } });
+
+    const logged = JSON.stringify(h.embedIn(LOG));
+    expect(logged).toContain('Discord refused the DM');
+    expect(logged).not.toContain('their DMs are closed');
+  });
+
+  test('who shares no server with Proton any more is logged as exactly that', async () => {
+    const h = harness();
+    h.rest.fail(
+      (call) => call.method === 'POST' && call.path === `/channels/${DM_CHANNEL}/messages`,
+      {
+        status: 403,
+        body: { code: 50278, message: 'Cannot send messages to this user due to no mutual guilds' },
+      },
+    );
+
+    await h.trip({ config: { ...TELLS, logChannelId: LOG } });
+
+    const logged = JSON.stringify(h.embedIn(LOG));
+    expect(logged).toContain('they no longer share a server with Proton');
+    expect(logged).not.toContain('their DMs are closed');
+    expect(h.said('warn')).toContain(
+      `honeypot could not tell ${MEMBER}: they no longer share a server with Proton.`,
+    );
+  });
+
+  test('is not called refused when the proxy could not reach Discord with the message', async () => {
+    const h = harness();
+    h.rest.fail(
+      (call) => call.method === 'POST' && call.path === `/channels/${DM_CHANNEL}/messages`,
+      { status: 502, body: { error: 'rest_proxy_upstream_failure', message: 'socket hang up' } },
+    );
+
+    await h.trip({ config: { ...TELLS, logChannelId: LOG } });
+
+    const logged = JSON.stringify(h.embedIn(LOG));
+    expect(logged).toContain('May not have arrived');
+    expect(logged).not.toContain('Discord refused the DM');
+    expect(h.said('warn').join(' ')).toContain('cannot tell whether it arrived');
+  });
+
+  test('is not called closed when Proton could not reach Discord to open the conversation', async () => {
+    const h = harness();
+    const answer = h.rest.request.bind(h.rest);
+    h.rest.request = async (call) => {
+      if (call.path === '/users/@me/channels') throw new Error('connect ECONNREFUSED');
+      return answer(call);
+    };
+
+    const outcome = await h.trip({ config: { ...TELLS, logChannelId: LOG } });
+
+    expect(outcome).toEqual({ action: 'sprung', kind: 'softban' });
+
+    const logged = JSON.stringify(h.embedIn(LOG));
+    expect(logged).toContain('Proton couldn’t reach Discord');
+    expect(logged).not.toContain('their DMs are closed');
   });
 });
 
@@ -202,7 +317,7 @@ describe('a worker that died between opening the channel and sending', () => {
 
     expect(outcome).toEqual({ action: 'sprung', kind: 'softban' });
     expect(h.said('error').join(' ')).toContain('has given up');
-    expect(JSON.stringify(h.embedIn(LOG))).toContain('were NOT told');
+    expect(JSON.stringify(h.embedIn(LOG))).toContain('gave up after several attempts');
   });
 });
 

@@ -44,12 +44,12 @@ describe('relativeLabel', () => {
 
 describe('reminderLabel', () => {
   test('leads with the relative time and then what it says', () => {
-    expect(reminderLabel(reminder(), NOW)).toBe('in 2h — take the bread out');
+    expect(reminderLabel(reminder(), NOW)).toBe('in 2h: take the bread out');
   });
 
   test('flattens newlines, which Discord would refuse in a choice name', () => {
     expect(reminderLabel(reminder({ content: 'first\n\nsecond' }), NOW)).toBe(
-      'in 2h — first second',
+      'in 2h: first second',
     );
   });
 
@@ -92,7 +92,7 @@ describe('renderPending', () => {
 describe('renderDelivery', () => {
   test('pings the owner and repeats what they asked for', () => {
     expect(renderDelivery('100000000000000001', 'water the plants')).toBe(
-      '<@100000000000000001> you asked me to remind you: water the plants',
+      '<@100000000000000001>, here’s your reminder: water the plants',
     );
   });
 

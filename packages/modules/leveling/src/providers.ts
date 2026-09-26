@@ -20,8 +20,7 @@ export const LEVELING_MODULE_ID = 'leveling';
 const UNKNOWN: ConditionResult = {
   passed: false,
   indeterminate: {
-    humanReason:
-      'Your activity in this server could not be read just now, so this could not be checked.',
+    humanReason: 'Couldn’t check your activity in this server right now. Try again in a moment.',
   },
 };
 
@@ -135,7 +134,7 @@ export function createLevelingProviders(activity: ActivityStore): Provider[] {
 
     describeFailure(config, result) {
       if (result.indeterminate) return result.indeterminate.humanReason;
-      return `You are level ${result.progress?.current ?? 0} and need level ${config.min}.`;
+      return `You’re level ${result.progress?.current ?? 0} and need level ${config.min}.`;
     },
   };
 
@@ -287,7 +286,7 @@ export function createLevelingProviders(activity: ActivityStore): Provider[] {
 
     describeFailure(config, result) {
       if (result.indeterminate) return result.indeterminate.humanReason;
-      return `You are not in the top ${config.n} on this server’s leaderboard.`;
+      return `You’re not in the top ${config.n} on this server’s leaderboard.`;
     },
   };
 
@@ -355,7 +354,7 @@ export function createLevelingProviders(activity: ActivityStore): Provider[] {
       .min(0)
       .max(10_000)
       .default(10)
-      .register(protonFields, { label: 'Up to at most' }),
+      .register(protonFields, { label: 'Maximum entries' }),
     window: windowField,
   });
 

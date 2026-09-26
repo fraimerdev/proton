@@ -179,7 +179,7 @@ describe('pressing the button on the notice', () => {
     const outcome = await h.press(statsId(TRAP), { config: armed() });
 
     expect(outcome).toEqual({ action: 'refused', reason: 'the stats port is unbound' });
-    expect(String(h.repliedText())).toContain(`I cannot read the numbers for <#${TRAP}>`);
+    expect(String(h.repliedText())).toContain(`I can’t show the numbers for <#${TRAP}>`);
     expect(h.repliedEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
     expect(h.replied()?.content).toBe('');
     expect(h.replied()?.flags).toBe(MESSAGE_FLAG_EPHEMERAL);

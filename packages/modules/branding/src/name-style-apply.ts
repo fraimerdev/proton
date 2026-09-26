@@ -8,6 +8,7 @@ import type {
   NameStyleReason,
   RestProxyClient,
 } from '@proton/core';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { BRANDING_ACTOR, MODULE_ID } from './config.ts';
 import { sameWireStyle } from './name-style.ts';
@@ -62,30 +63,35 @@ function judge(outcome: NameStyleOutcome, reason: NameStyleReason | null): Judge
   return { outcome, reason };
 }
 
-const proxyFailureSchema = z.object({
-  error: z.literal('rest_proxy_upstream_failure'),
-  message: z.string(),
-});
+const discordErrorSchema = z.object({ code: z.number().int() });
 
-const MISSING_PERMISSION = /^Missing (Permissions|Access)/;
-
-const DISCORD_REFUSAL = /^(Invalid Form Body|Unknown |\d{5}: |\S*\[[A-Z0-9_]+\]: )/;
+const STYLE_NOT_JUDGED: ReadonlySet<number> = new Set([
+  RESTJSONErrorCodes.GeneralError,
+  RESTJSONErrorCodes.CloudflareIsBlockingYourRequest,
+  RESTJSONErrorCodes.FeatureTemporarilyDisabledServerSide,
+  RESTJSONErrorCodes.APIResourceOverloaded,
+  RESTJSONErrorCodes.UnknownGuild,
+  RESTJSONErrorCodes.UnknownMember,
+  RESTJSONErrorCodes.MissingAccess,
+]);
 
 function refusal(upstream: ActionResult['upstream']): Judgement {
   if (!upstream) return judge('unverified', 'no_answer');
 
   const { status, body } = upstream;
-  if (status === 403) return judge('rejected', 'missing_change_nickname');
-  if (status >= 400 && status < 500 && status !== 429) return judge('rejected', 'discord_refused');
-  if (status !== 502) return judge('unverified', 'no_answer');
+  if (status < 400 || status >= 500 || status === 401 || status === 429) {
+    return judge('unverified', 'no_answer');
+  }
 
-  const proxied = proxyFailureSchema.safeParse(body);
-  if (!proxied.success) return judge('unverified', 'no_answer');
+  const parsed = discordErrorSchema.safeParse(body);
+  if (!parsed.success) return judge('unverified', 'no_answer');
 
-  const { message } = proxied.data;
-  if (MISSING_PERMISSION.test(message)) return judge('rejected', 'missing_change_nickname');
-  if (DISCORD_REFUSAL.test(message)) return judge('rejected', 'discord_refused');
-  return judge('unverified', 'no_answer');
+  const { code } = parsed.data;
+  if (code === RESTJSONErrorCodes.MissingPermissions) {
+    return judge('rejected', 'missing_change_nickname');
+  }
+  if (STYLE_NOT_JUDGED.has(code)) return judge('unverified', 'no_answer');
+  return judge('rejected', 'discord_refused');
 }
 
 export async function verifyNameStyle(input: {
@@ -137,7 +143,7 @@ const WARNINGS: Record<NameStyleReason, string> = {
   discord_ignored:
     'Discord answered but kept its old display name style for Proton in this server, so it does not accept this combination. Choose another style in the Branding module.',
   no_answer:
-    'Proton could not confirm its display name style with Discord in this server because Discord did not answer. It will check again when the server next reconnects.',
+    'Proton could not confirm its display name style with Discord in this server. It will check again when the server next reconnects.',
   not_readable:
     'Discord took the display name style Proton sent in this server but did not say what it now shows, so Proton could not confirm it.',
   changed_in_discord:

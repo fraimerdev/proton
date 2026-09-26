@@ -77,8 +77,8 @@ function requirementBlock(input: CardInput): MessageComponent | null {
   const note =
     input.requirements.length > 1
       ? input.view.requirementLogic === 'any'
-        ? ' — you need **any one** of these'
-        : ' — you need **all** of these'
+        ? ' (you need **any one** of these)'
+        : ' (you need **all** of these)'
       : '';
 
   return text(
@@ -238,7 +238,10 @@ export function buildDrop(input: CardInput): ComponentsResult {
   const body = opening(input);
 
   body.push(
-    text('\u{1F381} **DROP**\nFirst eligible member to press it wins. No draw, no waiting.'),
+    text(
+      '\u{1F381} **Drop**\nThe first eligible member to press the button wins. No draw, no ' +
+        'waiting.',
+    ),
     text(`\u{1F464} **Hosted by**\n<@${input.view.hostId}>`),
   );
 
@@ -259,8 +262,8 @@ export function buildPaused(input: CardInput): ComponentsResult {
   const because = input.pauseReason ? `\n${input.pauseReason}` : '';
   body.push(
     text(
-      `⏸️ **Paused**\nEntries are closed for now. The time remaining is held where it ` +
-        `was, so nobody loses out.${because}`,
+      `⏸️ **Paused**\nEntries are closed for now. The time left is kept for when it ` +
+        `resumes.${because}`,
     ),
     // No end timestamp while paused: ends_at is still the pre-pause instant and would count down
     // to a deadline that is not going to happen.
@@ -304,7 +307,9 @@ export function buildEnded(input: CardInput): ComponentsResult {
     text(
       `\u{1F3C6} **${winnerIds.length === 1 ? 'Winner' : 'Winners'}**\n${winnerList(winnerIds)}`,
     ),
-    text(`\u{1F3AB} ${plural(input.entrantCount, 'entry')} · hosted by <@${input.view.hostId}>`),
+    text(
+      `\u{1F3AB} ${plural(input.entrantCount, 'entry', 'entries')} · hosted by <@${input.view.hostId}>`,
+    ),
   );
 
   // Requirements stay on the ended card: the first question under a result is always "why them",
@@ -325,10 +330,12 @@ export function buildRerolled(input: CardInput): ComponentsResult {
 
   body.push(
     text(
-      `\u{1F504} **Rerolled — new ${winnerIds.length === 1 ? 'winner' : 'winners'}**\n` +
+      `\u{1F504} **Rerolled: new ${winnerIds.length === 1 ? 'winner' : 'winners'}**\n` +
         winnerList(winnerIds),
     ),
-    text(`\u{1F3AB} ${plural(input.entrantCount, 'entry')} · hosted by <@${input.view.hostId}>`),
+    text(
+      `\u{1F3AB} ${plural(input.entrantCount, 'entry', 'entries')} · hosted by <@${input.view.hostId}>`,
+    ),
     footer(input.view),
   );
 
@@ -340,10 +347,12 @@ export function buildNoWinners(input: CardInput): ComponentsResult {
 
   body.push(
     text(
-      '\u{1F614} **Nobody won**\nEither nobody entered, or everybody who did stopped meeting ' +
-        'the requirements before it was drawn.',
+      '\u{1F614} **Nobody won**\nEither nobody entered, or nobody who entered still met the ' +
+        'requirements when it was drawn.',
     ),
-    text(`\u{1F3AB} ${plural(input.entrantCount, 'entry')} · hosted by <@${input.view.hostId}>`),
+    text(
+      `\u{1F3AB} ${plural(input.entrantCount, 'entry', 'entries')} · hosted by <@${input.view.hostId}>`,
+    ),
     footer(input.view),
   );
 

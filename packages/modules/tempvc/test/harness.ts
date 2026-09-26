@@ -14,6 +14,7 @@ import {
 } from '../src/config.ts';
 import type { TempVcDeps } from '../src/deps.ts';
 import { TemporaryVoiceService } from '../src/service.ts';
+import type { PresenceStore } from '../src/store.ts';
 import type { TempVoiceChannelRow } from '../src/table.ts';
 import { MemoryTempVoiceRepository } from './memory-repository.ts';
 
@@ -47,8 +48,16 @@ export interface Fake {
   calls: Call[];
   logs: Array<{ level: string; message: string }>;
 
+  voice: Map<string, string>;
+  presence: PresenceStore;
+
   /** Force the next action of this kind to fail, the way a missing permission would. */
-  refuse(kind: string, code: string, humanReason: string): void;
+  refuse(
+    kind: string,
+    code: string,
+    humanReason: string,
+    status?: 'failed_precheck' | 'failed_api',
+  ): void;
 }
 
 export interface HarnessOptions {
@@ -61,7 +70,11 @@ export interface HarnessOptions {
 export function harness(options: HarnessOptions = {}): Fake {
   const calls: Call[] = [];
   const logs: Array<{ level: string; message: string }> = [];
-  const refusals = new Map<string, { code: string; humanReason: string }>();
+  const refusals = new Map<
+    string,
+    { status: 'failed_precheck' | 'failed_api'; failure: { code: string; humanReason: string } }
+  >();
+  const voice = new Map<string, string>();
 
   const repository = new MemoryTempVoiceRepository(options.now);
 
@@ -91,7 +104,7 @@ export function harness(options: HarnessOptions = {}): Fake {
       const refusal = refusals.get(request.kind);
       if (refusal) {
         refusals.delete(request.kind);
-        return { status: 'failed_precheck', failure: refusal } as ActionResult;
+        return refusal as ActionResult;
       }
 
       if (request.kind === 'create_channel') {
@@ -118,9 +131,12 @@ export function harness(options: HarnessOptions = {}): Fake {
 
   let counter = 0;
 
+  const presence = memoryPresence(voice);
   const service = new TemporaryVoiceService({
     repository,
     botUserId: BOT,
+    presence,
+    refusals: presence,
     ...(options.now ? { now: options.now } : {}),
     newId: () => `row-${++counter}`,
   });
@@ -141,7 +157,10 @@ export function harness(options: HarnessOptions = {}): Fake {
     },
     calls,
     logs,
-    refuse: (kind, code, humanReason) => refusals.set(kind, { code, humanReason }),
+    voice,
+    presence,
+    refuse: (kind, code, humanReason, status = 'failed_precheck') =>
+      refusals.set(kind, { status, failure: { code, humanReason } }),
   };
 }
 
@@ -165,9 +184,18 @@ interface AnswerPayload {
 
 /** Only the replies that carry something to read — a defer carries neither content nor embeds. */
 function answers(fake: Fake): AnswerPayload[] {
-  return callsOf(fake, 'interaction_reply')
+  return fake.calls
+    .filter((call) => call.kind === 'interaction_reply' || call.kind === 'interaction_followup')
     .map((call) => call.payload as AnswerPayload)
     .filter((payload) => payload.content !== undefined || payload.embeds !== undefined);
+}
+
+const INITIAL_CALLBACKS = new Set([4, 5, 6, 7, 9]);
+
+export function initialCallbacks(fake: Fake): Call[] {
+  return callsOf(fake, 'interaction_reply').filter((call) =>
+    INITIAL_CALLBACKS.has(Number(call.payload.callbackType ?? 4)),
+  );
 }
 
 export function replyText(fake: Fake): string | null {
@@ -183,26 +211,57 @@ export function replyCount(fake: Fake): number {
   return answers(fake).length;
 }
 
-export function memoryPresence(): NonNullable<TempVcDeps['presence']> {
+export function memoryPresence(voice: Map<string, string> = new Map()): PresenceStore {
+  const stamps = new Map<string, number>();
+  const occupancy = new Map<string, Set<string>>();
+  const refusals = new Map<string, number>();
+
   return {
-    locate: async () => null,
-    place: async () => undefined,
-    enter: async () => 1,
-    leave: async () => 0,
-    occupants: async () => [],
-    reset: async () => undefined,
+    locate: async (_guildId, userId) => voice.get(userId) ?? null,
+    where: async (_guildId, userId) =>
+      voice.has(userId) || stamps.has(userId)
+        ? { channelId: voice.get(userId) ?? null, at: stamps.get(userId) ?? 0 }
+        : null,
+    place: async (_guildId, userId, channelId, at) => {
+      if (channelId === null) voice.delete(userId);
+      else voice.set(userId, channelId);
+      stamps.set(userId, at);
+    },
+    enter: async (_guildId, channelId, userId) => {
+      const inside = occupancy.get(channelId) ?? new Set<string>();
+      inside.add(userId);
+      occupancy.set(channelId, inside);
+      return inside.size;
+    },
+    leave: async (_guildId, channelId, userId) => {
+      occupancy.get(channelId)?.delete(userId);
+      return occupancy.get(channelId)?.size ?? 0;
+    },
+    occupants: async (_guildId, channelId) => [...(occupancy.get(channelId) ?? [])],
+    reset: async (_guildId, channelId, userIds) => {
+      occupancy.set(channelId, new Set(userIds));
+    },
+    refusedDelete: async (_guildId, rowId) => {
+      const count = (refusals.get(rowId) ?? 0) + 1;
+      refusals.set(rowId, count);
+      return count;
+    },
+    deleteRefusals: async (_guildId, rowId) => refusals.get(rowId) ?? 0,
   };
 }
 
 export function depsOf(fake: Fake): TempVcDeps {
-  return { repository: fake.repository, presence: memoryPresence(), botUserId: BOT };
+  return { repository: fake.repository, presence: fake.presence, botUserId: BOT };
 }
+
+export const APPLICATION = '400000000000000000';
 
 export interface CommandCall {
   sub: string;
   userId?: string;
   channelId?: string;
   options?: RawOption[];
+  applicationId?: string | null;
 }
 
 export const stringOption = (name: string, value: string): RawOption => ({
@@ -224,6 +283,8 @@ export const userOption = (name: string, value: string): RawOption => ({
 });
 
 export function commandContext(fake: Fake, call: CommandCall): CommandContext<TempVcConfig> {
+  const applicationId = call.applicationId === undefined ? APPLICATION : call.applicationId;
+
   return {
     ...fake.ctx,
     channelId: call.channelId ?? CREATED,
@@ -232,6 +293,7 @@ export function commandContext(fake: Fake, call: CommandCall): CommandContext<Te
       { name: call.sub, type: OptionType.Subcommand, options: call.options ?? [] },
     ]),
     interaction: { id: '111111111111111111', token: 'tok' },
+    ...(applicationId === null ? {} : { applicationId }),
     idempotencyKey: `tempvc:${call.sub}`,
   } as CommandContext<TempVcConfig>;
 }

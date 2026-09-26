@@ -175,7 +175,7 @@ export function countEmoji(content: string): number {
 export const checkEmoji: Checker = (facts, config) => {
   const total = countEmoji(facts.content);
   if (total < config.emojiLimit) return null;
-  return hit('emoji', config, `it carries ${total} emoji`);
+  return hit('emoji', config, `it has ${total} emoji`);
 };
 
 export const checkWalls: Checker = (facts, config) => {

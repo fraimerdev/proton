@@ -133,12 +133,12 @@ const TICKET_ENTRIES = {
   'ticket.priority': ['Priority', 'Low, Medium, High or Urgent', v.text('Medium')],
   'ticket.subject': [
     'Subject',
-    'The one-line summary the member gave; empty when they gave none',
+    'The subject the member gave, or their first form answer; empty when there is none',
     v.text('Refund for order 1182'),
   ],
   'ticket.opener_mention': [
     'Opened by',
-    'Who opened the ticket. After a transfer this is still the opener; {user.mention} is the current owner.',
+    'Who opened the ticket. After a transfer, {user.mention} is the new owner.',
     v.user('100000000000000010', 'Fraimer'),
   ],
   'ticket.opened_at': ['Opened', 'When the ticket was opened', v.datetime(SAMPLE_NOW)],
@@ -174,17 +174,17 @@ const TICKET_ENTRIES = {
   ],
   [ANSWER_KEY]: [
     'Form answer',
-    "The member's answer to one question on the ticket form, named by the question's id, as in {ticket.answer.order}",
+    "The member's answer to one form question, named by the question's ID, as in {ticket.answer.order}",
     v.text('1182'),
   ],
   'ticket.blacklist_reason': [
     'Block reason',
-    'Why the member may not open tickets; empty when no reason was given',
+    "Why the member can't open tickets; empty when no reason was given",
     v.text('Spamming tickets'),
   ],
   'ticket.blacklist_expires_at': [
     'Block lifts',
-    'When the member may open tickets again; empty when the block is permanent',
+    'When the member can open tickets again; empty when the block is permanent',
     v.datetime(SAMPLE_NOW + 7 * 86_400_000),
   ],
 } satisfies Record<string, Entry>;
@@ -320,7 +320,7 @@ function responseDefinitions(): PlaceholderDefinitionInput[] {
   ];
 }
 
-const NOT_AN_ID = 'the id Proton holds is not a Discord id';
+const NOT_AN_ID = 'the ID Proton holds is not a Discord ID';
 
 function whole(value: number, what: string): ResolvedValue {
   return Number.isSafeInteger(value)

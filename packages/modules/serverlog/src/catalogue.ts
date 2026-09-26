@@ -1,6 +1,14 @@
-import type { EventType } from '@proton/core';
+import type { ActionKind, EventType, ModerationActionKind } from '@proton/core';
 import { AuditLogEvent } from 'discord-api-types/v10';
 import { ServerLogColors } from './colours.ts';
+import { actionExecutorId, type ExecutorOf, executorFrom, protonExecutes } from './executors.ts';
+import { renderModerationAction } from './render/actions.ts';
+import {
+  renderApplicationActionFailed,
+  renderApplicationDecided,
+  renderApplicationReopened,
+  renderApplicationSubmitted,
+} from './render/applications.ts';
 import {
   renderAutomodBlocked,
   renderAutomodFlagged,
@@ -81,14 +89,17 @@ import {
   renderMembersPruned,
   renderMemberTimedOut,
   renderMemberUnbanned,
+  renderTimeoutExpired,
   renderTimeoutRemoved,
 } from './render/moderation.ts';
 import {
   renderActionExecuted,
+  renderCommandsChanged,
   renderConfigChanged,
   renderModuleToggled,
   renderSecurityTripped,
 } from './render/proton.ts';
+import { renderReportFiled, renderReportResolved } from './render/reports.ts';
 import { renderRoleCreated, renderRoleDeleted, renderRoleUpdated } from './render/roles.ts';
 import {
   renderTicketClaimed,
@@ -144,6 +155,10 @@ export interface LogEventSpec {
   suppressWhenCorrelated?: boolean;
 
   targetId?(entity: unknown): string | null;
+
+  actionKinds?: readonly ModerationActionKind[];
+
+  executorId?: ExecutorOf;
 
   render(input: RenderInput): RenderResult | null;
 }
@@ -432,7 +447,7 @@ const SPECS: LogEventSpec[] = [
   {
     key: 'voice.left',
     category: 'voice',
-    label: 'Member left voice',
+    label: 'Member left a voice channel',
     colour: ServerLogColors.Remove,
     triggers: ['voice.state_updated'],
     primary: 'immediate',
@@ -488,6 +503,7 @@ const SPECS: LogEventSpec[] = [
     auditActions: [AuditLogEvent.MemberBanAdd],
     primary: 'entity',
     targetId: userIdOf,
+    actionKinds: ['ban'],
     render: renderMemberBanned,
   },
   {
@@ -499,6 +515,7 @@ const SPECS: LogEventSpec[] = [
     auditActions: [AuditLogEvent.MemberBanRemove],
     primary: 'entity',
     targetId: userIdOf,
+    actionKinds: ['unban'],
     render: renderMemberUnbanned,
   },
   {
@@ -509,6 +526,7 @@ const SPECS: LogEventSpec[] = [
     triggers: ['audit.entry'],
     auditActions: [AuditLogEvent.MemberKick],
     primary: 'audit',
+    actionKinds: ['kick'],
     render: renderMemberKicked,
   },
   {
@@ -529,6 +547,7 @@ const SPECS: LogEventSpec[] = [
     triggers: ['audit.entry'],
     auditActions: [AuditLogEvent.MemberUpdate],
     primary: 'audit',
+    actionKinds: ['timeout'],
     render: renderMemberTimedOut,
   },
   {
@@ -539,7 +558,68 @@ const SPECS: LogEventSpec[] = [
     triggers: ['audit.entry'],
     auditActions: [AuditLogEvent.MemberUpdate],
     primary: 'audit',
+    actionKinds: ['untimeout'],
     render: renderTimeoutRemoved,
+  },
+  {
+    key: 'moderation.member_warned',
+    category: 'moderation',
+    label: 'Member warned',
+    colour: ServerLogColors.Modify,
+    triggers: ['proton.action_executed'],
+    primary: 'immediate',
+    actionKinds: ['warn'],
+    render: renderModerationAction,
+  },
+  {
+    key: 'moderation.warning_removed',
+    category: 'moderation',
+    label: 'Warning removed',
+    colour: ServerLogColors.Add,
+    triggers: ['proton.action_executed'],
+    primary: 'immediate',
+    actionKinds: ['unwarn'],
+    render: renderModerationAction,
+  },
+  {
+    key: 'moderation.messages_purged',
+    category: 'moderation',
+    label: 'Messages purged',
+    colour: ServerLogColors.Remove,
+    triggers: ['proton.action_executed'],
+    primary: 'immediate',
+    actionKinds: ['purge'],
+    render: renderModerationAction,
+  },
+  {
+    key: 'moderation.slowmode_changed',
+    category: 'moderation',
+    label: 'Slowmode changed',
+    colour: ServerLogColors.Modify,
+    triggers: ['proton.action_executed'],
+    primary: 'immediate',
+    actionKinds: ['slowmode'],
+    render: renderModerationAction,
+  },
+  {
+    key: 'moderation.channel_locked',
+    category: 'moderation',
+    label: 'Channel locked',
+    colour: ServerLogColors.Remove,
+    triggers: ['proton.action_executed'],
+    primary: 'immediate',
+    actionKinds: ['lockdown'],
+    render: renderModerationAction,
+  },
+  {
+    key: 'moderation.channel_unlocked',
+    category: 'moderation',
+    label: 'Channel unlocked',
+    colour: ServerLogColors.Add,
+    triggers: ['proton.action_executed'],
+    primary: 'immediate',
+    actionKinds: ['unlock'],
+    render: renderModerationAction,
   },
   {
     key: 'moderation.bot_added',
@@ -550,6 +630,36 @@ const SPECS: LogEventSpec[] = [
     auditActions: [AuditLogEvent.BotAdd],
     primary: 'audit',
     render: renderBotAdded,
+  },
+  {
+    key: 'moderation.timeout_expired',
+    category: 'moderation',
+    label: 'Timeout expired',
+    colour: ServerLogColors.Modify,
+    triggers: ['moderation.punishment_expired'],
+    primary: 'immediate',
+    executorId: protonExecutes,
+    render: renderTimeoutExpired,
+  },
+  {
+    key: 'moderation.report_filed',
+    category: 'moderation',
+    label: 'User report filed',
+    colour: ServerLogColors.Add,
+    triggers: ['moderation.report_submitted'],
+    primary: 'immediate',
+    executorId: executorFrom('reporterId'),
+    render: renderReportFiled,
+  },
+  {
+    key: 'moderation.report_resolved',
+    category: 'moderation',
+    label: 'User report resolved',
+    colour: ServerLogColors.Modify,
+    triggers: ['moderation.report_resolved'],
+    primary: 'immediate',
+    executorId: executorFrom('resolvedBy'),
+    render: renderReportResolved,
   },
 
   {
@@ -909,33 +1019,47 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Modify,
     triggers: ['proton.config_changed'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderConfigChanged,
   },
   {
     key: 'proton.module_toggled',
     category: 'proton',
-    label: 'Module enabled or off',
+    label: 'Module turned on or off',
     colour: ServerLogColors.Modify,
     triggers: ['proton.config_changed'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderModuleToggled,
+  },
+  {
+    key: 'proton.commands_changed',
+    category: 'proton',
+    label: 'Command settings changed',
+    colour: ServerLogColors.Modify,
+    triggers: ['proton.commands_changed'],
+    primary: 'immediate',
+    executorId: executorFrom('actorId'),
+    render: renderCommandsChanged,
   },
   {
     key: 'proton.action_executed',
     category: 'proton',
-    label: 'Proton took a moderation action',
+    label: 'Proton took an action',
     colour: ServerLogColors.Modify,
     triggers: ['proton.action_executed'],
     primary: 'immediate',
+    executorId: actionExecutorId,
     render: renderActionExecuted,
   },
   {
     key: 'proton.security_tripped',
     category: 'proton',
-    label: 'Security module tripped',
+    label: 'Anti-Nuke, Anti-Raid or Honeypot triggered',
     colour: ServerLogColors.Remove,
     triggers: ['proton.security_tripped'],
     primary: 'immediate',
+    executorId: protonExecutes,
     render: renderSecurityTripped,
   },
   {
@@ -945,6 +1069,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['giveaways.created'],
     primary: 'immediate',
+    executorId: executorFrom('createdById'),
     render: renderGiveawayCreated,
   },
   {
@@ -954,6 +1079,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['giveaways.started'],
     primary: 'immediate',
+    executorId: protonExecutes,
     render: renderGiveawayStarted,
   },
   {
@@ -963,6 +1089,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Modify,
     triggers: ['giveaways.edited'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderGiveawayEdited,
   },
   {
@@ -972,6 +1099,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Modify,
     triggers: ['giveaways.paused'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderGiveawayPaused,
   },
   {
@@ -981,6 +1109,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['giveaways.resumed'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderGiveawayResumed,
   },
   {
@@ -990,6 +1119,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Remove,
     triggers: ['giveaways.cancelled'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderGiveawayCancelled,
   },
   {
@@ -999,6 +1129,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['giveaways.ended'],
     primary: 'immediate',
+    executorId: executorFrom('drawnById'),
     render: renderGiveawayEnded,
   },
   {
@@ -1008,6 +1139,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Modify,
     triggers: ['giveaways.rerolled'],
     primary: 'immediate',
+    executorId: executorFrom('drawnById'),
     render: renderGiveawayRerolled,
   },
   {
@@ -1017,6 +1149,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['giveaways.bonus_granted'],
     primary: 'immediate',
+    executorId: executorFrom('actorId'),
     render: renderGiveawayBonusGranted,
   },
   {
@@ -1026,6 +1159,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['tickets.opened'],
     primary: 'immediate',
+    executorId: executorFrom('openerId'),
     render: renderTicketOpened,
   },
   {
@@ -1035,6 +1169,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Modify,
     triggers: ['tickets.claimed'],
     primary: 'immediate',
+    executorId: executorFrom('claimedById'),
     render: renderTicketClaimed,
   },
   {
@@ -1044,6 +1179,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Remove,
     triggers: ['tickets.closed'],
     primary: 'immediate',
+    executorId: executorFrom('closedById'),
     render: renderTicketClosed,
   },
   {
@@ -1053,6 +1189,7 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Add,
     triggers: ['tickets.reopened'],
     primary: 'immediate',
+    executorId: executorFrom('reopenedById'),
     render: renderTicketReopened,
   },
   {
@@ -1062,7 +1199,48 @@ const SPECS: LogEventSpec[] = [
     colour: ServerLogColors.Remove,
     triggers: ['tickets.deleted'],
     primary: 'immediate',
+    executorId: executorFrom('deletedById'),
     render: renderTicketDeleted,
+  },
+  {
+    key: 'proton.application_submitted',
+    category: 'proton',
+    label: 'Application submitted',
+    colour: ServerLogColors.Add,
+    triggers: ['applications.submitted'],
+    primary: 'immediate',
+    executorId: executorFrom('actorId'),
+    render: renderApplicationSubmitted,
+  },
+  {
+    key: 'proton.application_decided',
+    category: 'proton',
+    label: 'Application accepted, rejected or waitlisted',
+    colour: ServerLogColors.Modify,
+    triggers: ['applications.accepted', 'applications.rejected', 'applications.waitlisted'],
+    primary: 'immediate',
+    executorId: executorFrom('actorId'),
+    render: renderApplicationDecided,
+  },
+  {
+    key: 'proton.application_reopened',
+    category: 'proton',
+    label: 'Application reopened',
+    colour: ServerLogColors.Add,
+    triggers: ['applications.reopened'],
+    primary: 'immediate',
+    executorId: executorFrom('actorId'),
+    render: renderApplicationReopened,
+  },
+  {
+    key: 'proton.application_action_failed',
+    category: 'proton',
+    label: 'Application action failed',
+    colour: ServerLogColors.Remove,
+    triggers: ['applications.action_failed'],
+    primary: 'immediate',
+    executorId: protonExecutes,
+    render: renderApplicationActionFailed,
   },
 ];
 
@@ -1100,6 +1278,16 @@ export function entitySpecsForAuditAction(actionType: number): LogEventSpec[] {
 
 export function specByKey(key: string): LogEventSpec | undefined {
   return LOG_EVENTS[key];
+}
+
+export const ACTION_LOG_KEY = 'proton.action_executed';
+
+const ACTION_SPECS = new Map<ActionKind, LogEventSpec>(
+  SPECS.flatMap((spec) => (spec.actionKinds ?? []).map((kind) => [kind, spec] as const)),
+);
+
+export function specForAction(kind: ActionKind): LogEventSpec | undefined {
+  return ACTION_SPECS.get(kind) ?? LOG_EVENTS[ACTION_LOG_KEY];
 }
 
 export function categoryOf(key: string): LogCategory | null {

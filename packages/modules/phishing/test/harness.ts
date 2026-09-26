@@ -1,10 +1,20 @@
-import type {
-  ActionExecutor,
-  ActionRequest,
-  ActionResult,
-  Logger,
-  ModuleContext,
-  ProtonEvent,
+import {
+  type ActionExecutor,
+  type ActionRequest,
+  type ActionResult,
+  type DedupeStore,
+  DefaultActionExecutor,
+  DISCORD_EPOCH_MS,
+  type GuildState,
+  type Logger,
+  type ModuleContext,
+  Permissions,
+  type ProtonEvent,
+  type ResolveContextHints,
+  type RestProxyClient,
+  type RestRequestOptions,
+  type RestResponse,
+  resolvePrecheckContext,
 } from '@proton/core';
 import { type PhishingConfig, phishingDefaultConfig } from '../src/config.ts';
 import type { BlocklistInstall, BlocklistStats, BlocklistStore } from '../src/store.ts';
@@ -122,6 +132,136 @@ export function context(config: Partial<PhishingConfig> = {}): Harness {
       logger,
     },
   };
+}
+
+const OWNER = '200000000000000001';
+const BOT_ROLE = '700000000000000001';
+
+export class DiscordStub implements RestProxyClient {
+  readonly calls: RestRequestOptions[] = [];
+  readonly removed = new Set<string>();
+
+  refuseRemovalWith: RestResponse | null = null;
+  removeThenAnswer: RestResponse | Error | null = null;
+  memberLookupFails = false;
+  lookupSaysNotMember = false;
+
+  async request(options: RestRequestOptions): Promise<RestResponse> {
+    this.calls.push(options);
+
+    const removal = /^\/guilds\/\d+\/(?:members|bans)\/(\d+)$/.exec(options.path);
+    if (removal?.[1] && (options.method === 'DELETE' || options.method === 'PUT')) {
+      if (this.refuseRemovalWith) return this.refuseRemovalWith;
+      this.removed.add(removal[1]);
+      if (this.removeThenAnswer instanceof Error) throw this.removeThenAnswer;
+      return this.removeThenAnswer ?? { status: 204, body: undefined };
+    }
+
+    return { status: 200, body: { id: '1' } };
+  }
+
+  alerts(): string[] {
+    return this.calls
+      .filter(
+        (call) => call.method === 'POST' && call.path === `/channels/${ALERT_CHANNEL}/messages`,
+      )
+      .map((call) => String((call.body as { content?: unknown }).content));
+  }
+
+  memberCalls(): RestRequestOptions[] {
+    return this.calls.filter((call) => /\/(members|bans)\//.test(call.path));
+  }
+}
+
+export function liveContext(config: Partial<PhishingConfig> = {}): {
+  ctx: ModuleContext<PhishingConfig>;
+  discord: DiscordStub;
+  logs: CapturedLog[];
+} {
+  const discord = new DiscordStub();
+  const { logger, logs } = recordingLogger();
+  const claimed = new Set<string>();
+
+  const dedupe: DedupeStore = {
+    claim: async (key) => {
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    },
+    release: async (key) => {
+      claimed.delete(key);
+    },
+    has: async (key) => claimed.has(key),
+  };
+
+  const state: GuildState = {
+    guildId: GUILD,
+    ownerId: OWNER,
+    everyoneRoleId: GUILD,
+    roles: new Map([
+      [GUILD, { id: GUILD, permissions: Permissions.ViewChannel, position: 0 }],
+      [
+        BOT_ROLE,
+        {
+          id: BOT_ROLE,
+          permissions:
+            Permissions.SendMessages |
+            Permissions.KickMembers |
+            Permissions.BanMembers |
+            Permissions.ModerateMembers,
+          position: 5,
+        },
+      ],
+    ]),
+    botRoleIds: [BOT_ROLE],
+    channels: new Map([
+      [CHANNEL, { id: CHANNEL, parentId: null, overwrites: [] }],
+      [ALERT_CHANNEL, { id: ALERT_CHANNEL, parentId: null, overwrites: [] }],
+    ]),
+    updatedAt: Date.now(),
+  };
+
+  const executor = new DefaultActionExecutor({
+    dedupe,
+    rest: discord,
+    recorder: { record: async () => ({ caseId: 'case_1' }) },
+    resolveContext: async (request, hints) => {
+      const resolved = await resolvePrecheckContext(
+        {
+          store: {
+            get: async () => state,
+            put: async () => undefined,
+            patch: async () => undefined,
+            delete: async () => undefined,
+          },
+          botUserId: BOT,
+          fetchMemberRoles: async (_guildId, userId) => {
+            if (discord.memberLookupFails) return null;
+            if (!discord.removed.has(userId)) return [];
+            return discord.lookupSaysNotMember ? 'not_member' : null;
+          },
+        },
+        request,
+        (hints ?? {}) as ResolveContextHints,
+      );
+      return 'context' in resolved ? resolved.context : resolved;
+    },
+  });
+
+  return {
+    discord,
+    logs,
+    ctx: {
+      guildId: GUILD,
+      config: { ...phishingDefaultConfig, ...config },
+      executor,
+      logger,
+    },
+  };
+}
+
+export function recentMessageId(ageMs = 60_000): string {
+  return String(BigInt(Date.now() - ageMs - DISCORD_EPOCH_MS) << 22n);
 }
 
 interface MessageOverrides {

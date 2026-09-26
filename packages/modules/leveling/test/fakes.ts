@@ -2,17 +2,23 @@ import {
   type ActionRequest,
   type ActionResult,
   type CommandContext,
+  type CommandDefinition,
   createCommandOptions,
   type GuildState,
   type Logger,
   type ModuleContext,
   type RawOption,
+  resolvePrivateReply,
+  subcommandPath,
 } from '@proton/core';
 import { type LevelingConfig, levelingDefaultConfig } from '../src/config.ts';
+import { levelForXp, MAX_XP } from '../src/curve.ts';
 import type {
   AdjustInput,
   AwardInput,
   AwardResult,
+  GrantInput,
+  GrantResult,
   LeaderboardEntry,
   MemberXpRecord,
   MemberXpStore,
@@ -54,6 +60,42 @@ export class FakeXpStore implements MemberXpStore {
 
   async adjust(input: AdjustInput): Promise<AwardResult> {
     return { xp: input.amount, level: 0, previousLevel: 0, awarded: true };
+  }
+
+  readonly grants: GrantInput[] = [];
+  readonly ledger = new Map<string, GrantResult>();
+
+  async grant(input: GrantInput): Promise<GrantResult> {
+    this.grants.push(input);
+
+    const stored = this.ledger.get(`${input.guildId}:${input.grantId}`);
+    if (stored) return { ...stored, awarded: false, duplicate: true };
+
+    const key = `${input.guildId}:${input.userId}`;
+    const held = this.records.get(key);
+    const before = held?.xp ?? 0;
+    const xp = Math.min(MAX_XP, before + input.amount);
+
+    const result: GrantResult = {
+      xp,
+      level: levelForXp(xp),
+      previousLevel: levelForXp(before),
+      awarded: true,
+      duplicate: false,
+    };
+
+    this.ledger.set(`${input.guildId}:${input.grantId}`, result);
+    this.records.set(key, {
+      userId: input.userId,
+      rank: 1,
+      messageCount: 0,
+      voiceSeconds: 0,
+      ...held,
+      xp,
+      level: result.level,
+    });
+
+    return result;
   }
 
   async get(guildId: string, userId: string): Promise<MemberXpRecord | null> {
@@ -246,6 +288,20 @@ function recorder(timeline: string[] = []): Recorded & {
   };
 }
 
+export interface Published {
+  type: string;
+  key: string;
+  payload: unknown;
+}
+
+export function capturePublishes(ctx: ModuleContext<LevelingConfig>): Published[] {
+  const published: Published[] = [];
+  ctx.publish = async (type, key, payload) => {
+    published.push({ type, key, payload });
+  };
+  return published;
+}
+
 export function listenerContext(
   config: Partial<LevelingConfig>,
 ): Recorded & { ctx: ModuleContext<LevelingConfig> } {
@@ -284,4 +340,33 @@ export function commandContext(
       idempotencyKey: 'interaction-event-1',
     },
   };
+}
+
+export interface ReplyOverrides {
+  replyPreference: boolean | null;
+  // Present, it replaces what the worker would resolve — undefined is a worker that set none.
+  privateReply: boolean | undefined;
+}
+
+export function workerContext(
+  command: CommandDefinition<LevelingConfig>,
+  options: RawOption[],
+  config: Partial<LevelingConfig> = {},
+  overrides: Partial<ReplyOverrides> = {},
+): Recorded & { ctx: CommandContext<LevelingConfig> } {
+  const built = commandContext(options, config);
+
+  if ('privateReply' in overrides) {
+    if (overrides.privateReply !== undefined) built.ctx.privateReply = overrides.privateReply;
+    return built;
+  }
+  if (!command.reply) return built;
+
+  built.ctx.privateReply = resolvePrivateReply(
+    command.reply,
+    built.ctx.config,
+    subcommandPath(options),
+    overrides.replyPreference ?? null,
+  );
+  return built;
 }

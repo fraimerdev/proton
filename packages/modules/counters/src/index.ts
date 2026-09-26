@@ -97,7 +97,7 @@ export function createCountersModule(
 ): ModuleManifest<typeof countersConfigSchema> {
   return {
     id: 'counters',
-    name: 'Counter channels',
+    name: 'Counters',
     category: 'utility',
     configSchema: countersConfigSchema,
     formSchema: countersFormSchema,
@@ -110,7 +110,13 @@ export function createCountersModule(
     // makes, and requiring it here would switch the whole module off for a server that only
     // renames channels it was pointed at.
     requiredPermissions: [Permissions.ViewChannel, Permissions.ManageChannels],
-    actionKinds: ['interaction_reply', 'edit_channel', 'create_channel', 'set_channel_overwrite'],
+    actionKinds: [
+      'interaction_reply',
+      'interaction_followup',
+      'edit_channel',
+      'create_channel',
+      'set_channel_overwrite',
+    ],
 
     configLimits: [{ key: 'counters', path: 'counters' }],
 

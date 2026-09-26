@@ -79,7 +79,7 @@ const DEFINITIONS: readonly PlaceholderDefinitionInput[] = [
   {
     key: 'appeal.decided_at',
     label: 'Decided',
-    description: 'When a moderator accepted or turned down the appeal',
+    description: 'When staff accepted or turned down the appeal',
     group: GROUP,
     type: 'datetime',
     example: v.datetime(SAMPLE_NOW),
@@ -95,16 +95,16 @@ const DEFINITIONS: readonly PlaceholderDefinitionInput[] = [
   {
     key: 'appeal.decided_by',
     label: 'Decided by',
-    description: 'The moderator who decided the appeal. Never shown to the member who appealed.',
+    description: 'The staff member who decided the appeal. Never shown to the member who appealed.',
     group: GROUP,
     type: 'mention',
-    example: v.user('100000000000000030', 'A moderator'),
+    example: v.user('100000000000000030', 'A staff member'),
     sensitivity: 'staff_only',
   },
   {
     key: 'appeal.answer.<key>',
     label: 'Answer',
-    description: 'An answer on the appeal, by question key. Only staff may see answers.',
+    description: 'An answer on the appeal, by answer key. Only staff may see answers.',
     group: GROUP,
     type: 'text',
     example: v.text('I was hacked'),

@@ -97,7 +97,7 @@ export function createRolemenuModule(
 ): ModuleManifest<typeof rolemenuConfigSchema> {
   return {
     id: 'rolemenu',
-    name: 'Role menus',
+    name: 'Role Menus',
     category: 'engagement',
     configSchema: rolemenuConfigSchema,
 
@@ -118,7 +118,7 @@ export function createRolemenuModule(
       'interaction_followup',
     ],
 
-    commands: rolemenuCommands,
+    commands: rolemenuCommands(deps),
     listeners: [
       createReactionListener(deps),
       createComponentListener(deps),

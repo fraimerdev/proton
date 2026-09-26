@@ -78,6 +78,7 @@ async function seeded(
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: NOW,
     });
   }
 

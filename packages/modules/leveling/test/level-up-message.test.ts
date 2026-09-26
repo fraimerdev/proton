@@ -21,6 +21,7 @@ import {
 import { applyLevelUp, type LevelUp, renderLevelUpMessage } from '../src/level-up.ts';
 import { createMessageXpListener } from '../src/message-xp.ts';
 import type { LevelUpPlaceholderFacts } from '../src/placeholders.ts';
+import { LEVELING_LEVEL_UP_SIMULATION } from '../src/simulation.ts';
 import type { AwardInput, AwardResult } from '../src/store.ts';
 import { FakeXpStore } from './fakes.ts';
 
@@ -298,6 +299,35 @@ describe('announce', () => {
     await applyLevelUp(ctx, levelUp());
 
     expect(sent.some((request) => request.kind === 'send')).toBe(false);
+  });
+
+  test('posts nothing while announcements are off, however full the message', async () => {
+    const { ctx, sent } = contextFor({
+      levelUpAnnounce: false,
+      levelUpMessage: message(LEGACY_TEXT),
+      levelUpChannelId: CHANNEL,
+    });
+
+    await applyLevelUp(ctx, levelUp());
+
+    expect(sent.some((request) => request.kind === 'send')).toBe(false);
+  });
+
+  test('a config saved before the switch existed keeps announcing', () => {
+    const parsed = levelingConfigSchema.parse({ levelUpMessage: LEGACY_TEXT });
+
+    expect(parsed.levelUpAnnounce).toBe(true);
+    expect(levelingDefaultConfig.levelUpAnnounce).toBe(true);
+  });
+
+  test('a test of a switched-off announcement says why nothing would post', () => {
+    const built = LEVELING_LEVEL_UP_SIMULATION.build(
+      { ...levelingDefaultConfig, levelUpAnnounce: false },
+      {} as never,
+    );
+
+    expect(built.ok).toBe(false);
+    expect(built.ok ? '' : built.humanReason).toContain('Turn on Announce level-ups');
   });
 
   test('falls back to the channel the member was talking in', async () => {

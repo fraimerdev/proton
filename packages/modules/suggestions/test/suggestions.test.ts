@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  type CommandLabeler,
+  formatCommandLabel,
   ModuleRegistry,
   Permissions,
   STATUS_ERROR_COLOUR,
@@ -28,6 +30,9 @@ import {
   voteEvent,
   voteId,
 } from './harness.ts';
+
+const renamed: CommandLabeler = (key, path) =>
+  formatCommandLabel(key, path, key === 'suggest' ? 'idea' : undefined);
 
 function votesField(embed: { fields?: Array<{ name: string; value: string }> } | null): string {
   return embed?.fields?.find((entry) => entry.name === 'Votes')?.value ?? '';
@@ -79,7 +84,7 @@ describe('/suggest', () => {
     expect(h.sendBodies()).toHaveLength(0);
 
     const reply = h.replyContent() ?? '';
-    expect(reply).toContain('has not picked a suggestion channel');
+    expect(reply).toContain('has no suggestion channel yet');
     expect(reply).toContain('admin');
   });
 
@@ -174,6 +179,32 @@ describe('/suggest', () => {
 
     expect(h.store.rows.size).toBe(0);
     expect(h.replyContent()).toContain(String(SUGGESTION_CONTENT_MAX));
+    expect(h.replyContent()).toContain('Nothing was posted. Shorten it and run `/suggest` again.');
+  });
+
+  test('names /suggest as this server shows it in an overlong refusal', async () => {
+    const h = harness();
+
+    await h.run('suggest', [stringOption('text', 'x'.repeat(SUGGESTION_CONTENT_MAX + 1))], {
+      commandLabel: renamed,
+    });
+
+    expect(h.replyContent()).toContain('Nothing was posted. Shorten it and run `/idea` again.');
+  });
+
+  test('names /suggest as this server shows it when no channel is set', async () => {
+    const h = harness();
+    const text = [stringOption('text', 'Add a bot-commands channel.')];
+
+    await h.run('suggest', text, { config: { channelId: undefined } });
+    expect(h.replyContent()).toContain('so `/suggest` can’t post anything.');
+
+    const renamedRun = harness();
+    await renamedRun.run('suggest', text, {
+      config: { channelId: undefined },
+      commandLabel: renamed,
+    });
+    expect(renamedRun.replyContent()).toContain('so `/idea` can’t post anything.');
   });
 
   test('names SendMessages when the bot cannot post in the suggestion channel', async () => {
@@ -221,7 +252,7 @@ describe('/suggest and its discussion thread', () => {
     expect(h.threadBodies()).toHaveLength(1);
     expect(h.threadBodies()[0]).toMatchObject({
       type: 11,
-      name: 'Suggestion #1 — Add a bot-commands channel.',
+      name: 'Suggestion #1: Add a bot-commands channel.',
     });
     expect([...h.store.rows.values()][0]?.threadId).toBe(THREAD);
     expect(h.followUpContent()).toContain(`<#${THREAD}>`);
@@ -357,7 +388,7 @@ describe('the vote buttons', () => {
 
     expect(h.store.votes.get(suggestion.id)).toBeUndefined();
     expect(h.followUpContent()).toContain('Denied');
-    expect(h.followUpContent()).toContain('voting on it is closed');
+    expect(h.followUpContent()).toContain('voting is closed');
   });
 
   test('tells the member when the suggestion is gone instead of failing silently', async () => {
@@ -365,7 +396,7 @@ describe('the vote buttons', () => {
 
     await h.press(voteEvent(voteId('nothing-here', 'up')));
 
-    expect(h.followUpContent()).toContain('no longer on record');
+    expect(h.followUpContent()).toContain('no longer exists');
   });
 
   test('ignores a button another module owns', async () => {
@@ -383,7 +414,7 @@ describe('the vote buttons', () => {
     await h.press(voteEvent(voteId(suggestion.id, 'up')), { config: { enabled: false } });
 
     expect(h.store.votes.get(suggestion.id)).toBeUndefined();
-    expect(h.replyContent()).toContain('disabled');
+    expect(h.replyContent()).toContain('Suggestions is off in this server');
   });
 
   test('names the missing wiring when the store was never bound', async () => {
@@ -406,7 +437,7 @@ describe('the vote buttons', () => {
 
     expect(await h.store.tally(suggestion.id)).toEqual({ up: 1, down: 0 });
     expect(h.editBodies()).toHaveLength(0);
-    expect(h.followUpContent()).toContain('never recorded which message it is');
+    expect(h.followUpContent()).toContain('I don’t know which message it is');
   });
 });
 
@@ -524,7 +555,7 @@ describe('/suggestion accept, deny and implement', () => {
     });
 
     expect(h.editBodies()).toHaveLength(0);
-    expect(h.followUpContent()).toContain('no **suggestion #99**');
+    expect(h.followUpContent()).toContain('Couldn’t find **suggestion #99**');
   });
 
   test('a suggestion whose message was never recorded is still decided, and says the post is stale', async () => {

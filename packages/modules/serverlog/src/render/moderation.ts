@@ -1,6 +1,15 @@
+import { moderationPunishmentExpiredSchema } from '@proton/core';
 import { ServerLogColors } from '../colours.ts';
 import { type LogLine, logEmbed, userMention } from '../embed.ts';
-import { changeOf, type RenderInput, type RenderResult, record, str } from './types.ts';
+import {
+  changeOf,
+  NONE,
+  type RenderInput,
+  type RenderResult,
+  record,
+  str,
+  UNKNOWN,
+} from './types.ts';
 
 function targetLines(input: RenderInput): LogLine[] | null {
   const payload = record(input.entity);
@@ -13,7 +22,7 @@ function targetLines(input: RenderInput): LogLine[] | null {
 
   return [
     { label: 'Member', mention: userMention(id), value: username ? `@${username}` : id },
-    { label: 'Id', value: id },
+    { label: 'ID', value: id },
   ];
 }
 
@@ -80,6 +89,7 @@ export function renderMembersPruned(input: RenderInput): RenderResult | null {
   if (!audit) return null;
 
   const options = audit.options ?? {};
+  const days = str(options.delete_member_days);
 
   return {
     embed: logEmbed({
@@ -87,8 +97,8 @@ export function renderMembersPruned(input: RenderInput): RenderResult | null {
       action: 'pruned',
       colour: ServerLogColors.Remove,
       lines: [
-        { label: 'Removed', value: str(options.members_removed) ?? 'unknown' },
-        { label: 'Inactive for', value: `${str(options.delete_member_days) ?? '?'} days` },
+        { label: 'Removed', value: str(options.members_removed) ?? UNKNOWN },
+        { label: 'Inactive for', value: days === undefined ? UNKNOWN : `${days} days` },
         reasonLine(input),
       ],
       executor: input.executor,
@@ -107,7 +117,7 @@ export function timeoutChange(input: RenderInput): { before?: string; after?: st
 export function renderMemberTimedOut(input: RenderInput): RenderResult | null {
   const targetId = input.audit?.targetId;
   const { after } = timeoutChange(input);
-  if (!targetId || !after || after === 'none') return null;
+  if (!targetId || !after || after === NONE) return null;
 
   const until = Date.parse(after);
 
@@ -133,11 +143,35 @@ export function renderMemberTimedOut(input: RenderInput): RenderResult | null {
   };
 }
 
+export function renderTimeoutExpired(input: RenderInput): RenderResult | null {
+  const parsed = moderationPunishmentExpiredSchema.safeParse(input.entity);
+  if (!parsed.success) return null;
+
+  const payload = parsed.data;
+
+  return {
+    embed: logEmbed({
+      subject: 'Timeout',
+      action: 'expired',
+      colour: ServerLogColors.Modify,
+      lines: [
+        { label: 'Member', mention: userMention(payload.userId), value: payload.userId },
+        { label: 'Case', value: payload.caseId },
+        { label: 'Ended', mention: `<t:${Math.floor(payload.endedAt / 1000)}:F>` },
+        ...(payload.memberPresent ? [] : [{ label: 'Note', value: 'Not in the server' }]),
+      ],
+      executor: input.executor,
+      occurredAt: input.occurredAt,
+      emojis: input.emojis,
+    }),
+  };
+}
+
 export function renderTimeoutRemoved(input: RenderInput): RenderResult | null {
   const targetId = input.audit?.targetId;
   const { before, after } = timeoutChange(input);
   if (!targetId || before === undefined) return null;
-  if (after !== undefined && after !== 'none') return null;
+  if (after !== undefined && after !== NONE) return null;
 
   return {
     embed: logEmbed({

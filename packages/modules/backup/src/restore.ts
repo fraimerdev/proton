@@ -75,9 +75,9 @@ export function planRestore(input: RestoreInput): RestoreResult {
   if (snapshot.schemaVersion !== SNAPSHOT_VERSION) {
     return {
       refusal:
-        `That snapshot is in format version ${snapshot.schemaVersion} and this build of Proton ` +
-        `reads version ${SNAPSHOT_VERSION}. Restoring it would mean guessing what it holds, so ` +
-        'I have not touched this server. Upgrade Proton, or take a fresh backup.',
+        `That snapshot uses format version ${snapshot.schemaVersion}, and I can only read ` +
+        `version ${SNAPSHOT_VERSION}. Restoring it would mean guessing what it holds, so I ` +
+        'haven’t changed anything. Take a new backup instead.',
     };
   }
 
@@ -85,18 +85,18 @@ export function planRestore(input: RestoreInput): RestoreResult {
     return {
       refusal:
         `That snapshot was taken in server ${snapshot.guildId}, not this one ` +
-        `(${present.guildId}). Restoring another server’s layout here would create its channels ` +
-        'and roles in your server, so I stopped.',
+        `(${present.guildId}). Restoring it here would copy another server’s channels and roles ` +
+        'into yours, so I stopped.',
     };
   }
 
   if (present.source === 'rest') {
     return {
       refusal:
-        'I won’t plan this restore. The channel list I have for this server leaves out every ' +
-        'channel I cannot see instead of marking it, so any hidden channel would look deleted ' +
-        'and I would recreate it beside the one that is already there. Nothing has been ' +
-        'changed. This is a fault on my side, not a setting in this server.',
+        'I can’t plan this restore. My channel list for this server leaves out every channel ' +
+        'I can’t see instead of marking it, so a hidden channel would look deleted and I’d ' +
+        'recreate a copy next to it. Nothing was changed. This is a problem on my side, not a ' +
+        'setting in this server.',
     };
   }
 
@@ -115,7 +115,7 @@ export function planRestore(input: RestoreInput): RestoreResult {
         kind: 'role',
         id: role.id,
         code: 'everyone_role',
-        reason: '@everyone exists in every server and cannot be created.',
+        reason: '@everyone is part of every server and can’t be recreated.',
       });
       continue;
     }
@@ -136,8 +136,8 @@ export function planRestore(input: RestoreInput): RestoreResult {
         id: role.id,
         code: 'managed_role',
         reason:
-          `${role.name} belongs to an app or integration. Discord creates those roles itself ` +
-          'when the app is added back, and refuses to let anyone else create them.',
+          `${role.name} belongs to an app. Discord creates it again when the app is added back, ` +
+          'and doesn’t let anyone else create it.',
       });
       continue;
     }
@@ -153,9 +153,9 @@ export function planRestore(input: RestoreInput): RestoreResult {
         id: channel.id,
         code: 'obfuscated_at_backup',
         reason:
-          'Proton could not see this channel when the backup was taken (no View Channel ' +
-          'permission), so the snapshot holds only its id, type and position. There is nothing ' +
-          'to recreate it from.',
+          'I couldn’t see this channel when the backup was taken (no View Channel permission), ' +
+          'so the snapshot holds only its ID, type and position. There’s nothing to recreate it ' +
+          'from.',
       });
       continue;
     }
@@ -185,7 +185,7 @@ export function planRestore(input: RestoreInput): RestoreResult {
     warnings.push(
       `${orphaned.length} channel${orphaned.length === 1 ? '' : 's'} would be recreated outside ` +
         `${orphaned.length === 1 ? 'its' : 'their'} original category, because that category is ` +
-        'gone and is not being restored (usually because Proton could not see it): ' +
+        'gone and isn’t being restored (usually because I couldn’t see it): ' +
         `${orphaned.map((channel) => channel.name ?? channel.id).join(', ')}.`,
     );
   }
@@ -222,7 +222,7 @@ const MAX_LISTED = 8;
 
 function skipLine(skip: RestoreSkip): string {
   const mention = skip.kind === 'channel' ? `<#${skip.id}>` : `<@&${skip.id}>`;
-  return `- ${mention} — ${skip.reason}`;
+  return `- ${mention}: ${skip.reason}`;
 }
 
 function skipLines(skips: readonly RestoreSkip[]): string[] {
@@ -234,20 +234,20 @@ function skipLines(skips: readonly RestoreSkip[]): string[] {
 export function describeRestore(plan: RestorePlan): string[] {
   const counts = summariseRestore(plan);
   const lines = [
-    `Restore plan for backup ${plan.backupId}: recreate ${counts.roles} ` +
+    `Restore plan for backup \`${plan.backupId}\`: recreate ${counts.roles} ` +
       `role${counts.roles === 1 ? '' : 's'} and ${counts.channels} ` +
-      `channel${counts.channels === 1 ? '' : 's'}. Nothing is ever deleted by a restore — ` +
-      'anything created since the backup stays.',
+      `channel${counts.channels === 1 ? '' : 's'}. A restore never deletes anything, so ` +
+      'whatever was created since the backup stays.',
   ];
 
   const obfuscated = plan.skipped.filter((skip) => skip.code === 'obfuscated_at_backup');
   if (obfuscated.length > 0) {
     lines.push(
       `${obfuscated.length} channel${obfuscated.length === 1 ? '' : 's'} in this backup ` +
-        `cannot be restored and ${obfuscated.length === 1 ? 'is' : 'are'} being skipped:`,
+        'can’t be restored:',
       ...skipLines(obfuscated),
-      'Grant Proton the View Channel permission in those channels and take a new backup; a ' +
-        'snapshot taken without it holds nothing to restore from.',
+      'Give me the View Channel permission in those channels and take a new backup. A snapshot ' +
+        'taken without it has nothing to restore from.',
     );
   }
 
@@ -257,6 +257,13 @@ export function describeRestore(plan: RestorePlan): string[] {
   }
 
   lines.push(...plan.warnings);
+
+  if (plan.dryRun && counts.roles + counts.channels > 0) {
+    lines.push(
+      'Recreated channels won’t get their old permissions back, and members won’t get ' +
+        'recreated roles back.',
+    );
+  }
 
   if (plan.dryRun) lines.push('This is a preview. Nothing was changed.');
 

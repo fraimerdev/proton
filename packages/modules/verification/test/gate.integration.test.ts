@@ -68,8 +68,8 @@ describe('the join gate (§10.5 — use, don’t rebuild)', () => {
     expect(h.discordCalls()).toEqual([]);
 
     const error = h.logs.find((l) => l.level === 'error');
-    expect(error?.message).toContain('position 9');
-    expect(error?.message).toContain('position 6');
+    expect(error?.message).toContain(`<@&${ABOVE_BOT_ROLE}>`);
+    expect(error?.message).toContain('at or above my highest role');
     expect(error?.message).toContain('everyone who joins this server has full access');
   });
 
@@ -162,9 +162,8 @@ describe('/verify', () => {
     await h.run('verify', [], { config: { ...GATED, verifiedRoleId: ABOVE_BOT_ROLE } });
 
     expect(h.discordCalls()).toEqual([]);
-    expect(h.replyContent()).toContain('position 9');
-    expect(h.replyContent()).toContain('position 6');
-    expect(h.replyContent()).toContain("Drag Proton's role above it");
+    expect(h.replyContent()).toContain(`<@&${ABOVE_BOT_ROLE}>`);
+    expect(h.replyContent()).toContain('move my role above it in Server Settings → Roles');
   });
 
   test('refuses when the unverified role sits above the bot, before touching anything', async () => {
@@ -182,7 +181,7 @@ describe('/verify', () => {
     await h.run('verify', [], { config: { enabled: true } });
 
     expect(h.discordCalls()).toEqual([]);
-    expect(h.replyContent()).toContain("hasn't finished setting up verification");
+    expect(h.replyContent()).toContain("Verification isn't set up in this server yet.");
   });
 
   test('answers even when verification is disabled', async () => {
@@ -190,6 +189,6 @@ describe('/verify', () => {
 
     await h.run('verify', [], { config: { enabled: false } });
 
-    expect(h.replyContent()).toContain('disabled');
+    expect(h.replyContent()).toContain('Verification is off in this server.');
   });
 });

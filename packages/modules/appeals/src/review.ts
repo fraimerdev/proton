@@ -52,9 +52,9 @@ function accentFor(appeal: AppealRecord): number {
 function heading(appeal: AppealRecord, panel: AppealPanel): string {
   const verdict =
     appeal.status === 'approved'
-      ? ' — accepted'
+      ? ' (accepted)'
       : appeal.status === 'denied'
-        ? ' — turned down'
+        ? ' (turned down)'
         : '';
 
   return `## Appeal #${appeal.number}${verdict}\n**${panel.name}** · <@${appeal.userId}>`;
@@ -95,11 +95,14 @@ export function buildReviewCard(appeal: AppealRecord, panel: AppealPanel): Revie
     return { ok: true, components: [container(accentFor(appeal), ...body)] };
   }
 
+  const owed =
+    appeal.status === 'approved' && panel.onApprove !== 'nothing' && !appeal.outcomeApplied;
+
   body.push(
     separator(),
     text(
       `${appeal.status === 'approved' ? 'Accepted' : 'Turned down'} by <@${appeal.decidedBy}>` +
-        (appeal.outcomeApplied ? '.' : ' — the outcome has NOT been carried out yet.'),
+        (owed ? ', but the outcome has NOT been carried out yet.' : '.'),
     ),
   );
 

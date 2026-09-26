@@ -1,6 +1,7 @@
 import type {
   EventListener,
   EventType,
+  GuildMemberLister,
   GuildState,
   ModuleContext,
   ProtonEvent,
@@ -10,6 +11,7 @@ import { planGrant } from './grant.ts';
 import type { PendingGrantStore } from './pending.ts';
 import { planRestore } from './restore.ts';
 import type { StickyRoleStore } from './store.ts';
+import type { JoinRolesRunStore } from './sync/store.ts';
 
 export const JOINROLES_MODULE_ID = 'joinroles';
 
@@ -22,6 +24,9 @@ export interface JoinRolesDeps {
   pending?: PendingGrantStore;
   guildState?: { get(guildId: string): Promise<GuildState | null> };
   botUserId?: string;
+  members?: GuildMemberLister;
+  runs?: JoinRolesRunStore;
+  now?(): number;
 }
 
 export interface MemberFacts {
@@ -191,7 +196,7 @@ async function grant(
       kind: 'add_role',
       actorId: JOINROLES_ACTOR,
       targetId: member.userId,
-      reason: member.isBot ? 'Join roles: bot added' : 'Join roles: member joined',
+      reason: member.isBot ? 'Join Roles: bot added' : 'Join Roles: member joined',
 
       idempotencyKey: joinrolesKey(ctx.guildId, member.userId, member.joinedAt, 'grant', roleId),
       dryRun: false,
@@ -269,7 +274,7 @@ async function restore(
       kind: 'add_role',
       actorId: JOINROLES_ACTOR,
       targetId: member.userId,
-      reason: 'Restoring roles held before leaving',
+      reason: 'Join Roles: restored a role they had before leaving',
 
       idempotencyKey: joinrolesKey(ctx.guildId, member.userId, member.joinedAt, 'sticky', roleId),
       dryRun: false,

@@ -2,14 +2,18 @@ import {
   type ActionResult,
   checkLimit,
   errorStatus,
+  type GuildState,
+  labelOf,
   limitFor,
   type ModuleContext,
+  newId,
   type PermissionOverwriteSpec,
   parseDuration,
   type StatusBody,
   type TicketPriority,
 } from '@proton/core';
 import { clipGraphemes } from '@proton/core/placeholders';
+import { ComponentType } from 'discord-api-types/v10';
 import {
   MODULE_ID,
   staffRolesFor,
@@ -21,6 +25,7 @@ import {
 import {
   clockOf,
   isProtonActor,
+  nameOf,
   placeholderReads,
   readBot,
   readProfile,
@@ -53,6 +58,7 @@ import {
   openCycle,
   type Ticket,
   type TicketFormAnswer,
+  type TicketSource,
   type TicketStatus,
   type TicketStore,
 } from './store.ts';
@@ -84,9 +90,21 @@ export function refused(result: ActionResult): boolean {
   return result.status === 'failed_precheck' || result.status === 'failed_api';
 }
 
+function tickets(count: number, kind = ''): string {
+  return `${count} open ${kind}${count === 1 ? 'ticket' : 'tickets'}`;
+}
+
+function typeCap(count: number, type: TicketType): string {
+  return (
+    `You already have ${tickets(count, `**${type.name}** `)}, the most this server allows. ` +
+    'Close one before opening another.'
+  );
+}
+
 export type OpenOutcome =
   | { status: 'opened'; ticket: Ticket }
   | { status: 'duplicate' }
+  | { status: 'pending'; ticket: Ticket }
   | { status: 'refused'; humanReason: string; authored?: boolean };
 
 export interface OpenInput {
@@ -102,6 +120,11 @@ export interface OpenInput {
   answers?: readonly TicketFormAnswer[];
   priority?: TicketPriority | undefined;
   subject?: string | null | undefined;
+
+  ownerId?: string | undefined;
+  source?: TicketSource | undefined;
+  participantIds?: readonly string[] | undefined;
+  skipMemberLimits?: boolean | undefined;
 }
 
 export interface GateInput {
@@ -112,6 +135,7 @@ export interface GateInput {
   now: Date;
   deps?: TicketsDeps | undefined;
   priority?: TicketPriority | undefined;
+  skipMemberLimits?: boolean | undefined;
 }
 
 // `authored` marks a refusal whose words are the admin's own blacklist template, not Proton's.
@@ -146,14 +170,28 @@ async function blacklistRefusal(input: GateInput, entry: BlacklistEntry): Promis
   const suffix =
     (entry.reason ? `\n\n**Reason**\n${entry.reason}` : '') +
     (entry.expiresAt
-      ? `\n\nThis lifts <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>.`
+      ? `\n\nYou can open tickets again <t:${Math.floor(entry.expiresAt.getTime() / 1000)}:R>.`
       : '');
 
   return clipGraphemes(message, Math.max(0, TICKET_TEXT_MAX - suffix.length)) + suffix;
 }
 
+async function serverCap(input: GateInput): Promise<GateOutcome> {
+  const inGuild = await input.store.countOpen(input.ctx.guildId);
+  if (inGuild < input.ctx.config.maxOpenPerGuild) return { ok: true };
+
+  return {
+    ok: false,
+    humanReason:
+      `This server already has ${inGuild} open tickets, the most it allows at once. Try ` +
+      'again once staff have closed some.',
+  };
+}
+
 export async function mayOpen(input: GateInput): Promise<GateOutcome> {
   const { ctx, store, type, openerId } = input;
+
+  if (input.skipMemberLimits) return serverCap(input);
 
   const entry = await store.blacklistEntry(ctx.guildId, openerId, input.now);
   if (entry) {
@@ -167,32 +205,27 @@ export async function mayOpen(input: GateInput): Promise<GateOutcome> {
   );
 
   if (!tier.ok) {
+    const close = labelOf(ctx, 'ticket', 'close');
+
     return {
       ok: false,
       humanReason:
-        `I did not open another ticket for you: ${tier.humanReason} Close one with ` +
-        '`/ticket close` inside it. If one of your ticket channels was deleted without being ' +
-        'closed, its slot is still taken — `/ticket list` shows the numbers and ' +
-        '`/ticket close number:<number>` clears one from anywhere.',
+        `I couldn’t open another ticket: ${tier.humanReason} Close one with \`${close}\` ` +
+        'inside it. A ticket channel deleted without being closed may still count. Find its ' +
+        `number with \`${labelOf(ctx, 'ticket', 'list')}\` and close it from anywhere with ` +
+        `\`${close} number:<number>\`.`,
     };
   }
 
-  const inGuild = await store.countOpen(ctx.guildId);
-  if (inGuild >= ctx.config.maxOpenPerGuild) {
-    return {
-      ok: false,
-      humanReason:
-        `This server already has ${inGuild} open tickets, which is the most it allows at once. ` +
-        'The support team needs to close some before new ones can be opened.',
-    };
-  }
+  const full = await serverCap(input);
+  if (!full.ok) return full;
 
   const open = await store.countOpenFor(ctx.guildId, openerId);
   if (open >= ctx.config.maxOpenPerUser) {
     return {
       ok: false,
       humanReason:
-        `You already have ${open} open ticket(s) and this server allows ` +
+        `You already have ${tickets(open)}, and this server allows ` +
         `${ctx.config.maxOpenPerUser}. Close one before opening another.`,
     };
   }
@@ -201,12 +234,7 @@ export async function mayOpen(input: GateInput): Promise<GateOutcome> {
     const forType = await store.countOpenForType(ctx.guildId, openerId, type.id);
 
     if (forType >= type.maxOpenPerUser) {
-      return {
-        ok: false,
-        humanReason:
-          `You already have ${forType} open **${type.name}** ticket(s), which is the most this ` +
-          'server allows for that kind. Close one before opening another.',
-      };
+      return { ok: false, humanReason: typeCap(forType, type) };
     }
   }
 
@@ -226,7 +254,7 @@ export async function mayOpen(input: GateInput): Promise<GateOutcome> {
 
       return {
         ok: false,
-        humanReason: `Please wait ${seconds} second${seconds === 1 ? '' : 's'} before opening another ticket.`,
+        humanReason: `You can open another ticket in ${seconds} second${seconds === 1 ? '' : 's'}.`,
       };
     }
   }
@@ -246,8 +274,8 @@ async function overCap(input: OpenInput, ticket: Ticket): Promise<string | null>
 
   if (rank > ceiling) {
     return (
-      `You already have ${ceiling} open ticket(s), which is the most this server allows. Close ` +
-      'one before opening another.'
+      `You already have ${tickets(ceiling)}, the most this server allows. Close one before ` +
+      'opening another.'
     );
   }
 
@@ -255,10 +283,7 @@ async function overCap(input: OpenInput, ticket: Ticket): Promise<string | null>
 
   const forType = await store.openRankAt(ctx.guildId, ticket.ownerId, ticket.number, type.id);
 
-  return forType > type.maxOpenPerUser
-    ? `You already have ${type.maxOpenPerUser} open **${type.name}** ticket(s), which is the most ` +
-        'this server allows for that kind. Close one before opening another.'
-    : null;
+  return forType > type.maxOpenPerUser ? typeCap(type.maxOpenPerUser, type) : null;
 }
 
 export function refusalBody(outcome: {
@@ -270,6 +295,7 @@ export function refusalBody(outcome: {
 
 export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
   const { ctx, store, type, deps } = input;
+  const ownerId = input.ownerId ?? input.openerId;
 
   const gate = await mayOpen({
     ctx,
@@ -279,6 +305,7 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     now: clockOf(deps),
     deps,
     priority: input.priority,
+    skipMemberLimits: input.skipMemberLimits,
   });
 
   if (!gate.ok) {
@@ -296,24 +323,31 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     openerId: input.openerId,
     priority: input.priority ?? type.defaultPriority,
     subject: input.subject ?? undefined,
+    ...(input.ownerId === undefined ? {} : { ownerId: input.ownerId }),
+    ...(input.source === undefined ? {} : { source: input.source }),
   });
 
-  // Re-checked now that the row exists. mayOpen ran before the insert, so two presses a moment
-  // apart both saw room; whichever landed second is the one that stands down.
-  const crowded = await overCap(input, ticket);
+  if (input.source !== undefined && ticket.channelId !== ticket.id) return { status: 'duplicate' };
 
-  if (crowded !== null) {
-    await store.abandon(ctx.guildId, ticket.id);
-    return { status: 'refused', humanReason: crowded };
+  if (!input.skipMemberLimits) {
+    // Re-checked now that the row exists. mayOpen ran before the insert, so two presses a moment
+    // apart both saw room; whichever landed second is the one that stands down.
+    const crowded = await overCap(input, ticket);
+
+    if (crowded !== null) {
+      await store.abandon(ctx.guildId, ticket.id);
+      return { status: 'refused', humanReason: crowded };
+    }
   }
 
   const staffRoleIds = staffRolesFor(ctx.config, type);
 
   const overwrites: PermissionOverwriteSpec[] = ticketOverwrites({
     guildId: ctx.guildId,
-    ownerId: input.openerId,
+    ownerId,
     staffRoleIds,
     botUserId: deps.botUserId,
+    participantIds: input.participantIds ?? [],
   });
 
   const namePattern = type.namePattern ?? ctx.config.namePattern;
@@ -321,79 +355,20 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
   const nameFacts = {
     number: ticket.number,
     typeName: type.name,
-    ownerId: input.openerId,
-    legacyUserName: input.openerName,
-    owner: await readProfile(naming, input.openerId, naming.sources.owner),
+    ownerId,
+    legacyUserName: ownerId === input.openerId ? input.openerName : await nameOf(deps, ownerId),
+    owner: await readProfile(naming, ownerId, naming.sources.owner),
     server: await readServer(naming),
   };
 
-  let created: ActionResult;
-  try {
-    created = await ctx.executor.execute({
-      guildId: ctx.guildId,
-      moduleId: MODULE_ID,
-      kind: 'create_channel',
-      actorId: input.openerId,
-      reason: `ticket #${ticket.number} opened by ${input.openerName}`,
-      idempotencyKey: `${input.idempotencyKey}:create`,
-      dryRun: false,
-      record: false,
-      payload: {
-        name: renderTicketChannelName(namePattern, nameFacts, clockOf(deps).getTime()),
-        type: TEXT_CHANNEL_TYPE,
-        ...(type.categoryId ? { parentId: type.categoryId } : {}),
-        ...(input.subject ? { topic: input.subject.slice(0, 1024) } : {}),
-        permissionOverwrites: overwrites,
-      },
-    });
-  } catch (error) {
-    // A throw here — a dead dedupe store, a dead REST proxy — would otherwise leave the reserved
-    // row open forever, pointing at no channel and holding one of the member's slots.
-    await store.abandon(ctx.guildId, ticket.id);
+  const made = await makeChannel(input, ticket, {
+    name: renderTicketChannelName(namePattern, nameFacts, clockOf(deps).getTime()),
+    overwrites,
+  });
 
-    ctx.logger.error(
-      `ticket #${ticket.number} could not be opened for ${input.openerName}: creating its channel ` +
-        `threw ${error instanceof Error ? error.message : String(error)}. The reserved row was ` +
-        'removed, so the member can press the button again.',
-      { guildId: ctx.guildId, moduleId: MODULE_ID, ticketId: ticket.id },
-    );
+  if (!made.ok) return made.outcome;
 
-    return {
-      status: 'refused',
-      humanReason:
-        'Something broke while I was opening your ticket channel, so nothing was recorded. ' +
-        'Try again — if a channel did appear, ask a moderator to remove it.',
-    };
-  }
-
-  // The create key is this press's own event id, so a duplicate claim means the gateway redelivered
-  // it: the first delivery opened the channel and owns that ticket. Only the row this delivery
-  // reserved goes — the attached one from the first delivery is left exactly as it is.
-  if (created.status === 'skipped_duplicate') {
-    await store.abandon(ctx.guildId, ticket.id);
-    return { status: 'duplicate' };
-  }
-
-  if (created.status !== 'executed') {
-    await store.abandon(ctx.guildId, ticket.id);
-
-    return {
-      status: 'refused',
-      humanReason: `I couldn't open a ticket channel: ${failureOf(created, 'Discord refused it')}`,
-    };
-  }
-
-  const channelId = str(record(created.body)?.id);
-  if (!channelId) {
-    await store.abandon(ctx.guildId, ticket.id);
-
-    return {
-      status: 'refused',
-      humanReason:
-        'Discord accepted the ticket channel but did not say which channel it made, so the ' +
-        'ticket was not recorded. Try again — nothing was left behind.',
-    };
-  }
+  const channelId = made.channelId;
 
   const attached = await store.attach(ctx.guildId, ticket.id, channelId);
 
@@ -410,12 +385,18 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     return {
       status: 'refused',
       humanReason:
-        `Your channel is open — <#${channelId}> — but I lost track of it while opening it, so ` +
-        '`/ticket close` will not work there. Ask a moderator to close it for you.',
+        `Your ticket channel <#${channelId}> is open, but I lost track of it, so ` +
+        `\`${labelOf(ctx, 'ticket', 'close')}\` won’t work there. Ask staff to delete the ` +
+        'channel when you’re done.',
     };
   }
 
-  await store.addParticipant(attached.id, input.openerId, 'opener', null);
+  await store.addParticipant(attached.id, ownerId, 'opener', null);
+
+  for (const userId of input.participantIds ?? []) {
+    if (userId === ownerId) continue;
+    await store.addParticipant(attached.id, userId, 'added', input.openerId);
+  }
 
   if (input.answers?.length) await store.saveAnswers(attached.id, input.answers);
 
@@ -424,7 +405,12 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     guildId: ctx.guildId,
     type: 'created',
     actorId: input.openerId,
-    data: { typeId: type.id, panelId: input.panelId, priority: attached.priority },
+    data: {
+      typeId: type.id,
+      panelId: input.panelId,
+      priority: attached.priority,
+      ...(attached.source ? { source: attached.source } : {}),
+    },
   });
 
   const view: TicketView = {
@@ -512,9 +498,156 @@ export async function openTicket(input: OpenInput): Promise<OpenOutcome> {
     openerId: attached.openerId,
     priority: attached.priority,
     ...(attached.subject ? { subject: attached.subject } : {}),
+    ...(attached.source ? { source: attached.source } : {}),
   });
 
   return { status: 'opened', ticket: attached };
+}
+
+interface ChannelPlan {
+  name: string;
+  overwrites: PermissionOverwriteSpec[];
+}
+
+type Made = { ok: true; channelId: string } | { ok: false; outcome: OpenOutcome };
+
+function unconfirmed(input: OpenInput, ticket: Ticket, why: string): Made {
+  input.ctx.logger.warn(
+    `ticket #${ticket.number} for ${input.source?.module ?? 'another module'} ` +
+      `${input.source?.ref ?? ''} may or may not have its channel yet: ${why}. The row is kept, so ` +
+      'the next request for it looks for the channel by name before making another one.',
+    { guildId: input.ctx.guildId, moduleId: MODULE_ID, ticketId: ticket.id },
+  );
+
+  return { ok: false, outcome: { status: 'pending', ticket } };
+}
+
+function ambiguous(result: ActionResult): boolean {
+  const code = result.failure?.code ?? '';
+  return code === 'transport_failure' || /^discord_5\d\d$/.test(code);
+}
+
+async function madeEarlier(input: OpenInput, ticket: Ticket, name: string): Promise<string | null> {
+  const { ctx, deps, store } = input;
+  if (!deps.guildState) return null;
+
+  let state: GuildState | null;
+  try {
+    state = await deps.guildState.get(ctx.guildId);
+  } catch {
+    return null;
+  }
+
+  for (const channel of state?.channels.values() ?? []) {
+    if (channel.name !== name) continue;
+
+    const owned = channel.overwrites.some(
+      (overwrite) => overwrite.type === OVERWRITE_MEMBER && overwrite.id === ticket.ownerId,
+    );
+    if (!owned || (await store.byChannel(ctx.guildId, channel.id))) continue;
+
+    return channel.id;
+  }
+
+  return null;
+}
+
+async function makeChannel(input: OpenInput, ticket: Ticket, plan: ChannelPlan): Promise<Made> {
+  const { ctx, store, type } = input;
+  const sourced = input.source !== undefined;
+
+  if (sourced) {
+    const earlier = await madeEarlier(input, ticket, plan.name);
+    if (earlier) return { ok: true, channelId: earlier };
+  }
+
+  let created: ActionResult;
+  try {
+    created = await ctx.executor.execute({
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      kind: 'create_channel',
+      actorId: input.openerId,
+      reason: `ticket #${ticket.number} opened by ${input.openerName}`,
+      // Keyed on the row every request for one source shares: a per-request key makes a second channel.
+      idempotencyKey: sourced
+        ? `${MODULE_ID}:source:${ticket.id}:create`
+        : `${input.idempotencyKey}:create`,
+      dryRun: false,
+      record: false,
+      payload: {
+        name: plan.name,
+        type: TEXT_CHANNEL_TYPE,
+        ...(type.categoryId ? { parentId: type.categoryId } : {}),
+        ...(input.subject ? { topic: input.subject.slice(0, 1024) } : {}),
+        permissionOverwrites: plan.overwrites,
+      },
+    });
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    if (sourced) return unconfirmed(input, ticket, `creating its channel threw ${why}`);
+
+    // A throw here — a dead dedupe store, a dead REST proxy — would otherwise leave the reserved
+    // row open forever, pointing at no channel and holding one of the member's slots.
+    await store.abandon(ctx.guildId, ticket.id);
+
+    ctx.logger.error(
+      `ticket #${ticket.number} could not be opened for ${input.openerName}: creating its channel ` +
+        `threw ${why}. The reserved row was removed, so the member can press the button again.`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID, ticketId: ticket.id },
+    );
+
+    return {
+      ok: false,
+      outcome: {
+        status: 'refused',
+        humanReason:
+          'Something went wrong while I was opening your ticket, so nothing was saved. Try again. ' +
+          'If a ticket channel appeared anyway, ask staff to delete it.',
+      },
+    };
+  }
+
+  // The create key is this press's own event id, so a duplicate claim means the gateway redelivered
+  // it: the first delivery opened the channel and owns that ticket. Only the row this delivery
+  // reserved goes — the attached one from the first delivery is left exactly as it is.
+  if (created.status === 'skipped_duplicate') {
+    // A sourced row is shared by every request for its source, so it is never one delivery's to drop.
+    if (!sourced) await store.abandon(ctx.guildId, ticket.id);
+    return { ok: false, outcome: { status: 'duplicate' } };
+  }
+
+  if (created.status !== 'executed') {
+    if (sourced && ambiguous(created)) {
+      return unconfirmed(input, ticket, failureOf(created, 'Discord did not answer'));
+    }
+
+    await store.abandon(ctx.guildId, ticket.id);
+
+    return {
+      ok: false,
+      outcome: {
+        status: 'refused',
+        humanReason: `I couldn't open a ticket channel: ${failureOf(created, 'Discord refused it')}`,
+      },
+    };
+  }
+
+  const channelId = str(record(created.body)?.id);
+  if (channelId) return { ok: true, channelId };
+
+  if (sourced) return unconfirmed(input, ticket, 'Discord did not say which channel it made');
+
+  await store.abandon(ctx.guildId, ticket.id);
+
+  return {
+    ok: false,
+    outcome: {
+      status: 'refused',
+      humanReason:
+        'Discord didn’t confirm which channel it created, so the ticket wasn’t saved. Try again.',
+    },
+  };
 }
 
 export interface CloseInput {
@@ -551,8 +684,8 @@ export async function closeTicket(input: CloseInput): Promise<CloseOutcome> {
     return {
       ok: false,
       humanReason:
-        `Ticket #${ticket.number} is not in a state I can close, so nothing was changed. It may ` +
-        'have been deleted while you were looking at it.',
+        `Ticket #${ticket.number} can’t be closed right now, so nothing was changed. It may have ` +
+        'just been reopened or deleted.',
     };
   }
 
@@ -636,6 +769,7 @@ export async function closeTicket(input: CloseInput): Promise<CloseOutcome> {
     closedAt: (closed.closedAt ?? new Date()).getTime(),
     messageCount: closed.messageCount,
     ...(transcript ? { transcriptUrl: transcript } : {}),
+    ...(closed.source ? { source: closed.source } : {}),
   });
 
   return { ok: true, ticket: closed, replayed: committed === null };
@@ -725,9 +859,17 @@ export async function reopenTicket(
   const reopened = await store.reopen(ctx.guildId, ticket.id, byId);
 
   if (!reopened) {
+    const other = ticket.source
+      ? await store.bySource(ctx.guildId, ticket.source.module, ticket.source.ref)
+      : null;
+
     return {
       ok: false,
-      humanReason: `Ticket #${ticket.number} is not closed, so there was nothing to reopen.`,
+      humanReason:
+        other && other.id !== ticket.id && other.status === 'open'
+          ? `Ticket #${ticket.number} can’t be reopened while ticket #${other.number} is open ` +
+            'for the same request. Use that one instead.'
+          : `Ticket #${ticket.number} isn’t closed, so there’s nothing to reopen.`,
     };
   }
 
@@ -866,33 +1008,45 @@ async function askForRating(ctx: ModuleContext<TicketsConfig>, ticket: Ticket): 
     moduleId: MODULE_ID,
     kind: 'create_dm',
     actorId: MODULE_ID,
-    idempotencyKey: `${MODULE_ID}:rating-dm:${ticket.id}:${closeCycle(ticket)}`,
+    // A nonce per attempt: a deduped create_dm has no body, so a replay would ask in the channel.
+    idempotencyKey: `${MODULE_ID}:rating-dm:${ticket.id}:${closeCycle(ticket)}:${newId()}`,
     dryRun: false,
     record: false,
     payload: { userId: ticket.ownerId },
   });
 
-  const channelId = str(record(dm.body)?.id);
+  const target = (dm.status === 'executed' ? str(record(dm.body)?.id) : null) ?? ticket.channelId;
 
-  // Falls back into the ticket channel rather than giving up: a member with DMs closed is the
-  // common case, not an error, and the prompt is useless if it never reaches anybody.
-  const target = dm.status === 'executed' && channelId ? channelId : ticket.channelId;
+  const addressed = {
+    type: ComponentType.TextDisplay,
+    content: `<@${ticket.ownerId}>, I couldn't DM you, so I'm asking here.`,
+  };
 
-  const asked = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'send',
-    actorId: MODULE_ID,
-    idempotencyKey: `${MODULE_ID}:rating:${ticket.id}:${closeCycle(ticket)}`,
-    dryRun: false,
-    record: false,
-    payload: {
-      channelId: target,
-      components: components.value,
-      flags: 32768,
-      allowedMentions: { parse: [] },
-    },
-  });
+  const ask = (channelId: string): Promise<ActionResult> => {
+    const shared = channelId === ticket.channelId;
+
+    return ctx.executor.execute({
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+      kind: 'send',
+      actorId: MODULE_ID,
+      // One key for the DM and the channel fallback: a separate key posts twice on a replayed close.
+      idempotencyKey: `${MODULE_ID}:rating:${ticket.id}:${closeCycle(ticket)}`,
+      dryRun: false,
+      record: false,
+      payload: {
+        channelId,
+        components: shared ? [addressed, ...components.value] : components.value,
+        flags: 32768,
+        allowedMentions: shared ? { parse: [], users: [ticket.ownerId] } : { parse: [] },
+        directMessage: !shared,
+      },
+    });
+  };
+
+  let asked = await ask(target);
+
+  if (target !== ticket.channelId && dmUndelivered(asked)) asked = await ask(ticket.channelId);
 
   if (refused(asked)) {
     ctx.logger.info(
@@ -900,4 +1054,8 @@ async function askForRating(ctx: ModuleContext<TicketsConfig>, ticket: Ticket): 
       { guildId: ctx.guildId, moduleId: MODULE_ID },
     );
   }
+}
+
+function dmUndelivered(result: ActionResult): boolean {
+  return result.failure?.code === 'discord_403';
 }

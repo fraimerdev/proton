@@ -49,7 +49,7 @@ export function renderRequirements(
   logic: 'any' | 'all',
   title: string,
 ): string {
-  if (lines.length === 0) return `**${title}** has no requirements — anybody here can enter.`;
+  if (lines.length === 0) return `**${title}** has no requirements, so anybody here can enter.`;
 
   const met = lines.filter((line) => line.passed).length;
   const eligible = logic === 'any' ? met > 0 : met === lines.length;
@@ -72,9 +72,9 @@ export function renderRequirements(
 
   const verdict = eligible
     ? '\n\n**You can enter this giveaway.**'
-    : '\n\n**You cannot enter this giveaway yet.**';
+    : '\n\n**You can’t enter this giveaway yet.**';
 
-  return `**Requirements — ${title}**\n${body}${note}${verdict}`;
+  return `**Requirements for ${title}**\n${body}${note}${verdict}`;
 }
 
 export async function renderMultipliers(
@@ -85,7 +85,7 @@ export async function renderMultipliers(
   maxEntriesPerUser: number | null,
 ): Promise<string> {
   if (specs.length === 0) {
-    return `**${title}** has no bonus entries — everybody who qualifies gets one entry.`;
+    return `**${title}** has no bonus entries, so everybody who qualifies gets 1 entry.`;
   }
 
   const described = describeMultipliers(registry, specs);
@@ -103,8 +103,8 @@ export async function renderMultipliers(
   const cap = maxEntriesPerUser === null ? '' : ` (capped at ${maxEntriesPerUser})`;
 
   return (
-    `**Bonus entries — ${title}**\n${body}\n\n` +
-    `On today’s figures you would enter with **${weight.total}** ` +
+    `**Bonus entries for ${title}**\n${body}\n\n` +
+    `If you entered now, you’d have **${weight.total}** ` +
     `${weight.total === 1 ? 'entry' : 'entries'}${cap}.`
   );
 }

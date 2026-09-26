@@ -1,4 +1,9 @@
-import { encodeCustomId, MESSAGE_FLAG_IS_COMPONENTS_V2 } from '@proton/core';
+import {
+  encodeCustomId,
+  labelOf,
+  MESSAGE_FLAG_IS_COMPONENTS_V2,
+  type ModuleContext,
+} from '@proton/core';
 import { MODULE_ID, plural } from './config.ts';
 import type { Giveaway } from './store.ts';
 
@@ -136,10 +141,10 @@ export function announcement(
   prize: string = view.title,
 ): string {
   if (winnerIds.length === 0) {
-    return `Nobody qualified for **${prize}**, so it went undrawn. ${link}`;
+    return `Nobody qualified for **${prize}**, so there’s no winner. ${link}`;
   }
 
-  return `${mentionAll(winnerIds)} — you won **${prize}**! Congratulations. ${link}`;
+  return `Congratulations ${mentionAll(winnerIds)}! You won **${prize}**. ${link}`;
 }
 
 export function rerollAnnouncement(
@@ -149,10 +154,23 @@ export function rerollAnnouncement(
   prize: string = view.title,
 ): string {
   if (winnerIds.length === 0) {
-    return `There was nobody left to reroll for **${prize}**. ${link}`;
+    return `Nobody was left to draw in the reroll for **${prize}**. ${link}`;
   }
 
-  return `${mentionAll(winnerIds)} — you won the reroll for **${prize}**! ${link}`;
+  return `Congratulations ${mentionAll(winnerIds)}! You won **${prize}** in the reroll. ${link}`;
+}
+
+export function notPosted(
+  labels: Pick<ModuleContext, 'commandLabel'>,
+  title: string,
+  channelId: string,
+  reason: string | undefined,
+): string {
+  return (
+    `**${title}** was created, but I couldn’t post it in <#${channelId}>: ` +
+    `${reason ?? 'Discord refused the message.'} Cancel it with ` +
+    `\`${labelOf(labels, 'giveaway', 'cancel')}\` before you try again.`
+  );
 }
 
 export interface ListEntry {
@@ -160,9 +178,12 @@ export interface ListEntry {
   entrants: number;
 }
 
-export function renderList(entries: readonly ListEntry[]): string {
+export function renderList(
+  entries: readonly ListEntry[],
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
+): string {
   if (entries.length === 0) {
-    return 'There are no giveaways here yet. Start one with `/giveaway create`.';
+    return `No giveaways are running. Start one with \`${labelOf(labels, 'giveaway', 'create')}\`.`;
   }
 
   return entries
@@ -171,7 +192,7 @@ export function renderList(entries: readonly ListEntry[]): string {
         entry.view.title.length > 60 ? `${entry.view.title.slice(0, 59)}…` : entry.view.title;
 
       return (
-        `• **${title}** — ${plural(entry.entrants, 'entrant')}, ` +
+        `• **${title}** · ${plural(entry.entrants, 'entrant')}, ` +
         `${plural(entry.view.winnerCount, 'winner')}, ends ${timestamp(entry.view.endsAt)} ` +
         `(\`${entry.view.id}\`)`
       );

@@ -47,7 +47,7 @@ export function createAntiraidModule(
 ): ModuleManifest<typeof antiraidConfigSchema> {
   return {
     id: 'antiraid',
-    name: 'Anti-raid',
+    name: 'Anti-Raid',
     category: 'security',
     configSchema: antiraidConfigSchema,
     defaultConfig: antiraidDefaultConfig,

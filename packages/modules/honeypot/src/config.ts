@@ -59,8 +59,7 @@ export const honeypotChannelsSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'channelId'],
-          message:
-            'This channel is already a honeypot. Edit the row above instead of adding it twice.',
+          message: 'This channel is already a bait channel.',
         });
       }
       seen.add(channel.channelId);
@@ -102,7 +101,7 @@ const settings = {
 
   keepChannelActive: z.boolean().default(false).register(protonFields, {
     label: 'Keep channels active',
-    description: 'Post a short message in bait channels once a day so they do not look abandoned.',
+    description: 'Post a short message in bait channels once a day so they don’t look abandoned.',
   }),
 
   renameChannelDaily: z.boolean().default(false).register(protonFields, {
@@ -139,8 +138,7 @@ const settings = {
     .default(DELETE_SECONDS_MAX)
     .register(protonFields, {
       label: 'Delete messages',
-      description:
-        'How far back to delete the member’s messages. Only a softban or a ban can do this.',
+      description: 'How far back to delete the member’s messages. Only a softban or ban does this.',
     }),
 
   waitBeforeActingSeconds: z
@@ -151,8 +149,7 @@ const settings = {
     .default(0)
     .register(protonFields, {
       label: 'Wait before acting',
-      description:
-        'How long to wait after a member triggers Honeypot. Leave at zero to act immediately.',
+      description: 'How long to wait after a member triggers Honeypot. Leave at 0 to act at once.',
     }),
 
   auditLogReason: z
@@ -172,7 +169,7 @@ const settings = {
 
   exemptAdministrators: z.boolean().default(true).register(protonFields, {
     label: 'Exempt administrators',
-    description: 'Anyone holding Administrator is caught and counted, but not acted on.',
+    description: 'Members with Administrator are logged and counted, but not acted on.',
   }),
 
   exemptAdminRoleId: snowflakeSchema.optional().register(protonFields, {
@@ -187,7 +184,7 @@ const settings = {
 
   postNotice: z.boolean().default(true).register(protonFields, {
     label: 'Post a warning message',
-    description: 'Shown in every armed bait channel to warn members away.',
+    description: 'Posted in every armed bait channel to warn members away.',
   }),
 
   noticeCounterButton: z
@@ -209,7 +206,7 @@ const settings = {
     }),
 
   sendDirectMessage: z.boolean().default(true).register(protonFields, {
-    label: 'Send a direct message',
+    label: 'Send a DM',
     description: 'Sent just before Proton acts, while the member is still in the server.',
   }),
 
@@ -218,6 +215,7 @@ const settings = {
     .default(false)
     .register(protonFields, {
       label: 'Offer a way back in',
+      description: 'Add a Rejoin button with your server invite.',
       showWhen: { path: 'sendDirectMessage', equals: ['true'] },
     }),
 
@@ -228,13 +226,13 @@ const settings = {
     .optional()
     .register(protonFields, {
       label: 'Invite link',
-      description: 'The server invite behind the Rejoin button. Proton cannot create one.',
+      description: 'The server invite behind the Rejoin button. Proton can’t create one for you.',
       showWhen: { path: 'offerWayBackIn', equals: ['true'] },
     }),
 
   addToBlacklist: z.boolean().default(false).register(protonFields, {
     label: 'Block caught members',
-    description: 'A blocked account cannot pass verification until a moderator lifts it.',
+    description: 'A blocked member can’t pass verification until a moderator lifts the block.',
   }),
 
   quoteMessage: z.boolean().default(false).register(protonFields, {

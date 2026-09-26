@@ -1,3 +1,4 @@
+import { labelOf, type ModuleContext } from '@proton/core';
 import type { EntrantRow, GiveawayStats, GiveawayStore } from './store.ts';
 
 export const ENTRANT_PAGE_SIZE = 20;
@@ -90,7 +91,11 @@ export async function exportEntrants(
   return { csv: `${lines.join('\n')}\n`, rows, truncated };
 }
 
-export function renderStats(stats: GiveawayStats, guildName = 'this server'): string {
+export function renderStats(
+  stats: GiveawayStats,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
+  guildName = 'this server',
+): string {
   const live =
     stats.byStatus.running +
     stats.byStatus.scheduled +
@@ -98,14 +103,17 @@ export function renderStats(stats: GiveawayStats, guildName = 'this server'): st
     stats.byStatus.drawing;
 
   if (stats.totalGiveaways === 0) {
-    return `No giveaways have been run in ${guildName} yet. Start one with \`/giveaway create\`.`;
+    return (
+      `No giveaways have been run in ${guildName} yet. ` +
+      `Start one with \`${labelOf(labels, 'giveaway', 'create')}\`.`
+    );
   }
 
   const average =
     stats.byStatus.ended === 0 ? 0 : Math.round(stats.uniqueEntrants / stats.byStatus.ended);
 
   return [
-    `**Giveaway statistics — ${guildName}**`,
+    `**Giveaway stats for ${guildName}**`,
     '',
     `**${stats.totalGiveaways}** giveaways · **${live}** live · ` +
       `**${stats.byStatus.ended}** finished · **${stats.byStatus.cancelled}** cancelled`,

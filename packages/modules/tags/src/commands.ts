@@ -4,6 +4,8 @@ import {
   checkLimit,
   type EntitlementTier,
   errorStatus,
+  labelOf,
+  type ModuleContext,
   successStatus,
 } from '@proton/core';
 import { SlashCommandBuilder } from 'discord.js';
@@ -71,12 +73,18 @@ export function tagCommand(deps: TagsDeps): Command {
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('Which tag to post.')
+          .setDescription('The tag to post.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(TAG_NAME_MAX),
       )
       .toJSON(),
+
+    reply: {
+      default: (config) => (config.ephemeral ? 'private' : 'public'),
+      toggleable: [''],
+      inheritsFrom: { label: 'Tags → Reply privately', moduleId: MODULE_ID },
+    },
 
     async handler(ctx) {
       const store = await ready(ctx, deps, 'a tag could not be posted');
@@ -90,7 +98,8 @@ export function tagCommand(deps: TagsDeps): Command {
         await reply(
           ctx,
           errorStatus(
-            `There is no tag called **${name}** in this server. \`/tags list\` shows what there is.`,
+            `Couldn’t find a tag called **${name}**. ` +
+              `\`${labelOf(ctx, 'tags', 'list')}\` shows every tag.`,
           ),
           { ephemeral: true },
         );
@@ -98,7 +107,7 @@ export function tagCommand(deps: TagsDeps): Command {
       }
 
       await reply(ctx, tag.content, {
-        ephemeral: ctx.config.ephemeral,
+        ephemeral: ctx.privateReply ?? ctx.config.ephemeral,
         ...(ctx.config.allowMentions ? {} : { allowedMentions: MENTIONS_OFF }),
       });
     },
@@ -118,7 +127,7 @@ function tagsBuilder(): SlashCommandBuilder {
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('What to call it. Letters, digits, dots, dashes and underscores.')
+          .setDescription('The tag’s name. Letters, numbers, dots, dashes and underscores.')
           .setRequired(true)
           .setMaxLength(TAG_NAME_MAX),
       )
@@ -138,7 +147,7 @@ function tagsBuilder(): SlashCommandBuilder {
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('Which tag to edit.')
+          .setDescription('The tag to edit.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(TAG_NAME_MAX),
@@ -155,11 +164,11 @@ function tagsBuilder(): SlashCommandBuilder {
   builder.addSubcommand((sub) =>
     sub
       .setName('delete')
-      .setDescription('Remove a tag.')
+      .setDescription('Delete a tag.')
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('Which tag to remove.')
+          .setDescription('The tag to delete.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(TAG_NAME_MAX),
@@ -171,18 +180,18 @@ function tagsBuilder(): SlashCommandBuilder {
       .setName('list')
       .setDescription('List this server’s tags.')
       .addIntegerOption((option) =>
-        option.setName('page').setDescription('Which page to show. Defaults to 1.').setMinValue(1),
+        option.setName('page').setDescription('The page to show. Defaults to 1.').setMinValue(1),
       ),
   );
 
   builder.addSubcommand((sub) =>
     sub
       .setName('info')
-      .setDescription('Show who wrote a tag and how often it is used.')
+      .setDescription('Show who created a tag and how often it’s been posted.')
       .addStringOption((option) =>
         option
           .setName('name')
-          .setDescription('Which tag to describe.')
+          .setDescription('The tag to show.')
           .setRequired(true)
           .setAutocomplete(true)
           .setMaxLength(TAG_NAME_MAX),
@@ -205,7 +214,7 @@ async function create(ctx: CommandContext<TagsConfig>, store: TagStore): Promise
   const tier: EntitlementTier = ctx.tier ?? 'free';
   const limit = checkLimit(tier, 'tags', await store.count(ctx.guildId));
   if (!limit.ok) {
-    await reply(ctx, errorStatus(`I did not save **${name}**: ${limit.humanReason}`), {
+    await reply(ctx, errorStatus(`I couldn’t save **${name}**: ${limit.humanReason}`), {
       ephemeral: true,
     });
     return;
@@ -222,16 +231,19 @@ async function create(ctx: CommandContext<TagsConfig>, store: TagStore): Promise
     await reply(
       ctx,
       errorStatus(
-        `**${name}** already exists in this server. Use \`/tags edit\` to change what it says.`,
+        `A tag called **${name}** already exists. ` +
+          `Use \`${labelOf(ctx, 'tags', 'edit')}\` to change it.`,
       ),
       { ephemeral: true },
     );
     return;
   }
 
-  await reply(ctx, successStatus(`Saved **${name}**. Anyone can post it with \`/tag ${name}\`.`), {
-    ephemeral: true,
-  });
+  await reply(
+    ctx,
+    successStatus(`Saved **${name}**. Post it with \`${labelOf(ctx, 'tag')} ${name}\`.`),
+    { ephemeral: true },
+  );
 }
 
 async function edit(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<void> {
@@ -250,7 +262,7 @@ async function edit(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
     ctx,
     changed
       ? successStatus(`Updated **${name}**.`)
-      : errorStatus(`There is no tag called **${name}** in this server, so nothing was changed.`),
+      : errorStatus(`Couldn’t find a tag called **${name}**, so nothing was changed.`),
     { ephemeral: true },
   );
 }
@@ -265,7 +277,7 @@ async function remove(ctx: CommandContext<TagsConfig>, store: TagStore): Promise
     ctx,
     removed
       ? successStatus(`Deleted **${name}**.`)
-      : errorStatus(`There is no tag called **${name}** in this server, so nothing was deleted.`),
+      : errorStatus(`Couldn’t find a tag called **${name}**, so nothing was deleted.`),
     { ephemeral: true },
   );
 }
@@ -275,21 +287,22 @@ export function renderList(
   page: number,
   total: number,
   pageSize: number,
+  labels: Pick<ModuleContext, 'commandLabel'> = {},
 ): string {
   if (total === 0) {
-    return 'This server has no tags yet. `/tags create` makes the first one.';
+    return `This server has no tags yet. Create one with \`${labelOf(labels, 'tags', 'create')}\`.`;
   }
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
   if (names.length === 0) {
     return (
-      `Page ${page} is empty — this server has ${total} tag${total === 1 ? '' : 's'} across ` +
+      `Page ${page} is empty. This server has ${total} tag${total === 1 ? '' : 's'} across ` +
       `${pages} page${pages === 1 ? '' : 's'}.`
     );
   }
 
   return (
-    `**Tags** — page ${page} of ${pages}, ${total} in total\n` +
+    `**Tags** · page ${page} of ${pages} · ${total} in total\n` +
     names.map((name) => `\`${name}\``).join(', ')
   );
 }
@@ -310,6 +323,7 @@ async function list(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
       page,
       result.total,
       TAG_LIST_PAGE_SIZE,
+      ctx,
     ),
     { ephemeral: true, allowedMentions: MENTIONS_OFF },
   );
@@ -321,7 +335,7 @@ async function info(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
 
   const tag = await store.get(ctx.guildId, name);
   if (!tag) {
-    await reply(ctx, errorStatus(`There is no tag called **${name}** in this server.`), {
+    await reply(ctx, errorStatus(`Couldn’t find a tag called **${name}**.`), {
       ephemeral: true,
     });
     return;
@@ -334,8 +348,8 @@ async function info(ctx: CommandContext<TagsConfig>, store: TagStore): Promise<v
 
   await reply(
     ctx,
-    `**${tag.name}** — created by <@${tag.createdBy}> ` +
-      `<t:${Math.floor(tag.createdAt.getTime() / 1000)}:R>, posted ${tag.uses} ` +
+    `**${tag.name}** was created by <@${tag.createdBy}> ` +
+      `<t:${Math.floor(tag.createdAt.getTime() / 1000)}:R> and has been posted ${tag.uses} ` +
       `time${tag.uses === 1 ? '' : 's'}.${edited}`,
     { ephemeral: true, allowedMentions: MENTIONS_OFF },
   );
@@ -364,7 +378,7 @@ export function tagsCommand(deps: TagsDeps): Command {
         case 'info':
           return info(ctx, store);
         default:
-          await reply(ctx, errorStatus('That subcommand is not one I know.'), { ephemeral: true });
+          await reply(ctx, errorStatus('I don’t recognise that subcommand.'), { ephemeral: true });
       }
     },
   };

@@ -166,7 +166,7 @@ describe('a nested tree decides entry', () => {
 
     return join(
       { store, providers: registry },
-      { giveaway, ctx, requirements: [], multipliers: [], blacklist: [] },
+      { giveaway, ctx, pressedAt: NOW, requirements: [], multipliers: [], blacklist: [] },
     );
   }
 
@@ -230,6 +230,7 @@ describe('a nested tree decides the draw', () => {
           premiumSince: null,
           hasAvatar: true,
         },
+        pressedAt: NOW,
       });
     }
 

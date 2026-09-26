@@ -155,35 +155,41 @@ function refusal(code: string, humanReason: string): TicketAuthDecision {
   return { allowed: false, code, humanReason };
 }
 
+function whoMay(permitted: readonly TicketRole[]): string {
+  if (permitted.includes('owner')) return 'Only its owner and staff can.';
+  if (permitted.includes('support')) return 'Only staff can.';
+  if (permitted.includes('claimant')) {
+    return 'Only whoever claimed it, or anyone with Manage Channels or Manage Server, can.';
+  }
+  return 'It needs Manage Channels or Manage Server.';
+}
+
 export function authorizeTicket(input: TicketAuthInput): TicketAuthDecision {
   const { action, ticket } = input;
 
   if (!GUILD_ACTIONS.has(action) && ticket === null) {
-    return refusal(
-      'no_ticket',
-      'That control is attached to a ticket and there is no ticket here, so nothing was changed.',
-    );
+    return refusal('no_ticket', 'There’s no ticket in this channel, so nothing was changed.');
   }
 
   if (ticket?.status === 'deleted') {
     return refusal(
       'ticket_deleted',
-      `Ticket #${ticket.number} was deleted, so it cannot be changed any more.`,
+      `Ticket #${ticket.number} was deleted, so it can’t be changed any more.`,
     );
   }
 
   if (action === 'claim' && (input.claimMode ?? 'single') === 'off') {
     return refusal(
       'claiming_off',
-      'Claiming is disabled for this kind of ticket. An admin can turn it on in the Proton ' +
-        'dashboard under Tickets → Ticket types.',
+      'Claiming is off for this ticket type. An admin can turn it on in the Proton dashboard ' +
+        'under Tickets → Ticket types.',
     );
   }
 
   if (action === 'reopen' && input.reopenEnabled === false) {
     return refusal(
       'reopen_off',
-      'This kind of ticket cannot be reopened once it is closed. Open a new one instead.',
+      'Tickets of this type can’t be reopened once they’re closed. Open a new one instead.',
     );
   }
 
@@ -195,11 +201,10 @@ export function authorizeTicket(input: TicketAuthInput): TicketAuthDecision {
     return refusal(
       'not_permitted',
       ticket === null
-        ? "You don't have permission to do that in this server. It needs Manage Server, or one " +
-            'of the support roles configured under Tickets.'
-        : `You cannot do that to ticket #${ticket.number}. It is open to the member who raised ` +
-            'it, the support roles configured for this ticket type, and anyone with Manage ' +
-            'Channels.',
+        ? permitted.includes('support')
+          ? 'You need Manage Server, Manage Channels or a staff role to do that.'
+          : 'You need Manage Server or Manage Channels to do that.'
+        : `You can’t do that to ticket #${ticket.number}. ${whoMay(permitted)}`,
     );
   }
 
@@ -214,9 +219,9 @@ export function authorizeTicket(input: TicketAuthInput): TicketAuthDecision {
   ) {
     return refusal(
       'claimed_by_other',
-      `Ticket #${ticket.number} is claimed by <@${ticket.claimedById}>, and this ticket type ` +
-        'limits its controls to whoever claimed it. They can hand it over, or a moderator can ' +
-        'unclaim it.',
+      `Ticket #${ticket.number} is claimed by <@${ticket.claimedById}>, and on this ticket type ` +
+        'only the claimer can use its controls. Ask them to hand it over, or ask someone with ' +
+        'Manage Channels to unclaim it.',
     );
   }
 

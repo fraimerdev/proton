@@ -309,7 +309,7 @@ export function renderReply(
   const content = clipGraphemes(result.output, DISCORD_TEXT_LIMITS.content);
 
   if (content.length < result.output.length) {
-    report('output_truncated', 'the reply passed 2000 characters, so the end was cut.');
+    report('output_truncated', 'the reply is over 2000 characters, so the end was cut.');
   }
   return content;
 }

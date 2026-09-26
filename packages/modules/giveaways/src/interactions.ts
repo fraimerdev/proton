@@ -7,11 +7,13 @@ import {
   type ProtonEvent,
   parseCustomId,
   readComponentInteraction,
+  snowflakeCreatedAt,
   successStatus,
 } from '@proton/core';
 import { MODULE_ID } from './config.ts';
 import { bindEntry, clockOf, type GiveawaysDeps } from './deps.ts';
-import { describeJoin, isBlacklisted, join } from './entry.ts';
+import { BLOCKED_FROM_GIVEAWAYS, describeJoin, isBlacklisted, join } from './entry.ts';
+import { publishDropClaimed, publishEntered } from './events.ts';
 import { inspectRequirements, renderMultipliers, renderRequirements } from './inspect.ts';
 import {
   CLAIM_ACTION,
@@ -75,6 +77,9 @@ export async function handleEnter(
   const ref = interactionRef(interaction);
   const root = `${interaction.interactionId}:${id.action}`;
 
+  // The press time, not the handling time: a press handled late must not undo a later one.
+  const pressedAt = new Date(snowflakeCreatedAt(interaction.interactionId) ?? clockOf(deps)());
+
   const bound = bindEntry(deps);
   if ('unbound' in bound) {
     ctx.logger.error(
@@ -115,27 +120,34 @@ export async function handleEnter(
       interaction.userId,
       root,
       claimed
-        ? successStatus(`**${giveaway.title}** is yours — the host will be in touch.`)
-        : errorStatus('That prize is not yours to claim, or you have already claimed it.'),
+        ? successStatus(`You claimed **${giveaway.title}**. It’s yours.`)
+        : errorStatus(
+            'You can’t claim that prize. It isn’t yours, you’ve already claimed it, or the time ' +
+              'to claim it has run out.',
+          ),
     );
 
     return 'answered';
   }
 
   if (id.action === LEAVE_ACTION) {
-    const left = await store.leave(giveaway.id, interaction.userId, new Date(clockOf(deps)()));
-    if (left) await deps.dirty?.mark(giveaway.guildId, giveaway.id);
+    const left = await store.leave(giveaway.id, interaction.userId, pressedAt);
+    if (left === 'left') await deps.dirty?.mark(giveaway.guildId, giveaway.id);
 
     await tellEntrant(
       ctx,
       { applicationId, interaction: ref },
       interaction.userId,
       root,
-      left
+      left === 'left'
         ? successStatus(
-            `You have left **${giveaway.title}**. You can enter again while it is still running.`,
+            `You left **${giveaway.title}**. You can enter again while it’s still running.`,
           )
-        : errorStatus(`You are not in the draw for **${giveaway.title}**.`),
+        : left === 'superseded'
+          ? errorStatus(
+              `You entered **${giveaway.title}** after pressing “Leave”, so you’re still in the draw.`,
+            )
+          : errorStatus(`You’re not in the draw for **${giveaway.title}**.`),
     );
 
     return 'answered';
@@ -163,7 +175,7 @@ export async function handleEnter(
       { applicationId, interaction: ref },
       interaction.userId,
       root,
-      errorStatus('I could not read who you are from that button press. Please try again later.'),
+      errorStatus('I couldn’t tell who pressed that button. Try again in a moment.'),
     );
     return 'answered';
   }
@@ -184,7 +196,7 @@ export async function handleEnter(
         { applicationId, interaction: ref },
         interaction.userId,
         root,
-        errorStatus('You are not eligible for giveaways in this server.'),
+        errorStatus(BLOCKED_FROM_GIVEAWAYS),
       );
       return 'answered';
     }
@@ -197,7 +209,7 @@ export async function handleEnter(
         root,
         errorStatus(
           [
-            `You cannot claim **${giveaway.title}**. Here is what is missing:`,
+            `You can’t claim **${giveaway.title}**. Here’s what you’re missing:`,
             ...verdict.failures.map((failure) => `• ${failure.humanReason}`),
           ].join('\n'),
         ),
@@ -207,15 +219,31 @@ export async function handleEnter(
 
     const dropped = await store.claimDrop(ctx.guildId, giveaway.id, interaction.userId, now);
 
+    // claimDrop only ever wins once, so a redelivered press by the winner comes back 'taken'. The
+    // win row is what tells that apart from a loser, and it must publish again: the first publish
+    // is what was lost.
+    const replayed =
+      dropped.outcome === 'taken' &&
+      (await store.winners(giveaway.id)).some(
+        (win) => win.drawId === `${giveaway.id}:drop` && win.userId === interaction.userId,
+      );
+
+    if (dropped.outcome === 'won' || replayed) {
+      await publishDropClaimed(ctx, dropped.outcome === 'won' ? dropped.giveaway : giveaway, {
+        userId: interaction.userId,
+        activityAt: event.occurredAt,
+      });
+    }
+
     await tellEntrant(
       ctx,
       { applicationId, interaction: ref },
       interaction.userId,
       root,
-      dropped.outcome === 'won'
-        ? successStatus(`You claimed **${giveaway.title}**. It is yours.`)
+      dropped.outcome === 'won' || replayed
+        ? successStatus(`You claimed **${giveaway.title}**. It’s yours.`)
         : dropped.outcome === 'taken'
-          ? errorStatus(`Somebody was faster — **${giveaway.title}** has already gone.`)
+          ? errorStatus(`Somebody was faster. **${giveaway.title}** is already gone.`)
           : errorStatus('That giveaway no longer exists.'),
     );
 
@@ -269,6 +297,7 @@ export async function handleEnter(
     {
       giveaway,
       ctx: memberCtx,
+      pressedAt,
       requirements: requirementSpecs,
       multipliers: multiplierSpecs,
       blacklist,
@@ -276,6 +305,15 @@ export async function handleEnter(
       bypassRoleIds: ctx.config.bypassRoleIds,
     },
   );
+
+  // Already-entered too: a press redelivered after the first publish was lost lands there.
+  if (outcome.outcome === 'entered' || outcome.outcome === 'already-entered') {
+    await publishEntered(ctx, giveaway, {
+      userId: interaction.userId,
+      totalEntries: outcome.totalEntries,
+      activityAt: event.occurredAt,
+    });
+  }
 
   if (outcome.outcome === 'entered') {
     // Marked, not edited: the debounced updater turns thousands of joins into a handful of edits.

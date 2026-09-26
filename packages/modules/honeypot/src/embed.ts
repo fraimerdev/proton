@@ -38,13 +38,13 @@ export function quoteForLog(body: string): string | undefined {
 
 const OUTCOMES: Record<Incident['outcome'], { text: string; colour: number }> = {
   done: { text: 'Done', colour: HONEYPOT_OK },
-  refused: { text: 'Could not be carried out', colour: HONEYPOT_ALARM },
+  refused: { text: 'Failed', colour: HONEYPOT_ALARM },
 
-  exempt: { text: 'Left alone — exempt', colour: HONEYPOT_QUIET },
+  exempt: { text: 'Exempt', colour: HONEYPOT_QUIET },
   gone: { text: 'They had already left', colour: HONEYPOT_QUIET },
 
   // Never green and never merely amber: the member is still banned and a human has to lift it.
-  ban_stuck: { text: 'FAILED — the member is still banned', colour: HONEYPOT_COLOUR },
+  ban_stuck: { text: 'FAILED: the member is still banned', colour: HONEYPOT_COLOUR },
 };
 
 export function buildIncidentEmbed(incident: Incident, now: number): Record<string, unknown> {
@@ -67,7 +67,7 @@ export function buildIncidentEmbed(incident: Incident, now: number): Record<stri
   }
 
   if (incident.dm) {
-    fields.push({ name: 'Told', value: incident.dm, inline: false });
+    fields.push({ name: 'DM', value: incident.dm, inline: false });
   }
 
   if (incident.quote) {

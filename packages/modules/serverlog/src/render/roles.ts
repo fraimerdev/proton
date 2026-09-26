@@ -1,6 +1,15 @@
 import { ServerLogColors } from '../colours.ts';
 import { type LogField, logEmbed, roleMention } from '../embed.ts';
-import { changeOf, num, type RenderInput, type RenderResult, record, str } from './types.ts';
+import {
+  changeOf,
+  NONE,
+  num,
+  type RenderInput,
+  type RenderResult,
+  record,
+  str,
+  UNKNOWN,
+} from './types.ts';
 
 function roleOf(
   input: RenderInput,
@@ -13,7 +22,7 @@ function roleOf(
 
   return {
     id,
-    name: str(role?.name) ?? 'unknown',
+    name: str(role?.name) ?? UNKNOWN,
     ...(num(role?.color) === undefined ? {} : { colour: num(role?.color) }),
   };
 }
@@ -33,7 +42,7 @@ function roleEmbed(
       colour,
       lines: [
         { label: 'Name', mention: roleMention(role.id), value: role.name },
-        { label: 'Id', value: role.id },
+        { label: 'ID', value: role.id },
       ],
       executor: input.executor,
       occurredAt: input.occurredAt,
@@ -67,7 +76,7 @@ export function renderRoleUpdated(input: RenderInput): RenderResult | null {
     const { before, after } = changeOf(input.audit, key);
     if (before === undefined && after === undefined) continue;
 
-    fields.push({ name: label, value: `${before ?? 'none'} → ${after ?? 'none'}` });
+    fields.push({ name: label, value: `${before ?? NONE} → ${after ?? NONE}` });
   }
 
   return {
@@ -77,7 +86,7 @@ export function renderRoleUpdated(input: RenderInput): RenderResult | null {
       colour: ServerLogColors.Modify,
       lines: [
         { label: 'Name', mention: roleMention(role.id), value: role.name },
-        { label: 'Id', value: role.id },
+        { label: 'ID', value: role.id },
       ],
       ...(fields.length > 0 ? { fields } : {}),
       executor: input.executor,

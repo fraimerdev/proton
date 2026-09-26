@@ -1,5 +1,11 @@
-import { type EventType, type ModuleContext, newId } from '@proton/core';
-import type { GiveawaysConfig } from './config.ts';
+import {
+  type EventType,
+  giveawayDropClaimedEventSchema,
+  giveawayEnteredEventSchema,
+  type ModuleContext,
+  newId,
+} from '@proton/core';
+import { type GiveawaysConfig, MODULE_ID } from './config.ts';
 import type { DrawSummary } from './end.ts';
 import type { Giveaway, GiveawayEventKind, GiveawayStore } from './store.ts';
 
@@ -13,6 +19,8 @@ export const GIVEAWAY_EMITS: EventType[] = [
   'giveaways.ended',
   'giveaways.rerolled',
   'giveaways.bonus_granted',
+  'giveaways.entered',
+  'giveaways.drop_claimed',
 ];
 
 type Ctx = ModuleContext<GiveawaysConfig>;
@@ -237,6 +245,53 @@ export async function publishBonus(
       `${input.revoked ? 'revoked' : 'granted'}:${input.amount}`,
     payload: { ...subject(giveaway), ...input },
   });
+}
+
+export function enteredKey(giveawayId: string, userId: string): string {
+  return `giveaways:${giveawayId}:entered:${userId}`;
+}
+
+export function dropClaimedKey(giveawayId: string, userId: string): string {
+  return `giveaways:${giveawayId}:drop:${userId}`;
+}
+
+export async function publishEntered(
+  ctx: Ctx,
+  giveaway: Giveaway,
+  input: { userId: string; totalEntries: number; activityAt: number },
+): Promise<void> {
+  await announce(ctx, 'giveaways.entered', enteredKey(giveaway.id, input.userId), () =>
+    giveawayEnteredEventSchema.parse({ ...subject(giveaway), ...input }),
+  );
+}
+
+export async function publishDropClaimed(
+  ctx: Ctx,
+  giveaway: Giveaway,
+  input: { userId: string; activityAt: number },
+): Promise<void> {
+  await announce(ctx, 'giveaways.drop_claimed', dropClaimedKey(giveaway.id, input.userId), () =>
+    giveawayDropClaimedEventSchema.parse({ ...subject(giveaway), ...input }),
+  );
+}
+
+async function announce(
+  ctx: Ctx,
+  type: EventType,
+  key: string,
+  payload: () => unknown,
+): Promise<void> {
+  if (!ctx.publish) return;
+
+  try {
+    await ctx.publish(type, key, payload());
+  } catch (error) {
+    ctx.logger.warn(
+      `Giveaways could not publish ${type} (${key}), so Achievements will not count it: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+  }
 }
 
 export async function publishOrphaned(

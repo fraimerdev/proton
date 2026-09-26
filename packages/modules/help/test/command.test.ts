@@ -1,8 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  type ActionExecutor,
+  type ActionRequest,
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
+  type CommandDefinition,
   createCommandOptions,
   type DedupeStore,
   DefaultActionExecutor,
@@ -15,6 +18,9 @@ import {
   type RestProxyClient,
   type RestRequestOptions,
   type RestResponse,
+  replyControl,
+  resolvePrivateReply,
+  subcommandPath,
 } from '@proton/core';
 import { helpCommand } from '../src/command.ts';
 import { type HelpConfig, helpDefaultConfig } from '../src/config.ts';
@@ -73,9 +79,37 @@ interface Body {
   };
 }
 
-function harness(config: Partial<HelpConfig> = {}, dashboardUrl: string | null = DASHBOARD) {
+interface RunOverrides {
+  replyPreference: boolean | null;
+  // Present, it replaces what the worker would resolve — undefined is a worker that set none.
+  privateReply: boolean | undefined;
+  idempotencyKey: string;
+}
+
+function privateReplyOf(
+  command: CommandDefinition<HelpConfig>,
+  config: HelpConfig,
+  overrides: Partial<RunOverrides>,
+): { privateReply?: boolean } {
+  if ('privateReply' in overrides) {
+    return overrides.privateReply === undefined ? {} : { privateReply: overrides.privateReply };
+  }
+  if (!command.reply) return {};
+
+  const preference = overrides.replyPreference ?? null;
+  return {
+    privateReply: resolvePrivateReply(command.reply, config, subcommandPath([]), preference),
+  };
+}
+
+function harness(
+  config: Partial<HelpConfig> = {},
+  dashboardUrl: string | null = DASHBOARD,
+  overrides: Partial<RunOverrides> = {},
+) {
   const rest = new FakeRest();
   const recorder = new MemoryRecorder();
+  const requests: ActionRequest[] = [];
   const lines: string[] = [];
   const logger: Logger = {
     info: (message) => lines.push(message),
@@ -98,21 +132,30 @@ function harness(config: Partial<HelpConfig> = {}, dashboardUrl: string | null =
     }),
   });
 
+  const recording: ActionExecutor = {
+    execute: (request) => {
+      requests.push(request);
+      return executor.execute(request);
+    },
+  };
+
+  const command = helpCommand(dashboardUrl === null ? {} : { dashboardUrl });
+  const full = { ...helpDefaultConfig, ...config };
+
   const ctx: CommandContext<HelpConfig> = {
     guildId: GUILD,
     channelId: CHANNEL,
     userId: USER,
-    config: { ...helpDefaultConfig, ...config },
-    executor,
+    config: full,
+    executor: recording,
     logger,
     options: createCommandOptions([]),
     interaction: { id: INTERACTION, token: LIVE_TOKEN },
-    idempotencyKey: newId(),
+    idempotencyKey: overrides.idempotencyKey ?? newId(),
+    ...privateReplyOf(command, full, overrides),
   };
 
-  const command = helpCommand(dashboardUrl === null ? {} : { dashboardUrl });
-
-  return { command, ctx, rest, recorder, lines };
+  return { command, ctx, rest, recorder, requests, lines };
 }
 
 function sent(rest: FakeRest): Body['data'] {
@@ -215,5 +258,80 @@ describe('/help', () => {
     await command.handler(ctx);
 
     expect(rest.calls).toEqual([]);
+  });
+});
+
+function ephemeralFlag(rest: FakeRest): number {
+  return (sent(rest)?.flags ?? 0) & MESSAGE_FLAG_EPHEMERAL;
+}
+
+describe('/help registration and reply visibility', () => {
+  test('stays registered while Help is off, so a new server can still find the dashboard', () => {
+    expect(helpCommand().alwaysRegistered).toBe(true);
+  });
+
+  test('defaults to Reply privately and lets the Commands page choose, with no module page to point at', () => {
+    const command = helpCommand();
+
+    expect(command.reply?.toggleable).toEqual(['']);
+    expect(command.reply?.inheritsFrom).toBeUndefined();
+    expect(replyControl(command.reply, command.data, helpDefaultConfig)).toEqual({
+      supported: true,
+      paths: [{ path: '', default: 'private', toggleable: true }],
+    });
+    expect(
+      replyControl(command.reply, command.data, { ...helpDefaultConfig, ephemeral: false })?.paths,
+    ).toEqual([{ path: '', default: 'public', toggleable: true }]);
+  });
+
+  test.each([
+    ['private', true],
+    ['public', false],
+  ] as const)(
+    'with no setting and Reply privately %s it answers exactly as before',
+    async (_label, ephemeral) => {
+      const before = harness({ ephemeral }, DASHBOARD, {
+        privateReply: undefined,
+        idempotencyKey: 'evt-help',
+      });
+      const after = harness({ ephemeral }, DASHBOARD, {
+        replyPreference: null,
+        idempotencyKey: 'evt-help',
+      });
+
+      await before.command.handler(before.ctx);
+      await after.command.handler(after.ctx);
+
+      expect(after.ctx.privateReply).toBe(ephemeral);
+      expect(after.requests).toEqual(before.requests);
+      expect(after.requests[0]?.payload).toMatchObject({
+        ephemeral,
+        flags: MESSAGE_FLAG_IS_COMPONENTS_V2,
+      });
+      expect(after.requests[0]?.payload).not.toHaveProperty('callbackType');
+    },
+  );
+
+  test('set public, it answers in the channel although the stored config says privately', async () => {
+    const { command, ctx, rest } = harness({ ephemeral: true }, DASHBOARD, {
+      replyPreference: false,
+    });
+
+    await command.handler(ctx);
+
+    expect(ephemeralFlag(rest)).toBe(0);
+    expect((sent(rest)?.flags ?? 0) & MESSAGE_FLAG_IS_COMPONENTS_V2).toBe(
+      MESSAGE_FLAG_IS_COMPONENTS_V2,
+    );
+  });
+
+  test('set private, it answers privately although the stored config says publicly', async () => {
+    const { command, ctx, rest } = harness({ ephemeral: false }, DASHBOARD, {
+      replyPreference: true,
+    });
+
+    await command.handler(ctx);
+
+    expect(ephemeralFlag(rest)).toBe(MESSAGE_FLAG_EPHEMERAL);
   });
 });

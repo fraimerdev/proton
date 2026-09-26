@@ -37,6 +37,8 @@ import {
 
 const NUMBER_CONFLICT = 'tickets_guild_number_uq';
 
+const SOURCE_CONFLICT = 'tickets_source_open_uq';
+
 const RESERVE_ATTEMPTS = 5;
 
 function toTicket(row: TicketRow): Ticket {
@@ -74,6 +76,10 @@ function toTicket(row: TicketRow): Ticket {
     deletedAt: row.deletedAt,
     messageCount: row.messageCount,
     transcriptUrl: row.transcriptUrl,
+    source:
+      row.sourceModule !== null && row.sourceRef !== null
+        ? { module: row.sourceModule, ref: row.sourceRef }
+        : null,
   };
 }
 
@@ -119,13 +125,26 @@ function toEvent(row: TicketEventRow): TicketEvent {
   };
 }
 
-function isNumberCollision(error: unknown): boolean {
-  const shape = error as { code?: unknown; constraint_name?: unknown; constraint?: unknown };
+function uniqueViolation(error: unknown): string | null {
+  let current: unknown = error;
 
-  return (
-    shape?.code === '23505' &&
-    (shape.constraint_name === NUMBER_CONFLICT || shape.constraint === NUMBER_CONFLICT)
-  );
+  for (let depth = 0; current !== null && current !== undefined && depth < 5; depth += 1) {
+    const shape = current as {
+      code?: unknown;
+      constraint_name?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+
+    if (shape.code === '23505') {
+      const name = shape.constraint_name ?? shape.constraint;
+      return typeof name === 'string' ? name : '';
+    }
+
+    current = shape.cause;
+  }
+
+  return null;
 }
 
 export class DrizzleTicketStore implements TicketStore {
@@ -153,9 +172,12 @@ export class DrizzleTicketStore implements TicketStore {
             panelId: input.panelId,
             channelId: id,
             openerId: input.openerId,
-            ownerId: input.openerId,
+            ownerId: input.ownerId ?? input.openerId,
             priority: input.priority,
             ...(input.subject === undefined ? {} : { subject: input.subject }),
+            ...(input.source === undefined
+              ? {}
+              : { sourceModule: input.source.module, sourceRef: input.source.ref }),
             waitingOn: 'staff',
           })
           .returning();
@@ -165,9 +187,56 @@ export class DrizzleTicketStore implements TicketStore {
 
         return toTicket(row);
       } catch (error) {
-        if (attempt >= RESERVE_ATTEMPTS || !isNumberCollision(error)) throw error;
+        const constraint = uniqueViolation(error);
+
+        if (constraint === SOURCE_CONFLICT && input.source !== undefined) {
+          const open = await this.#openBySource(
+            input.guildId,
+            input.source.module,
+            input.source.ref,
+          );
+          if (open) return open;
+        }
+
+        const retryable = constraint === NUMBER_CONFLICT || constraint === SOURCE_CONFLICT;
+        if (attempt >= RESERVE_ATTEMPTS || !retryable) throw error;
       }
     }
+  }
+
+  async #openBySource(guildId: string, module: string, ref: string): Promise<Ticket | null> {
+    const rows = await this.#handle.db
+      .select()
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.guildId, guildId),
+          eq(tickets.sourceModule, module),
+          eq(tickets.sourceRef, ref),
+          eq(tickets.status, 'open'),
+        ),
+      )
+      .limit(1);
+
+    return rows[0] ? toTicket(rows[0]) : null;
+  }
+
+  async bySource(guildId: string, sourceModule: string, sourceRef: string): Promise<Ticket | null> {
+    const rows = await this.#handle.db
+      .select()
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.guildId, guildId),
+          eq(tickets.sourceModule, sourceModule),
+          eq(tickets.sourceRef, sourceRef),
+          ne(tickets.status, 'deleted'),
+        ),
+      )
+      .orderBy(desc(sql`${tickets.status} = 'open'`), desc(tickets.number))
+      .limit(1);
+
+    return rows[0] ? toTicket(rows[0]) : null;
   }
 
   async attach(guildId: string, ticketId: string, channelId: string): Promise<Ticket | null> {
@@ -326,25 +395,31 @@ export class DrizzleTicketStore implements TicketStore {
   }
 
   async reopen(guildId: string, ticketId: string, byId: string): Promise<Ticket | null> {
-    const rows = await this.#handle.db
-      .update(tickets)
-      .set({
-        status: 'open',
-        closedAt: null,
-        closedBy: null,
-        closeReason: null,
-        archivedAt: null,
-        lastActivityAt: new Date(),
-        waitingOn: 'staff',
-      })
-      .where(
-        and(
-          eq(tickets.guildId, guildId),
-          eq(tickets.id, ticketId),
-          or(eq(tickets.status, 'closed'), eq(tickets.status, 'archived')),
-        ),
-      )
-      .returning();
+    let rows: TicketRow[];
+    try {
+      rows = await this.#handle.db
+        .update(tickets)
+        .set({
+          status: 'open',
+          closedAt: null,
+          closedBy: null,
+          closeReason: null,
+          archivedAt: null,
+          lastActivityAt: new Date(),
+          waitingOn: 'staff',
+        })
+        .where(
+          and(
+            eq(tickets.guildId, guildId),
+            eq(tickets.id, ticketId),
+            or(eq(tickets.status, 'closed'), eq(tickets.status, 'archived')),
+          ),
+        )
+        .returning();
+    } catch (error) {
+      if (uniqueViolation(error) === SOURCE_CONFLICT) return null;
+      throw error;
+    }
 
     const row = rows[0];
     if (!row) return null;
@@ -600,7 +675,9 @@ export class DrizzleTicketStore implements TicketStore {
         // coalesce, not a conditional write: the first staff reply is the one that counts and a
         // later one must not keep moving the first-response clock forward.
         ...(input.fromStaff
-          ? { firstResponseAt: sql`coalesce(${tickets.firstResponseAt}, ${input.at})` }
+          ? {
+              firstResponseAt: sql`coalesce(${tickets.firstResponseAt}, ${input.at.toISOString()}::timestamptz)`,
+            }
           : {}),
       })
       .where(

@@ -6,10 +6,13 @@ import { renderLevelUpTemplate } from './level-up.ts';
 import { LEVEL_UP_SURFACE, type LevelUpPlaceholderFacts } from './placeholders.ts';
 
 const NOTHING_TO_POST =
-  'the level-up announcement is empty, so a real level-up posts nothing. Write something before ' +
-  'testing it.';
+  'the message is empty, so a real level-up posts nothing. Write something before testing it.';
 
-const SOURCES = ['message', 'voice', 'admin'] as const;
+const ANNOUNCEMENTS_OFF =
+  'level-up announcements are off, so a real level-up posts nothing. Turn on Announce level-ups ' +
+  'before testing it.';
+
+const SOURCES = ['message', 'voice', 'admin', 'reward'] as const;
 
 function factsFor(scene: SimulationScene): LevelUpPlaceholderFacts {
   const previousLevel = readInteger(scene.inputs, 'previousLevel', 4);
@@ -68,6 +71,7 @@ export const LEVELING_LEVEL_UP_SIMULATION: SimulationAdapter<LevelingConfig> = {
           { value: 'message', label: 'By chatting' },
           { value: 'voice', label: 'In voice' },
           { value: 'admin', label: 'XP given by staff' },
+          { value: 'reward', label: 'XP from a reward' },
         ],
         fallback: 'message',
       },
@@ -82,15 +86,19 @@ export const LEVELING_LEVEL_UP_SIMULATION: SimulationAdapter<LevelingConfig> = {
       },
     ],
     note:
-      'No XP is awarded, no level is stored and no reward role is given, so the reward and removed ' +
-      'role placeholders come out empty. A real level-up with no announcement channel set posts in ' +
-      'the channel the member was chatting in.',
+      'A test gives no XP, levels or reward roles, so the reward and removed role placeholders ' +
+      'come out empty. With no level-up channel set, a real level-up posts in the channel the ' +
+      'member was chatting in.',
   },
 
   destination: (config) => config.levelUpChannelId ?? null,
 
   build(config, scene): SimulationBuild {
     const message = config.levelUpMessage;
+
+    if (!config.levelUpAnnounce) {
+      return { ok: false, humanReason: ANNOUNCEMENTS_OFF, diagnostics: [] };
+    }
 
     if (isSilentLevelUp(message)) {
       return { ok: false, humanReason: NOTHING_TO_POST, diagnostics: [] };

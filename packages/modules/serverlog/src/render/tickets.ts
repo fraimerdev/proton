@@ -18,7 +18,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 
 // Mirrors the actor handling in proton.ts: a pseudo actor is not a snowflake, so mentioning it
 // would render as literal text where a name belongs.
-function actorLine(label: string, actorId: string): LogLine {
+export function actorLine(label: string, actorId: string): LogLine {
   if (actorId.startsWith('proton:')) {
     return { label, value: actorId.slice('proton:'.length) };
   }

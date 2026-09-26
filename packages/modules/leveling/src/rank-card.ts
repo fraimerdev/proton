@@ -1,7 +1,9 @@
 import {
+  type CardBadge,
   type CardDeps,
-  type CardDescriptorInput,
+  type CardPreset,
   discordAvatarUrl,
+  RANK_CARD_BADGES_MAX,
   renderCard,
   toHexColour,
 } from '@proton/cards';
@@ -12,7 +14,7 @@ import { MODULE_ID } from './perform.ts';
 
 export interface RankCardInput {
   userId: string;
-  preset: CardDescriptorInput['preset'];
+  preset: CardPreset;
   level: number;
   rank: number;
   totalXp: number;
@@ -20,12 +22,47 @@ export interface RankCardInput {
   span: number;
 }
 
-// An interaction must be answered within 3s (I9), and a card is decoration. Rendering is raced
-// against a budget well inside that so a slow CDN costs the picture, never the reply.
+// Under 3 s because with no application id the card rides the only callback (I9).
 const RENDER_BUDGET_MS = 2000;
+
+export const BADGE_BUDGET_MS = 500;
+
+interface EarnedBadges {
+  badges: CardBadge[];
+  count: number;
+}
+
+const NO_BADGES: EarnedBadges = { badges: [], count: 0 };
 
 function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([work, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+}
+
+async function badgesFor(
+  ctx: CommandContext<LevelingConfig>,
+  deps: LevelingDeps,
+  userId: string,
+): Promise<EarnedBadges> {
+  if (!deps.badges || !ctx.config.cardShowBadges) return NO_BADGES;
+
+  try {
+    const earned = await withTimeout(deps.badges(ctx.guildId, userId), BADGE_BUDGET_MS);
+    if (earned !== null) return earned;
+
+    ctx.logger.warn('achievement badges took too long to read, so the rank card shows none', {
+      guildId: ctx.guildId,
+      moduleId: MODULE_ID,
+    });
+  } catch (error) {
+    ctx.logger.warn(
+      `achievement badges could not be read, so the rank card shows none: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { guildId: ctx.guildId, moduleId: MODULE_ID },
+    );
+  }
+
+  return NO_BADGES;
 }
 
 export async function renderRankCard(
@@ -43,7 +80,11 @@ export async function renderRankCard(
       }),
   };
 
-  const profile = await deps.userProfile?.(input.userId);
+  const [profile, earned] = await Promise.all([
+    deps.userProfile?.(input.userId),
+    badgesFor(ctx, deps, input.userId),
+  ]);
+  const badges = earned.badges.slice(0, RANK_CARD_BADGES_MAX);
 
   try {
     const data = await withTimeout(
@@ -63,6 +104,8 @@ export async function renderRankCard(
           showRank: ctx.config.cardShowRank,
           showPercent: ctx.config.cardShowPercent,
           showTotalXp: ctx.config.cardShowTotalXp,
+          ...(badges.length > 0 ? { badges } : {}),
+          ...(earned.count > 0 ? { achievementCount: earned.count } : {}),
           ...(profile?.avatarHash
             ? { avatarUrl: discordAvatarUrl(input.userId, profile.avatarHash) }
             : {}),

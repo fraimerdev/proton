@@ -1,6 +1,7 @@
-import type { ActionResult, ModuleContext } from '@proton/core';
+import type { ActionFailure, ActionResult, ModuleContext } from '@proton/core';
 import { MESSAGE_CONTENT_MAX } from '@proton/core';
 import { clipGraphemes, type PlaceholderLookup } from '@proton/core/placeholders';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
 import { APPEALS_ACTOR, type AppealPanel, type AppealsConfig, MODULE_ID } from './config.ts';
 import {
   APPEAL_DECISION_SURFACE,
@@ -12,12 +13,62 @@ import type { FiledAppeal } from './web.ts';
 
 export const DM_ATTEMPTS_MAX = 5;
 
-export type NotifyOutcome = 'sent' | 'closed' | 'failed' | 'gave_up';
+export type NotifyOutcome = 'sent' | 'closed' | 'failed' | 'unconfirmed' | 'gave_up';
 
 function channelIdOf(result: ActionResult): string | null {
   const id = (result.body as { id?: unknown } | undefined)?.id;
 
   return typeof id === 'string' ? id : null;
+}
+
+function mayHaveLanded(code: string | undefined): boolean {
+  return code === 'transport_failure' || /^discord_5\d\d$/.test(code ?? '');
+}
+
+const DMS_CLOSED: ReadonlySet<number> = new Set([
+  RESTJSONErrorCodes.CannotSendMessagesToThisUser,
+  RESTJSONErrorCodes.CannotSendMessagesToThisUserDueToHavingNoMutualGuilds,
+]);
+
+function dmsClosed(failure: ActionFailure | undefined): boolean {
+  const code = failure?.discordCode;
+  return code === undefined ? failure?.code === 'discord_403' : DMS_CLOSED.has(code);
+}
+
+function undelivered(
+  ctx: ModuleContext<AppealsConfig>,
+  appeal: AppealRecord,
+  result: ActionResult,
+  step: 'open' | 'send',
+): 'closed' | 'failed' | 'unconfirmed' {
+  const context = { guildId: ctx.guildId, moduleId: MODULE_ID, userId: appeal.userId };
+  const decided = `appeal #${appeal.number} was decided but`;
+  const humanReason = result.failure?.humanReason ?? 'Discord gave no reason.';
+
+  if (dmsClosed(result.failure)) {
+    ctx.logger.warn(
+      `${decided} ${appeal.userId} could not be told: Discord would not deliver the direct ` +
+        'message. Their direct messages are closed, or they no longer share a server with ' +
+        'Proton. They do not know the outcome.',
+      context,
+    );
+    return 'closed';
+  }
+
+  if (step === 'send' && mayHaveLanded(result.failure?.code)) {
+    ctx.logger.error(
+      `${decided} the message telling ${appeal.userId} may not have reached them: ` +
+        `${humanReason} Proton cannot tell whether they know the outcome.`,
+      context,
+    );
+    return 'unconfirmed';
+  }
+
+  ctx.logger.error(
+    `${decided} ${appeal.userId} could not be told: ${humanReason} They do not know the outcome.`,
+    context,
+  );
+  return 'failed';
 }
 
 export function decisionMessage(
@@ -79,7 +130,7 @@ export async function tellAppellant(
     });
 
     channelId = channelIdOf(opened);
-    if (channelId === null) return 'closed';
+    if (channelId === null) return undelivered(ctx, appeal, opened, 'open');
 
     await store.rememberDm(ctx.guildId, appeal.id, channelId);
   }
@@ -99,8 +150,11 @@ export async function tellAppellant(
       channelId,
       content: decisionMessage(appeal, panel, lookup, now),
       allowedMentions: { parse: [] },
+      directMessage: true,
     },
   });
 
-  return sent.status === 'executed' || sent.status === 'skipped_duplicate' ? 'sent' : 'failed';
+  if (sent.status === 'executed' || sent.status === 'skipped_duplicate') return 'sent';
+
+  return undelivered(ctx, appeal, sent, 'send');
 }

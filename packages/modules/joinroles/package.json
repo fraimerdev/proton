@@ -6,7 +6,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./sync-store": "./src/sync/store.ts",
+    "./sync-view": "./src/sync/view.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -194,14 +194,14 @@ function record(overrides: Partial<PollRecord> = {}): PollRecord {
 }
 
 describe('renderAnnouncement', () => {
-  test('links the poll and says plainly that Proton cannot read the counts', () => {
+  test('links the poll and points at it for the results', () => {
     const text = renderAnnouncement(record());
 
     expect(text).toContain('Best topping?');
     expect(text).toContain(
       pollLink('900000000000000001', '500000000000000001', '700000000000000001'),
     );
-    expect(text).toContain('cannot read it back');
+    expect(text).toContain('The final results are on the poll.');
   });
 
   test('stays inside a Discord message even with the longest possible question', () => {

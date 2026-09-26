@@ -219,7 +219,7 @@ describe('verification.web_passed', () => {
     const error = h.logs.find((entry) => entry.level === 'error');
     expect(error?.message).toContain(MEMBER);
     expect(error?.message).toContain('NOT given their role');
-    expect(error?.message).toContain('position 9');
+    expect(error?.message).toContain(`<@&${ABOVE_BOT_ROLE}>`);
   });
 
   test('says so instead of silently dropping a result it cannot read', async () => {

@@ -4,7 +4,9 @@ import { MODULE_ID } from './config.ts';
 import { publishEdited, publishPaused, publishResumed } from './events.ts';
 import type { Ctx } from './perform.ts';
 import { END_JOB_ID } from './schedule.ts';
-import type { Giveaway, GiveawayPatch, GiveawayStore } from './store.ts';
+import type { Giveaway, GiveawayPatch, GiveawayStatus, GiveawayStore } from './store.ts';
+
+export const EDITABLE: readonly GiveawayStatus[] = ['scheduled', 'running', 'paused'];
 
 export interface ManageDeps {
   store: GiveawayStore;
@@ -109,12 +111,7 @@ export async function shiftDeadline(
   const endsAt = new Date(current.endsAt.getTime() + input.byMs);
   if (endsAt.getTime() <= at.getTime()) return { outcome: 'too-short', giveaway: current };
 
-  const patched = await deps.store.patch(
-    ctx.guildId,
-    input.giveawayId,
-    ['scheduled', 'running', 'paused'],
-    { endsAt },
-  );
+  const patched = await deps.store.patch(ctx.guildId, input.giveawayId, EDITABLE, { endsAt });
 
   if (!patched) return wrongState(deps, ctx.guildId, input.giveawayId);
 
@@ -137,12 +134,7 @@ export async function editGiveawayFields(
 ): Promise<ManageOutcome> {
   const before = await deps.store.get(ctx.guildId, input.giveawayId);
 
-  const patched = await deps.store.patch(
-    ctx.guildId,
-    input.giveawayId,
-    ['scheduled', 'running', 'paused'],
-    input.patch,
-  );
+  const patched = await deps.store.patch(ctx.guildId, input.giveawayId, EDITABLE, input.patch);
 
   if (!patched) return wrongState(deps, ctx.guildId, input.giveawayId);
 

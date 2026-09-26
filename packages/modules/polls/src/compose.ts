@@ -38,15 +38,15 @@ export function composePoll(input: ComposeInput): ComposeResult {
   const question = input.question.trim();
 
   if (question.length === 0) {
-    return { ok: false, humanReason: 'A poll needs a question, and that one was empty.' };
+    return { ok: false, humanReason: 'A poll needs a question.' };
   }
 
   if (question.length > POLL_MAX_QUESTION_LENGTH) {
     return {
       ok: false,
       humanReason:
-        `Discord caps a poll question at ${POLL_MAX_QUESTION_LENGTH} characters and yours is ` +
-        `${question.length}. Cut ${question.length - POLL_MAX_QUESTION_LENGTH} of them.`,
+        `Discord allows up to ${POLL_MAX_QUESTION_LENGTH} characters in a poll question, and ` +
+        `yours has ${question.length}. Cut ${question.length - POLL_MAX_QUESTION_LENGTH} of them.`,
     };
   }
 
@@ -56,8 +56,8 @@ export function composePoll(input: ComposeInput): ComposeResult {
     return {
       ok: false,
       humanReason:
-        `A poll needs at least ${POLL_MIN_ANSWERS} answers and I found ${answers.length} in ` +
-        `that. ${SEPARATOR_HINT}`,
+        `A poll needs at least ${POLL_MIN_ANSWERS} answers, and I found ${answers.length}. ` +
+        SEPARATOR_HINT,
     };
   }
 
@@ -65,7 +65,7 @@ export function composePoll(input: ComposeInput): ComposeResult {
     return {
       ok: false,
       humanReason:
-        `Discord allows at most ${POLL_MAX_ANSWERS} answers on a poll and that is ` +
+        `Discord allows up to ${POLL_MAX_ANSWERS} answers on a poll, and that has ` +
         `${answers.length}. Remove ${answers.length - POLL_MAX_ANSWERS} of them.`,
     };
   }
@@ -76,8 +76,8 @@ export function composePoll(input: ComposeInput): ComposeResult {
     return {
       ok: false,
       humanReason:
-        `Answer ${overlong + 1} is ${answer.length} characters and Discord caps a poll answer ` +
-        `at ${POLL_MAX_ANSWER_LENGTH}. Cut ${answer.length - POLL_MAX_ANSWER_LENGTH} from ` +
+        `Answer ${overlong + 1} has ${answer.length} characters, and Discord allows up to ` +
+        `${POLL_MAX_ANSWER_LENGTH}. Cut ${answer.length - POLL_MAX_ANSWER_LENGTH} from ` +
         `“${answer.slice(0, POLL_MAX_ANSWER_LENGTH)}…”.`,
     };
   }
@@ -86,7 +86,7 @@ export function composePoll(input: ComposeInput): ComposeResult {
     return {
       ok: false,
       humanReason:
-        `A poll runs for whole hours, at least ${POLL_MIN_DURATION_HOURS} of them, and that ` +
+        `A poll runs for a whole number of hours, at least ${POLL_MIN_DURATION_HOURS}. You ` +
         `asked for ${input.durationHours}.`,
     };
   }
@@ -95,8 +95,8 @@ export function composePoll(input: ComposeInput): ComposeResult {
     return {
       ok: false,
       humanReason:
-        `Discord runs a poll for at most ${POLL_MAX_DURATION_HOURS} hours (32 days) and that ` +
-        `asked for ${input.durationHours}.`,
+        `Discord runs a poll for at most ${POLL_MAX_DURATION_HOURS} hours (32 days). You asked ` +
+        `for ${input.durationHours}.`,
     };
   }
 

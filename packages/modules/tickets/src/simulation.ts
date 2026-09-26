@@ -95,8 +95,7 @@ function textMessage(
     return {
       ok: false,
       humanReason:
-        'this comes out empty once its placeholders are filled in, so Proton would ' +
-        'have nothing to say. Check the placeholders it uses.',
+        'this is empty once its placeholders are filled in. Check the placeholders it uses.',
       diagnostics: [],
     };
   }
@@ -110,8 +109,7 @@ function textMessage(
 }
 
 const CARD_NOTE =
-  'Proton wraps this in the ticket card when a real ticket is involved. The test posts the words ' +
-  'you wrote, filled in, without that fixed chrome around them.';
+  'In a real ticket this appears inside the ticket card. The test sends only your text.';
 
 const NAME_DESCRIPTOR: SimulationDescriptor = {
   id: 'tickets.channel_name',
@@ -124,7 +122,7 @@ const NAME_DESCRIPTOR: SimulationDescriptor = {
   delivery: 'none',
   subject: true,
   inputs: [TYPE_INPUT, NUMBER_INPUT],
-  note: 'No ticket is opened and no channel is created — this only works out the name.',
+  note: 'No ticket is opened and no channel is created. This only works out the name.',
 };
 
 export const TICKETS_NAME_SIMULATION: SimulationAdapter<TicketsConfig> = {
@@ -163,7 +161,7 @@ export const TICKETS_WELCOME_SIMULATION: SimulationAdapter<TicketsConfig> = {
     id: 'tickets.welcome',
     moduleId: 'tickets',
     label: 'Ticket opening message',
-    summary: 'What the member is told when their ticket opens.',
+    summary: 'What is posted in a new ticket channel when a ticket opens.',
     surfaceId: TICKET_WELCOME_SURFACE.id,
     configPath: 'types.*.welcomeMessage',
     output: 'message',
@@ -203,7 +201,7 @@ export const TICKETS_CLOSE_SIMULATION: SimulationAdapter<TicketsConfig> = {
       NUMBER_INPUT,
       { key: 'reason', label: 'Closing reason', kind: 'text', maxLength: 200, fallback: 'Sorted' },
     ],
-    note: `No ticket is closed, locked, archived or transcribed. ${CARD_NOTE}`,
+    note: 'No ticket is closed, locked, archived or transcribed.',
   },
 
   build(config, scene): SimulationBuild {
@@ -231,7 +229,7 @@ export const TICKETS_RESPONSE_SIMULATION: SimulationAdapter<TicketsConfig> = {
     id: 'tickets.response',
     moduleId: 'tickets',
     label: 'Quick response',
-    summary: 'What staff send into a ticket with /ticket respond.',
+    summary: 'What staff post in a ticket with /ticket response.',
     surfaceId: TICKET_RESPONSE_SURFACE.id,
     configPath: 'responses.*.content',
     output: 'message',
@@ -271,7 +269,7 @@ export const TICKETS_RESPONSE_SIMULATION: SimulationAdapter<TicketsConfig> = {
       response.content,
       factsFor(scene, type?.name ?? 'Support', type?.defaultPriority ?? 'medium'),
       scene,
-      `'${response.label}' sent into ticket #${readInteger(scene.inputs, 'number', 42)}`,
+      `'${response.label}' posted in ticket #${readInteger(scene.inputs, 'number', 42)}`,
     );
   },
 };
@@ -281,7 +279,7 @@ export const TICKETS_BLACKLIST_SIMULATION: SimulationAdapter<TicketsConfig> = {
     id: 'tickets.blacklist',
     moduleId: 'tickets',
     label: 'Blacklist message',
-    summary: 'What somebody who may not open tickets is told when they try.',
+    summary: 'What a blocked member sees when they try to open a ticket.',
     surfaceId: TICKET_BLACKLIST_SURFACE.id,
     configPath: 'blacklistMessage',
     output: 'message',
@@ -297,9 +295,9 @@ export const TICKETS_BLACKLIST_SIMULATION: SimulationAdapter<TicketsConfig> = {
       },
     ],
     note:
-      'Sent to you, never to the example member, and nobody is blacklisted by this. The real one ' +
-      'is an ephemeral reply only the member who pressed the button sees, with the reason and any ' +
-      'expiry added after your words.',
+      'Sent to you, not the example member, and no one is blocked. The real message is a private ' +
+      'reply to the member who tried to open a ticket, with the reason and any end date added ' +
+      'below your text.',
   },
 
   build(config, scene): SimulationBuild {
@@ -313,7 +311,7 @@ export const TICKETS_BLACKLIST_SIMULATION: SimulationAdapter<TicketsConfig> = {
       config.blacklistMessage,
       facts,
       scene,
-      `${scene.subject.displayName} turned away from opening a ticket`,
+      `${scene.subject.displayName} blocked from opening a ticket`,
     );
   },
 };

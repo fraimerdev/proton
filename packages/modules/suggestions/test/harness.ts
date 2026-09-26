@@ -2,6 +2,7 @@ import {
   type CaseInput,
   type CaseRecorder,
   type CommandContext,
+  type CommandLabeler,
   createCommandOptions,
   type DedupeStore,
   DefaultActionExecutor,
@@ -238,6 +239,7 @@ export interface RunOverrides {
   idempotencyKey: string;
   appPermissions: bigint;
   userId: string;
+  commandLabel: CommandLabeler;
 }
 
 export interface CallBody {
@@ -404,6 +406,7 @@ export function harness(options: HarnessOptions = {}): Harness {
         options: createCommandOptions(commandOptions),
         interaction: { id: INTERACTION, token: 'interaction-token' },
         idempotencyKey: overrides.idempotencyKey ?? newId(),
+        ...(overrides.commandLabel ? { commandLabel: overrides.commandLabel } : {}),
       };
 
       await definition.handler(ctx);

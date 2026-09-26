@@ -56,7 +56,7 @@ export function readExecution(payload: unknown): ExecutionFacts | null {
 const TRIGGER_REASONS: Record<number, string> = {
   [AUTOMOD_TRIGGER_KEYWORD]: 'it matched this server’s blocked words',
   [AUTOMOD_TRIGGER_SPAM]: 'Discord’s spam filter caught it',
-  [AUTOMOD_TRIGGER_KEYWORD_PRESET]: 'it matched one of Discord’s maintained word lists',
+  [AUTOMOD_TRIGGER_KEYWORD_PRESET]: 'it matched one of Discord’s word presets',
   [AUTOMOD_TRIGGER_MENTION_SPAM]: 'it mentioned too many people at once',
   [AUTOMOD_TRIGGER_MEMBER_PROFILE]: 'their profile matched this server’s blocked words',
 };

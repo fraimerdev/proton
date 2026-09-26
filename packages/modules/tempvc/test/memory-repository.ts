@@ -118,6 +118,11 @@ export class MemoryTempVoiceRepository implements TempVoiceRepository {
     return true;
   }
 
+  async reopen(id: string): Promise<void> {
+    const row = this.rows.get(id);
+    if (row?.status === 'closing') this.rows.set(id, { ...row, status: 'live' });
+  }
+
   async forget(id: string): Promise<void> {
     this.rows.delete(id);
     this.#access.delete(id);

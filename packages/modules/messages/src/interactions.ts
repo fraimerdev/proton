@@ -3,6 +3,7 @@ import {
   type EventType,
   errorStatus,
   interactionRef,
+  labelOf,
   MAX_AUTOCOMPLETE_CHOICES,
   type ModuleContext,
   type ProtonEvent,
@@ -33,12 +34,12 @@ const AUTOCOMPLETED_SUBCOMMAND = 'post';
 const FOCUSED_OPTION = 'name';
 
 const SWITCHED_OFF =
-  'The Messages module is disabled in this server, so nothing was posted. An admin can turn ' +
-  'it back on from the Proton dashboard.';
+  'Messages is off in this server, so nothing was posted. An admin can turn it on from the ' +
+  'Proton dashboard.';
 
 const NOT_WIRED =
-  'I can’t finish that: I would have no way to tell you whether your embed went out. Nothing ' +
-  'was posted. This is a fault on my side, not a setting in this server.';
+  'I can’t post that right now, so nothing was posted. This is a fault on my side, not a ' +
+  'setting in this server.';
 
 export type ModalOutcome =
   | { action: 'ignored'; reason: string }
@@ -74,8 +75,8 @@ export async function handleModalSubmit(
       ctx,
       to,
       errorStatus(
-        'Discord did not tell me which channel you composed that in, so I have nowhere to post ' +
-          'it. Run `/message send` again from the channel you want it in.',
+        'Discord didn’t say which channel you composed that in, so nothing was posted. Run ' +
+          `\`${labelOf(ctx, 'message', 'send')}\` again from the channel you want it in.`,
       ),
     );
     return { action: 'refused', reason: 'the modal submission carried no channel' };
@@ -118,7 +119,7 @@ export async function handleModalSubmit(
       ctx,
       to,
       bound.deps.applicationId,
-      errorStatus(`I could not post your embed in <#${channelId}>. ${humanReason}`),
+      errorStatus(`Couldn’t post your embed in <#${channelId}>. ${humanReason}`),
     );
     return { action: 'refused', reason: humanReason };
   }

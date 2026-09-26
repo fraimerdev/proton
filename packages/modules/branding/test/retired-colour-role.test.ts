@@ -199,7 +199,7 @@ describe('deleting the colour role an earlier Proton made, on reconnect', () => 
       expect(roleCalls(h)).toEqual([]);
       expect(h.roles.held).toBe(COLOUR_ROLE);
       expect(deletions(h)).toBe(1);
-      expect(roleWarnings(h)[0]?.message).toContain('above or equal to my highest role');
+      expect(roleWarnings(h)[0]?.message).toContain("above or equal to Proton's highest role");
     }
   });
 

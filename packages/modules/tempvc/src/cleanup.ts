@@ -17,6 +17,9 @@ export const PATROL_INTERVAL_MS = 60_000;
 /** A bound on one pass, so a guild with a hundred stale rows cannot monopolise the worker. */
 export const SWEEP_BATCH = 25;
 
+export const DELETE_ATTEMPTS = 5;
+export const DELETE_RETRY_WINDOW_MS = 60 * 60_000;
+
 export interface SweepReport {
   deleted: number;
   spared: number;
@@ -78,12 +81,11 @@ export async function patrol(
     }
 
     if (row.deleteAfter !== null) continue;
+    if ((await store.occupants(ctx.guildId, row.channelId)).length > 0) continue;
+    if ((await store.deleteRefusals(ctx.guildId, row.id)) >= DELETE_ATTEMPTS) continue;
 
-    const occupants = await store.occupants(ctx.guildId, row.channelId);
-    if (occupants.length === 0) {
-      // Given the same deadline a live emptying would have, so a rejoin still spares it.
-      await repository.scheduleDelete(row.id, new Date(now.getTime() + PATROL_INTERVAL_MS));
-    }
+    // Given the same deadline a live emptying would have, so a rejoin still spares it.
+    await repository.scheduleDelete(row.id, new Date(now.getTime() + PATROL_INTERVAL_MS));
   }
 
   const report = await sweep(ctx, deps, undefined, now);

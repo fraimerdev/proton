@@ -69,7 +69,9 @@ export async function applyRestore(
 
     const name = op.channel.name;
     if (name === null) {
-      applied.failures.push(`a channel could not be recreated because its name was not readable`);
+      applied.failures.push(
+        'a channel couldn’t be recreated because the snapshot has no name for it',
+      );
       continue;
     }
 
@@ -109,8 +111,8 @@ export async function applyRestore(
       // Without the new id every channel under this category lands at the top level. Say so
       // rather than letting the restore look complete.
       applied.failures.push(
-        `category ${name} was created but Discord did not return its id, so channels that sat ` +
-          'under it were restored to the top level',
+        `category ${name} was created, but Discord didn’t return its ID, so the channels under ` +
+          'it were restored at the top level',
       );
     }
   }

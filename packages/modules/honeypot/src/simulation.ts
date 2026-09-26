@@ -4,16 +4,11 @@ import type { HoneypotConfig } from './config.ts';
 import { buildNoticeMessage } from './notice.ts';
 import { buildDirectMessage } from './render.ts';
 
-const NOTICE_OFF =
-  'the warning message is disabled, so Proton posts nothing in a bait channel. Switch ' +
-  '“Post the warning” on before testing it.';
+const NOTICE_OFF = 'the warning message is off. Turn on “Post a warning message” to test it.';
 
-const DM_OFF =
-  'the direct message is disabled, so a caught member is never told why. Switch “Send a ' +
-  'direct message” on before testing it.';
+const DM_OFF = 'the DM is off. Turn on “Send a DM” to test it.';
 
-const NO_BAIT =
-  'this trap has no bait channel yet, so there is nowhere the warning would go. Add one first.';
+const NO_BAIT = 'there’s no bait channel for the warning to go in yet. Add one first.';
 
 function channelIdFor(config: HoneypotConfig, scene: SimulationScene): string | null {
   const index = readInteger(scene.inputs, 'channelIndex', 0);
@@ -31,7 +26,7 @@ export const HONEYPOT_NOTICE_SIMULATION: SimulationAdapter<HoneypotConfig> = {
     id: 'honeypot.notice',
     moduleId: 'honeypot',
     label: 'Warning message',
-    summary: 'The message Proton keeps pinned at the top of a bait channel.',
+    summary: 'The message Proton posts in each bait channel.',
     surfaceId: 'honeypot.notice',
     configPath: 'noticeLayout',
     output: 'message',
@@ -56,9 +51,7 @@ export const HONEYPOT_NOTICE_SIMULATION: SimulationAdapter<HoneypotConfig> = {
         fixed: true,
       },
     ],
-    note:
-      'The real warning is edited in place in the bait channel, never posted twice. This test ' +
-      'posts a copy wherever you choose, and the counter button on it does nothing.',
+    note: 'This posts a copy wherever you choose. The counter button on the copy does nothing.',
   },
 
   destination: (config) => config.channels[0]?.channelId ?? null,
@@ -99,7 +92,7 @@ export const HONEYPOT_DM_SIMULATION: SimulationAdapter<HoneypotConfig> = {
     id: 'honeypot.dm',
     moduleId: 'honeypot',
     label: 'Direct message',
-    summary: 'What a member gets told after the trap catches them.',
+    summary: 'What a caught member is told, just before Proton acts.',
     surfaceId: 'honeypot.dm',
     configPath: 'dmLayout',
     output: 'message',
@@ -107,9 +100,8 @@ export const HONEYPOT_DM_SIMULATION: SimulationAdapter<HoneypotConfig> = {
     subject: true,
     inputs: [],
     note:
-      'Sent to you, never to the example member — nobody is caught, banned or blocked by this. The ' +
-      'Appeal button is left out unless this trap bans and has an appeal form, because the real ' +
-      'link is minted for a real catch.',
+      'Sent to you, and nobody is caught, banned or blocked. The Appeal button is always left ' +
+      'out, because each real appeal link is made for one catch.',
   },
 
   build(config, scene): SimulationBuild {

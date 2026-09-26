@@ -83,8 +83,8 @@ export async function handleVote(
       ctx,
       to,
       errorStatus(
-        'Suggestions are disabled in this server, so this button does nothing right now. An ' +
-          'admin can turn them back on from the Proton dashboard.',
+        'Suggestions is off in this server, so this button doesn’t work right now. An admin can ' +
+          'turn it on in the Proton dashboard.',
       ),
     );
     return { action: 'refused', reason: 'suggestions are off in this server' };
@@ -108,8 +108,8 @@ export async function handleVote(
   if (!suggestion) {
     await say(
       errorStatus(
-        'That suggestion is no longer on record, so I cannot count your vote. Ask an admin to ' +
-          'delete the post — the buttons on it lead nowhere.',
+        'That suggestion no longer exists, so I can’t count your vote. Ask an admin to delete ' +
+          'this post.',
       ),
     );
     return { action: 'refused', reason: 'no such suggestion' };
@@ -120,9 +120,8 @@ export async function handleVote(
   if (!votingOpen(suggestion.status)) {
     await say(
       errorStatus(
-        `**Suggestion #${suggestion.number}** was already ` +
-          `**${STATUS_LABELS[suggestion.status]}**, so voting on it is closed and your press ` +
-          'changed nothing.',
+        `**Suggestion #${suggestion.number}** is already ` +
+          `**${STATUS_LABELS[suggestion.status]}**, so voting is closed.`,
       ),
     );
     return { action: 'refused', reason: `the suggestion is ${suggestion.status}` };
@@ -132,7 +131,7 @@ export async function handleVote(
     await say(
       errorStatus(
         `**Suggestion #${suggestion.number}** is your own, and this server has **Let members ` +
-          'vote on their own suggestion** disabled, so I did not count your ' +
+          'vote on their own suggestion** turned off, so I didn’t count your ' +
           `${emoji}. Everyone else can still vote on it.`,
       ),
     );
@@ -153,8 +152,8 @@ export async function handleVote(
     outcome === 'unchanged'
       ? `Your ${emoji} on **suggestion #${suggestion.number}** was already counted, so nothing ` +
         `changed. It stands at ${describeTally(tally)}.`
-      : `Counted your ${emoji} on **suggestion #${suggestion.number}** — it is now ` +
-        `${describeTally(tally)}. Press the other button to change your mind.`;
+      : `Counted your ${emoji} on **suggestion #${suggestion.number}**. It’s now at ` +
+        `${describeTally(tally)}. Press the other button to change your vote.`;
 
   const stale = await repaint(ctx, event.id, facts.userId, suggestion, tally);
 
@@ -176,11 +175,11 @@ async function repaint(
   tally: Tally,
 ): Promise<string> {
   if (suggestion.messageId === null) {
-    return ' The post itself could not be updated because I never recorded which message it is.';
+    return ' The post still shows the old counts because I don’t know which message it is.';
   }
 
   const row = buildVoteRow(suggestion.id, suggestion.status);
-  if (!row.ok) return ` The post itself could not be updated: ${row.humanReason}`;
+  if (!row.ok) return ` I couldn’t update the post: ${row.humanReason}`;
 
   const edited = await editSuggestion(ctx, {
     channelId: suggestion.channelId,
@@ -191,7 +190,5 @@ async function repaint(
     idempotencyKey: `${MODULE_ID}:${eventId}:edit`,
   });
 
-  return succeeded(edited)
-    ? ''
-    : ` The post itself still shows the old counts: ${whyItFailed(edited)}`;
+  return succeeded(edited) ? '' : ` The post still shows the old counts: ${whyItFailed(edited)}`;
 }

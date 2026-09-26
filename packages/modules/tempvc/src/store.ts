@@ -8,7 +8,8 @@
  */
 export interface PresenceStore {
   locate(guildId: string, userId: string): Promise<string | null>;
-  place(guildId: string, userId: string, channelId: string | null): Promise<void>;
+  where(guildId: string, userId: string): Promise<Seen | null>;
+  place(guildId: string, userId: string, channelId: string | null, at: number): Promise<void>;
 
   enter(guildId: string, channelId: string, userId: string): Promise<number>;
   leave(guildId: string, channelId: string, userId: string): Promise<number>;
@@ -17,4 +18,12 @@ export interface PresenceStore {
 
   /** Rewrites a channel's occupants wholesale, which is how a reconnect re-learns the truth. */
   reset(guildId: string, channelId: string, userIds: readonly string[]): Promise<void>;
+
+  refusedDelete(guildId: string, rowId: string, windowMs: number): Promise<number>;
+  deleteRefusals(guildId: string, rowId: string): Promise<number>;
+}
+
+export interface Seen {
+  channelId: string | null;
+  at: number;
 }

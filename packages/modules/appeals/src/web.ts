@@ -8,6 +8,12 @@ import {
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+export const NOT_TAKING_APPEALS = 'This server isn’t taking appeals right now.';
+
+export function dayCount(days: number): string {
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
 export const APPEAL_STATES = ['open', 'filed', 'decided', 'closed'] as const;
 export type AppealState = (typeof APPEAL_STATES)[number];
 
@@ -62,8 +68,8 @@ export function appealView(input: AppealViewInput): AppealView {
       return {
         state: 'closed',
         humanReason:
-          'This appeal was filed, but the form it belonged to has since been removed. A ' +
-          'moderator can still see it.',
+          'Your appeal was sent, but the server has since removed its form. The server’s staff ' +
+          'can still see your appeal.',
       };
     }
 
@@ -73,7 +79,8 @@ export function appealView(input: AppealViewInput): AppealView {
         panel,
         appeal: existing,
         humanReason:
-          'Your appeal has been sent to the moderators. Nothing more is needed from you.',
+          'Your appeal has been sent to the server’s staff. Nothing more is needed from you. ' +
+          'Open this link again later to check for a decision.',
       };
     }
 
@@ -106,26 +113,28 @@ export function appealView(input: AppealViewInput): AppealView {
   }
 
   if (!config.enabled) {
-    return { state: 'closed', humanReason: 'This server is not taking appeals at the moment.' };
+    return { state: 'closed', humanReason: NOT_TAKING_APPEALS };
   }
 
   if (!panel) {
     return {
       state: 'closed',
       humanReason:
-        'The appeal form this link points at no longer exists. Nothing you did caused this — ' +
-        'the server changed its settings.',
+        'This link’s appeal form no longer exists because the server changed its settings. ' +
+        'Nothing you did caused this.',
     };
   }
 
   if (!panel.enabled) {
-    return { state: 'closed', humanReason: 'This server is not taking appeals at the moment.' };
+    return { state: 'closed', humanReason: NOT_TAKING_APPEALS };
   }
 
   if (now - issuedAt >= panel.windowDays * DAY_MS) {
     return {
       state: 'closed',
-      humanReason: `Appeals close ${panel.windowDays} days after the action, and that has passed.`,
+      humanReason:
+        `Appeals close ${dayCount(panel.windowDays)} after the action, and that time has ` +
+        'passed.',
     };
   }
 
@@ -137,7 +146,7 @@ export function appealView(input: AppealViewInput): AppealView {
 
     return {
       state: 'closed',
-      humanReason: `You appealed recently. You can appeal again in ${days} days.`,
+      humanReason: `You appealed recently. You can appeal again in ${dayCount(days)}.`,
     };
   }
 

@@ -1,4 +1,6 @@
-import type { TicketPriority } from '@proton/core';
+import type { TicketPriority, TicketSource } from '@proton/core';
+
+export type { TicketSource };
 
 export type TicketStatus = 'open' | 'closed' | 'archived' | 'deleted';
 
@@ -49,6 +51,8 @@ export interface Ticket {
 
   messageCount: number;
   transcriptUrl: string | null;
+
+  source: TicketSource | null;
 }
 
 // Which close a side effect belongs to. A reopened ticket closes again, and an idempotency key
@@ -71,6 +75,8 @@ export interface ReserveTicketInput {
   openerId: string;
   priority: TicketPriority;
   subject?: string | undefined;
+  ownerId?: string | undefined;
+  source?: TicketSource | undefined;
 }
 
 export interface CloseTicketInput {
@@ -196,8 +202,11 @@ export interface TicketStats {
 export interface TicketStore {
   // Reserved before the channel exists, because the channel name carries the ticket number and the
   // number can only be allocated safely inside an insert. The row starts out pointing at its own id
-  // so the live-channel unique index still holds while it waits for attach().
+  // so the live-channel unique index still holds while it waits for attach(). A sourced reservation
+  // that collides with an open ticket for the same source returns that ticket instead.
   reserve(input: ReserveTicketInput): Promise<Ticket>;
+
+  bySource(guildId: string, sourceModule: string, sourceRef: string): Promise<Ticket | null>;
 
   attach(guildId: string, ticketId: string, channelId: string): Promise<Ticket | null>;
 
@@ -232,6 +241,7 @@ export interface TicketStore {
   // rather than a second transcript and a second channel deletion. Every mutator below follows it.
   close(input: CloseTicketInput): Promise<Ticket | null>;
 
+  // Also null when another ticket is already open for the same source.
   reopen(guildId: string, ticketId: string, byId: string): Promise<Ticket | null>;
 
   archive(guildId: string, ticketId: string): Promise<Ticket | null>;

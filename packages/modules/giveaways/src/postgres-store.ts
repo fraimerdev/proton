@@ -34,6 +34,7 @@ import type {
   GiveawayStats,
   GiveawayStatus,
   GiveawayStore,
+  LeaveOutcome,
   ListGiveawaysQuery,
   MemberSnapshot,
   MultiplierRow,
@@ -336,34 +337,77 @@ export class DrizzleGiveawayStore implements GiveawayStore {
   // window between the caller's read and this write must not enter a giveaway that has since been
   // paused, cancelled or drawn.
   async enter(entry: NewEntry): Promise<EnterOutcome> {
-    const inserted = await this.#handle.db.execute(sql`
-      insert into ${giveawayEntries} (
-        giveaway_id, user_id, base_entries, total_entries, breakdown, member_snapshot
-      )
-      select ${entry.giveawayId}, ${entry.userId}, ${entry.baseEntries}, ${entry.totalEntries},
-             ${JSON.stringify(entry.breakdown)}::jsonb,
-             ${entry.memberSnapshot === null ? null : JSON.stringify(entry.memberSnapshot)}::jsonb
-      where exists (
-        select 1 from ${giveaways}
-         where ${giveaways.id} = ${entry.giveawayId} and ${giveaways.status} = 'running'
-      )
-      on conflict do nothing
-      returning user_id
-    `);
+    const pressed = sql`${entry.pressedAt.toISOString()}::timestamptz`;
 
-    if (inserted.length > 0) return 'entered';
+    // A Leave or resume committed between the upsert and the read can leave a row it now takes.
+    for (;;) {
+      // Only a row left before this press comes back: a double or late press must not re-enter.
+      const written = await this.#handle.db.execute(sql`
+        insert into ${giveawayEntries} (
+          giveaway_id, user_id, base_entries, total_entries, breakdown, member_snapshot, joined_at
+        )
+        select ${entry.giveawayId}, ${entry.userId}, ${entry.baseEntries}, ${entry.totalEntries},
+               ${JSON.stringify(entry.breakdown)}::jsonb,
+               ${entry.memberSnapshot === null ? null : JSON.stringify(entry.memberSnapshot)}::jsonb,
+               ${pressed}
+        where exists (
+          select 1 from ${giveaways}
+           where ${giveaways.id} = ${entry.giveawayId} and ${giveaways.status} = 'running'
+        )
+        on conflict (giveaway_id, user_id) do update
+           set base_entries = excluded.base_entries,
+               total_entries = excluded.total_entries,
+               breakdown = excluded.breakdown,
+               member_snapshot = excluded.member_snapshot,
+               joined_at = excluded.joined_at,
+               revalidated_at = null,
+               left_at = null
+         where ${giveawayEntries.leftAt} is not null
+           and ${giveawayEntries.leftAt} < excluded.joined_at
+           and ${giveawayEntries.disqualifiedAt} is null
+        returning user_id
+      `);
 
-    // Zero rows is ambiguous — already entered, or no longer running. One extra read, only ever
-    // on the path that is about to refuse the member anyway.
-    const existing = await this.entry(entry.giveawayId, entry.userId);
-    return existing ? 'already-entered' : 'closed';
+      if (written.length > 0) return 'entered';
+
+      const [row] = await this.#handle.db
+        .select({
+          status: giveaways.status,
+          userId: giveawayEntries.userId,
+          leftAt: giveawayEntries.leftAt,
+          leftFirst: sql<boolean | null>`${giveawayEntries.leftAt} < ${pressed}`,
+          disqualifiedAt: giveawayEntries.disqualifiedAt,
+        })
+        .from(giveaways)
+        .leftJoin(
+          giveawayEntries,
+          and(
+            eq(giveawayEntries.giveawayId, giveaways.id),
+            eq(giveawayEntries.userId, entry.userId),
+          ),
+        )
+        .where(eq(giveaways.id, entry.giveawayId))
+        .limit(1);
+
+      if (!row) return 'closed';
+      if (row.userId !== null && row.leftAt === null) return 'already-entered';
+      if (row.status !== 'running') return 'closed';
+      if (row.userId !== null && !row.leftFirst) return 'superseded';
+      if (row.disqualifiedAt !== null) return 'closed';
+    }
   }
 
   async entry(giveawayId: string, userId: string): Promise<EntrantRow | null> {
     const [row] = await this.#handle.db
       .select()
       .from(giveawayEntries)
-      .where(and(eq(giveawayEntries.giveawayId, giveawayId), eq(giveawayEntries.userId, userId)))
+      .where(
+        and(
+          eq(giveawayEntries.giveawayId, giveawayId),
+          eq(giveawayEntries.userId, userId),
+          isNull(giveawayEntries.leftAt),
+        ),
+      )
       .limit(1);
 
     if (!row) return null;
@@ -612,7 +656,7 @@ export class DrizzleGiveawayStore implements GiveawayStore {
                   and b.revoked_at is null
              ), 0)),
              breakdown = v.breakdown,
-             revalidated_at = ${at}
+             revalidated_at = ${at.toISOString()}::timestamptz
         from (values ${values}) as v(user_id, total, breakdown)
        where e.giveaway_id = ${giveawayId} and e.user_id = v.user_id
       returning e.user_id
@@ -812,12 +856,14 @@ export class DrizzleGiveawayStore implements GiveawayStore {
   // anything the caller measured: a resume issued by a worker with a skewed clock must not shorten
   // or lengthen the giveaway.
   async resume(guildId: string, giveawayId: string, at: Date): Promise<Giveaway | null> {
+    // A bare ${at} in sql`` skips the column encoder and postgres.js throws on the raw Date.
+    const instant = sql`${at.toISOString()}::timestamptz`;
     const [row] = await this.#handle.db
       .update(giveaways)
       .set({
         status: 'running',
-        endsAt: sql`${giveaways.endsAt} + (${at} - ${giveaways.pausedAt})`,
-        pausedMs: sql`${giveaways.pausedMs} + (extract(epoch from (${at} - ${giveaways.pausedAt})) * 1000)::bigint`,
+        endsAt: sql`${giveaways.endsAt} + (${instant} - ${giveaways.pausedAt})`,
+        pausedMs: sql`${giveaways.pausedMs} + (extract(epoch from (${instant} - ${giveaways.pausedAt})) * 1000)::bigint`,
         pausedAt: null,
         pausedBy: null,
         pauseReason: null,
@@ -896,21 +942,36 @@ export class DrizzleGiveawayStore implements GiveawayStore {
     return row ? toGiveaway(row) : null;
   }
 
-  async leave(giveawayId: string, userId: string, at: Date): Promise<boolean> {
-    const rows = await this.#handle.db
-      .update(giveawayEntries)
-      .set({ leftAt: at })
-      .where(
-        and(
-          eq(giveawayEntries.giveawayId, giveawayId),
-          eq(giveawayEntries.userId, userId),
-          isNull(giveawayEntries.leftAt),
-          isNull(giveawayEntries.disqualifiedAt),
-        ),
-      )
-      .returning({ userId: giveawayEntries.userId });
+  // A Leave pressed before the member's latest entry must not take them out, however late it lands.
+  async leave(giveawayId: string, userId: string, pressedAt: Date): Promise<LeaveOutcome> {
+    const live = and(
+      eq(giveawayEntries.giveawayId, giveawayId),
+      eq(giveawayEntries.userId, userId),
+      isNull(giveawayEntries.leftAt),
+      isNull(giveawayEntries.disqualifiedAt),
+    );
 
-    return rows.length > 0;
+    const joinedFirst = lte(giveawayEntries.joinedAt, pressedAt);
+
+    // An Enter committed between the update and the read can leave a row it now takes.
+    for (;;) {
+      const rows = await this.#handle.db
+        .update(giveawayEntries)
+        .set({ leftAt: pressedAt })
+        .where(and(live, joinedFirst))
+        .returning({ userId: giveawayEntries.userId });
+
+      if (rows.length > 0) return 'left';
+
+      const [row] = await this.#handle.db
+        .select({ joinedFirst: sql<boolean>`${joinedFirst}` })
+        .from(giveawayEntries)
+        .where(live)
+        .limit(1);
+
+      if (!row) return 'not-entered';
+      if (!row.joinedFirst) return 'superseded';
+    }
   }
 
   async resolve(guildId: string, reference: string): Promise<Giveaway | null> {

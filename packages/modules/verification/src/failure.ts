@@ -25,7 +25,7 @@ export function planFailure(
         plan: {
           kind: 'kick',
           payload: { userId },
-          told: 'You have been removed from the server. You can rejoin and try again.',
+          told: 'You’ve been removed from the server. You can rejoin and try again.',
           logged: 'kicked',
         },
       };
@@ -35,7 +35,7 @@ export function planFailure(
         plan: {
           kind: 'ban',
           payload: { userId, deleteMessageSeconds: 0 },
-          told: 'You have been banned from the server.',
+          told: 'You’ve been banned from the server.',
           logged: 'banned',
         },
       };
@@ -57,7 +57,7 @@ export function planFailure(
         plan: {
           kind: 'timeout',
           payload: { userId, until: new Date(now + capped) },
-          told: `You have been timed out for ${formatDuration(capped)}.`,
+          told: `You’ve been timed out for ${formatDuration(capped)}.`,
           logged: `timed out for ${formatDuration(capped)}`,
         },
       };
@@ -78,7 +78,7 @@ export function planFailure(
         plan: {
           kind: 'add_role',
           payload: { userId, roleId },
-          told: 'Your access has been restricted. Contact a moderator if this was a mistake.',
+          told: 'Your access has been restricted. If you think this is a mistake, contact a moderator.',
           logged: 'quarantined',
         },
       };

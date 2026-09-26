@@ -11,7 +11,8 @@
     "./notice": "./src/notice.ts",
     "./placeholders": "./src/placeholders.ts",
     "./simulation": "./src/simulation.ts",
-    "./render": "./src/render.ts"
+    "./render": "./src/render.ts",
+    "./store": "./src/store.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

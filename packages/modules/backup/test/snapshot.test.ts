@@ -105,7 +105,7 @@ describe('the report an admin gets at backup time', () => {
     const { report } = buildSnapshot(fixtureLayout('channelObfuscated'), NOW);
     const text = describeCapture(report).join('\n');
 
-    expect(text).toContain('could NOT be backed up');
+    expect(text).toContain('couldn’t be backed up');
     expect(text).toContain(`<#${HIDDEN_CHANNEL}>`);
     expect(text).toContain('View Channel');
 
@@ -119,13 +119,13 @@ describe('the report an admin gets at backup time', () => {
     const text = describeCapture(report).join('\n');
 
     expect(text).toContain('Backed up 1 channel and 2 roles.');
-    expect(text).not.toContain('could NOT');
+    expect(text).not.toContain('couldn’t be backed up');
   });
 
   test('warns that a REST-sourced snapshot cannot count what is missing from it', () => {
     const { report } = buildSnapshot(layout([rawChannel()], [], 'rest'), NOW);
 
-    expect(describeCapture(report).join('\n')).toContain('may therefore be missing channels');
+    expect(describeCapture(report).join('\n')).toContain('may be missing channels');
   });
 
   test('counts objects it could not read instead of dropping them silently', () => {
@@ -133,7 +133,7 @@ describe('the report an admin gets at backup time', () => {
 
     expect(snapshot.channels).toHaveLength(1);
     expect(report.unreadable).toBe(2);
-    expect(describeCapture(report).join('\n')).toContain('could not be read by this version');
+    expect(describeCapture(report).join('\n')).toContain('I couldn’t read 2 items Discord sent');
   });
 
   test('loses only the odd object, not the whole backup', () => {

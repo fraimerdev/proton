@@ -159,7 +159,7 @@ async function excuse(
 ): Promise<TrapOutcome> {
   ctx.logger.info(
     `${message.authorId} posted in honeypot channel ${message.channelId} and was left alone: ` +
-      `${EXEMPT_LABEL[reason]}.`,
+      EXEMPT_LABEL[reason],
     {
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
@@ -168,11 +168,7 @@ async function excuse(
     },
   );
 
-  await report(
-    ctx,
-    deps,
-    incidentOf(ctx, message, 'Nothing — they are exempt', 'exempt', EXEMPT_LABEL[reason]),
-  );
+  await report(ctx, deps, incidentOf(ctx, message, 'None', 'exempt', EXEMPT_LABEL[reason]));
 
   await count(ctx, rawDeps, channel, message, deps.now(), 'exempt');
 
@@ -363,7 +359,7 @@ async function deleteTrigger(
     moduleId: MODULE_ID,
     kind: 'delete_message',
     actorId: HONEYPOT_ACTOR,
-    reason: 'Honeypot: removing the message that sprang the trap.',
+    reason: 'Honeypot: deleting the message that triggered it.',
     payload: { channelId: message.channelId, messageId: message.messageId },
     dryRun: false,
     record: false,
@@ -378,6 +374,13 @@ async function deleteTrigger(
       { guildId: ctx.guildId, moduleId: MODULE_ID, code: result.failure?.code },
     );
   }
+}
+
+function windowField(seconds: number): string {
+  if (seconds === 0) return 'None';
+
+  const described = describeWindow(seconds);
+  return `${described.charAt(0).toUpperCase()}${described.slice(1)}`;
 }
 
 function incidentOf(
@@ -398,7 +401,7 @@ function incidentOf(
     action,
     window:
       ctx.config.action === 'softban' || ctx.config.action === 'ban'
-        ? describeWindow(ctx.config.deleteMessageSeconds)
+        ? windowField(ctx.config.deleteMessageSeconds)
         : null,
     outcome,
     ...(detail ? { detail } : {}),
@@ -451,10 +454,10 @@ async function publish(
     moduleId: MODULE_ID,
     trigger: 'honeypot',
     actorId: message.authorId,
-    summary: `Posted in <#${message.channelId}>, which is a honeypot channel.`,
+    summary: `Posted in <#${message.channelId}>, a Honeypot bait channel.`,
     actionsTaken:
       outcome === 'ban_stuck'
-        ? [`${plan.describe} — the unban FAILED and the member is still banned`]
+        ? [`${plan.describe}, but the unban FAILED and the member is still banned`]
         : [plan.describe],
     ownerExempt: false,
   });

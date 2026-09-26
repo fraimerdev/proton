@@ -72,7 +72,7 @@ export async function refreshCounters(
     } catch (error) {
       creationFailures.push({
         name: creation.name,
-        humanReason: `I made the channel but could not record it: ${detailOf(error)}`,
+        humanReason: `I created it but couldn't keep track of it (${detailOf(error)}).`,
       });
       continue;
     }
@@ -154,8 +154,8 @@ async function readOwned(
 
     return {
       failed:
-        'I could not look up the counter channels I made for this server, so I left every one ' +
-        'of them alone rather than risk making duplicates. Nothing was changed.',
+        "I couldn't look up the counter channels I created in this server, so I left them all " +
+        'alone rather than risk creating duplicates. Nothing was changed.',
     };
   }
 }

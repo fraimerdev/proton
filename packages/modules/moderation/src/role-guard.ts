@@ -18,8 +18,8 @@ export function guardRole(input: RoleGuardInput): Refusal | null {
   if (roleId === state.everyoneRoleId) {
     return {
       refusal:
-        '@everyone is not a role I can hand out — every member already has it, and Discord does ' +
-        'not allow it to be added or removed.',
+        "@everyone can't be added or removed. Every member already has it, and Discord doesn't " +
+        'allow it to change.',
     };
   }
 
@@ -27,24 +27,24 @@ export function guardRole(input: RoleGuardInput): Refusal | null {
   if (!role) {
     return {
       refusal:
-        `I don't have <@&${roleId}> in this server's role list yet, so I can't check I'm ` +
-        'allowed to hand it out. Try again shortly.',
+        `I don't have <@&${roleId}> in this server's role list yet, so I can't check that I'm ` +
+        'allowed to change it. Try again in a moment.',
     };
   }
 
   if (role.managed === true) {
     return {
       refusal:
-        `<@&${roleId}> is managed by Discord — it belongs to a bot, an integration or Server ` +
-        'Boosting, and nobody can assign it by hand, me included.',
+        `<@&${roleId}> is managed by Discord. It belongs to a bot, an integration or Server ` +
+        'Boosting, so nobody can add or remove it by hand, including me.',
     };
   }
 
   if (role.position >= highestRolePosition(state.roles, state.botRoleIds)) {
     return {
       refusal:
-        `<@&${roleId}> is above or equal to my own highest role, so Discord will not let me ` +
-        'hand it out. Move my role higher in Server Settings → Roles.',
+        `<@&${roleId}> is at or above my highest role, so Discord won't let me add or remove ` +
+        'it. Move my role higher in Server Settings → Roles.',
     };
   }
 
@@ -61,8 +61,8 @@ export function guardRole(input: RoleGuardInput): Refusal | null {
   if (role.position >= highestRolePosition(state.roles, input.actorRoleIds)) {
     return {
       refusal:
-        `<@&${roleId}> is above or equal to your own highest role, so I won't hand it out on ` +
-        'your behalf — Discord would refuse you the same change.',
+        `<@&${roleId}> is at or above your highest role, so I won't add or remove it for you. ` +
+        "Discord wouldn't let you make that change yourself.",
     };
   }
 
@@ -108,8 +108,8 @@ export function guardTarget(input: TargetGuardInput): Refusal | null {
   if (highestRolePosition(state.roles, input.targetRoleIds) >= actorHighest) {
     return {
       refusal:
-        `<@${input.targetId}>'s highest role is above or equal to your own, so I won't change ` +
-        'their roles on your behalf — Discord would refuse you the same change.',
+        `<@${input.targetId}>'s highest role is at or above yours, so I won't change their ` +
+        "roles for you. Discord wouldn't let you make that change yourself.",
     };
   }
 

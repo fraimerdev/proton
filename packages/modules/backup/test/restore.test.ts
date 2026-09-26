@@ -175,7 +175,7 @@ describe('a channel Proton could not see (Gate 2)', () => {
     const snapshot = buildSnapshot(fixtureLayout('channelObfuscated'), NOW).snapshot;
     const text = describeRestore(plan(snapshot, layout([], [everyone]))).join('\n');
 
-    expect(text).toContain('cannot be restored');
+    expect(text).toContain('can’t be restored');
     expect(text).toContain(`<#${HIDDEN_CHANNEL}>`);
     expect(text).toContain('View Channel');
     expect(text).toContain('take a new backup');
@@ -222,7 +222,7 @@ describe('refusals', () => {
 
     expect(isRestoreRefusal(result)).toBe(true);
     expect(isRestoreRefusal(result) && result.refusal).toContain(
-      'leaves out every channel I cannot see',
+      'leaves out every channel I can’t see',
     );
   });
 

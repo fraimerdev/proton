@@ -6,13 +6,13 @@ export const MAX_REASON_LENGTH = 512;
 
 export const RESPONSE_LABELS: Record<RaidResponse, string> = {
   verify: 'being given the verification role',
-  quarantine: 'being quarantined for staff review',
+  quarantine: 'being quarantined for moderators to review',
   kick: 'being kicked',
 };
 
 const RESPONSE_ROLE_SETTINGS: Record<RaidResponse, string | null> = {
-  verify: 'a verification role',
-  quarantine: 'a quarantine role',
+  verify: 'verification role',
+  quarantine: 'quarantine role',
   kick: null,
 };
 
@@ -25,7 +25,7 @@ export interface ResponsePlan {
 
 export type ResponsePlanResult = { plan: ResponsePlan } | { unconfigured: string };
 
-const DASHBOARD = 'the Anti-raid page of the Proton dashboard';
+const DASHBOARD = 'the Anti-Raid page of the Proton dashboard';
 
 export function responseKind(response: RaidResponse): ActionKind {
   return response === 'kick' ? 'kick' : 'add_role';
@@ -47,8 +47,8 @@ export function responseUnconfigured(config: AntiraidConfig): string | null {
   if (setting === null || responseRoleId(config) !== undefined) return null;
 
   return (
-    `The ${config.response} response has no role configured, so I cannot act on the accounts ` +
-    `I flag. Set ${setting} on ${DASHBOARD}, or change the response to one that needs no role.`
+    `No ${setting} is set, so Proton can't act on flagged members. Set one on ${DASHBOARD}, ` +
+    "or choose an action that doesn't need a role."
   );
 }
 
@@ -66,7 +66,7 @@ export function planResponse(
     plan: {
       kind: responseKind(config.response),
       payload: roleId === undefined ? { userId } : { userId, roleId },
-      reason: `Anti-raid ${score.score}/${MAX_JOIN_SCORE}: ${score.reasons.join(' ')}`.slice(
+      reason: `Anti-Raid ${score.score}/${MAX_JOIN_SCORE}: ${score.reasons.join(' ')}`.slice(
         0,
         MAX_REASON_LENGTH,
       ),

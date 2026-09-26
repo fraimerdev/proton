@@ -16,6 +16,7 @@ export type CommandGateDecision = { allowed: true } | { allowed: false; refusal:
 
 export interface CommandGateInput {
   commandName: string;
+  displayName?: string;
 
   memberRoleIds: readonly string[];
   config: PermissionsConfig;
@@ -53,7 +54,7 @@ export function evaluateCommandGate(input: CommandGateInput): CommandGateDecisio
       code: 'missing_required_role',
       commandName: input.commandName,
       requiredRoleIds: [...required],
-      humanReason: describeRefusal(input.commandName, required),
+      humanReason: describeRefusal(input.displayName || input.commandName, required),
     },
   };
 }
@@ -69,7 +70,7 @@ function describeRefusal(commandName: string, required: readonly string[]): stri
 
   return (
     `You need ${roles} to use /${commandName} in this server. ` +
-    'This is a Proton command override, not a Discord permission — a server admin can change it ' +
-    `in the dashboard under Permissions → /${commandName}.`
+    'This is a Proton command override, not a Discord permission. A server admin can change it ' +
+    'in the Proton dashboard under Permissions.'
   );
 }

@@ -19,10 +19,9 @@ export function announceKey(guildId: string, messageId: string): string {
 
 export function renderAnnouncement(record: PollRecord): string {
   return (
-    `**Poll closed** — “${record.question}”\n` +
+    `**Poll closed:** “${record.question}”\n` +
     `${pollLink(record.guildId, record.channelId, record.messageId)}\n` +
-    'Discord keeps the final tally on the poll itself and I cannot read it back, so open ' +
-    'the poll above for the counts.'
+    'The final results are on the poll.'
   );
 }
 

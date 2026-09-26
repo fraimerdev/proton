@@ -46,13 +46,15 @@ const CAUGHT_NOUN: Record<HoneypotAction, string> = {
 };
 
 const CONSEQUENCE: Record<HoneypotAction, string> = {
-  softban: 'you are removed from the server and let straight back in',
-  ban: 'you are banned from the server',
-  kick: 'you are removed from the server',
-  timeout: 'you are timed out and cannot speak',
-  warn: 'it is recorded against your account',
-  none: 'it is reported to the moderators',
+  softban: 'you’re removed from the server, but can rejoin straight away',
+  ban: 'you’re banned from the server',
+  kick: 'you’re removed from the server',
+  timeout: 'you’re timed out',
+  warn: 'you get a warning',
+  none: 'it’s reported to the moderators',
 };
+
+const OTHER_NOUN: Record<string, string> = { exempt: 'Exempt' };
 
 export const DM_ACTION_WORD: Record<HoneypotAction, string> = {
   softban: 'removed from the server, and can rejoin straight away',
@@ -75,7 +77,7 @@ export function purgeSentence(config: HoneypotConfig): string {
   const purges = config.action === 'softban' || config.action === 'ban';
 
   return purges && config.deleteMessageSeconds > 0
-    ? ` Everything you posted in ${describeWindow(config.deleteMessageSeconds)} is deleted with you.`
+    ? ` Your messages from ${describeWindow(config.deleteMessageSeconds)} are deleted too.`
     : '';
 }
 
@@ -283,9 +285,9 @@ export function buildStatsComponents(view: StatsView): Record<string, unknown>[]
 
   if (view.total === 0) {
     body.push(
-      text('Nothing has walked into this trap yet. That is the outcome to hope for.'),
+      text('Nothing has walked into this trap yet.'),
       separator(),
-      text('It is armed and watching. Every message posted here trips it.'),
+      text('It’s armed. Any message posted here sets it off.'),
     );
 
     return [container(HONEYPOT_COLOUR, ...body)];
@@ -300,7 +302,10 @@ export function buildStatsComponents(view: StatsView): Record<string, unknown>[]
 
   const breakdown = Object.entries(view.byAction)
     .filter(([, count]) => count > 0)
-    .map(([action, count]) => `${CAUGHT_NOUN[action as HoneypotAction] ?? action} ×${count}`)
+    .map(
+      ([action, count]) =>
+        `${CAUGHT_NOUN[action as HoneypotAction] ?? OTHER_NOUN[action] ?? action} ×${count}`,
+    )
     .join(' · ');
 
   if (breakdown) body.push(separator(), text(`**What happened to them**\n${breakdown}`));
@@ -322,7 +327,7 @@ export function buildStatsComponents(view: StatsView): Record<string, unknown>[]
     text(
       lines
         ? `**Most recent**\n${lines}`
-        : 'Nobody in the last 30 days — that is as far back as the member list is kept.',
+        : 'Nobody in the last 30 days. The list only goes back that far.',
     ),
   );
 

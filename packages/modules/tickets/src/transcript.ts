@@ -631,7 +631,8 @@ function messagesBlock(input: TranscriptInput): string {
     return section(
       'Messages',
       `<div class="card"><p class="group quiet">${escapeHtml(
-        'No messages were kept for this ticket. Message capture is off unless an admin turns it on.',
+        'No messages were saved for this ticket. Messages are only saved when message capture is ' +
+          'on for its ticket type, and they are deleted after 30 days.',
       )}</p></div>`,
     );
   }
@@ -771,7 +772,7 @@ export function renderTranscriptText(input: TranscriptInput): string {
   const priority = priorityKey(ticket.priority);
 
   const lines: string[] = [
-    `${ticketLabel(ticket)} — ${oneLine(input.typeName, NAME_LIMIT)}`,
+    `${ticketLabel(ticket)} · ${oneLine(input.typeName, NAME_LIMIT)}`,
     `Server:      ${oneLine(input.guildName, NAME_LIMIT)}`,
     `Status:      ${ticket.status}`,
     `Priority:    ${PRIORITY_LABELS[priority]}`,
@@ -821,7 +822,7 @@ export function renderTranscriptText(input: TranscriptInput): string {
   lines.push('', 'MESSAGES');
 
   if (input.messages.length === 0) {
-    lines.push('No messages were kept for this ticket.', '');
+    lines.push('No messages were saved for this ticket.', '');
   }
 
   const byId = new Map(input.messages.map((message) => [message.messageId, message]));

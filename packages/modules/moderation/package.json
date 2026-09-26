@@ -8,8 +8,15 @@
     ".": "./src/index.ts",
     "./config": "./src/config.ts",
     "./members": "./src/members.ts",
+    "./placeholders": "./src/placeholders.ts",
+    "./punish-store": "./src/punish/postgres-store.ts",
+    "./report-card": "./src/reports/card.ts",
+    "./reports-view": "./src/reports/view.ts",
+    "./rule-summary": "./src/reports/rule-summary.ts",
     "./run-store": "./src/run-store.ts",
-    "./store": "./src/store.ts"
+    "./simulation": "./src/simulation.ts",
+    "./store": "./src/store.ts",
+    "./tables": "./src/tables.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -22,5 +29,8 @@
     "drizzle-orm": "^0.45.2",
     "ioredis": "^6.0.0",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@proton/fixtures": "workspace:*"
   }
 }

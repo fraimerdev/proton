@@ -54,12 +54,12 @@ export function scoreJoin(signals: JoinSignals, settings: ScoreSettings): RaidSc
     score += SIGNAL_WEIGHTS.joinBurst;
     reasons.push(
       `${signals.joinsInWindow} accounts joined within ${settings.joinWindow}, at or above this ` +
-        `server's threshold of ${settings.joinThreshold}.`,
+        `server's raid threshold of ${settings.joinThreshold}.`,
     );
   }
 
   if (signals.accountAgeMs === null) {
-    reasons.push('The account age could not be read from the user id, so it was not weighed.');
+    reasons.push("The account age couldn't be read from the user ID, so it wasn't scored.");
   } else if (signals.accountAgeMs < settings.brandNewAccountMs) {
     score += SIGNAL_WEIGHTS.brandNewAccount;
     reasons.push(
@@ -75,7 +75,7 @@ export function scoreJoin(signals: JoinSignals, settings: ScoreSettings): RaidSc
   }
 
   if (signals.avatarless === null) {
-    reasons.push('The join carried no profile details, so the avatar was not weighed.');
+    reasons.push("The join had no profile details, so the avatar wasn't scored.");
   } else if (signals.avatarless) {
     score += SIGNAL_WEIGHTS.avatarless;
     reasons.push('The account has no avatar.');

@@ -116,6 +116,7 @@ describe('pause holds the remaining time', () => {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: new Date(clock.now),
     });
 
     expect(entered).toBe('closed');
@@ -359,6 +360,7 @@ describe('scheduled giveaways', () => {
       totalEntries: 1,
       breakdown: [],
       memberSnapshot: null,
+      pressedAt: new Date(clock.now),
     });
 
     expect(entered).toBe('closed');
@@ -380,6 +382,7 @@ describe('scheduled giveaways', () => {
         totalEntries: 1,
         breakdown: [],
         memberSnapshot: null,
+        pressedAt: new Date(clock.now),
       }),
     ).toBe('entered');
   });

@@ -60,9 +60,9 @@ export interface HoneypotDmFacts {
 
 const GROUP = 'Honeypot';
 
-const SAMPLE_CONSEQUENCE = 'you are removed from the server and let straight back in';
+const SAMPLE_CONSEQUENCE = 'you’re removed from the server, but can rejoin straight away';
 
-const SAMPLE_PURGE = ' Everything you posted in the last 7 days is deleted with you.';
+const SAMPLE_PURGE = ' Your messages from the last 7 days are deleted too.';
 
 const SAMPLE_ACTION = 'removed from the server, and can rejoin straight away';
 
@@ -70,7 +70,7 @@ const CONSEQUENCE: PlaceholderDefinitionInput = {
   key: 'honeypot.consequence',
   aliases: ['consequence'],
   label: 'What happens',
-  description: 'What happens to anyone who posts in this channel, in the words the notice uses',
+  description: 'What happens to anyone who posts in this channel, in the warning message’s words',
   group: GROUP,
   type: 'markdown',
   example: v.markdown(SAMPLE_CONSEQUENCE),
@@ -81,7 +81,7 @@ const PURGE: PlaceholderDefinitionInput = {
   aliases: ['purge'],
   label: 'Messages deleted',
   description:
-    'The sentence saying how far back their messages are deleted; empty when nothing is deleted',
+    'The sentence saying how far back their messages are deleted. Empty when nothing is deleted.',
   group: GROUP,
   type: 'markdown',
   example: v.markdown(SAMPLE_PURGE),
@@ -100,7 +100,7 @@ const ACTION: PlaceholderDefinitionInput = {
   key: 'honeypot.action',
   aliases: ['action'],
   label: 'What was done',
-  description: 'What was done to the member, in the words the direct message uses',
+  description: 'What was done to the member, in the DM’s words',
   group: GROUP,
   type: 'markdown',
   example: v.markdown(SAMPLE_ACTION),

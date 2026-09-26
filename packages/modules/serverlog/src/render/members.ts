@@ -1,7 +1,15 @@
 import { snowflakeCreatedAt } from '@proton/core';
 import { ServerLogColors } from '../colours.ts';
 import { type LogLine, logEmbed, timestampLine, userMention } from '../embed.ts';
-import { changeOf, type RenderInput, type RenderResult, record, str } from './types.ts';
+import {
+  changeOf,
+  NONE,
+  type RenderInput,
+  type RenderResult,
+  record,
+  str,
+  UNKNOWN,
+} from './types.ts';
 
 interface MemberSubject {
   id: string;
@@ -27,7 +35,7 @@ function accountAgeLine(userId: string): LogLine {
   const created = snowflakeCreatedAt(userId);
 
   return created === null
-    ? { label: 'Account created', value: 'unknown' }
+    ? { label: 'Account created', value: UNKNOWN }
     : { label: 'Account created', mention: timestampLine(created / 1000) };
 }
 
@@ -42,7 +50,7 @@ export function renderMemberJoined(input: RenderInput): RenderResult | null {
       colour: ServerLogColors.Add,
       lines: [
         { label: 'Member', mention: userMention(member.id), value: `@${member.username}` },
-        { label: 'Id', value: member.id },
+        { label: 'ID', value: member.id },
         accountAgeLine(member.id),
       ],
       executor: null,
@@ -63,7 +71,7 @@ export function renderMemberLeft(input: RenderInput): RenderResult | null {
       colour: ServerLogColors.Remove,
       lines: [
         { label: 'Member', mention: userMention(member.id), value: `@${member.username}` },
-        { label: 'Id', value: member.id },
+        { label: 'ID', value: member.id },
       ],
       executor: null,
       occurredAt: input.occurredAt,
@@ -83,7 +91,7 @@ export function renderScreeningPassed(input: RenderInput): RenderResult | null {
       colour: ServerLogColors.Modify,
       lines: [
         { label: 'Member', mention: userMention(member.id), value: `@${member.username}` },
-        { label: 'Id', value: member.id },
+        { label: 'ID', value: member.id },
       ],
       executor: null,
       occurredAt: input.occurredAt,
@@ -106,8 +114,8 @@ export function renderNicknameChanged(input: RenderInput): RenderResult | null {
       colour: ServerLogColors.Modify,
       lines: [
         { label: 'Member', mention: userMention(targetId), value: targetId },
-        { label: 'Before', value: before ?? 'none' },
-        { label: 'After', value: after ?? 'none' },
+        { label: 'Before', value: before ?? NONE },
+        { label: 'After', value: after ?? NONE },
       ],
       executor: input.executor,
       occurredAt: input.occurredAt,

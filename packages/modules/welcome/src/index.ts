@@ -33,7 +33,6 @@ export {
 } from './config.ts';
 export {
   BOOST_EVENT_TYPES,
-  BOOST_MESSAGE_TYPES,
   createBoostListener,
   createGreetingListener,
   type GreetingPayloadFacts,
@@ -71,7 +70,7 @@ export function createWelcomeModule(
 ): ModuleManifest<typeof welcomeConfigSchema> {
   return {
     id: 'welcome',
-    name: 'Welcome',
+    name: 'Welcomer',
     category: 'engagement',
     configSchema: welcomeConfigSchema,
     formSchema: welcomeFormSchema,

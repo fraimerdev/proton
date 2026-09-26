@@ -134,6 +134,7 @@ describe('requirement logic at the join', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
         requirements: [
           { providerId: 'leveling.pass', config: {} },
           { providerId: 'leveling.failA', config: {} },
@@ -155,6 +156,7 @@ describe('requirement logic at the join', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
         requirements: [
           { providerId: 'leveling.pass', config: {} },
           { providerId: 'leveling.failA', config: {} },
@@ -173,7 +175,14 @@ describe('requirement logic at the join', () => {
 
     const outcome = await join(
       { store, providers: new ProviderRegistry() },
-      { giveaway, ctx: ctxFor(userId(1)), requirements: [], multipliers: [], blacklist: [] },
+      {
+        giveaway,
+        ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
+        requirements: [],
+        multipliers: [],
+        blacklist: [],
+      },
     );
 
     expect(outcome.outcome).toBe('entered');
@@ -189,6 +198,7 @@ describe('requirement logic at the join', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
         requirements: [
           { providerId: 'leveling.failA', config: {} },
           { providerId: 'leveling.failB', config: {} },
@@ -222,6 +232,7 @@ describe('blacklist and rate limiting', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
         requirements: [],
         multipliers: [],
         blacklist: [{ subjectType: 'user', subjectId: userId(1) }],
@@ -241,6 +252,7 @@ describe('blacklist and rate limiting', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1), [ROLE_B]),
+        pressedAt: NOW,
         requirements: [],
         multipliers: [],
         blacklist: [{ subjectType: 'role', subjectId: ROLE_B }],
@@ -266,6 +278,7 @@ describe('blacklist and rate limiting', () => {
     const input = {
       giveaway,
       ctx: ctxFor(userId(1)),
+      pressedAt: NOW,
       requirements: [],
       multipliers: [],
       blacklist: [],
@@ -287,6 +300,7 @@ describe('blacklist and rate limiting', () => {
     const input = {
       giveaway,
       ctx: ctxFor(userId(1)),
+      pressedAt: NOW,
       requirements: [],
       multipliers: [],
       blacklist: [],
@@ -308,7 +322,14 @@ describe('blacklist and rate limiting', () => {
 
     const outcome = await join(
       { store, providers: new ProviderRegistry() },
-      { giveaway, ctx: ctxFor(userId(1)), requirements: [], multipliers: [], blacklist: [] },
+      {
+        giveaway,
+        ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
+        requirements: [],
+        multipliers: [],
+        blacklist: [],
+      },
     );
 
     expect(outcome.outcome).toBe('closed');
@@ -325,6 +346,7 @@ describe('entry weight at the join', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
         requirements: [],
         multipliers: [{ providerId: 'leveling.role', config: { amount: 4 }, mode: 'add' }],
         blacklist: [],
@@ -347,6 +369,7 @@ describe('entry weight at the join', () => {
       {
         giveaway,
         ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
         requirements: [],
         multipliers: [{ providerId: 'leveling.role', config: { amount: 40 }, mode: 'add' }],
         blacklist: [],
@@ -363,7 +386,14 @@ describe('entry weight at the join', () => {
 
     await join(
       { store, providers: new ProviderRegistry() },
-      { giveaway, ctx: ctxFor(userId(1)), requirements: [], multipliers: [], blacklist: [] },
+      {
+        giveaway,
+        ctx: ctxFor(userId(1)),
+        pressedAt: NOW,
+        requirements: [],
+        multipliers: [],
+        blacklist: [],
+      },
     );
 
     expect(store.entries[0]?.memberSnapshot?.roleIds).toEqual([ROLE_A]);

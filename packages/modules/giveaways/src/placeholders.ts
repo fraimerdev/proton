@@ -117,7 +117,7 @@ const GIVEAWAY_DEFINITIONS: readonly PlaceholderDefinitionInput[] = [
   {
     key: 'giveaway.claim_deadline',
     label: 'Claim by',
-    description: 'When the prize has to be claimed by. Empty when winners do not need to claim.',
+    description: 'When the prize must be claimed by. Empty when winners don’t need to claim.',
     group: GROUP,
     type: 'datetime',
     example: v.datetime(SAMPLE_GIVEAWAY_WIN.claimDeadline),

@@ -146,7 +146,7 @@ describe('leveling conditions', () => {
 
     expect(passing.passed).toBe(true);
     expect(failing.passed).toBe(false);
-    expect(failing.failures[0]?.humanReason).toBe('You are level 2 and need level 5.');
+    expect(failing.failures[0]?.humanReason).toBe('You’re level 2 and need level 5.');
   });
 
   test('leveling.xp reports progress toward the threshold', async () => {

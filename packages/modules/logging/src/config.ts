@@ -11,7 +11,7 @@ export const loggingConfigSchema = z.object({
     .default(false)
     .register(protonFields, {
       label: 'Enabled',
-      description: `Stores message content — personal data — for ${MESSAGE_LOG_RETENTION_DAYS} days`,
+      description: `Stores message text (personal data) for ${MESSAGE_LOG_RETENTION_DAYS} days.`,
     }),
 
   logEdits: z.boolean().default(true).register(protonFields, {
@@ -38,7 +38,9 @@ export const loggingConfigSchema = z.object({
     .default(false)
     .register(protonFields, {
       label: 'Remember recent message text',
-      description: `Personal data, held in memory apart from the ${MESSAGE_LOG_RETENTION_DAYS}-day archive`,
+      description:
+        'Stores the text, author and attachment links of recent messages, so edit and delete ' +
+        'logs can show what changed and who wrote it.',
     }),
 
   cacheRetention: durationStringSchema

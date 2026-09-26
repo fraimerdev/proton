@@ -11,6 +11,8 @@ export const pingCommand: CommandDefinition<PingConfig> = {
     .setDescription('Check that Proton is responding.')
     .toJSON(),
 
+  reply: { default: 'public', toggleable: [''] },
+
   async handler(ctx) {
     if (!ctx.config.enabled) return;
 
@@ -34,7 +36,7 @@ export const pingCommand: CommandDefinition<PingConfig> = {
         interactionId: ctx.interaction.id,
         interactionToken: ctx.interaction.token,
         content: ctx.config.response,
-        ephemeral: false,
+        ephemeral: ctx.privateReply ?? false,
       },
     });
 

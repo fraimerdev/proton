@@ -188,7 +188,7 @@ describe('/remind', () => {
     await h.run('remind', remind(), { config: { enabled: false } });
 
     expect(h.reminders.rows.size).toBe(0);
-    expect(h.replyContent()).toContain('disabled');
+    expect(h.replyContent()).toContain('Reminders is off in this server');
   });
 
   test('names the missing wiring when the store was never bound', async () => {
@@ -259,6 +259,186 @@ describe('delivery', () => {
     await expect(h.deliver({ reminderId: reminder.id })).rejects.toThrow(/Send Messages/);
 
     expect((await h.reminders.get(GUILD, reminder.id))?.deliveredAt).toBeNull();
+  });
+
+  test('a channel Discord will not let Proton post in drops the reminder instead of retrying', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 403, body: { code: 50013, message: 'Missing Permissions' } };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+
+    const warned = h.logs.filter(
+      (line) => line.level === 'warn' && line.message.includes('dropped'),
+    );
+    expect(warned).toHaveLength(1);
+    expect(warned[0]?.message).toContain(`<#${CHANNEL}>`);
+    expect(warned[0]?.message).toContain('Send Messages');
+    expect(warned[0]?.message).not.toContain('take the bread out');
+  });
+
+  test('a channel Proton cannot see drops the reminder and names View Channel, not Send Messages', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 403, body: { code: 50001, message: 'Missing Access' } };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+
+    const warned = h.logs.filter(
+      (line) => line.level === 'warn' && line.message.includes('dropped'),
+    );
+    expect(warned).toHaveLength(1);
+    expect(warned[0]?.message).toContain(`<#${CHANNEL}>`);
+    expect(warned[0]?.message).toContain('View Channel');
+    expect(warned[0]?.message).not.toContain('Send Messages');
+  });
+
+  test('a 403 with no Discord code, such as a Cloudflare block, is dropped without naming a permission', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 403, body: 'error code: 40333' };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+
+    const warned = h.logs.filter(
+      (line) => line.level === 'warn' && line.message.includes('dropped'),
+    );
+    expect(warned).toHaveLength(1);
+    expect(warned[0]?.message).toContain(`Discord refused to post in <#${CHANNEL}> (403).`);
+    expect(warned[0]?.message).not.toContain('Send Messages');
+    expect(warned[0]?.message).not.toContain('View Channel');
+  });
+
+  test('a 403 with a code Proton has no wording for is dropped and names the code', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = {
+      status: 403,
+      body: { code: 40004, message: 'Send messages has been temporarily disabled' },
+    };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+    expect(
+      h.logs.some(
+        (line) =>
+          line.level === 'warn' &&
+          line.message.includes(`Discord refused to post in <#${CHANNEL}> (403, code 40004).`),
+      ),
+    ).toBe(true);
+  });
+
+  test('a 404 with a code other than Unknown Channel is dropped and names the code', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 404, body: { code: 10004, message: 'Unknown Guild' } };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+    expect(
+      h.logs.some(
+        (line) =>
+          line.level === 'warn' &&
+          line.message.includes(`Discord answered 404 (code 10004) when Proton tried to post in`),
+      ),
+    ).toBe(true);
+    expect(h.logs.some((line) => line.message.includes('no longer exists'))).toBe(false);
+  });
+
+  test('a locked thread drops the reminder whatever status Discord answers with', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 400, body: { code: 160005, message: 'Thread is locked' } };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+    expect(
+      h.logs.some(
+        (line) =>
+          line.level === 'warn' &&
+          line.message.includes(`<#${CHANNEL}>`) &&
+          line.message.includes('locked or archived thread'),
+      ),
+    ).toBe(true);
+  });
+
+  test('an empty 404 means the channel is gone and drops the reminder', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 404, body: undefined };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+    expect(
+      h.logs.some((line) => line.level === 'warn' && line.message.includes('no longer exists')),
+    ).toBe(true);
+  });
+
+  test('a channel that no longer exists drops the reminder instead of retrying', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 404, body: { code: 10003, message: 'Unknown Channel' } };
+
+    await h.deliver({ reminderId: reminder.id });
+
+    expect(await h.reminders.get(GUILD, reminder.id)).toBeNull();
+    expect(
+      h.logs.some(
+        (line) =>
+          line.level === 'warn' &&
+          line.message.includes(`<#${CHANNEL}>`) &&
+          line.message.includes('no longer exists'),
+      ),
+    ).toBe(true);
+  });
+
+  test('a replayed schedule after a refusal does not ask Discord again', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 403, body: { code: 50001, message: 'Missing Access' } };
+
+    await h.deliver({ reminderId: reminder.id });
+    await h.deliver({ reminderId: reminder.id });
+
+    const posts = h.calls().filter((call) => call.path === `/channels/${CHANNEL}/messages`);
+    expect(posts).toHaveLength(1);
+  });
+
+  test('a refused reminder stops showing as waiting and frees its place under the limit', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 404, body: { code: 10003, message: 'Unknown Channel' } };
+
+    await h.deliver({ reminderId: reminder.id });
+    h.rest.response = { status: 200, body: {} };
+    await h.run('reminders', subcommand('list', []));
+
+    expect(h.bodies().at(-1)?.data?.content).toContain('no reminders waiting');
+    expect(await h.reminders.countPending(GUILD, MEMBER)).toBe(0);
+  });
+
+  test('a failure that is not a refusal leaves the reminder pending for the retry', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = {
+      status: 502,
+      body: { error: 'rest_proxy_upstream_failure', message: 'Service Unavailable' },
+    };
+
+    await expect(h.deliver({ reminderId: reminder.id })).rejects.toThrow(`<#${CHANNEL}>`);
+
+    expect((await h.reminders.get(GUILD, reminder.id))?.deliveredAt).toBeNull();
+    expect(h.logs.some((line) => line.message.includes('dropped'))).toBe(false);
   });
 
   test('a schedule whose data this build cannot read is dropped loudly, not retried', async () => {
@@ -347,6 +527,19 @@ describe('/reminders cancel', () => {
     await h.run('reminders', subcommand('cancel', [stringOption('reminder', 'nothing-like-it')]));
 
     expect(h.replyContent()).toContain('/reminders list');
+    expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
+  });
+
+  test('cancelling a reminder that was dropped says it may have been dropped, not only posted', async () => {
+    const h = harness();
+    const reminder = await set(h);
+    h.rest.response = { status: 404, body: { code: 10003, message: 'Unknown Channel' } };
+    await h.deliver({ reminderId: reminder.id });
+    h.rest.response = { status: 200, body: {} };
+
+    await h.run('reminders', subcommand('cancel', [stringOption('reminder', reminder.id)]));
+
+    expect(h.replyEmbed()?.description).toContain('dropped because I couldn’t post in its channel');
     expect(h.replyEmbed()?.color).toBe(STATUS_ERROR_COLOUR);
   });
 

@@ -356,7 +356,7 @@ describe('what a greeting refuses', () => {
     });
 
     expect(refused.success).toBe(false);
-    expect(refused.error?.issues[0]?.message).toContain('link buttons and nothing else');
+    expect(refused.error?.issues[0]?.message).toContain('can only have link buttons');
   });
 
   test('a dropdown, for the same reason', () => {
@@ -393,6 +393,17 @@ describe('what a greeting refuses', () => {
 
   test('an embed with nothing in it', () => {
     expect(greetingMessageSchema.safeParse({ embeds: [{}] }).success).toBe(false);
+  });
+
+  test('but not a placeholder that fills in a link, such as the member’s avatar', () => {
+    const accepted = greetingMessageSchema.safeParse({
+      embeds: [{ title: 'Welcome', thumbnailUrl: '{user.avatar_url}' }],
+    });
+
+    expect(accepted.success).toBe(true);
+    expect(greetingMessageSchema.safeParse({ embeds: [{ thumbnailUrl: 'avatar' }] }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -864,7 +875,7 @@ describe('boost listener', () => {
 
     expect(rest.calls).toEqual([]);
     expect(lines.join(' ')).toContain(
-      `I'm missing the Send Messages permission in <#${BOOST_CHANNEL}>`,
+      `Missing the Send Messages permission in <#${BOOST_CHANNEL}>`,
     );
   });
 

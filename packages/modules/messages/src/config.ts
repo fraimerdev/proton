@@ -15,6 +15,7 @@ import {
   snowflakeSchema,
   tryParseDuration,
 } from '@proton/core';
+import { placeholderLinkPaths } from '@proton/core/placeholders';
 import { z } from 'zod';
 
 export const MODULE_ID = 'messages';
@@ -78,26 +79,20 @@ export const SCHEDULE_MODES = ['once', 'repeat'] as const;
 
 export const MIN_REPEAT_MS = 60_000;
 
-export const SCHEDULE_HELP =
-  'A scheduled template posts at an exact start time and, when it repeats, on an interval such ' +
-  'as `24h` or `7d` — Proton books one explicit next run rather than reading a cron expression.';
-
 export const templateScheduleSchema = z
   .object({
     channelId: snowflakeSchema,
 
     at: z.iso.datetime({
       offset: true,
-      error:
-        'must be a complete ISO timestamp carrying a timezone, such as 2026-01-31T09:00:00Z — ' +
-        'without one there is no way to tell which server\u2019s 09:00 was meant.',
+      error: 'must be a date and time with a timezone, such as 2026-01-31T09:00:00Z',
     }),
 
     mode: z.enum(SCHEDULE_MODES).default('once'),
 
     every: durationStringSchema
       .refine((value) => (tryParseDuration(value) ?? 0) >= MIN_REPEAT_MS, {
-        error: `a template repeats at most once every ${formatDuration(MIN_REPEAT_MS)} — anything faster would exhaust the channel\u2019s rate limit and stall Proton\u2019s other messages there.`,
+        error: `must be at least ${formatDuration(MIN_REPEAT_MS)}`,
       })
       .optional(),
 
@@ -110,9 +105,7 @@ export const templateScheduleSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['every'],
-        message:
-          'a repeating template needs an interval \u2014 how long Proton waits before posting it ' +
-          'again, such as 24h or 7d.',
+        message: 'A repeating template needs an interval, such as 24h or 7d.',
       });
     }
   });
@@ -132,7 +125,20 @@ export const savedMessageSchema = z.preprocess(
       // Optional outside the default so a SavedMessage literal written before this key still typechecks.
       placeholders: z.boolean().default(false).optional(),
     })
-    .superRefine(refineMessage),
+    .superRefine((message, ctx) => {
+      refineMessage(message, ctx);
+      if (message.placeholders === true) return;
+
+      for (const path of placeholderLinkPaths(message)) {
+        ctx.addIssue({
+          code: 'custom',
+          path,
+          message:
+            'turn on placeholders for this template to use one here, or enter a complete ' +
+            'http:// or https:// link',
+        });
+      }
+    }),
 );
 
 export type SavedMessage = z.infer<typeof savedMessageSchema>;
@@ -157,9 +163,7 @@ export const templatesSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'name'],
-          message:
-            `two saved messages are both called '${message.name}' — /message post could not say ` +
-            'which of them you meant',
+          message: `Another template is already called '${message.name}'.`,
         });
       }
       seen.add(key);
@@ -171,9 +175,9 @@ export const templatesSchema = z
             code: 'custom',
             path: [index, 'components'],
             message:
-              `the name '${message.name}' and the component key '${componentKey}' come to ` +
-              `${length} characters once Proton adds its own prefix, and Discord allows ` +
-              `${MAX_CUSTOM_ID_LENGTH}. Shorten the message name or the key.`,
+              `The template name '${message.name}' and the key '${componentKey}' come to ` +
+              `${length} characters with Proton’s prefix, and Discord allows ` +
+              `${MAX_CUSTOM_ID_LENGTH}. Shorten the template name or the key.`,
           });
         }
       }
@@ -206,9 +210,7 @@ export const savedComponentsSchema = z
         ctx.addIssue({
           code: 'custom',
           path: [index, 'name'],
-          message:
-            `two saved components are both called '${component.name}' — the palette could not ` +
-            'say which of them you were inserting.',
+          message: `Another saved row is already called '${component.name}'.`,
         });
       }
       seen.add(key);

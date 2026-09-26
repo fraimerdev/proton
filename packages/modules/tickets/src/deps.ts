@@ -83,7 +83,7 @@ export function isProtonActor(actorId: string | null | undefined): boolean {
 
 // A pseudo actor is not a snowflake, so <@proton:tickets> renders as literal text in Discord.
 export function mentionOf(actorId: string | null | undefined): string {
-  if (!actorId) return 'somebody';
+  if (!actorId) return 'someone';
   return isProtonActor(actorId) ? 'Proton' : `<@${actorId}>`;
 }
 
