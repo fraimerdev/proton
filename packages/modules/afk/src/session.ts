@@ -158,6 +158,7 @@ async function sendRecap(
         content,
         allowedMentions: { parse: [] },
         flags: MessageFlags.SuppressEmbeds,
+        directMessage: true,
       },
     });
 

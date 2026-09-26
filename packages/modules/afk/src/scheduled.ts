@@ -15,6 +15,8 @@ export const tidyDataSchema = z.object({
   messageId: z.string().min(1),
 });
 
+const TRANSIENT_FAILURE = /^(?:transport_failure|discord_(?:429|5\d\d))$/;
+
 function unreadable(ctx: ModuleContext<AfkConfig>, what: string, error: z.ZodError): void {
   ctx.logger.error(
     `a scheduled AFK ${what} carried data this build cannot read (${error.issues
@@ -80,18 +82,17 @@ export async function tidyReply(data: unknown, ctx: ModuleContext<AfkConfig>): P
   });
 
   if (result.status !== 'failed_precheck' && result.status !== 'failed_api') return;
-  if (result.failure?.code === 'discord_404') return;
 
-  const reason = failureOf(result).humanReason;
+  const { code, humanReason: reason } = failureOf(result);
+  if (code === 'discord_404') return;
 
-  if (result.status === 'failed_precheck') {
-    ctx.logger.warn(`AFK could not tidy its reply in <#${channelId}>, so it stays: ${reason}`, {
-      guildId: ctx.guildId,
-      moduleId: MODULE_ID,
-      code: result.failure?.code,
-    });
-    return;
+  if (result.status === 'failed_api' && TRANSIENT_FAILURE.test(code)) {
+    throw new Error(`AFK could not delete its reply ${messageId} in <#${channelId}>: ${reason}`);
   }
 
-  throw new Error(`AFK could not delete its reply ${messageId} in <#${channelId}>: ${reason}`);
+  ctx.logger.warn(`AFK could not tidy its reply in <#${channelId}>, so it stays: ${reason}`, {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    code,
+  });
 }

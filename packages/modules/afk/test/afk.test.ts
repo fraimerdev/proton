@@ -255,7 +255,7 @@ describe('/afk set', () => {
     await h.run('set', [], { config: { enabled: false } });
 
     expect(h.store.statuses.size).toBe(0);
-    expect(h.lastFollowUp()).toContain('disabled');
+    expect(h.lastFollowUp()).toContain('AFK is off in this server');
   });
 
   test('without a store it says it cannot run, and names the missing binding in the log', async () => {
@@ -306,7 +306,7 @@ describe('/afk set when the tag cannot be applied', () => {
     expect(h.nicknames()).toEqual([]);
     expect(h.lastFollowUp()).toContain(
       "I couldn't add [AFK] to your nickname: your highest role is at or above mine. Move " +
-        "Proton's role higher in Server Settings → Roles.",
+        'my role higher in Server Settings → Roles.',
     );
   });
 
@@ -599,6 +599,20 @@ describe('coming back', () => {
         "away, but I couldn't DM you the list.",
     );
     expect(warnings(h).some((line) => line.includes('could not open a DM'))).toBe(true);
+  });
+
+  test('DMs the list even where this server denies Proton Send Messages, which a DM does not need', async () => {
+    const h = harness();
+    await goAfk(h, 'lunch');
+    await h.emit(messageEvent({ mentions: [mention(MEMBER)] }));
+    h.botPermissions = BOT_PERMISSIONS & ~Permissions.SendMessages;
+
+    await h.emit(messageEvent({ authorId: MEMBER, nick: '[AFK] Bob' }));
+
+    const dm = h.sends().find((sent) => sent.channelId === DM_CHANNEL);
+    expect(dm?.body.content).toContain('You were pinged 1 time while you were AFK:');
+    expect(dm?.body).not.toHaveProperty('directMessage');
+    expect(warnings(h).some((line) => line.includes('could not send the pings'))).toBe(false);
   });
 
   test('says the list could not be sent when the DM itself is refused', async () => {
@@ -1058,12 +1072,47 @@ describe('the tidy job', () => {
     expect(warnings(h).some((line) => line.includes('Manage Messages'))).toBe(true);
   });
 
-  test('any other failure throws so the sweeper retries', async () => {
+  test('a refusal from Discord logs once and leaves the reply, without retrying', async () => {
+    const h = harness();
+    h.rest.fail('DELETE', '/channels/', 403);
+
+    await h.job(AFK_TIDY_JOB, { channelId: CHANNEL, messageId: snowflake('7') });
+
+    expect(h.deletes()).toHaveLength(1);
+    expect(warnings(h)).toEqual([
+      expect.stringContaining(`AFK could not tidy its reply in <#${CHANNEL}>, so it stays`),
+    ]);
+  });
+
+  test('a Discord outage throws so the sweeper retries', async () => {
     const h = harness();
     h.rest.fail('DELETE', '/channels/', 500);
 
     await expect(
       h.job(AFK_TIDY_JOB, { channelId: CHANNEL, messageId: snowflake('7') }),
     ).rejects.toThrow('could not delete');
+  });
+
+  test('a rate limit throws so the sweeper retries', async () => {
+    const h = harness();
+    h.rest.fail('DELETE', '/channels/', 429);
+
+    await expect(
+      h.job(AFK_TIDY_JOB, { channelId: CHANNEL, messageId: snowflake('7') }),
+    ).rejects.toThrow('could not delete');
+    expect(warnings(h)).toEqual([]);
+  });
+
+  test('an unreachable proxy throws so the sweeper retries', async () => {
+    const h = harness();
+    h.rest.intercept('DELETE', '/channels/', async () => {
+      throw new Error('connect ECONNREFUSED');
+    });
+
+    await expect(
+      h.job(AFK_TIDY_JOB, { channelId: CHANNEL, messageId: snowflake('7') }),
+    ).rejects.toThrow('could not delete');
+    expect(h.deletes()).toHaveLength(1);
+    expect(warnings(h)).toEqual([]);
   });
 });

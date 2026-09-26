@@ -42,8 +42,7 @@ const MENTIONS_OFF: AllowedMentions = { parse: [] };
 const NOT_WIRED =
   'I can’t run AFK right now. Nothing was changed. This is a fault on my side, not a setting in this server.';
 
-const DISABLED =
-  'AFK is disabled in this server. An admin can turn the AFK module on from the Proton dashboard.';
+const DISABLED = 'AFK is off in this server. An admin can turn it on in the Proton dashboard.';
 
 const NEEDS_MANAGE_NICKNAMES =
   "You need the Manage Nicknames permission to clear someone else's AFK.";
@@ -258,7 +257,7 @@ async function clear(ctx: Ctx, store: AfkStore, applicationId: string): Promise<
 function builder(): SlashCommandBuilder {
   const command = new SlashCommandBuilder()
     .setName('afk')
-    .setDescription('Tell people who ping you that you are away.')
+    .setDescription('Let people who ping you know you’re away.')
     .setContexts(InteractionContextType.Guild);
 
   command.addSubcommand((sub) =>
@@ -268,7 +267,7 @@ function builder(): SlashCommandBuilder {
       .addStringOption((option) =>
         option
           .setName('reason')
-          .setDescription('Why you are away. Text only, no links.')
+          .setDescription('Why you’re away. Text only, no links.')
           .setRequired(false)
           .setMaxLength(REASON_MAX),
       ),
@@ -292,7 +291,7 @@ function builder(): SlashCommandBuilder {
 export function afkCommand(deps: AfkDeps): Command {
   return {
     name: 'afk',
-    description: 'Tell people who ping you that you are away.',
+    description: 'Let people who ping you know you’re away.',
 
     data: builder().toJSON(),
 
@@ -323,7 +322,7 @@ export function afkCommand(deps: AfkDeps): Command {
         case 'clear':
           return clear(ctx, store, applicationId);
         default:
-          return say(ctx, applicationId, errorStatus('That subcommand is not one I know.'));
+          return say(ctx, applicationId, errorStatus('I don’t know that subcommand.'));
       }
     },
   };

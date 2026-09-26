@@ -138,8 +138,8 @@ export function renderRecap(guildId: string, pings: readonly AfkPing[]): string[
 
   for (const ping of pings) {
     const line =
-      `<@${ping.authorId}> in <#${ping.channelId}> <t:${unixSeconds(ping.pingedAt)}:R> — ` +
-      `https://discord.com/channels/${guildId}/${ping.channelId}/${ping.messageId}`;
+      `<@${ping.authorId}> in <#${ping.channelId}> <t:${unixSeconds(ping.pingedAt)}:R> · ` +
+      `[Jump to message](https://discord.com/channels/${guildId}/${ping.channelId}/${ping.messageId})`;
 
     if (current.length + 1 + line.length > MESSAGE_CONTENT_MAX) {
       chunks.push(current);
@@ -161,8 +161,8 @@ export function nicknameProblem(failure: ActionFailure, whose: Whose): string {
       return "Discord doesn't let bots change the server owner's nickname.";
     case 'role_hierarchy':
       return (
-        `${whose} highest role is at or above mine. Move Proton's role higher in Server ` +
-        'Settings → Roles.'
+        `${whose} highest role is at or above mine. Move my role higher in Server Settings → ` +
+        'Roles.'
       );
     case 'missing_permission':
       return "I'm missing the Manage Nicknames permission in this server.";

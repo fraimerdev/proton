@@ -202,8 +202,8 @@ describe('renderRecap', () => {
     expect(rest).toEqual([]);
     expect(only?.split('\n')).toEqual([
       'You were pinged 1 time while you were AFK:',
-      `<@10000000000000000002> in <#50000000000000000001> <t:${Math.floor(ping(1).pingedAt.getTime() / 1000)}:R> — ` +
-        `https://discord.com/channels/${GUILD}/50000000000000000001/8000000000000000001`,
+      `<@10000000000000000002> in <#50000000000000000001> <t:${Math.floor(ping(1).pingedAt.getTime() / 1000)}:R> · ` +
+        `[Jump to message](https://discord.com/channels/${GUILD}/50000000000000000001/8000000000000000001)`,
     ]);
   });
 
@@ -239,7 +239,7 @@ describe('nicknameProblem', () => {
       "Discord doesn't let bots change the server owner's nickname.",
     );
     expect(nicknameProblem({ code: 'role_hierarchy', humanReason: '' }, 'your')).toBe(
-      "your highest role is at or above mine. Move Proton's role higher in Server Settings → Roles.",
+      'your highest role is at or above mine. Move my role higher in Server Settings → Roles.',
     );
     expect(nicknameProblem({ code: 'role_hierarchy', humanReason: '' }, 'their')).toContain(
       'their highest role',

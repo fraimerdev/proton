@@ -336,7 +336,7 @@ async function untagAll(ctx: Ctx, store: AfkStore, auditId: string): Promise<voi
       kind: 'set_member_nickname',
       targetId: status.userId,
       actorId: MODULE_ID,
-      reason: 'AFK tag disabled',
+      reason: 'AFK tag turned off',
       payload: { nickname: status.previousNick },
       dryRun: false,
       record: false,
