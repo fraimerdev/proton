@@ -1,7 +1,15 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import type { CardDescriptor, GoodbyeCard, RankCard, WelcomeCard } from '../descriptor.ts';
+import type {
+  BadgeCard,
+  CardDescriptor,
+  GoodbyeCard,
+  RankCard,
+  WelcomeCard,
+} from '../descriptor.ts';
 import { type PresetPalette, paletteFor } from '../presets.ts';
 import { abbreviate, group, monogram, sanitiseText } from '../text.ts';
+import { BadgeArt } from './badge.tsx';
+import { BADGE_CARD_SIZE } from './badges.ts';
 import {
   AVATAR_RING,
   AVATAR_SIZE,
@@ -40,9 +48,11 @@ interface Skin extends PresetPalette {
   accent: string;
 }
 
+type FramedCard = Exclude<CardDescriptor, BadgeCard>;
+
 // A scrim changes the ground, so it has to change the ink with it: 68% of #0a0a0a over a bright
 // photo composites near #3b3b3b, where the muted step falls under 3:1 and stops being readable.
-function skinOf(card: CardDescriptor, backdrop: boolean): Skin {
+function skinOf(card: FramedCard, backdrop: boolean): Skin {
   const palette = paletteFor(card.preset);
 
   return {
@@ -61,10 +71,15 @@ const EYEBROW_SIZE = 30;
 const GREETING_NAME_SIZE = 52;
 const GREETING_LINE_SIZE = 32;
 const PILL_SIZE = 24;
+const COUNT_SIZE = 22;
 
 // The original card set its two rows on these baselines, and the whole layout hangs off them.
 const META_BASELINE = 80;
 const ROW_BASELINE = 220;
+
+const STRIP_TOP = 318;
+const STRIP_BADGE = 36;
+const STRIP_GAP = 12;
 
 const cover = {
   position: 'absolute',
@@ -190,7 +205,7 @@ function Frame({
   images,
   children,
 }: {
-  card: CardDescriptor;
+  card: FramedCard;
   images: CardImages | undefined;
   children: ReactNode;
 }): ReactElement {
@@ -240,6 +255,56 @@ function Row({
       }}
     >
       {children}
+    </div>
+  );
+}
+
+function achievementsLabel(count: number): string {
+  return `${group(count)} ${count === 1 ? 'achievement' : 'achievements'}`;
+}
+
+function BadgeStrip({ card, skin }: { card: RankCard; skin: Skin }): ReactElement | null {
+  const count = card.achievementCount;
+  if (card.badges.length === 0 && !count) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        position: 'absolute',
+        left: CONTENT_LEFT,
+        top: STRIP_TOP,
+        width: COLUMN_WIDTH,
+        height: STRIP_BADGE,
+        alignItems: 'center',
+      }}
+    >
+      {card.badges.map((badge, index) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: a badge's place in the strip is its identity
+        <div key={index} style={{ display: 'flex', flexShrink: 0, marginRight: STRIP_GAP }}>
+          <BadgeArt
+            shape={badge.shape}
+            colour={badge.colour}
+            icon={badge.icon}
+            image={badge.image}
+            size={STRIP_BADGE}
+          />
+        </div>
+      ))}
+      {count === undefined ? null : (
+        <div
+          style={{
+            display: 'flex',
+            flexShrink: 0,
+            fontSize: COUNT_SIZE,
+            fontWeight: 600,
+            lineHeight: LINE_HEIGHT,
+            color: skin.muted,
+          }}
+        >
+          {achievementsLabel(count)}
+        </div>
+      )}
     </div>
   );
 }
@@ -362,6 +427,7 @@ function RankCardBody({
           {`${Math.floor(ratio * 100)}%`}
         </div>
       ) : null}
+      <BadgeStrip card={card} skin={skin} />
     </Frame>
   );
 }
@@ -487,7 +553,23 @@ function GreetingCardBody({
   );
 }
 
+function BadgeCardBody({ card }: { card: BadgeCard }): ReactElement {
+  return (
+    <div style={{ display: 'flex', width: BADGE_CARD_SIZE, height: BADGE_CARD_SIZE }}>
+      <BadgeArt
+        shape={card.shape}
+        colour={card.colour}
+        icon={card.icon}
+        image={card.image}
+        size={BADGE_CARD_SIZE}
+      />
+    </div>
+  );
+}
+
 export function Card({ card, images }: CardProps): ReactElement {
+  if (card.kind === 'badge') return <BadgeCardBody card={card} />;
+
   return card.kind === 'rank' ? (
     <RankCardBody card={card} images={images} />
   ) : (

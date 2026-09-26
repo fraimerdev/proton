@@ -1,13 +1,20 @@
 export { CARD_IMAGE_HOSTS, cardImageHostAllowed } from '../avatar.ts';
 export {
+  BADGE_IMAGE_MAX_BYTES,
+  type BadgeCard,
+  badgeCardSchema,
+  badgeImageSchema,
   CARD_SIZES,
+  type CardBadge,
   type CardDescriptor,
   type CardDescriptorInput,
   type CardKind,
   type CardSize,
+  cardBadgeSchema,
   cardDescriptorSchema,
   type GoodbyeCard,
   goodbyeCardSchema,
+  RANK_CARD_BADGES_MAX,
   type RankCard,
   rankCardSchema,
   sizeFor,
@@ -24,6 +31,22 @@ export {
   toHexColour,
 } from '../presets.ts';
 export { abbreviate, group, monogram, sanitiseText } from '../text.ts';
+export { BadgeArt, type BadgeArtProps } from './badge.tsx';
+export {
+  BADGE_CARD_SIZE,
+  BADGE_ICON_IDS,
+  BADGE_ICON_LABELS,
+  BADGE_ICON_PATHS,
+  BADGE_SHAPE_LABELS,
+  BADGE_SHAPE_PATHS,
+  BADGE_SHAPES,
+  type BadgeIconId,
+  type BadgeShape,
+  CARD_TIER_IDS,
+  type CardTierId,
+  TIER_COLOURS,
+  TIER_LABELS,
+} from './badges.ts';
 export { Card, type CardImages, type CardProps } from './card.tsx';
 export { PREVIEW_SAMPLE } from './sample.ts';
 export {

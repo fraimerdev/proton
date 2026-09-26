@@ -88,7 +88,7 @@ describe('cardDescriptorSchema', () => {
       guildName: 'g',
       memberCount: 0,
     });
-    expect(parsed.preset).toBe('midnight');
+    expect(parsed.kind === 'welcome' && parsed.preset).toBe('midnight');
   });
 
   test('refuses progress beyond the level span rather than clamping it', () => {

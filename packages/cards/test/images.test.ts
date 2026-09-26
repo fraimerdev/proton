@@ -4,8 +4,12 @@ import {
   type FetchLike,
   HttpImageFetcher,
   IMAGE_MAX_BYTES,
+  IMAGE_MAX_SIDE,
+  imageDimensions,
   isRenderableImage,
+  oversizedImage,
 } from '../src/index.ts';
+import { sizedPng } from './png.ts';
 
 function response(
   body: Uint8Array,
@@ -126,5 +130,61 @@ describe('isRenderableImage', () => {
 
   test('rejects bytes that are not an image the renderer can draw', () => {
     expect(isRenderableImage(new Uint8Array([0x52, 0x49, 0x46, 0x46]))).toBe(false);
+  });
+});
+
+function sizedGif(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(10);
+  bytes.set([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
+
+  const header = new DataView(bytes.buffer);
+  header.setUint16(6, width, true);
+  header.setUint16(8, height, true);
+
+  return bytes;
+}
+
+function sizedJpeg(width: number, height: number): Uint8Array {
+  const bytes = new Uint8Array(20);
+  bytes.set([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00, 0xff, 0xc0, 0x00, 0x11, 0x08]);
+
+  const header = new DataView(bytes.buffer);
+  header.setUint16(13, height);
+  header.setUint16(15, width);
+
+  return bytes;
+}
+
+describe('imageDimensions', () => {
+  test('reads the size a PNG, GIF or JPEG header declares', () => {
+    expect(imageDimensions(sizedPng(640, 480))).toEqual({ width: 640, height: 480 });
+    expect(imageDimensions(sizedGif(640, 480))).toEqual({ width: 640, height: 480 });
+    expect(imageDimensions(sizedJpeg(640, 480))).toEqual({ width: 640, height: 480 });
+    expect(imageDimensions(sizedPng(16_000, 16_000))).toEqual({ width: 16_000, height: 16_000 });
+  });
+
+  test('is null when nothing declares one, and is never a decode', () => {
+    expect(imageDimensions(PNG_BYTES)).toBeNull();
+    expect(imageDimensions(sizedPng(64, 64).slice(0, 18))).toBeNull();
+    expect(imageDimensions(new Uint8Array([0x52, 0x49, 0x46, 0x46]))).toBeNull();
+    expect(imageDimensions(new Uint8Array(0))).toBeNull();
+  });
+});
+
+describe('oversizedImage', () => {
+  test('names the size of an image past the cap, and passes one at it', () => {
+    expect(oversizedImage(sizedPng(IMAGE_MAX_SIDE + 1, 8))).toEqual({
+      width: IMAGE_MAX_SIDE + 1,
+      height: 8,
+    });
+    expect(oversizedImage(sizedPng(IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))).toBeNull();
+    expect(oversizedImage(sizedPng(2_048, 2_048), 1_024)).toEqual({ width: 2_048, height: 2_048 });
+  });
+
+  // Refusing these would break every fixture that carries only a magic number, and they are no
+  // bomb: resvg sizes its buffer from the same field and cannot draw them either.
+  test('lets a header it cannot read through', () => {
+    expect(oversizedImage(PNG_BYTES)).toBeNull();
+    expect(oversizedImage(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBeNull();
   });
 });

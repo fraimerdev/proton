@@ -6,7 +6,7 @@ import {
   type CardPreset,
   renderCard,
 } from '../src/index.ts';
-import { PNG_MAGIC, readPng } from './png.ts';
+import { PNG_MAGIC, readPng, sizedPng } from './png.ts';
 
 const rank: CardDescriptorInput = {
   kind: 'rank',
@@ -135,6 +135,23 @@ describe('renderCard', () => {
     );
     expect(skipped[0]).toContain('not a PNG');
   });
+
+  test.each([
+    ['the avatar', { ...welcome, avatarUrl: CDN_IMAGE }],
+    ['the background', { ...welcome, backgroundUrl: CDN_IMAGE }],
+  ] as const)(
+    '%s is skipped when its header declares more pixels than a card can draw',
+    async (_label, descriptor) => {
+      const skipped: string[] = [];
+      const png = await renderCard(descriptor, {
+        images: { fetch: async () => sizedPng(16_000, 16_000) },
+        onImageSkipped: (reason) => skipped.push(reason),
+      });
+
+      expect(readPng(png).magic).toEqual(PNG_MAGIC);
+      expect(skipped[0]).toContain('16000×16000 pixels');
+    },
+  );
 
   test('a real PNG avatar is drawn, not silently dropped', async () => {
     const avatar = await renderCard({ ...rank, preset: 'aurora' });

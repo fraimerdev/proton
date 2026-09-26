@@ -167,6 +167,95 @@ export function isRenderableImage(bytes: Uint8Array): boolean {
   return imageMimeType(bytes) !== null;
 }
 
+const IHDR = new Uint8Array([0x49, 0x48, 0x44, 0x52]);
+
+export const IMAGE_MAX_SIDE = 4_096;
+
+export interface ImageSize {
+  width: number;
+  height: number;
+}
+
+function uint16(bytes: Uint8Array, offset: number, littleEndian = false): number | null {
+  const first = bytes[offset];
+  const second = bytes[offset + 1];
+  if (first === undefined || second === undefined) return null;
+  return littleEndian ? first | (second << 8) : (first << 8) | second;
+}
+
+function uint32(bytes: Uint8Array, offset: number): number | null {
+  const high = uint16(bytes, offset);
+  const low = uint16(bytes, offset + 2);
+  return high === null || low === null ? null : high * 65_536 + low;
+}
+
+function pngSize(bytes: Uint8Array): ImageSize | null {
+  if (!IHDR.every((byte, index) => bytes[12 + index] === byte)) return null;
+
+  const width = uint32(bytes, 16);
+  const height = uint32(bytes, 20);
+  return width === null || height === null ? null : { width, height };
+}
+
+function gifSize(bytes: Uint8Array): ImageSize | null {
+  const width = uint16(bytes, 6, true);
+  const height = uint16(bytes, 8, true);
+  return width === null || height === null ? null : { width, height };
+}
+
+const NOT_A_FRAME: ReadonlySet<number> = new Set([0xc4, 0xc8, 0xcc]);
+
+function jpegSize(bytes: Uint8Array): ImageSize | null {
+  let offset = 2;
+
+  while (offset + 1 < bytes.length) {
+    if (bytes[offset] !== 0xff) return null;
+
+    const marker = bytes[offset + 1];
+    if (marker === undefined) return null;
+
+    // Any number of 0xff bytes may pad a marker, so one is stepped over rather than two.
+    if (marker === 0xff) {
+      offset += 1;
+      continue;
+    }
+
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) {
+      offset += 2;
+      continue;
+    }
+
+    const length = uint16(bytes, offset + 2);
+    if (length === null || length < 2) return null;
+
+    if (marker >= 0xc0 && marker <= 0xcf && !NOT_A_FRAME.has(marker)) {
+      const height = uint16(bytes, offset + 5);
+      const width = uint16(bytes, offset + 7);
+      return width === null || height === null ? null : { width, height };
+    }
+
+    if (marker === 0xda) return null;
+
+    offset += 2 + length;
+  }
+
+  return null;
+}
+
+export function imageDimensions(bytes: Uint8Array): ImageSize | null {
+  if (startsWith(bytes, PNG)) return pngSize(bytes);
+  if (startsWith(bytes, JPEG)) return jpegSize(bytes);
+  if (startsWith(bytes, GIF)) return gifSize(bytes);
+  return null;
+}
+
+// A header too damaged to declare a size is let through: resvg reads the same field to size its
+// buffer, so an image this cannot measure is one it cannot decode into a bomb either.
+export function oversizedImage(bytes: Uint8Array, maxSide = IMAGE_MAX_SIDE): ImageSize | null {
+  const size = imageDimensions(bytes);
+  return size !== null && (size.width > maxSide || size.height > maxSide) ? size : null;
+}
+
 export function discordAvatarUrl(userId: string, avatarHash: string, size = 256): string {
   return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.png?size=${size}`;
 }

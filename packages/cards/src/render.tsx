@@ -1,6 +1,12 @@
 import { Resvg } from '@resvg/resvg-js';
 import satori from 'satori';
-import { type ImageFetcher, imageMimeType, nullImageFetcher } from './avatar.ts';
+import {
+  IMAGE_MAX_SIDE,
+  type ImageFetcher,
+  imageMimeType,
+  nullImageFetcher,
+  oversizedImage,
+} from './avatar.ts';
 import {
   type CardDescriptor,
   type CardDescriptorInput,
@@ -45,22 +51,37 @@ async function resolve(
     return undefined;
   }
 
+  const oversized = oversizedImage(bytes);
+  if (oversized !== null) {
+    deps.onImageSkipped?.(
+      `${what} declares ${oversized.width}×${oversized.height} pixels, over the ` +
+        `${IMAGE_MAX_SIDE}×${IMAGE_MAX_SIDE} a card can draw, so it was not drawn`,
+    );
+    return undefined;
+  }
+
   return `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`;
 }
 
-export async function renderSvg(input: CardDescriptorInput, deps: CardDeps = {}): Promise<string> {
-  const card: CardDescriptor = cardDescriptorSchema.parse(input);
-  const size = sizeFor(card.kind);
-
+async function resolveImages(
+  card: Exclude<CardDescriptor, { kind: 'badge' }>,
+  deps: CardDeps,
+): Promise<CardImages> {
   const [avatarSrc, backgroundSrc] = await Promise.all([
     resolve(card.avatarUrl, 'the avatar', deps),
     resolve(card.backgroundUrl, 'the background', deps),
   ]);
 
-  const images: CardImages = {
+  return {
     ...(avatarSrc === undefined ? {} : { avatarSrc }),
     ...(backgroundSrc === undefined ? {} : { backgroundSrc }),
   };
+}
+
+export async function renderSvg(input: CardDescriptorInput, deps: CardDeps = {}): Promise<string> {
+  const card: CardDescriptor = cardDescriptorSchema.parse(input);
+  const size = sizeFor(card);
+  const images = card.kind === 'badge' ? {} : await resolveImages(card, deps);
 
   return satori(<Card card={card} images={images} />, {
     width: size.width,
@@ -73,5 +94,8 @@ export async function renderCard(
   input: CardDescriptorInput,
   deps: CardDeps = {},
 ): Promise<Uint8Array> {
-  return new Resvg(await renderSvg(input, deps)).render().asPng();
+  // satori has already drawn every glyph as a path; scanning system fonts cost ~200 ms per render.
+  return new Resvg(await renderSvg(input, deps), { font: { loadSystemFonts: false } })
+    .render()
+    .asPng();
 }
