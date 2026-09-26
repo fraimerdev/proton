@@ -22,6 +22,7 @@ export interface BreakerInput {
 export interface BreakerReport {
   strippedRoleIds: string[];
   attempted: ActionKind[];
+  afterStripDone: AfterStripAction;
   failures: string[];
   ownerExempt: boolean;
   summary: string;
@@ -39,7 +40,12 @@ function forAlert(input: BreakerInput): string {
 
 const AFTER_STRIP_PHRASE: Record<Exclude<AfterStripAction, 'none'>, string> = {
   ban: 'They were then banned from this server.',
-  kick: 'They were then removed from this server.',
+  kick: 'They were then kicked from this server.',
+};
+
+const AFTER_STRIP_TAKEN: Record<Exclude<AfterStripAction, 'none'>, string> = {
+  ban: 'Banned',
+  kick: 'Kicked',
 };
 
 export async function tripBreaker(
@@ -52,9 +58,9 @@ export async function tripBreaker(
 
   if (state?.ownerId === input.actorId) {
     const summary =
-      `Anti-nuke detected ${forAlert(input)}, and that member owns this server. Discord does ` +
-      "not let any bot remove the owner's roles, ban them or kick them, so I have done nothing " +
-      'and cannot. Recover the account, then transfer ownership or enable server-wide 2FA.';
+      `Anti-Nuke detected ${forAlert(input)}, and that member owns this server. Discord doesn't ` +
+      "let bots remove the owner's roles, ban them or kick them, so nothing was done. Recover " +
+      'the account, then transfer ownership or turn on server-wide 2FA.';
 
     ctx.logger.warn(summary, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: input.actorId });
 
@@ -63,6 +69,7 @@ export async function tripBreaker(
     const ownerReport: BreakerReport = {
       strippedRoleIds: [],
       attempted: [],
+      afterStripDone: 'none',
       failures: [],
       ownerExempt: true,
       summary,
@@ -72,7 +79,7 @@ export async function tripBreaker(
     return ownerReport;
   }
 
-  const reason = `Anti-nuke: ${detected}`.slice(0, REASON_MAX);
+  const reason = `Anti-Nuke: ${detected}`.slice(0, REASON_MAX);
   const failures: string[] = [];
   const attempted: ActionKind[] = [];
 
@@ -80,16 +87,22 @@ export async function tripBreaker(
 
   if (roleIds === null) {
     const summary =
-      `Anti-nuke detected ${forAlert(input)}, but I could not read that member's roles, so I ` +
-      'have stripped nothing and taken no further action. They may have already left the ' +
-      'server. Check the audit log and act by hand — this one needs a person.';
+      `Anti-Nuke detected ${forAlert(input)}, but couldn't read that member's roles, so nothing ` +
+      'was done. They may have already left the server. Check the audit log and act by hand.';
     ctx.logger.error(summary, {
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
       actorId: input.actorId,
     });
     await announce(ctx, input.eventId, summary);
-    return { strippedRoleIds: [], attempted: [], failures: [], ownerExempt: false, summary };
+    return {
+      strippedRoleIds: [],
+      attempted: [],
+      afterStripDone: 'none',
+      failures: [],
+      ownerExempt: false,
+      summary,
+    };
   }
 
   const strippable = roleIds
@@ -113,12 +126,13 @@ export async function tripBreaker(
     });
 
     attempted.push('remove_role');
-    collect(failures, result, `removing <@&${roleId}>`);
+    collect(failures, result, `Couldn't remove <@&${roleId}>`);
     if (result.status === 'executed' || result.status === 'dry_run') stripped.push(roleId);
   }
 
+  let afterStripDone: AfterStripAction = 'none';
   if (ctx.config.afterStrip !== 'none') {
-    const kind: ActionKind = ctx.config.afterStrip;
+    const kind = ctx.config.afterStrip;
     const result = await ctx.executor.execute({
       guildId: ctx.guildId,
       moduleId: MODULE_ID,
@@ -132,10 +146,18 @@ export async function tripBreaker(
     });
 
     attempted.push(kind);
-    collect(failures, result, `${kind === 'ban' ? 'banning' : 'kicking'} that member`);
+    if (!collect(failures, result, `Couldn't ${kind} them`)) afterStripDone = kind;
   }
 
-  const summary = summarise(ctx.config, input, forAlert(input), stripped, strippable, failures);
+  const summary = summarise(
+    ctx.config,
+    input,
+    forAlert(input),
+    stripped,
+    strippable,
+    failures,
+    afterStripDone,
+  );
 
   ctx.logger.warn(summary, {
     guildId: ctx.guildId,
@@ -150,6 +172,7 @@ export async function tripBreaker(
   const report: BreakerReport = {
     strippedRoleIds: stripped,
     attempted,
+    afterStripDone,
     failures,
     ownerExempt: false,
     summary,
@@ -159,9 +182,10 @@ export async function tripBreaker(
   return report;
 }
 
-function collect(failures: string[], result: ActionResult, what: string): void {
-  if (result.status === 'skipped_duplicate') return;
-  if (result.failure) failures.push(`${what}: ${result.failure.humanReason}`);
+function collect(failures: string[], result: ActionResult, what: string): boolean {
+  if (result.status === 'skipped_duplicate' || !result.failure) return false;
+  failures.push(`${what}: ${result.failure.humanReason}`);
+  return true;
 }
 
 function summarise(
@@ -171,31 +195,33 @@ function summarise(
   stripped: readonly string[],
   attempted: readonly string[],
   failures: readonly string[],
+  afterStripDone: AfterStripAction,
 ): string {
-  const lines = [`Anti-nuke tripped: ${detected} (limit ${input.limit} per ${input.window}).`];
+  const lines = [`Anti-Nuke tripped: ${detected} (limit ${input.limit} per ${input.window}).`];
 
   if (attempted.length === 0) {
-    lines.push('They held no removable roles, so there was nothing to strip.');
+    lines.push('They had no roles to remove.');
   } else {
     lines.push(
-      `Removed ${stripped.length} of their ${attempted.length} roles first: ` +
-        `${attempted.map((roleId) => `<@&${roleId}>`).join(', ')}. Every removal is recorded as ` +
-        'a Proton case carrying the full set, so their roles can be restored exactly.',
+      `Removed ${stripped.length} of their ${attempted.length} roles: ` +
+        `${attempted.map((roleId) => `<@&${roleId}>`).join(', ')}.` +
+        (stripped.length > 0
+          ? ' Each removal is recorded as a case with the full role list, so their roles can be ' +
+            'restored exactly.'
+          : ''),
     );
   }
 
   if (config.afterStrip === 'none') {
     lines.push(
-      'Nothing else was done — this server has "After stripping roles" set to none. Review the ' +
-        'audit log and decide.',
+      'Nothing else was done, as "After stripping roles" is set to Nothing further. Check the ' +
+        'audit log and decide what to do next.',
     );
-  } else {
-    lines.push(AFTER_STRIP_PHRASE[config.afterStrip]);
+  } else if (afterStripDone !== 'none') {
+    lines.push(AFTER_STRIP_PHRASE[afterStripDone]);
   }
 
-  if (failures.length > 0) {
-    lines.push(`What did NOT work — ${failures.join(' | ')}`);
-  }
+  for (const failure of failures) lines.push(`⚠ ${failure}`);
 
   return lines.join('\n').slice(0, MESSAGE_MAX);
 }
@@ -207,6 +233,9 @@ export async function publishTrip(
 ): Promise<void> {
   if (!ctx.publish) return;
 
+  const followUp =
+    report.afterStripDone === 'none' ? [] : [AFTER_STRIP_TAKEN[report.afterStripDone]];
+
   try {
     await ctx.publish('proton.security_tripped', input.eventId, {
       guildId: ctx.guildId,
@@ -215,9 +244,11 @@ export async function publishTrip(
       actorId: input.actorId,
       summary: report.summary.slice(0, 1024),
       actionsTaken: [
-        ...report.strippedRoleIds.map((roleId) => `stripped role ${roleId}`),
-        ...report.attempted,
-      ].slice(0, 20),
+        ...report.strippedRoleIds
+          .slice(0, 20 - followUp.length)
+          .map((roleId) => `Removed <@&${roleId}>`),
+        ...followUp,
+      ],
       ownerExempt: report.ownerExempt,
     });
   } catch (error) {

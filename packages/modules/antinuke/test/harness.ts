@@ -36,6 +36,8 @@ export const BOT = '300000000000000001';
 export const ADMIN = '100000000000000001';
 export const ALERT_CHANNEL = '500000000000000001';
 export const COMMAND_CHANNEL = '500000000000000002';
+export const APPLICATION = '400000000000000001';
+export const INTERACTION_TOKEN = 'interaction-token';
 
 export const NUKER = '200000000000000009';
 
@@ -139,6 +141,31 @@ export interface LogLine {
   message: string;
 }
 
+export interface MessageBody {
+  content?: string;
+  flags?: number;
+  embeds?: { description?: string; color?: number }[];
+}
+
+export interface CallbackBody {
+  type?: number;
+  data?: MessageBody;
+}
+
+export interface CommandRun {
+  applicationId?: string | null;
+  idempotencyKey?: string;
+  commandLabel?: (key: string, path?: string) => string;
+}
+
+const INITIAL_CALLBACKS = new Set([4, 5, 6, 7, 9]);
+
+const isCallback = (call: RestRequestOptions) =>
+  call.path.startsWith('/interactions/') && call.path.endsWith('/callback');
+
+const isFollowup = (call: RestRequestOptions) =>
+  call.path === `/webhooks/${APPLICATION}/${INTERACTION_TOKEN}`;
+
 export interface HarnessOptions {
   rateWindow?: RateWindowStore;
   maintenance?: MaintenanceStore;
@@ -162,7 +189,11 @@ export interface Harness {
 
   clock: { now: number };
   handle(event: ProtonEvent, config?: Partial<AntinukeConfig>): Promise<AntinukeOutcome>;
-  runCommand(options: RawOption[], config?: Partial<AntinukeConfig>): Promise<void>;
+  runCommand(
+    options: RawOption[],
+    config?: Partial<AntinukeConfig>,
+    run?: CommandRun,
+  ): Promise<void>;
 
   discordCalls(): RestRequestOptions[];
 
@@ -170,6 +201,10 @@ export interface Harness {
   cases(): CaseInput[];
   replyContent(): string | null;
   replyEmbed(): { description?: string; color?: number } | null;
+
+  initialCallbacks(): RestRequestOptions[];
+  followups(): RestRequestOptions[];
+  answers(): MessageBody[];
 
   alertContent(): string | null;
   logged(level: LogLine['level'], fragment: string): boolean;
@@ -185,6 +220,18 @@ export function harness(options: HarnessOptions = {}): Harness {
   const maintenance = options.maintenance ?? new MemoryMaintenanceStore();
   const memberRoles = options.memberRoles ?? MEMBER_ROLES;
   const omit = new Set<keyof AntinukeDeps>(options.omit ?? []);
+
+  const answers = (): MessageBody[] =>
+    rest.calls
+      .filter((call) => isCallback(call) || isFollowup(call))
+      .map((call) =>
+        isFollowup(call)
+          ? (call.body as MessageBody | undefined)
+          : (call.body as CallbackBody | undefined)?.data,
+      )
+      .filter(
+        (body): body is MessageBody => body?.content !== undefined || body?.embeds !== undefined,
+      );
 
   const state: GuildState = {
     guildId: GUILD,
@@ -261,9 +308,11 @@ export function harness(options: HarnessOptions = {}): Harness {
       return handleDestructiveEvent(event, ctx, deps);
     },
 
-    async runCommand(raw, config = {}) {
+    async runCommand(raw, config = {}, run = {}) {
       const command = createAntinukeCommands(deps)[0];
       if (!command) throw new Error('the antinuke module declares no commands');
+
+      const applicationId = run.applicationId === undefined ? APPLICATION : run.applicationId;
 
       const ctx: CommandContext<AntinukeConfig> = {
         guildId: GUILD,
@@ -277,36 +326,36 @@ export function harness(options: HarnessOptions = {}): Harness {
         }),
         logger,
         options: createCommandOptions(raw),
-        interaction: { id: '600000000000000001', token: 'interaction-token' },
-        idempotencyKey: newId(),
+        interaction: { id: '600000000000000001', token: INTERACTION_TOKEN },
+        ...(applicationId === null ? {} : { applicationId }),
+        ...(run.commandLabel ? { commandLabel: run.commandLabel } : {}),
+        idempotencyKey: run.idempotencyKey ?? newId(),
       };
 
       await command.handler(ctx);
     },
 
-    discordCalls: () => rest.calls.filter((call) => !call.path.startsWith('/interactions/')),
+    discordCalls: () => rest.calls.filter((call) => !isCallback(call) && !isFollowup(call)),
     callPaths: () => rest.calls.map((call) => `${call.method} ${call.path}`),
     cases: () => recorder.recorded.filter((c) => c.kind !== 'interaction_reply'),
 
     replyContent() {
-      const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      const data = (
-        call?.body as
-          | { data?: { content?: string; embeds?: { description?: string }[] } }
-          | undefined
-      )?.data;
-
+      const data = answers()[0];
       return data?.content || data?.embeds?.[0]?.description || null;
     },
 
-    replyEmbed() {
-      const call = rest.calls.find((c) => c.path.startsWith('/interactions/'));
-      const data = (
-        call?.body as { data?: { embeds?: { description?: string; color?: number }[] } } | undefined
-      )?.data;
+    replyEmbed: () => answers()[0]?.embeds?.[0] ?? null,
 
-      return data?.embeds?.[0] ?? null;
-    },
+    initialCallbacks: () =>
+      rest.calls.filter(
+        (call) =>
+          isCallback(call) &&
+          INITIAL_CALLBACKS.has((call.body as CallbackBody | undefined)?.type ?? 4),
+      ),
+
+    followups: () => rest.calls.filter(isFollowup),
+
+    answers,
 
     alertContent() {
       const call = rest.calls.find((c) => c.path === `/channels/${ALERT_CHANNEL}/messages`);

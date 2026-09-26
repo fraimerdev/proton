@@ -66,7 +66,7 @@ export function createAntinukeModule(
 ): ModuleManifest<typeof antinukeConfigSchema> {
   return {
     id: 'antinuke',
-    name: 'Anti-nuke',
+    name: 'Anti-Nuke',
     category: 'security',
     configSchema: antinukeConfigSchema,
     defaultConfig: antinukeDefaultConfig,
@@ -75,7 +75,14 @@ export function createAntinukeModule(
     requiredIntents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildModeration],
 
     requiredPermissions: [Permissions.ViewAuditLog, Permissions.ManageRoles],
-    actionKinds: ['remove_role', 'kick', 'ban', 'send', 'interaction_reply'],
+    actionKinds: [
+      'remove_role',
+      'kick',
+      'ban',
+      'send',
+      'interaction_reply',
+      'interaction_followup',
+    ],
 
     commands: createAntinukeCommands(deps),
     emits: ['proton.security_tripped'],

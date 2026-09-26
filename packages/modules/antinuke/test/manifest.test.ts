@@ -104,6 +104,12 @@ describe('the manifest', () => {
     expect(new Set(claimed).size).toBe(keys.size);
   });
 
+  test('declares the deferred reply and the followup /antinuke answers with', () => {
+    expect(antinukeModule.actionKinds).toContain('interaction_reply');
+    expect(antinukeModule.actionKinds).toContain('interaction_followup');
+    expect(registry().mayExecute('antinuke', 'interaction_followup')).toBe(true);
+  });
+
   test('exposes one admin command, gated on Manage Server', () => {
     expect(antinukeModule.commands?.map((command) => command.name)).toEqual(['antinuke']);
     expect(antinukeModule.commands?.[0]?.data.default_member_permissions).toBe(

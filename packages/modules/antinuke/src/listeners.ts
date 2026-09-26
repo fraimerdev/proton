@@ -8,7 +8,13 @@ import { announce, type BreakerReport, MODULE_ID, tripBreaker } from './breaker.
 import { classOfEvent, thresholdFor, WATCHED_EVENT_TYPES } from './classes.ts';
 import type { AntinukeConfig } from './config.ts';
 import { type AntinukeDeps, bindDeps, describeUnbound } from './deps.ts';
-import { hasLapsed, isCoveredByMaintenance, type MaintenanceWindow } from './maintenance.ts';
+import {
+  discordTime,
+  hasLapsed,
+  isCoveredByMaintenance,
+  type MaintenanceWindow,
+  startedBy,
+} from './maintenance.ts';
 
 export type AntinukeOutcome =
   | { action: 'ignored'; reason: string }
@@ -113,9 +119,8 @@ export async function announceLapse(
   window: MaintenanceWindow,
 ): Promise<void> {
   const summary =
-    `Anti-nuke maintenance mode ended at ${new Date(window.expiresAt).toISOString()} and the ` +
-    `breaker is armed again. It was opened by ${window.enabledBy}` +
-    `${window.reason ? ` for: ${window.reason}` : ''}.`;
+    `Maintenance mode ended at ${discordTime(window.expiresAt)}, and Anti-Nuke is armed again. ` +
+    startedBy(window);
 
   ctx.logger.info(summary, { guildId: ctx.guildId, moduleId: MODULE_ID });
   await announce(ctx, `maintenance-lapsed:${ctx.guildId}:${window.expiresAt}`, summary, 'lapsed');

@@ -83,6 +83,15 @@ export function hasLapsed(window: MaintenanceWindow, now: number): boolean {
   return now >= window.expiresAt;
 }
 
+export function discordTime(ms: number): string {
+  return `<t:${Math.floor(ms / 1000)}:f>`;
+}
+
+export function startedBy(window: MaintenanceWindow): string {
+  const reason = window.reason ? ` Reason: ${window.reason}` : '';
+  return `It was started by <@${window.enabledBy}>.${reason}`;
+}
+
 export interface MaintenancePlanInput {
   guildId: string;
   enabledBy: string;
@@ -106,21 +115,15 @@ export function planMaintenance(
   input: MaintenancePlanInput,
 ): MaintenanceWindow | MaintenanceRefusal {
   if (input.durationMs <= 0) {
-    return {
-      refusal:
-        'Maintenance mode needs a positive duration — a window that expires immediately ' +
-        'would leave the breaker armed for the work you are about to do.',
-    };
+    return { refusal: 'Maintenance mode needs a duration longer than 0, like 20m.' };
   }
 
   if (input.durationMs > input.maxDurationMs) {
     return {
       refusal:
         `This server caps maintenance mode at ${formatDuration(input.maxDurationMs)}, and you ` +
-        `asked for ${formatDuration(input.durationMs)}. Run it again for a shorter window, or ` +
-        'raise "Longest maintenance window" in the Proton dashboard. The cap exists because ' +
-        'maintenance mode switches off the only thing standing between a compromised admin ' +
-        'and an empty server.',
+        `asked for ${formatDuration(input.durationMs)}. Try a shorter duration, or raise ` +
+        '"Longest maintenance window" on the Anti-Nuke page of the Proton dashboard.',
     };
   }
 

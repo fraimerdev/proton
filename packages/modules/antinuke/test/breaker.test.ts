@@ -77,7 +77,7 @@ describe('the breaker', () => {
       expect(recorded.targetId).toBe(NUKER);
 
       expect(recorded.actorId).toBe(ANTINUKE_ACTOR);
-      expect(recorded.reason).toContain('Anti-nuke: 3 channel deletions within 30s');
+      expect(recorded.reason).toContain('Anti-Nuke: 3 channel deletions within 30s');
       expect(recorded.payload).toMatchObject({
         userId: NUKER,
         strippedRoleIds: [NUKER_HIGH_ROLE, NUKER_LOW_ROLE],
@@ -103,7 +103,7 @@ describe('the breaker', () => {
     await h.handle(auditEvent('channel.deleted'), { alertChannelId: ALERT_CHANNEL });
 
     const alert = h.alertContent() ?? '';
-    expect(alert).toContain('Anti-nuke tripped');
+    expect(alert).toContain('Anti-Nuke tripped');
     expect(alert).toContain('3 channel deletions within 30s');
     expect(alert).toContain(NUKER);
     expect(alert).toContain(NUKER_HIGH_ROLE);
@@ -126,8 +126,8 @@ describe('the guild owner', () => {
     expect(h.cases().map((recorded) => recorded.kind)).toEqual(['send']);
     const alert = h.alertContent() ?? '';
     expect(alert).toContain('owns this server');
-    expect(alert).toContain('Discord does not let');
-    expect(alert).toContain('done nothing');
+    expect(alert).toContain("Discord doesn't let");
+    expect(alert).toContain('nothing was done');
     expect(h.logged('warn', 'owns this server')).toBe(true);
   });
 });
@@ -139,7 +139,7 @@ describe('when Proton cannot do its half', () => {
     await h.handle(auditEvent('channel.deleted'), { alertChannelId: ALERT_CHANNEL });
 
     const alert = h.alertContent() ?? '';
-    expect(alert).toContain('What did NOT work');
+    expect(alert).toContain("⚠ Couldn't remove");
     expect(alert).toContain('Manage Roles');
     expect(alert).toContain('this server');
 
@@ -157,8 +157,8 @@ describe('when Proton cannot do its half', () => {
     expect(outcome).toMatchObject({ action: 'tripped', report: { strippedRoleIds: [] } });
 
     expect(h.callPaths()).toEqual([`POST /channels/${ALERT_CHANNEL}/messages`]);
-    expect(h.alertContent()).toContain('could not read that member');
-    expect(h.logged('error', 'this one needs a person')).toBe(true);
+    expect(h.alertContent()).toContain("couldn't read that member");
+    expect(h.logged('error', 'act by hand')).toBe(true);
   });
 
   test('reports its own inability to reach the alert channel', async () => {

@@ -74,7 +74,7 @@ describe('counting destructive audit events', () => {
     });
 
     expect(outcome.action).toBe('ignored');
-    expect(h.logged('error', 'not a duration I can read')).toBe(true);
+    expect(h.logged('error', "isn't a valid duration")).toBe(true);
     expect(windowOf(h).hits).toEqual([]);
   });
 });
@@ -209,7 +209,7 @@ describe('maintenance mode', () => {
     expect(first.action).toBe('counted');
     expect(second.action).toBe('counted');
     expect(windowOf(h).hits).toHaveLength(2);
-    expect(h.alertContent()).toContain('maintenance mode ended');
+    expect(h.alertContent()).toContain('Maintenance mode ended');
     expect(h.alertContent()).toContain('armed again');
 
     expect(h.discordCalls().filter((c) => c.path.endsWith('/messages'))).toHaveLength(1);

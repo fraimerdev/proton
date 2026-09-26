@@ -65,15 +65,14 @@ export function thresholdFor(
   if (typeof limit !== 'number' || typeof window !== 'string') {
     return {
       error:
-        'its limit is not a whole number, or its window is not a duration. Fix them on the ' +
-        'Anti-nuke page of the Proton dashboard.',
+        "Its limit or window isn't valid. Fix it on the Anti-Nuke page of the Proton dashboard.",
     };
   }
 
   const windowMs = tryParseDuration(window);
   if (windowMs === null) {
     return {
-      error: `'${window}' is not a duration I can read. Fix it on the Anti-nuke page of the Proton dashboard.`,
+      error: `'${window}' isn't a valid duration. Fix it on the Anti-Nuke page of the Proton dashboard.`,
     };
   }
 

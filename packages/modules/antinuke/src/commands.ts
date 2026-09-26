@@ -1,11 +1,17 @@
 import {
+  type ActionResult,
   type CommandContext,
   type CommandDefinition,
+  deferEphemeral,
   errorStatus,
+  followUp,
   formatDuration,
-  MESSAGE_CONTENT_MAX,
+  type InteractionMessage,
+  labelOf,
   Permissions,
   parseDuration,
+  type RespondTo,
+  replyEphemeral,
   type StatusBody,
   successStatus,
 } from '@proton/core';
@@ -16,94 +22,95 @@ import { CLASS_LABELS, NUKE_CLASSES, thresholdFor } from './classes.ts';
 import type { AntinukeConfig } from './config.ts';
 import type { AntinukeDeps } from './deps.ts';
 import {
+  discordTime,
   hasLapsed,
   isMaintenanceRefusal,
   type MaintenanceStore,
   planMaintenance,
+  startedBy,
 } from './maintenance.ts';
 
 const REASON_MAX = 512;
 
 const NO_STORE =
-  'Maintenance mode is unavailable: Proton is running with nowhere to record a window, and a ' +
-  'window nothing records is a hole nothing closes. Ask whoever runs Proton to make it ' +
-  'available — until then the breaker stays armed and cannot be suspended.';
+  'Maintenance mode is unavailable because Proton has nowhere to store it right now, so ' +
+  'Anti-Nuke stays armed.';
 
 const DISABLED =
-  'Anti-nuke is disabled in this server, so there is no breaker to suspend. Turn the ' +
-  'Anti-nuke module on from the Proton dashboard first.';
+  "Anti-Nuke is off in this server, so there's nothing to pause. Turn it on in the Proton " +
+  'dashboard first.';
+
+type Ctx = CommandContext<AntinukeConfig>;
+
+type Answer = (message: string | StatusBody) => Promise<void>;
 
 export function createAntinukeCommands(deps: AntinukeDeps): CommandDefinition<AntinukeConfig>[] {
   return [
     {
       name: 'antinuke',
-      description: 'Inspect the anti-nuke breaker, or suspend it briefly for bulk admin work.',
+      description: "Check Anti-Nuke's status, or pause it while you make bulk changes.",
 
       data: new SlashCommandBuilder()
         .setName('antinuke')
-        .setDescription('Inspect the anti-nuke breaker, or suspend it briefly for bulk admin work.')
+        .setDescription("Check Anti-Nuke's status, or pause it while you make bulk changes.")
         .setContexts(InteractionContextType.Guild)
 
         .setDefaultMemberPermissions(Permissions.ManageGuild)
         .addSubcommand((sub) =>
-          sub
-            .setName('status')
-            .setDescription('Show whether the breaker is armed, and at what thresholds.'),
+          sub.setName('status').setDescription('Show whether Anti-Nuke is armed, and its limits.'),
         )
         .addSubcommand((sub) =>
           sub
             .setName('maintenance')
-            .setDescription('Suspend the breaker for a fixed period of bulk admin work.')
+            .setDescription('Pause Anti-Nuke for a set time while you make bulk changes.')
             .addStringOption((option) =>
               option
                 .setName('duration')
-                .setDescription('How long to suspend it for, e.g. 20m. It cannot be indefinite.')
+                .setDescription('How long to pause it for, like 20m.')
                 .setRequired(true),
             )
             .addStringOption((option) =>
               option
                 .setName('reason')
-                .setDescription('What you are about to do. Recorded with the window.')
+                .setDescription("What you're about to do. It's shown in the alert and the status.")
                 .setMaxLength(REASON_MAX),
             ),
         )
         .addSubcommand((sub) =>
-          sub.setName('resume').setDescription('End maintenance mode now and re-arm the breaker.'),
+          sub.setName('resume').setDescription('End maintenance mode now and re-arm Anti-Nuke.'),
         )
         .toJSON(),
 
       async handler(ctx) {
+        const answer = await acknowledge(ctx);
+
         switch (ctx.options.getSubcommand()) {
           case 'maintenance':
-            return startMaintenance(ctx, deps);
+            return startMaintenance(ctx, deps, answer);
           case 'resume':
-            return resume(ctx, deps);
+            return resume(ctx, deps, answer);
           default:
-            return status(ctx, deps);
+            return status(ctx, deps, answer);
         }
       },
     },
   ];
 }
 
-async function startMaintenance(
-  ctx: CommandContext<AntinukeConfig>,
-  deps: AntinukeDeps,
-): Promise<void> {
+async function startMaintenance(ctx: Ctx, deps: AntinukeDeps, answer: Answer): Promise<void> {
   const store = requireStore(deps);
-  if (!store) return reply(ctx, errorStatus(NO_STORE));
-  if (!ctx.config.enabled) return reply(ctx, errorStatus(DISABLED));
+  if (!store) return answer(errorStatus(NO_STORE));
+  if (!ctx.config.enabled) return answer(errorStatus(DISABLED));
 
   const raw = ctx.options.getString('duration');
-  if (!raw) return reply(ctx, errorStatus('I need a duration, for example 20m.'));
+  if (!raw) return answer(errorStatus('Include a duration, like 20m.'));
 
   let durationMs: number;
   try {
     durationMs = parseDuration(raw);
   } catch (error) {
-    return reply(
-      ctx,
-      errorStatus(error instanceof Error ? error.message : `'${raw}' is not a duration.`),
+    return answer(
+      errorStatus(error instanceof Error ? error.message : `'${raw}' isn't a duration.`),
     );
   }
 
@@ -119,59 +126,55 @@ async function startMaintenance(
     now,
   });
 
-  if (isMaintenanceRefusal(planned)) return reply(ctx, errorStatus(planned.refusal));
+  if (isMaintenanceRefusal(planned)) return answer(errorStatus(planned.refusal));
 
   await store.set(planned);
 
-  const until = new Date(planned.expiresAt).toISOString();
+  const until = discordTime(planned.expiresAt);
   const audit =
-    `Anti-nuke maintenance mode was enabled by ${ctx.userId} for ` +
-    `${formatDuration(durationMs)}, until ${until}` +
-    `${planned.reason ? `, for: ${planned.reason}` : ''}. The breaker will not act on anything ` +
-    'destructive in that time, and re-arms by itself at the end — nothing extends it.';
+    `<@${ctx.userId}> started Anti-Nuke maintenance mode until ${until} ` +
+    `(${formatDuration(durationMs)}). Anti-Nuke won't act on destructive changes until then, ` +
+    `and re-arms by itself when it ends.${planned.reason ? ` Reason: ${planned.reason}` : ''}`;
 
   ctx.logger.warn(audit, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: ctx.userId });
   await announce(ctx, ctx.idempotencyKey, audit, 'maintenance-on');
 
-  await reply(
-    ctx,
+  await answer(
     successStatus(
-      `Maintenance mode is on until ${until} (${formatDuration(durationMs)}). Anti-nuke will not ` +
-        'act until then. Run `/antinuke resume` the moment you are done — every minute of this is ' +
-        'a minute the breaker is not protecting the server.',
+      `Maintenance mode is on until ${until} (${formatDuration(durationMs)}). Anti-Nuke won't ` +
+        `act until then, so run \`${labelOf(ctx, 'antinuke', 'resume')}\` as soon as you're done.`,
     ),
   );
 }
 
-async function resume(ctx: CommandContext<AntinukeConfig>, deps: AntinukeDeps): Promise<void> {
+async function resume(ctx: Ctx, deps: AntinukeDeps, answer: Answer): Promise<void> {
   const store = requireStore(deps);
-  if (!store) return reply(ctx, errorStatus(NO_STORE));
+  if (!store) return answer(errorStatus(NO_STORE));
 
   const window = await store.get(ctx.guildId);
   const now = deps.now?.() ?? Date.now();
 
   if (!window || hasLapsed(window, now)) {
-    return reply(ctx, errorStatus('Maintenance mode is not on — the breaker is already armed.'));
+    return answer(errorStatus("Maintenance mode isn't on, so Anti-Nuke is already armed."));
   }
 
   await store.clear(ctx.guildId);
 
   const audit =
-    `Anti-nuke maintenance mode was ended early by ${ctx.userId}; it was opened by ` +
-    `${window.enabledBy} and would have run until ${new Date(window.expiresAt).toISOString()}. ` +
-    'The breaker is armed again.';
+    `<@${ctx.userId}> ended Anti-Nuke maintenance mode early, so Anti-Nuke is armed again. ` +
+    startedBy(window);
 
   ctx.logger.warn(audit, { guildId: ctx.guildId, moduleId: MODULE_ID, actorId: ctx.userId });
   await announce(ctx, ctx.idempotencyKey, audit, 'maintenance-off');
 
-  await reply(ctx, successStatus('Maintenance mode is off. The breaker is armed again.'));
+  await answer(successStatus('Maintenance mode is off. Anti-Nuke is armed again.'));
 }
 
-async function status(ctx: CommandContext<AntinukeConfig>, deps: AntinukeDeps): Promise<void> {
+async function status(ctx: Ctx, deps: AntinukeDeps, answer: Answer): Promise<void> {
   const lines: string[] = [];
 
   if (!ctx.config.enabled) {
-    lines.push('Anti-nuke is OFF in this server. Nothing is being counted.');
+    lines.push('Anti-Nuke is **off** in this server, so nothing is being counted.');
   } else {
     const store = requireStore(deps);
     const window = store ? await store.get(ctx.guildId) : null;
@@ -181,66 +184,47 @@ async function status(ctx: CommandContext<AntinukeConfig>, deps: AntinukeDeps): 
       lines.push(NO_STORE);
     } else if (window && !hasLapsed(window, now)) {
       lines.push(
-        `Anti-nuke is SUSPENDED until ${new Date(window.expiresAt).toISOString()} — maintenance ` +
-          `mode was opened by ${window.enabledBy}` +
-          `${window.reason ? ` for: ${window.reason}` : ''}.`,
+        `Anti-Nuke is **paused** for maintenance mode until ${discordTime(window.expiresAt)}. ` +
+          startedBy(window),
       );
     } else {
-      lines.push('Anti-nuke is ARMED.');
+      lines.push('Anti-Nuke is **armed**.');
     }
 
     for (const nukeClass of NUKE_CLASSES) {
       const threshold = thresholdFor(ctx.config, nukeClass);
+      const label = CLASS_LABELS[nukeClass];
+      const name = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
       lines.push(
         'error' in threshold
-          ? `- ${CLASS_LABELS[nukeClass]}: not being watched — ${threshold.error}`
-          : `- ${CLASS_LABELS[nukeClass]}: ${threshold.limit} per ${threshold.window}`,
+          ? `- ${name}: not watched. ${threshold.error}`
+          : `- ${name}: ${threshold.limit} per ${threshold.window}`,
       );
     }
 
     lines.push(
       ctx.config.afterStrip === 'none'
-        ? 'When it trips: roles are stripped and a human is told. Nothing irreversible.'
-        : `When it trips: roles are stripped first, then ${ctx.config.afterStrip}.`,
+        ? "When it trips, the member's roles are removed. Nothing else is done."
+        : `When it trips, the member's roles are removed first, then they're ` +
+            `${ctx.config.afterStrip === 'ban' ? 'banned' : 'kicked'}.`,
     );
 
     if (!ctx.config.alertChannelId) {
       lines.push(
-        'No alert channel is set, so the breaker can only report to the logs. Set one in the ' +
-          'Proton dashboard — somebody has to be told.',
+        'No alert channel is set, so no one is alerted when it trips. Set one on the Anti-Nuke ' +
+          'page of the Proton dashboard.',
       );
     }
   }
 
-  await reply(ctx, lines.join('\n'));
+  await answer(lines.join('\n'));
 }
 
 function requireStore(deps: AntinukeDeps): MaintenanceStore | null {
   return deps.maintenance ?? null;
 }
 
-async function reply(
-  ctx: CommandContext<AntinukeConfig>,
-  message: string | StatusBody,
-): Promise<void> {
-  const body =
-    typeof message === 'string' ? { content: message.slice(0, MESSAGE_CONTENT_MAX) } : message;
-
-  const result = await ctx.executor.execute({
-    guildId: ctx.guildId,
-    moduleId: MODULE_ID,
-    kind: 'interaction_reply',
-    actorId: ctx.userId,
-    idempotencyKey: `${MODULE_ID}:${ctx.idempotencyKey}:reply`,
-    dryRun: false,
-    payload: {
-      interactionId: ctx.interaction.id,
-      interactionToken: ctx.interaction.token,
-      ...body,
-      ephemeral: true,
-    },
-  });
-
+function warnUnanswered(ctx: Ctx, result: ActionResult): void {
   if (result.failure) {
     ctx.logger.warn(`anti-nuke could not answer the invoker: ${result.failure.humanReason}`, {
       guildId: ctx.guildId,
@@ -248,4 +232,36 @@ async function reply(
       code: result.failure.code,
     });
   }
+}
+
+function privately(message: string | StatusBody): InteractionMessage {
+  return typeof message === 'string'
+    ? { content: message, ephemeral: true }
+    : { ...message, ephemeral: true };
+}
+
+async function acknowledge(ctx: Ctx): Promise<Answer> {
+  const to: RespondTo = {
+    guildId: ctx.guildId,
+    moduleId: MODULE_ID,
+    actorId: ctx.userId,
+    interaction: ctx.interaction,
+    idempotencyKey: `${MODULE_ID}:${ctx.idempotencyKey}`,
+  };
+
+  const applicationId = ctx.applicationId;
+
+  // Without an application id there is no followup webhook, so the one callback must be the answer.
+  if (!applicationId) {
+    return async (message) =>
+      warnUnanswered(ctx, await ctx.executor.execute(replyEphemeral(to, privately(message))));
+  }
+
+  warnUnanswered(ctx, await ctx.executor.execute(deferEphemeral(to)));
+
+  return async (message) =>
+    warnUnanswered(
+      ctx,
+      await ctx.executor.execute(followUp({ ...to, applicationId }, privately(message))),
+    );
 }
