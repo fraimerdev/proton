@@ -1,0 +1,96 @@
+{
+  "t": "INTERACTION_CREATE",
+  "s": 56,
+  "op": 0,
+  "d": {
+    "id": "1500000000000000007",
+    "application_id": "800000000000000001",
+    "type": 5,
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000001",
+    "token": "modal-file-upload-interaction-token",
+    "version": 1,
+    "app_permissions": "563603924254720",
+    "locale": "en-US",
+    "guild_locale": "en-US",
+    "context": 0,
+    "data": {
+      "custom_id": "proton:moderation:rsub:Ab3dE5gH9k",
+      "components": [
+        {
+          "type": 18,
+          "id": 1,
+          "component": {
+            "type": 3,
+            "id": 2,
+            "custom_id": "reason",
+            "values": ["spam"]
+          }
+        },
+        {
+          "type": 18,
+          "id": 3,
+          "component": {
+            "type": 4,
+            "id": 4,
+            "custom_id": "comment",
+            "value": "They posted this in three channels within a minute."
+          }
+        },
+        {
+          "type": 18,
+          "id": 5,
+          "component": {
+            "type": 19,
+            "id": 6,
+            "custom_id": "evidence",
+            "values": ["1430000000000000001", "1430000000000000002"]
+          }
+        }
+      ],
+      "resolved": {
+        "attachments": {
+          "1430000000000000001": {
+            "id": "1430000000000000001",
+            "filename": "screenshot.png",
+            "size": 241394,
+            "url": "https://cdn.discordapp.com/ephemeral-attachments/2222222222222222222/1430000000000000001/screenshot.png?ex=6aae7940&is=6aad27c0&hm=5954f90117ccf8716ffa6c7f97a778a0d039810c9584045f400d8a9fff590768&",
+            "proxy_url": "https://media.discordapp.net/ephemeral-attachments/2222222222222222222/1430000000000000001/screenshot.png?ex=6aae7940&is=6aad27c0&hm=5954f90117ccf8716ffa6c7f97a778a0d039810c9584045f400d8a9fff590768&",
+            "content_type": "image/png",
+            "width": 2482,
+            "height": 604,
+            "placeholder": "/PcBAoBQydvKesabEIoMsdg=",
+            "placeholder_version": 1,
+            "ephemeral": true
+          },
+          "1430000000000000002": {
+            "id": "1430000000000000002",
+            "filename": "chat-log.txt",
+            "size": 1832,
+            "url": "https://cdn.discordapp.com/ephemeral-attachments/2222222222222222222/1430000000000000002/chat-log.txt?ex=6aae7940&is=6aad27c0&hm=7a1e3b0c9d8f6e5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a&",
+            "proxy_url": "https://media.discordapp.net/ephemeral-attachments/2222222222222222222/1430000000000000002/chat-log.txt?ex=6aae7940&is=6aad27c0&hm=7a1e3b0c9d8f6e5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a&",
+            "content_type": "text/plain; charset=utf-8",
+            "ephemeral": true
+          }
+        }
+      }
+    },
+    "member": {
+      "user": {
+        "id": "100000000000000001",
+        "username": "tester",
+        "discriminator": "0",
+        "global_name": "Tester",
+        "avatar": null,
+        "bot": false
+      },
+      "roles": ["400000000000000001"],
+      "joined_at": "2026-01-04T10:00:00.000000+00:00",
+      "deaf": false,
+      "mute": false,
+      "flags": 0,
+      "permissions": "1071698660929",
+      "communication_disabled_until": null
+    }
+  }
+}

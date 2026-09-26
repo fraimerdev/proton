@@ -1,0 +1,77 @@
+{
+  "t": "INTERACTION_CREATE",
+  "s": 56,
+  "op": 0,
+  "d": {
+    "id": "1500000000000000021",
+    "application_id": "800000000000000001",
+    "type": 2,
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000001",
+    "token": "guild-command-interaction-token",
+    "version": 1,
+    "app_permissions": "563603924254720",
+    "locale": "en-US",
+    "guild_locale": "en-US",
+    "context": 0,
+    "authorizing_integration_owners": { "0": "900000000000000001" },
+    "data": {
+      "id": "1260000000000000001",
+      "name": "ban",
+      "type": 1,
+      "guild_id": "900000000000000001",
+      "options": [
+        {
+          "name": "add",
+          "type": 1,
+          "options": [
+            { "name": "user", "type": 6, "value": "100000000000000003" },
+            { "name": "reason", "type": 3, "value": "Posting scam links" }
+          ]
+        }
+      ],
+      "resolved": {
+        "users": {
+          "100000000000000003": {
+            "id": "100000000000000003",
+            "username": "rulebreaker",
+            "discriminator": "0",
+            "global_name": "Rule Breaker",
+            "avatar": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+            "public_flags": 0
+          }
+        },
+        "members": {
+          "100000000000000003": {
+            "avatar": null,
+            "nick": "Breaker",
+            "roles": ["700000000000000001"],
+            "joined_at": "2026-08-01T09:30:00.000000+00:00",
+            "premium_since": null,
+            "pending": false,
+            "flags": 0,
+            "permissions": "1071698660929",
+            "communication_disabled_until": null
+          }
+        }
+      }
+    },
+    "member": {
+      "user": {
+        "id": "100000000000000001",
+        "username": "tester",
+        "discriminator": "0",
+        "global_name": "Tester",
+        "avatar": null,
+        "bot": false
+      },
+      "roles": ["400000000000000001"],
+      "joined_at": "2026-01-04T10:00:00.000000+00:00",
+      "deaf": false,
+      "mute": false,
+      "flags": 0,
+      "permissions": "1071698660929",
+      "communication_disabled_until": null
+    }
+  }
+}

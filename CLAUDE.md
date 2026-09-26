@@ -21,6 +21,12 @@ decisions below, which the project owner has taken since PLAN.md was written.
 - **Privileged intents**: Server Members + Message Content. Presence is not used.
 - **Message-log retention**: opt-in, 30 days.
 - **`@tanstack/react-table` is v9**, not §2's v8 — not a dependency until Gate 1.
+- **Commands are registered per server, never globally.** This replaces §2's "global in prod". The
+  worker keeps each guild's effective set (customized names/descriptions, per-command switch, module
+  state) in sync with `PUT /applications/{app}/guilds/{guild}/commands`; `COMMAND_REGISTRATION_SCOPE`
+  is `guild` (the test guild only) or `every-guild`. A command whose module is off is not registered,
+  except `/help`. Registration PUTs are not `ActionExecutor` actions, as the boot registrar never was.
+  Discord wipes a command's Integrations permissions on rename or unregister; the Commands page warns.
 - **No environment rail on destructive actions.** This replaces §3's I12: Proton performs every
   action for real in every environment, however destructive. Nothing reads `NODE_ENV` to decide
   whether Discord is called, and `PROTON_ALLOW_DESTRUCTIVE` is gone. The only remaining dry run is

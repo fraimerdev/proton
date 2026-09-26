@@ -1,0 +1,50 @@
+{
+  "t": "INTERACTION_CREATE",
+  "s": 59,
+  "op": 0,
+  "d": {
+    "id": "1500000000000000024",
+    "application_id": "800000000000000001",
+    "type": 4,
+    "guild_id": "900000000000000001",
+    "channel_id": "500000000000000001",
+    "token": "guild-autocomplete-interaction-token",
+    "version": 1,
+    "app_permissions": "563603924254720",
+    "locale": "en-US",
+    "guild_locale": "en-US",
+    "data": {
+      "id": "1260000000000000001",
+      "name": "ban",
+      "type": 1,
+      "guild_id": "900000000000000001",
+      "options": [
+        {
+          "name": "add",
+          "type": 1,
+          "options": [
+            { "name": "user", "type": 6, "value": "100000000000000003" },
+            { "name": "reason", "type": 3, "value": "scam", "focused": true }
+          ]
+        }
+      ]
+    },
+    "member": {
+      "user": {
+        "id": "100000000000000001",
+        "username": "tester",
+        "discriminator": "0",
+        "global_name": "Tester",
+        "avatar": null,
+        "bot": false
+      },
+      "roles": ["400000000000000001"],
+      "joined_at": "2026-01-04T10:00:00.000000+00:00",
+      "deaf": false,
+      "mute": false,
+      "flags": 0,
+      "permissions": "1071698660929",
+      "communication_disabled_until": null
+    }
+  }
+}

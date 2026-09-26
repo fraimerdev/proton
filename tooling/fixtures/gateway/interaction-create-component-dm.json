@@ -1,0 +1,51 @@
+{
+  "t": "INTERACTION_CREATE",
+  "s": 57,
+  "op": 0,
+  "d": {
+    "id": "1500000000000000008",
+    "application_id": "800000000000000001",
+    "type": 3,
+    "channel_id": "1600000000000000001",
+    "channel": {
+      "id": "1600000000000000001",
+      "type": 1,
+      "last_message_id": "1400000000000000011",
+      "flags": 0,
+      "recipients": [
+        {
+          "id": "100000000000000001",
+          "username": "tester",
+          "discriminator": "0",
+          "global_name": "Tester",
+          "avatar": null
+        }
+      ]
+    },
+    "token": "component-dm-interaction-token",
+    "version": 1,
+    "app_permissions": "1126451209649664",
+    "locale": "en-US",
+    "context": 1,
+    "authorizing_integration_owners": { "0": "0" },
+    "data": {
+      "custom_id": "proton:moderation:rfin:900000000000000001:Ab3dE5gH9k",
+      "component_type": 2
+    },
+    "message": {
+      "id": "1400000000000000011",
+      "channel_id": "1600000000000000001",
+      "type": 0,
+      "content": "",
+      "flags": 0
+    },
+    "user": {
+      "id": "100000000000000001",
+      "username": "tester",
+      "discriminator": "0",
+      "global_name": "Tester",
+      "avatar": null,
+      "bot": false
+    }
+  }
+}

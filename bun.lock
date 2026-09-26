@@ -23,12 +23,16 @@
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
         "@proton/gateway": "workspace:*",
+        "@proton/module-achievements": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
         "@proton/module-appeals": "workspace:*",
+        "@proton/module-applications": "workspace:*",
         "@proton/module-branding": "workspace:*",
         "@proton/module-cases": "workspace:*",
         "@proton/module-giveaways": "workspace:*",
+        "@proton/module-joinroles": "workspace:*",
         "@proton/module-leveling": "workspace:*",
+        "@proton/module-moderation": "workspace:*",
         "@proton/module-ping": "workspace:*",
         "@proton/module-tags": "workspace:*",
         "@proton/module-tickets": "workspace:*",
@@ -44,9 +48,11 @@
       "version": "0.0.0",
       "dependencies": {
         "@better-auth/drizzle-adapter": "^1.6.28",
+        "@fontsource-variable/inter": "^5.3.0",
         "@fontsource/cherry-bomb-one": "^5.3.0",
         "@fontsource/chicle": "^5.3.0",
         "@fontsource/grenze-gotisch": "^5.3.0",
+        "@fontsource/ibm-plex-mono": "^5.3.0",
         "@fontsource/inter": "^5.3.0",
         "@fontsource/kalam": "^5.3.0",
         "@fontsource/medievalsharp": "^5.3.0",
@@ -59,10 +65,12 @@
         "@proton/cards": "workspace:*",
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
+        "@proton/module-achievements": "workspace:*",
         "@proton/module-afk": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
         "@proton/module-antiraid": "workspace:*",
         "@proton/module-appeals": "workspace:*",
+        "@proton/module-applications": "workspace:*",
         "@proton/module-automod": "workspace:*",
         "@proton/module-backup": "workspace:*",
         "@proton/module-branding": "workspace:*",
@@ -149,9 +157,11 @@
         "@proton/cards": "workspace:*",
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
+        "@proton/module-achievements": "workspace:*",
         "@proton/module-afk": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
         "@proton/module-appeals": "workspace:*",
+        "@proton/module-applications": "workspace:*",
         "@proton/module-backup": "workspace:*",
         "@proton/module-branding": "workspace:*",
         "@proton/module-cases": "workspace:*",
@@ -226,6 +236,24 @@
         "drizzle-kit": "^0.31.10",
       },
     },
+    "packages/modules/achievements": {
+      "name": "@proton/module-achievements",
+      "version": "0.0.0",
+      "dependencies": {
+        "@proton/cards": "workspace:*",
+        "@proton/core": "workspace:*",
+        "@proton/db": "workspace:*",
+        "discord-api-types": "^0.38.53",
+        "discord.js": "^14.27.0",
+        "drizzle-orm": "^0.45.2",
+        "ioredis": "^6.0.0",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@proton/fixtures": "workspace:*",
+        "fast-check": "^4.9.0",
+      },
+    },
     "packages/modules/afk": {
       "name": "@proton/module-afk",
       "version": "0.0.0",
@@ -277,6 +305,22 @@
         "@proton/core": "workspace:*",
         "@proton/db": "workspace:*",
         "discord-api-types": "^0.38.53",
+        "drizzle-orm": "^0.45.2",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "@testcontainers/postgresql": "^12.1.0",
+        "fast-check": "^4.9.0",
+      },
+    },
+    "packages/modules/applications": {
+      "name": "@proton/module-applications",
+      "version": "0.0.0",
+      "dependencies": {
+        "@proton/core": "workspace:*",
+        "@proton/db": "workspace:*",
+        "discord-api-types": "^0.38.53",
+        "discord.js": "^14.27.0",
         "drizzle-orm": "^0.45.2",
         "zod": "^4.4.3",
       },
@@ -466,6 +510,9 @@
         "ioredis": "^6.0.0",
         "zod": "^4.4.3",
       },
+      "devDependencies": {
+        "@proton/fixtures": "workspace:*",
+      },
     },
     "packages/modules/permissions": {
       "name": "@proton/module-permissions",
@@ -518,10 +565,12 @@
       "version": "0.0.0",
       "dependencies": {
         "@proton/core": "workspace:*",
+        "@proton/module-achievements": "workspace:*",
         "@proton/module-afk": "workspace:*",
         "@proton/module-antinuke": "workspace:*",
         "@proton/module-antiraid": "workspace:*",
         "@proton/module-appeals": "workspace:*",
+        "@proton/module-applications": "workspace:*",
         "@proton/module-automod": "workspace:*",
         "@proton/module-backup": "workspace:*",
         "@proton/module-branding": "workspace:*",
@@ -853,11 +902,15 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.12", "", { "os": "win32", "cpu": "x64" }, "sha512-alJC0uCZpTFrSL0CCDjcgleBXPnCrEAhTBILpeAp7M/OFgoqtAetfBzX0xM00MUsVVPpVjlPuMbREqnZCXaTnA=="],
 
+    "@fontsource-variable/inter": ["@fontsource-variable/inter@5.3.0", "", {}, "sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA=="],
+
     "@fontsource/cherry-bomb-one": ["@fontsource/cherry-bomb-one@5.3.0", "", {}, "sha512-iSBbBw+xmNsvws9m3m12J+2X5tlC0FORiuk0oLe7LWOzuolvFb/Paeck36eLONiXRzad4RVcZ+ip77hjFB1zQA=="],
 
     "@fontsource/chicle": ["@fontsource/chicle@5.3.0", "", {}, "sha512-lRrPF7geIDlICqMn05eL59zVP2vxTaz5fRogpyQZzNlZQLA7+OGDo73nsrsYSqqTozD9nF3l/KW73ndm/j4Qjw=="],
 
     "@fontsource/grenze-gotisch": ["@fontsource/grenze-gotisch@5.3.0", "", {}, "sha512-hIgb3TJWnwjiaf8FWMYfPe5PvHHnSv+VYUJI40Fj0KhjWhBhBl4LTsGrkr4MSjo6mG+znR2tBz5L++4wkEgI1A=="],
+
+    "@fontsource/ibm-plex-mono": ["@fontsource/ibm-plex-mono@5.3.0", "", {}, "sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q=="],
 
     "@fontsource/inter": ["@fontsource/inter@5.3.0", "", {}, "sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g=="],
 
@@ -987,6 +1040,8 @@
 
     "@proton/gateway": ["@proton/gateway@workspace:apps/gateway"],
 
+    "@proton/module-achievements": ["@proton/module-achievements@workspace:packages/modules/achievements"],
+
     "@proton/module-afk": ["@proton/module-afk@workspace:packages/modules/afk"],
 
     "@proton/module-antinuke": ["@proton/module-antinuke@workspace:packages/modules/antinuke"],
@@ -994,6 +1049,8 @@
     "@proton/module-antiraid": ["@proton/module-antiraid@workspace:packages/modules/antiraid"],
 
     "@proton/module-appeals": ["@proton/module-appeals@workspace:packages/modules/appeals"],
+
+    "@proton/module-applications": ["@proton/module-applications@workspace:packages/modules/applications"],
 
     "@proton/module-automod": ["@proton/module-automod@workspace:packages/modules/automod"],
 

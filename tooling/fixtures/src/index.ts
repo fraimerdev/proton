@@ -31,8 +31,32 @@ import interactionCreateAutocomplete from '../gateway/interaction-create-autocom
 import interactionCreateComponent from '../gateway/interaction-create-component.json' with {
   type: 'json',
 };
+import interactionCreateComponentDm from '../gateway/interaction-create-component-dm.json' with {
+  type: 'json',
+};
+import interactionCreateGuildAutocomplete from '../gateway/interaction-create-guild-autocomplete.json' with {
+  type: 'json',
+};
+import interactionCreateGuildCommand from '../gateway/interaction-create-guild-command.json' with {
+  type: 'json',
+};
+import interactionCreateGuildMessageCommand from '../gateway/interaction-create-guild-message-command.json' with {
+  type: 'json',
+};
+import interactionCreateGuildUserCommand from '../gateway/interaction-create-guild-user-command.json' with {
+  type: 'json',
+};
+import interactionCreateMessageCommand from '../gateway/interaction-create-message-command.json' with {
+  type: 'json',
+};
 import interactionCreateModal from '../gateway/interaction-create-modal.json' with { type: 'json' };
+import interactionCreateModalFileUpload from '../gateway/interaction-create-modal-file-upload.json' with {
+  type: 'json',
+};
 import interactionCreatePing from '../gateway/interaction-create-ping.json' with { type: 'json' };
+import interactionCreateUserCommand from '../gateway/interaction-create-user-command.json' with {
+  type: 'json',
+};
 import inviteCreate from '../gateway/invite-create.json' with { type: 'json' };
 import inviteDelete from '../gateway/invite-delete.json' with { type: 'json' };
 import messageCreate from '../gateway/message-create.json' with { type: 'json' };
@@ -76,6 +100,10 @@ export const dispatches = {
   interactionCreateComponent: interactionCreateComponent as unknown as RawDispatch,
   interactionCreateModal: interactionCreateModal as unknown as RawDispatch,
   interactionCreateAutocomplete: interactionCreateAutocomplete as unknown as RawDispatch,
+  interactionCreateUserCommand: interactionCreateUserCommand as unknown as RawDispatch,
+  interactionCreateMessageCommand: interactionCreateMessageCommand as unknown as RawDispatch,
+  interactionCreateModalFileUpload: interactionCreateModalFileUpload as unknown as RawDispatch,
+  interactionCreateComponentDm: interactionCreateComponentDm as unknown as RawDispatch,
   channelObfuscated: channelObfuscated as unknown as RawDispatch,
   auditLogChannelDelete: auditLogChannelDelete as unknown as RawDispatch,
 
@@ -110,14 +138,30 @@ export const dispatches = {
 
 export type DispatchName = keyof typeof dispatches;
 
+export const guildCommandDispatches = {
+  interactionCreateGuildCommand: interactionCreateGuildCommand as unknown as RawDispatch,
+  interactionCreateGuildUserCommand: interactionCreateGuildUserCommand as unknown as RawDispatch,
+  interactionCreateGuildMessageCommand:
+    interactionCreateGuildMessageCommand as unknown as RawDispatch,
+  interactionCreateGuildAutocomplete: interactionCreateGuildAutocomplete as unknown as RawDispatch,
+} as const;
+
+export type GuildCommandDispatchName = keyof typeof guildCommandDispatches;
+
 export const dispatchSequences = {
   auditLogChannelDeleteBurst: auditLogChannelDeleteBurst.dispatches as unknown as RawDispatch[],
 } as const;
 
 export type DispatchSequenceName = keyof typeof dispatchSequences;
 
-export function dispatch(name: DispatchName): RawDispatch {
-  return structuredClone(dispatches[name]);
+function isGuildCommandDispatch(name: string): name is GuildCommandDispatchName {
+  return Object.hasOwn(guildCommandDispatches, name);
+}
+
+export function dispatch(name: DispatchName | GuildCommandDispatchName): RawDispatch {
+  return structuredClone(
+    isGuildCommandDispatch(name) ? guildCommandDispatches[name] : dispatches[name],
+  );
 }
 
 export function dispatchSequence(name: DispatchSequenceName): RawDispatch[] {
