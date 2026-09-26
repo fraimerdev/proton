@@ -1,6 +1,7 @@
 import {
   type ActionExecutor,
   type ActionKind,
+  type ActionRequest,
   isScopedActionExecutor,
   type ModuleRegistry,
   type ScopedActionExecutor,
@@ -23,13 +24,27 @@ export function moduleExecutor(
   moduleId: string,
   executor: ActionExecutor,
 ): ActionExecutor {
+  const allow = (request: ActionRequest): void => {
+    if (!registry.mayExecute(moduleId, request.kind)) {
+      throw new UndeclaredActionError(moduleId, request.kind);
+    }
+  };
+  const precheck = executor.precheck?.bind(executor);
+
   const guarded: ScopedActionExecutor = {
     execute(request) {
-      if (!registry.mayExecute(moduleId, request.kind)) {
-        throw new UndeclaredActionError(moduleId, request.kind);
-      }
+      allow(request);
       return executor.execute(request);
     },
+
+    ...(precheck
+      ? {
+          precheck(request: ActionRequest) {
+            allow(request);
+            return precheck(request);
+          },
+        }
+      : {}),
 
     // Forwarded, not dropped: a module that hands the executor hints to save a per-target fetch
     // paid for them anyway while this wrapper answered every isScopedActionExecutor check false.

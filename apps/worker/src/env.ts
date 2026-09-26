@@ -1,13 +1,27 @@
 import { VERIFY_LINK_SECRET_MIN } from '@proton/core';
-import { createEnv } from '@proton/core/env';
+import { createEnv, EnvValidationError } from '@proton/core/env';
+import { COMMAND_REGISTRATION_SCOPES } from '@proton/db';
 import { z } from 'zod';
+
+export const LEGACY_GLOBAL_SCOPE = 'global';
+
+export const LEGACY_SCOPE_WARNING =
+  'COMMAND_REGISTRATION_SCOPE=global is read as every-guild: Proton now registers its commands in ' +
+  'each server instead of globally. Set COMMAND_REGISTRATION_SCOPE=every-guild in .env to stop ' +
+  'this warning.';
 
 export const envSchema = z.object({
   DISCORD_BOT_TOKEN: z.string().min(1),
   DISCORD_APPLICATION_ID: z.string().min(1),
 
-  DISCORD_TEST_GUILD_ID: z.string().optional(),
-  COMMAND_REGISTRATION_SCOPE: z.enum(['guild', 'global']).default('guild'),
+  DISCORD_TEST_GUILD_ID: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().trim().min(1).optional(),
+  ),
+  COMMAND_REGISTRATION_SCOPE: z
+    .enum([...COMMAND_REGISTRATION_SCOPES, LEGACY_GLOBAL_SCOPE])
+    .default('guild')
+    .transform((scope) => (scope === LEGACY_GLOBAL_SCOPE ? 'every-guild' : scope)),
   REDIS_URL: z.string().min(1),
   REDIS_DB_BUS: z.coerce.number().int().min(0).max(15).default(0),
   REDIS_DB_DEDUPE: z.coerce.number().int().min(0).max(15).default(1),
@@ -53,6 +67,38 @@ export const envSchema = z.object({
 
 export type WorkerEnv = z.infer<typeof envSchema>;
 
-export function loadEnv(source?: Record<string, string | undefined>): WorkerEnv {
-  return createEnv('@proton/worker', envSchema, source);
+export function registrationRefusal(
+  env: Pick<WorkerEnv, 'COMMAND_REGISTRATION_SCOPE' | 'DISCORD_TEST_GUILD_ID'>,
+): string | null {
+  if (env.COMMAND_REGISTRATION_SCOPE === 'guild' && !env.DISCORD_TEST_GUILD_ID) {
+    return (
+      'COMMAND_REGISTRATION_SCOPE: guild requires DISCORD_TEST_GUILD_ID. Refusing to fall back to ' +
+      'registering commands in every server, which would publish them to every guild the bot is in.'
+    );
+  }
+
+  if (env.COMMAND_REGISTRATION_SCOPE === 'every-guild' && env.DISCORD_TEST_GUILD_ID) {
+    return (
+      'COMMAND_REGISTRATION_SCOPE: every-guild registers commands in every server Proton is in, but ' +
+      'DISCORD_TEST_GUILD_ID is set, which marks a development environment. Unset ' +
+      'DISCORD_TEST_GUILD_ID in production, or set COMMAND_REGISTRATION_SCOPE=guild to register ' +
+      'only in the test guild.'
+    );
+  }
+
+  return null;
+}
+
+export function loadEnv(
+  source: Record<string, string | undefined> = process.env,
+  warn: (message: string) => void = console.warn,
+): WorkerEnv {
+  const env = createEnv('@proton/worker', envSchema, source);
+
+  const refusal = registrationRefusal(env);
+  if (refusal) throw new EnvValidationError('@proton/worker', [refusal]);
+
+  if (source.COMMAND_REGISTRATION_SCOPE === LEGACY_GLOBAL_SCOPE) warn(LEGACY_SCOPE_WARNING);
+
+  return env;
 }

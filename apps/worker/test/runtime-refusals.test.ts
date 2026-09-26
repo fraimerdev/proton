@@ -17,6 +17,7 @@ import { GatewayIntentBits } from 'discord-api-types/v10';
 import { z } from 'zod';
 import { ConfigUnavailableError } from '../src/config-provider.ts';
 import { disabledReason, ModuleRuntime } from '../src/runtime.ts';
+import { queryError } from './query-error.ts';
 
 const GUILD = '900000000000000001';
 const DASHBOARD = 'https://proton.example';
@@ -174,9 +175,9 @@ describe('a command that cannot run still answers', () => {
 
     const content = replyContent(executor);
     expect(content).toContain('Ping');
-    expect(content).toContain('disabled');
+    expect(content).toContain('is off');
     expect(content).toContain(`<${DASHBOARD}/dashboard/${GUILD}/ping>`);
-    expect(content).toContain('top of that page');
+    expect(content).toContain('top of the page');
     expect(content).not.toContain('Module enabled');
   });
 
@@ -199,7 +200,7 @@ describe('a command that cannot run still answers', () => {
     await runtime.handle(commandEvent());
 
     const content = replyContent(executor);
-    expect(content).toContain('disabled');
+    expect(content).toContain('is off');
     expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
   });
 
@@ -220,7 +221,7 @@ describe('a command that cannot run still answers', () => {
     expect((payloadOf(executor) as { ephemeral?: boolean }).ephemeral).toBe(true);
   });
 
-  test('unreadable settings say how to repair them', async () => {
+  test('unreadable settings are put down to Proton, since no Save can rewrite them', async () => {
     const { runtime, executor } = runtimeWith(
       new ConfigUnavailableError({
         message: 'the module is unknown',
@@ -235,8 +236,8 @@ describe('a command that cannot run still answers', () => {
 
     const content = replyContent(executor);
     expect(content).toContain('Ping');
-    expect(content).toContain('Save');
-    expect(content).toContain(`${DASHBOARD}/dashboard/${GUILD}/ping`);
+    expect(content).toContain('on my end');
+    expect(content).not.toContain('Save');
   });
 
   test('invalid stored settings name the field that is wrong', async () => {
@@ -270,8 +271,9 @@ describe('a command that cannot run still answers', () => {
       const content = replyContent(executor);
       expect(content).not.toContain('Save');
       expect(content).not.toContain('/dashboard/');
-      expect(content).toContain('no settings page');
+      expect(content).toContain('on my end');
     }
+    expect(replyContent(invalid.executor)).toContain('no settings page');
   });
 
   test('a command no module owns is answered rather than left hanging', async () => {
@@ -302,6 +304,22 @@ describe('a command that cannot run still answers', () => {
     expect(embed.description).toContain('/ping');
     expect(embed.description).not.toContain('10.0.0.4');
     expect(lines.some((line) => line.includes('10.0.0.4:5432'))).toBe(true);
+  });
+
+  test('a handler whose query failed logs the failure without the values it was bound with', async () => {
+    const { runtime, lines } = runtimeWith(
+      { enabled: true, config: { enabled: true } },
+      {
+        handler: async () => {
+          throw queryError(['SECRET moderator reason']);
+        },
+      },
+    );
+
+    await expect(runtime.handle(commandEvent())).rejects.toThrow();
+
+    expect(lines.some((line) => line.includes('database query failed (08006)'))).toBe(true);
+    expect(lines.join('\n')).not.toContain('SECRET');
   });
 
   test('a transient config failure propagates instead of being answered', async () => {
@@ -421,6 +439,33 @@ describe('the handler is told who invoked it', () => {
     });
 
     expect(ctx.actorDisplayName).toBe('tester');
+  });
+
+  test('the invoker’s join time arrives in epoch milliseconds', async () => {
+    const ctx = await handled();
+
+    expect(ctx.actorJoinedAt).toBe(Date.parse('2026-01-04T10:00:00.000Z'));
+  });
+
+  test('a member sent without a join time, or with one that is not a date, has none', async () => {
+    const missing = await handled((d) => {
+      delete member(d).joined_at;
+    });
+    const garbled = await handled((d) => {
+      member(d).joined_at = 'yesterday';
+    });
+
+    expect(missing.actorJoinedAt).toBeNull();
+    expect(garbled.actorJoinedAt).toBeNull();
+  });
+
+  test('without a member there is no join time', async () => {
+    const ctx = await handled((d) => {
+      d.user = { id: '100000000000000001', username: 'dm-tester', global_name: null };
+      d.member = undefined;
+    });
+
+    expect(ctx.actorJoinedAt).toBeNull();
   });
 
   test('without a member the nickname is unknown and the name comes from the user', async () => {

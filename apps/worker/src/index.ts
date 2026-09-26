@@ -1,22 +1,29 @@
-import { HttpImageFetcher } from '@proton/cards';
+import { HttpImageFetcher, renderCard } from '@proton/cards';
 import {
+  ACHIEVEMENT_RETRY_MAILBOX_PREFIX,
+  achievementRetryOutcomeSchema,
   BulkMemberContextLoader,
+  commandCatalogue,
   createUserResolver,
   DatabaseReversalScheduler,
   DefaultActionExecutor,
   HttpRestProxyClient,
   ProviderRegistry,
+  REPORT_ACTION_MAILBOX_PREFIX,
   RedisCorrelationStore,
   RedisDedupeStore,
   RedisGuildStateStore,
+  RedisMailbox,
   RedisMessageContentCache,
   RedisRateWindow,
   RedisSimulationResults,
   RedisStreamsEventBus,
   RedisUserProfileCache,
   type ResolveContextHints,
+  RestGuildMemberLister,
   RestMemberContextLoader,
   RuleEngine,
+  reportActionOutcomeSchema,
   resolvePrecheckContext,
   ScheduledActionSweeper,
 } from '@proton/core';
@@ -27,13 +34,22 @@ import {
   DrizzleBlockedMemberStore,
   DrizzleBrandingNameStyleStore,
   DrizzleCaseRecorder,
+  DrizzleCommandRegistrationStore,
   DrizzleGuildRuleStore,
   DrizzleMemberXpStore,
   DrizzleScheduledActionStore,
 } from '@proton/db';
+import {
+  DrizzleAchievementStore,
+  purgeAchievements,
+  RedisAchievementVoiceStore,
+  RedisFencedLocks,
+  RedisLimits,
+} from '@proton/module-achievements';
 import { DrizzleAfkStore } from '@proton/module-afk';
 import { RedisMaintenanceStore } from '@proton/module-antinuke';
 import { DrizzleAppealStore } from '@proton/module-appeals';
+import { DrizzleApplicationStore, purgeApplications } from '@proton/module-applications';
 import { DrizzleBackupStore } from '@proton/module-backup';
 import { DrizzleBrandingAssetStore, DrizzleBrandingRoleStore } from '@proton/module-branding/store';
 import { DrizzleCaseHistoryStore } from '@proton/module-cases/store';
@@ -52,24 +68,38 @@ import {
   RedisNoticeStore,
 } from '@proton/module-honeypot';
 import { DrizzleStickyRoleStore, RedisPendingGrantStore } from '@proton/module-joinroles';
+import { RedisJoinRolesRunStore } from '@proton/module-joinroles/sync-store';
 import {
   CachedXpEventStore,
   levelForXp,
+  MAX_PAID_SESSION_MS,
   MAX_XP,
   RedisVoiceSessionStore,
+  VOICE_SESSION_PREFIX,
 } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
 import { DrizzleXpEventStore } from '@proton/module-leveling/xp-event-store';
 import { PostgresMessageLogStore, runMessageLogMaintenance } from '@proton/module-logging';
-import { RestGuildMemberLister } from '@proton/module-moderation/members';
+import {
+  DrizzleReportStore,
+  RedisDmChannelStore as ModerationDmChannelStore,
+  RedisDraftStore as ModerationDraftStore,
+  purgeModerationEvidence,
+  RedisMessageHistoryBuffer,
+  RedisPromptStore,
+  RedisReactionGate,
+} from '@proton/module-moderation';
+import {
+  DrizzleCaseLedger,
+  DrizzleCaseMessageStore,
+  DrizzleTimeoutStore,
+} from '@proton/module-moderation/punish-store';
 import { RedisRoleRunStore } from '@proton/module-moderation/run-store';
-import { DrizzleWarningStore } from '@proton/module-moderation/store';
 import { RedisBlocklistStore, refreshBlocklist } from '@proton/module-phishing';
 import { DrizzlePollStore } from '@proton/module-polls';
 import { DrizzleReminderStore } from '@proton/module-reminders';
 import {
   RedisScreeningStore,
-  SERVERLOG_ACTOR,
   SERVERLOG_MODULE_ID,
   type ServerlogDeps,
   serverlogConfigSchema,
@@ -82,24 +112,49 @@ import {
   RedisCooldownGate,
   RedisPresenceStore,
 } from '@proton/module-tempvc';
-import { DrizzleTicketStore } from '@proton/module-tickets';
+import { DrizzleTicketStore, purgeCapturedMessages } from '@proton/module-tickets';
 import {
   RedisCaptchaStore,
   RedisPanelStore,
   RedisQuarantineStore,
 } from '@proton/module-verification';
 import { createModuleRegistry } from '@proton/modules';
+import {
+  createAchievementBadges,
+  createChannelKind,
+  createLevelHolders,
+  createMemberFacts,
+  createMemberPages,
+  effectivelyEnabled,
+} from './achievement-ports.ts';
 import { PublishingCaseRecorder, publishableCase } from './action-events.ts';
 import { readNativeAutomodRules } from './automod-rules.ts';
+import { createCommandGate } from './command-gate.ts';
+import { CommandLabels } from './command-labels.ts';
+import { CommandResolver } from './command-resolver.ts';
+import {
+  CommandRecordCache,
+  CommandSettingsProvider,
+  CommandSyncer,
+  CommandSyncQueue,
+  DRIFT_RECONCILE,
+  HttpCommandWorkerViews,
+  inRegistrationScope,
+} from './command-sync.ts';
+import { CommandSyncTriggers, startCommandSyncSweep } from './command-sync-triggers.ts';
 import { CachingConfigProvider, HttpConfigProvider } from './config-provider.ts';
 import { verifyApplicationEmojis } from './emoji-check.ts';
 import { loadEnv } from './env.ts';
+import { logHandlerError } from './error-log.ts';
 import { GuildLayoutConsumer, RedisGuildLayoutStore } from './guild-layout.ts';
 import { HttpGuildRegistrar } from './guild-registrar.ts';
 import { GuildStateConsumer } from './guild-state-consumer.ts';
 import { ModuleListenerRuntime } from './listener-runtime.ts';
-import { createFetchMemberRoles } from './member-roles.ts';
+import { createMemberLookup } from './member-lookup.ts';
+import { createFetchMemberRoles, createMemberRolesLookup } from './member-roles.ts';
 import { MessageCacheConsumer } from './message-cache.ts';
+import { createMessageReader } from './message-read.ts';
+import { ModerationMessagesConsumer } from './moderation-messages.ts';
 import { moduleExecutor } from './module-actions.ts';
 import {
   assertHandlersCoverJobs,
@@ -108,7 +163,7 @@ import {
 } from './module-jobs.ts';
 import { createModulePublisher } from './module-publish.ts';
 import { createModuleScheduler } from './module-schedule.ts';
-import { registerCommands } from './registrar.ts';
+import { PSEUDO_ACTORS } from './pseudo-actors.ts';
 import { RuleCronScheduler, RuleDispatchRuntime, RulePresetSeeder } from './rule-runtime.ts';
 import { ModuleRuntime } from './runtime.ts';
 import { startScheduledActionJobs } from './scheduled-jobs.ts';
@@ -133,19 +188,7 @@ const handle = createDb(env.DATABASE_URL);
 const rest = new HttpRestProxyClient(env.REST_PROXY_URL);
 
 const bus = new RedisStreamsEventBus(busRedis, {
-  onHandlerError: (event, error, group) => {
-    console.error(
-      `${group} failed to handle ${event.type}, so it will be redelivered: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      {
-        group,
-        eventId: event.id,
-        guildId: event.guildId,
-        ...(error instanceof Error && error.stack ? { stack: error.stack } : {}),
-      },
-    );
-  },
+  onHandlerError: logHandlerError((message, meta) => console.error(message, meta)),
   onDeadLetter: (event, deliveries, group) => {
     console.error(
       `${group} is giving up on ${event.type} after ${deliveries} deliveries — it has been ` +
@@ -172,26 +215,40 @@ const schedule = new DrizzleScheduledActionStore(handle);
 const blockedMembers = new DrizzleBlockedMemberStore(handle);
 const reversals = new DatabaseReversalScheduler({ store: schedule, logger: console });
 
-const fetchMemberRoles = createFetchMemberRoles(rest, {
-  onUnavailable: (guildId, userId, status) => {
+const memberRolesOptions = {
+  onUnavailable: (guildId: string, userId: string, status: number) => {
     console.error(
-      `could not read ${userId}'s roles in ${guildId}: the REST proxy answered ${status}. Any ` +
-        'action needing their role list has been refused rather than guessed.',
+      `could not read ${userId}'s roles in ${guildId}: ${status < 500 ? 'Discord' : 'the REST proxy'} ` +
+        `answered ${status}. Any action needing their role list has been refused rather than guessed.`,
       { guildId, userId, status },
     );
   },
-});
+};
+
+const fetchMemberRoles = createFetchMemberRoles(rest, memberRolesOptions);
+const memberRolesLookup = createMemberRolesLookup(rest, memberRolesOptions);
+
+const memberLister = new RestGuildMemberLister(rest);
 
 const rateWindow = new RedisRateWindow(moduleRedis);
 const blocklist = new RedisBlocklistStore(moduleRedis);
 const messageLogStore = new PostgresMessageLogStore(handle);
+const ticketStore = new DrizzleTicketStore(handle);
+const tempVoice = new DrizzleTempVoiceRepository(handle);
+const memberXp = new DrizzleMemberXpStore(handle, { levelForXp, maxXp: MAX_XP });
+const achievementStore = new DrizzleAchievementStore(handle);
+const applicationStore = new DrizzleApplicationStore(handle);
 const messageCache = new RedisMessageContentCache(messageRedis);
+
+const reportStore = new DrizzleReportStore(handle);
+const caseMessages = new DrizzleCaseMessageStore(handle);
+const moderationHistory = new RedisMessageHistoryBuffer(moduleRedis);
 
 const correlation = new RedisCorrelationStore(moduleRedis);
 const users = createUserResolver({
   cache: new RedisUserProfileCache(userRedis),
   rest,
-  pseudoActors: { [SERVERLOG_ACTOR]: { username: 'Proton', avatarUrl: null } },
+  pseudoActors: PSEUDO_ACTORS,
   onUnavailable: (userId, status) => {
     console.warn(
       `could not read ${userId}'s profile: the REST proxy answered ${status}. The log that ` +
@@ -230,6 +287,7 @@ const serverlogDeps: ServerlogDeps = {
   burst: rateWindow,
   cache: messageCache,
   screening: new RedisScreeningStore(moduleRedis),
+  dashboardUrl: env.DASHBOARD_URL,
 
   botUserId: env.DISCORD_APPLICATION_ID,
 
@@ -255,7 +313,11 @@ const executor = new DefaultActionExecutor({
 
   resolveContext: async (request, hints) => {
     const result = await resolvePrecheckContext(
-      { store: guildState, botUserId: env.DISCORD_APPLICATION_ID, fetchMemberRoles },
+      {
+        store: guildState,
+        botUserId: env.DISCORD_APPLICATION_ID,
+        fetchMemberRoles: memberRolesLookup,
+      },
       request,
       (hints ?? {}) as ResolveContextHints,
     );
@@ -264,8 +326,11 @@ const executor = new DefaultActionExecutor({
   },
 });
 
-// Created before the modules so a module that consumes providers (giveaways) and the modules
-// that register them (leveling, cases, core) all share one instance.
+const configApi = new HttpConfigProvider(env.API_URL, env.API_SHARED_SECRET);
+
+const config = new CachingConfigProvider(configApi, { ttlMs: env.CONFIG_CACHE_TTL_MS });
+
+// Created before the modules so giveaways and the modules providing to it share one instance.
 const providerRegistry = new ProviderRegistry();
 
 const registry = createModuleRegistry(
@@ -273,12 +338,36 @@ const registry = createModuleRegistry(
     help: { dashboardUrl: env.DASHBOARD_URL },
     cases: { history: new DrizzleCaseHistoryStore(handle) },
     moderation: {
-      warnings: new DrizzleWarningStore(handle),
       guildState,
       fetchMemberRoles,
-      members: new RestGuildMemberLister(rest),
+      members: memberLister,
       roleRuns: new RedisRoleRunStore(moduleRedis),
       applicationId: env.DISCORD_APPLICATION_ID,
+
+      lookupMember: createMemberLookup(rest),
+      readMessage: createMessageReader(rest),
+      commandGate: (guildId, commandName, roleIds) =>
+        moderationCommandGate(guildId, commandName, roleIds),
+      users,
+      placeholders,
+      drafts: new ModerationDraftStore(moduleRedis),
+      reports: reportStore,
+      reactionGate: new RedisReactionGate(moduleRedis),
+      prompts: new RedisPromptStore(moduleRedis),
+      // The api waits on this key in the bus database, not the modules one.
+      mailbox: new RedisMailbox(busRedis, {
+        prefix: REPORT_ACTION_MAILBOX_PREFIX,
+        schema: reportActionOutcomeSchema,
+      }),
+      timeouts: new DrizzleTimeoutStore(handle),
+      ledger: new DrizzleCaseLedger(handle),
+      caseMessages,
+      history: moderationHistory,
+      dmChannels: new ModerationDmChannelStore(moduleRedis),
+      reversals: schedule,
+
+      botUserId: env.DISCORD_APPLICATION_ID,
+      dashboardUrl: env.DASHBOARD_URL,
     },
     antinuke: {
       rateWindow,
@@ -347,9 +436,12 @@ const registry = createModuleRegistry(
     serverlog: serverlogDeps,
 
     leveling: {
-      xp: new DrizzleMemberXpStore(handle, { levelForXp, maxXp: MAX_XP }),
+      xp: memberXp,
       activity: new DrizzleActivityStore(handle, { levelForXp }),
-      sessions: new RedisVoiceSessionStore(moduleRedis),
+      sessions: new RedisVoiceSessionStore(moduleRedis, {
+        keyPrefix: VOICE_SESSION_PREFIX,
+        ttlMs: MAX_PAID_SESSION_MS,
+      }),
       guildState,
       placeholders,
       xpEvents: new CachedXpEventStore(new DrizzleXpEventStore(handle)),
@@ -363,10 +455,39 @@ const registry = createModuleRegistry(
           avatarHash: profile.avatarHash,
         };
       },
+      badges: createAchievementBadges({ store: achievementStore, config }),
+    },
+    achievements: {
+      store: achievementStore,
+      voice: new RedisAchievementVoiceStore(moduleRedis),
+      locks: new RedisFencedLocks(moduleRedis),
+      limits: new RedisLimits(moduleRedis),
+      guildState,
+      placeholders,
+      applicationId: env.DISCORD_APPLICATION_ID,
+      availability: {
+        isEnabled: async (guildId, moduleId) =>
+          effectivelyEnabled(await config.get(guildId, moduleId)),
+      },
+      memberFacts: createMemberFacts(rest),
+      listMembers: createMemberPages(rest),
+      levelOf: async (guildId, userId) => (await memberXp.get(guildId, userId))?.level ?? null,
+      levelHolders: createLevelHolders(handle),
+      channelKind: createChannelKind({ tickets: ticketStore, temporary: tempVoice }),
+      blocked: blockedMembers,
+      renderBadge: (card) => renderCard(card, cardImages),
+      mailbox: new RedisMailbox(busRedis, {
+        prefix: ACHIEVEMENT_RETRY_MAILBOX_PREFIX,
+        schema: achievementRetryOutcomeSchema,
+      }),
+
+      botUserId: env.DISCORD_APPLICATION_ID,
     },
     joinroles: {
       store: new DrizzleStickyRoleStore(handle),
       pending: new RedisPendingGrantStore(moduleRedis),
+      members: memberLister,
+      runs: new RedisJoinRolesRunStore(moduleRedis),
 
       guildState,
 
@@ -380,7 +501,7 @@ const registry = createModuleRegistry(
     welcome: { guildState, cards: cardImages, placeholders },
     tags: { store: new DrizzleTagStore(handle) },
     tickets: {
-      store: new DrizzleTicketStore(handle),
+      store: ticketStore,
       applicationId: env.DISCORD_APPLICATION_ID,
 
       guildState,
@@ -392,8 +513,25 @@ const registry = createModuleRegistry(
         return profile ? (profile.globalName ?? profile.username) : null;
       },
     },
+    applications: {
+      store: applicationStore,
+      applicationId: env.DISCORD_APPLICATION_ID,
+      dashboardUrl: env.DASHBOARD_URL,
+      providers: providerRegistry,
+      availability: {
+        isEnabled: async (guildId, moduleId) =>
+          effectivelyEnabled(await config.get(guildId, moduleId)),
+      },
+      guildState,
+      placeholders,
+      memberRoles: async (guildId, userId) => {
+        const roles = await memberRolesLookup(guildId, userId);
+        return roles === 'not_member' ? 'absent' : roles;
+      },
+      lookupMember: createMemberLookup(rest),
+    },
     tempvc: {
-      repository: new DrizzleTempVoiceRepository(handle),
+      repository: tempVoice,
       presence: new RedisPresenceStore(moduleRedis),
       cooldown: new RedisCooldownGate(moduleRedis),
       guildState,
@@ -433,8 +571,7 @@ const registry = createModuleRegistry(
       drafts: new RedisDraftStore(moduleRedis),
       placeholders,
       availability: {
-        // The same cached config path every module surface already reads, so the picker never
-        // offers a requirement whose owning module is disabled in this guild.
+        // The cached config path, so the picker never offers a requirement whose module is off.
         async isEnabled(guildId, moduleId) {
           try {
             return (await config.get(guildId, moduleId)).enabled;
@@ -446,8 +583,10 @@ const registry = createModuleRegistry(
       members: new BulkMemberContextLoader(rest, {
         onUnavailable: (guildId, detail) => {
           console.warn(
-            `giveaways could not re-check entrants in ${guildId}, so the draw fell back to what ` +
-              `each entrant looked like when they joined: ${detail}`,
+            `giveaways could not read the whole member list of ${guildId}, so entrants it did ` +
+              'not reach were judged only on what Proton recorded when they entered, a ' +
+              'requirement that record could not answer was not held against them, and none of ' +
+              `them was disqualified for leaving: ${detail}`,
             { guildId },
           );
         },
@@ -469,9 +608,49 @@ const registry = createModuleRegistry(
   { providers: providerRegistry },
 );
 
-const configApi = new HttpConfigProvider(env.API_URL, env.API_SHARED_SECRET);
+const commandRail = {
+  applicationId: env.DISCORD_APPLICATION_ID,
+  scope: env.COMMAND_REGISTRATION_SCOPE,
+  testGuildId: env.DISCORD_TEST_GUILD_ID,
+};
+const catalogue = commandCatalogue(registry);
+const commandRegistrations = new DrizzleCommandRegistrationStore(handle);
+const commandRecords = new CommandRecordCache(commandRegistrations);
+// Dispatch reads through a short timeout and a cache; a sync must never read a cached view.
+const commandSettings = new CommandSettingsProvider(
+  new HttpCommandWorkerViews(env.API_URL, env.API_SHARED_SECRET, { timeoutMs: 1_500 }),
+  { ttlMs: env.CONFIG_CACHE_TTL_MS },
+);
+const commandSyncer = new CommandSyncer({
+  rest,
+  rail: commandRail,
+  catalogue,
+  views: new HttpCommandWorkerViews(env.API_URL, env.API_SHARED_SECRET),
+  store: commandRegistrations,
+  records: commandRecords,
+  logger: console,
+});
+const commandQueue = new CommandSyncQueue({ syncer: commandSyncer, logger: console });
+const commandResolver = new CommandResolver({
+  catalogue,
+  records: commandRecords,
+  reconcile: (guildId) => commandQueue.enqueue(guildId, DRIFT_RECONCILE),
+  logger: console,
+});
+const commandLabels = new CommandLabels({
+  catalogue,
+  records: commandRecords,
+  settings: commandSettings,
+  inScope: (guildId) => inRegistrationScope(commandRail, guildId),
+  logger: console,
+});
 
-const config = new CachingConfigProvider(configApi, { ttlMs: env.CONFIG_CACHE_TTL_MS });
+const moderationCommandGate = createCommandGate({
+  registry,
+  config,
+  logger: console,
+  displayName: (guildId, key) => commandResolver.displayName(guildId, key),
+});
 
 const publisherFor = createModulePublisher({ bus, registry, logger: console });
 const schedulerFor = createModuleScheduler({ store: schedule, registry, logger: console });
@@ -485,6 +664,10 @@ const runtime = new ModuleRuntime({
   publisherFor,
   schedulerFor,
   dashboardUrl: env.DASHBOARD_URL,
+  resolver: commandResolver,
+  commandSettings,
+  labels: commandLabels,
+  refused: dedupe,
 });
 const listeners = new ModuleListenerRuntime({
   bus,
@@ -494,6 +677,9 @@ const listeners = new ModuleListenerRuntime({
   logger: console,
   publisherFor,
   schedulerFor,
+  dashboardUrl: env.DASHBOARD_URL,
+  resolver: commandResolver,
+  labels: commandLabels,
 });
 
 const ruleStore = new DrizzleGuildRuleStore(handle, {
@@ -552,18 +738,34 @@ const rulePresets = new RulePresetSeeder({
   logger: console,
 });
 
+const guildRegistrar = new HttpGuildRegistrar(env.API_URL, env.API_SHARED_SECRET);
+
+const commandTriggers = new CommandSyncTriggers({
+  bus,
+  rest,
+  rail: commandRail,
+  queue: commandQueue,
+  syncer: commandSyncer,
+  records: commandRecords,
+  store: commandRegistrations,
+  registrar: guildRegistrar,
+  settings: commandSettings,
+  logger: console,
+});
+
 const stateConsumer = new GuildStateConsumer({
   bus,
   store: guildState,
-  registrar: new HttpGuildRegistrar(env.API_URL, env.API_SHARED_SECRET),
+  registrar: guildRegistrar,
   botUserId: env.DISCORD_APPLICATION_ID,
   logger: console,
+  removal: { cron: ruleCron, commands: commandTriggers },
+  commands: commandTriggers,
 });
 
 const layoutConsumer = new GuildLayoutConsumer({ bus, store: layoutStore, logger: console });
 
-// The mailbox lives on the bus connection, because the api blocks on the same key in the same
-// database.
+// On the bus connection: the api blocks on the same key in the same database.
 const simulationConsumer = new SimulationConsumer({
   bus,
   results: new RedisSimulationResults(busRedis),
@@ -575,6 +777,7 @@ const simulationConsumer = new SimulationConsumer({
   apiUrl: env.API_URL,
   apiSecret: env.API_SHARED_SECRET,
   logger: console,
+  labels: commandLabels,
 });
 
 const messageCacheConsumer = new MessageCacheConsumer({
@@ -585,10 +788,23 @@ const messageCacheConsumer = new MessageCacheConsumer({
   logger: console,
 });
 
+const moderationMessagesConsumer = new ModerationMessagesConsumer({
+  bus,
+  config,
+  history: moderationHistory,
+  reports: reportStore,
+  logger: console,
+});
+
 const moduleJobHandlers = {
   'phishing:refresh-blocklist': () => refreshBlocklist({ store: blocklist, logger: console }),
   'logging:partition-maintenance': (payload: Record<string, unknown>) =>
     runMessageLogMaintenance(messageLogStore, { ...payload, now: new Date() }),
+  'tickets:purge-captured-messages': () => purgeCapturedMessages(ticketStore, new Date()),
+  'moderation:purge-evidence': () =>
+    purgeModerationEvidence({ reports: reportStore, caseMessages }, new Date()),
+  'achievements:purge': () => purgeAchievements(achievementStore, Date.now()),
+  'applications:purge': () => purgeApplications(applicationStore, new Date()),
 };
 assertHandlersCoverJobs(registry, moduleJobHandlers, console);
 
@@ -597,28 +813,28 @@ const subscriptions = [
   layoutConsumer.start(),
   simulationConsumer.start(),
   messageCacheConsumer.start(),
+  moderationMessagesConsumer.start(),
   runtime.start(),
   ...listeners.start(),
   ...ruleDispatch.start(),
   rulePresets.start(),
+  commandTriggers.start(),
 ];
 
-void registerCommands(rest, registry, {
-  applicationId: env.DISCORD_APPLICATION_ID,
-  scope: env.COMMAND_REGISTRATION_SCOPE,
-  testGuildId: env.DISCORD_TEST_GUILD_ID,
-})
-  .then((registered) => {
-    console.log(`registered ${registered.count} command(s) at ${registered.path}`);
-  })
-  .catch((error: unknown) => {
-    console.error(
-      'could not register slash commands — existing commands keep working, but any command ' +
-        `added or changed in this build will NOT appear in Discord: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-    );
-  });
+void commandTriggers.bootFanOut().catch((error: unknown) => {
+  console.error(
+    'could not check the servers’ commands at boot — commands registered earlier keep working, ' +
+      `but any command added or changed in this build may NOT appear in Discord: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+  );
+});
+
+const commandSweep = startCommandSyncSweep({
+  connection: { url: env.REDIS_URL, db: env.REDIS_DB_JOBS, maxRetriesPerRequest: null },
+  sweep: () => commandTriggers.sweep(),
+  logger: console,
+});
 
 const scheduledJobs = startScheduledActionJobs({
   connection: { url: env.REDIS_URL, db: env.REDIS_DB_JOBS, maxRetriesPerRequest: null },
@@ -636,6 +852,7 @@ const scheduledJobs = startScheduledActionJobs({
       logger: console,
       publisherFor,
       schedulerFor,
+      labels: commandLabels,
     }),
   }),
   intervalMs: env.REVERSAL_SWEEP_INTERVAL_MS,
@@ -648,7 +865,10 @@ flushJobs = startServerlogFlush({
   logger: console,
 
   contextFor: async (guildId) => {
-    const snapshot = await config.get(guildId, SERVERLOG_MODULE_ID);
+    const [snapshot, commandLabel] = await Promise.all([
+      config.get(guildId, SERVERLOG_MODULE_ID),
+      commandLabels.forGuild(guildId),
+    ]);
     if (!snapshot.enabled) return null;
 
     const parsed = serverlogConfigSchema.safeParse(snapshot.config);
@@ -659,6 +879,7 @@ flushJobs = startServerlogFlush({
       config: parsed.data,
       executor: moduleExecutor(registry, SERVERLOG_MODULE_ID, executor),
       logger: console,
+      commandLabel,
     };
   },
 });
@@ -672,11 +893,23 @@ const moduleJobs = startModuleJobs({
 
 console.log(`declared ${moduleJobs.scheduled.length} module job(s)`);
 
+const trimStreams = (): void => {
+  bus.trim().catch((error: unknown) => {
+    console.error(
+      `could not trim the event streams: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  });
+};
+
+trimStreams();
+const streamTrim = setInterval(trimStreams, 3_600_000);
+
 console.log('worker consuming events');
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     void (async () => {
+      clearInterval(streamTrim);
       try {
         await Promise.allSettled([
           ...subscriptions.map((s) => s.close()),
@@ -684,6 +917,8 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
           moduleJobs.close(),
           flushJobs?.close() ?? Promise.resolve(),
           ruleCron.close(),
+          commandQueue.close(),
+          commandSweep.close(),
         ]);
         busRedis.disconnect();
         dedupeRedis.disconnect();

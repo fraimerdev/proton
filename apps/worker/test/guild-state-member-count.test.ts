@@ -35,7 +35,7 @@ class FakeRedis {
   }
 }
 
-const registrar: GuildRegistrar = { ensure: async () => {}, markLeft: async () => {} };
+const registrar: GuildRegistrar = { ensure: async () => {}, markLeft: async () => true };
 
 const silent = { info: () => {}, warn: () => {}, error: () => {} };
 

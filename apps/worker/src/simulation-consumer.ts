@@ -41,6 +41,8 @@ import type {
   UserFacts,
 } from '@proton/core/placeholders';
 import { serverFactsFrom } from '@proton/core/placeholders';
+import { RESTJSONErrorCodes } from 'discord-api-types/v10';
+import type { CommandLabelSource } from './command-labels.ts';
 import { moduleExecutor } from './module-actions.ts';
 
 export const SIMULATION_GROUP = 'simulation';
@@ -57,9 +59,24 @@ export interface SimulationConsumerDeps {
   apiSecret: string;
   logger: Logger;
   now?(): number;
+  labels?: CommandLabelSource;
 }
 
 const NOWHERE: SimulationDestination = { kind: 'none', channelId: null, label: 'nowhere' };
+
+const DM_REFUSED: NonNullable<SimulationOutcome['error']> = {
+  code: 'dm_closed',
+  message:
+    "Discord wouldn't deliver the test message to your DMs. In this server's privacy settings, " +
+    "allow DMs from server members, and check you haven't blocked Proton. Then try again.",
+};
+
+const ALREADY_STARTED: NonNullable<SimulationOutcome['error']> = {
+  code: 'already_started',
+  message:
+    'Proton already started this test, so it stopped rather than risk sending it twice. Run ' +
+    'the test again to send a new one.',
+};
 
 function str(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -121,6 +138,33 @@ function failureOf(result: ActionResult): string {
   return result.failure?.humanReason ?? 'Discord refused it and gave no reason.';
 }
 
+const DMS_CLOSED: ReadonlySet<number> = new Set([
+  RESTJSONErrorCodes.CannotSendMessagesToThisUser,
+  RESTJSONErrorCodes.CannotSendMessagesToThisUserDueToHavingNoMutualGuilds,
+]);
+
+function refusedDm(result: ActionResult): boolean {
+  if (result.status !== 'failed_api') return false;
+
+  const code = result.failure?.discordCode;
+  return code === undefined ? result.failure?.code === 'discord_403' : DMS_CLOSED.has(code);
+}
+
+function dmOpenFailure(result: ActionResult): string {
+  if (result.failure === undefined) {
+    return "Discord opened a DM with you but didn't say which channel it was, so nothing was sent.";
+  }
+
+  if (result.failure.code === 'transport_failure') {
+    return (
+      "Proton couldn't reach Discord to open a DM with you, so nothing was sent. Try again in a " +
+      'moment.'
+    );
+  }
+
+  return `Proton couldn't open a DM with you, so nothing was sent. ${result.failure.humanReason}`;
+}
+
 function messageIdOf(result: ActionResult): string | null {
   return str(nested(result.body, 'id'));
 }
@@ -164,6 +208,10 @@ export class SimulationConsumer {
     }
 
     const payload = parsed.data;
+
+    // A replay of an answered request: a second answer would overwrite the first, true one.
+    if ((await this.#deps.results.recall(payload.requestId)) !== null) return;
+
     let outcome: SimulationOutcome;
 
     try {
@@ -179,7 +227,7 @@ export class SimulationConsumer {
         payload,
         NOWHERE,
         'simulation_failed',
-        `Proton could not run that test: ${detailOf(error)}`,
+        `Proton couldn't run that test: ${detailOf(error)}`,
       );
     }
 
@@ -230,7 +278,7 @@ export class SimulationConsumer {
         payload,
         destination,
         'render_failed',
-        `${descriptor.label} cannot be posted as it stands: ${built.humanReason}`,
+        `${descriptor.label} can't be sent as it is: ${built.humanReason}`,
       );
     }
 
@@ -273,12 +321,13 @@ export class SimulationConsumer {
     state: GuildState | null,
     eventId: string,
   ): Promise<SimulationScene> {
-    const [subject, actor, bot] = await Promise.all([
+    const [subject, actor, bot, commandLabel] = await Promise.all([
       this.#personFor(payload.guildId, payload.subjectId),
       payload.subjectId === payload.actorId
         ? Promise.resolve(null)
         : this.#personFor(payload.guildId, payload.actorId),
       this.#botFacts(payload.guildId),
+      this.#deps.labels?.forGuild(payload.guildId),
     ]);
 
     const channel = channelFactsOf(state, payload.channelId);
@@ -296,6 +345,7 @@ export class SimulationConsumer {
       now: this.#deps.now?.() ?? Date.now(),
       tier: payload.tier,
       inputs: payload.inputs,
+      ...(commandLabel ? { commandLabel } : {}),
     };
   }
 
@@ -341,11 +391,11 @@ export class SimulationConsumer {
     scene: SimulationScene,
   ): SimulationDestination {
     if (descriptor.delivery === 'none') {
-      return { kind: 'none', channelId: null, label: 'nowhere — this is a name, not a message' };
+      return { kind: 'none', channelId: null, label: 'nowhere (this is a channel name)' };
     }
 
     if (descriptor.delivery === 'dm') {
-      return { kind: 'dm', channelId: null, label: 'your direct messages' };
+      return { kind: 'dm', channelId: null, label: 'your DMs' };
     }
 
     if (channelId === null) return { kind: 'channel', channelId: null, label: 'no channel yet' };
@@ -395,8 +445,8 @@ export class SimulationConsumer {
         error: {
           code: 'card_failed',
           message:
-            `The card could not be rendered, so nothing was sent: ${detailOf(error)} The message ` +
-            'itself is fine — the picture beside it is what failed.',
+            `The card image couldn't be drawn, so nothing was sent: ${detailOf(error)} The ` +
+            'message itself is fine; only the image failed.',
         },
       };
     }
@@ -414,15 +464,35 @@ export class SimulationConsumer {
       // No case row: a rehearsal is not a moderation act, and a ledger entry for one would show up
       // in this server's history as something that happened to somebody.
       record: false,
-      payload: { channelId, ...body, ...(files.length > 0 ? { files } : {}) },
+      payload: {
+        channelId,
+        ...body,
+        ...(files.length > 0 ? { files } : {}),
+        directMessage: descriptor.delivery === 'dm',
+      },
     });
+
+    if (descriptor.delivery === 'dm' && refusedDm(result)) return { sent: null, error: DM_REFUSED };
+    if (result.status === 'skipped_duplicate') return { sent: null, error: ALREADY_STARTED };
+
+    if (result.failure?.code === 'transport_failure') {
+      return {
+        sent: null,
+        error: {
+          code: 'delivery_failed',
+          message:
+            "Proton couldn't reach Discord, so it can't tell whether the test message was " +
+            `posted. Check ${destination.label} before trying again.`,
+        },
+      };
+    }
 
     if (result.status === 'failed_precheck' || result.status === 'failed_api') {
       return {
         sent: null,
         error: {
           code: result.status === 'failed_precheck' ? 'not_permitted' : 'delivery_failed',
-          message: `The test message was not posted: ${failureOf(result)}`,
+          message: `The test message wasn't posted: ${failureOf(result)}`,
         },
       };
     }
@@ -460,21 +530,12 @@ export class SimulationConsumer {
     });
 
     const channelId = str(nested(opened.body, 'id'));
+    if (channelId !== null) return { channelId, error: null };
 
-    if (channelId === null) {
-      return {
-        channelId: null,
-        error: {
-          code: 'dm_closed',
-          message:
-            'Proton could not open a direct message with you, so nothing was sent. Allow direct ' +
-            `messages from server members in this server's privacy settings and try again. ` +
-            `Discord said: ${failureOf(opened)}`,
-        },
-      };
-    }
+    if (refusedDm(opened)) return { channelId: null, error: DM_REFUSED };
+    if (opened.status === 'skipped_duplicate') return { channelId: null, error: ALREADY_STARTED };
 
-    return { channelId, error: null };
+    return { channelId: null, error: { code: 'delivery_failed', message: dmOpenFailure(opened) } };
   }
 
   async #cardFiles(
@@ -503,7 +564,7 @@ export class SimulationConsumer {
 
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { message?: string };
-      throw new Error(body.message ?? `the api answered ${response.status}.`);
+      throw new Error(body.message ?? `Proton's API answered ${response.status}.`);
     }
 
     return new Uint8Array(await response.arrayBuffer());

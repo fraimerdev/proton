@@ -6,8 +6,11 @@ import type {
   ScheduledJob,
   ScheduledModuleJob,
 } from '@proton/core';
+import { describeError, isQueryError } from '@proton/db';
 import { type ConnectionOptions, Queue, Worker } from 'bullmq';
+import type { CommandLabelSource } from './command-labels.ts';
 import { ConfigUnavailableError } from './config-provider.ts';
+import { loggableError } from './error-log.ts';
 import { logQueueConnectionErrors } from './job-errors.ts';
 import { moduleExecutor } from './module-actions.ts';
 import type { ModulePublisherFactory } from './module-publish.ts';
@@ -84,6 +87,7 @@ export interface ScheduledJobRunnerDeps {
 
   publisherFor?: ModulePublisherFactory;
   schedulerFor?: ModuleSchedulerFactory;
+  labels?: CommandLabelSource;
 }
 
 export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
@@ -109,6 +113,7 @@ export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
       );
     }
 
+    const labelling = deps.labels?.forGuild(job.guildId);
     let snapshot: ModuleConfigSnapshot;
     try {
       snapshot = await deps.config.get(job.guildId, manifest.id);
@@ -126,7 +131,7 @@ export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
     }
 
     const disabled = disabledReason(snapshot, manifest.configSchema);
-    if (disabled) {
+    if (disabled && !(manifest.scheduledWhileDisabled ?? []).includes(job.jobId)) {
       deps.logger.warn(
         `${manifest.name} is disabled in this server, so its scheduled '${job.jobId}' job ` +
           'did not run and has been dropped. Re-enable the module and schedule it again.',
@@ -145,6 +150,7 @@ export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
       );
     }
 
+    const commandLabel = await labelling;
     const ctx: ModuleContext<typeof parsed.data> = {
       guildId: job.guildId,
       config: parsed.data,
@@ -154,9 +160,15 @@ export function createScheduledJobRunner(deps: ScheduledJobRunnerDeps) {
 
       ...(deps.publisherFor ? { publish: deps.publisherFor(manifest.id, job.guildId) } : {}),
       ...(deps.schedulerFor ? deps.schedulerFor(manifest.id, job.guildId, job) : {}),
+      ...(commandLabel ? { commandLabel } : {}),
     };
 
-    await handler(job.data, ctx);
+    try {
+      await handler(job.data, ctx);
+    } catch (error) {
+      if (isQueryError(error)) throw new Error(describeError(error));
+      throw error;
+    }
   };
 }
 
@@ -186,8 +198,9 @@ export function startModuleJobs(deps: ModuleJobsDeps): ModuleJobs {
   );
 
   worker.on('failed', (job, error) => {
-    deps.logger.error(`module job '${job?.name ?? 'unknown'}' failed: ${error.message}`, {
-      stack: error.stack,
+    const { message, stack } = loggableError(error);
+    deps.logger.error(`module job '${job?.name ?? 'unknown'}' failed: ${message}`, {
+      ...(stack ? { stack } : {}),
     });
   });
 

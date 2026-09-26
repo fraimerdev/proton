@@ -157,6 +157,32 @@ describe('CachingConfigProvider', () => {
     await cache.get(GUILD, 'antinuke');
     expect(inner.reads()).toBe(4);
   });
+
+  test('a read in flight when the entry is invalidated is neither shared nor cached', async () => {
+    const answers: Array<(snapshot: ModuleConfigSnapshot) => void> = [];
+    const cache = new CachingConfigProvider(
+      {
+        get: () =>
+          new Promise<ModuleConfigSnapshot>((resolve) => {
+            answers.push(resolve);
+          }),
+      },
+      { ttlMs: 5_000 },
+    );
+
+    const before = cache.get(GUILD, 'joinroles');
+    cache.invalidate(GUILD, 'joinroles');
+    const after = cache.get(GUILD, 'joinroles');
+
+    expect(answers).toHaveLength(2);
+    answers[1]?.({ enabled: true, config: { saved: 'new' } });
+    answers[0]?.({ enabled: true, config: { saved: 'old' } });
+
+    expect((await before).config).toEqual({ saved: 'old' });
+    expect((await after).config).toEqual({ saved: 'new' });
+    expect((await cache.get(GUILD, 'joinroles')).config).toEqual({ saved: 'new' });
+    expect(answers).toHaveLength(2);
+  });
 });
 
 describe('HttpConfigProvider error classification', () => {

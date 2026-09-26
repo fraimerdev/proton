@@ -50,7 +50,16 @@ export interface GuildRegistrar {
     name: string,
     extra?: { locale?: string; shardId?: number },
   ): Promise<void>;
-  markLeft(guildId: string): Promise<void>;
+  markLeft(guildId: string): Promise<boolean>;
+}
+
+export interface RemovedGuildCleanup {
+  cron: { unregister(guildId: string): Promise<number> };
+  commands?: { forget(guildId: string): Promise<void> };
+}
+
+export interface GuildCommandSync {
+  available(guildId: string, joinedAt: string | null): Promise<void>;
 }
 
 export class GuildStateConsumer {
@@ -59,6 +68,8 @@ export class GuildStateConsumer {
   readonly #registrar: GuildRegistrar;
   readonly #botUserId: string;
   readonly #logger: Logger;
+  readonly #removal: RemovedGuildCleanup | undefined;
+  readonly #commands: GuildCommandSync | undefined;
 
   constructor(deps: {
     bus: EventBus;
@@ -66,12 +77,37 @@ export class GuildStateConsumer {
     registrar: GuildRegistrar;
     botUserId: string;
     logger: Logger;
+    removal?: RemovedGuildCleanup;
+    commands?: GuildCommandSync;
   }) {
     this.#bus = deps.bus;
     this.#store = deps.store;
     this.#registrar = deps.registrar;
     this.#botUserId = deps.botUserId;
     this.#logger = deps.logger;
+    this.#removal = deps.removal;
+    this.#commands = deps.commands;
+  }
+
+  async #removed(guildId: string): Promise<void> {
+    if (!(await this.#registrar.markLeft(guildId))) {
+      this.#logger.info(
+        'Discord still lists Proton in this server, so this removal is older than a rejoin and ' +
+          'nothing was forgotten.',
+        { guildId },
+      );
+      return;
+    }
+
+    await this.#store.delete(guildId);
+    const unscheduled = (await this.#removal?.cron.unregister(guildId)) ?? 0;
+    await this.#removal?.commands?.forget(guildId);
+
+    this.#logger.info(
+      'Proton was removed from this server. Its cron rules were stopped and come back if it is ' +
+        'added again; its scheduled actions and stored data stay until deletion is requested.',
+      { guildId, removedCronRules: unscheduled },
+    );
   }
 
   start(): Subscription {
@@ -139,10 +175,11 @@ export class GuildStateConsumer {
 
     if (event.type === 'guild.unavailable') {
       if (!event.guildId) return;
-      await this.#store.delete(event.guildId);
 
-      if (payload.unavailable !== true) {
-        await this.#registrar.markLeft(event.guildId);
+      if (payload.unavailable === true) {
+        await this.#store.delete(event.guildId);
+      } else {
+        await this.#removed(event.guildId);
       }
       return;
     }
@@ -180,5 +217,10 @@ export class GuildStateConsumer {
       roles: state.roles.size,
       channels: state.channels.size,
     });
+
+    await this.#commands?.available(
+      state.guildId,
+      typeof payload.joined_at === 'string' ? payload.joined_at : null,
+    );
   }
 }

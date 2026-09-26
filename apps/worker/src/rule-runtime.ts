@@ -364,6 +364,18 @@ export type CronJobData = z.infer<typeof cronJobDataSchema>;
 export const cronSchedulerId = (data: CronJobData): string =>
   `${data.guildId}:${data.moduleId}:${data.ruleId}`;
 
+// BullMQ's raw ids: the rules may be gone already, and getJobSchedulers deletes hash-less ones.
+export async function guildCronSchedulerIds(
+  queue: Pick<Queue, 'getBackend' | 'toKey'>,
+  guildId: string,
+): Promise<string[]> {
+  const client = await queue.getBackend().client;
+
+  return (await client.zrange(queue.toKey('repeat'), 0, -1)).filter((id) =>
+    id.startsWith(`${guildId}:`),
+  );
+}
+
 export interface CronSchedule {
   id: string;
   data: CronJobData;
@@ -498,6 +510,15 @@ export class RuleCronScheduler implements RuleCronRegistrar {
     }
 
     return scheduled;
+  }
+
+  async unregister(guildId: string): Promise<number> {
+    let removed = 0;
+    for (const id of await guildCronSchedulerIds(this.#queue, guildId)) {
+      if (await this.#queue.removeJobScheduler(id)) removed += 1;
+    }
+
+    return removed;
   }
 
   async close(): Promise<void> {

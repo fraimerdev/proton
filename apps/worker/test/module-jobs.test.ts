@@ -103,7 +103,23 @@ describe('the shipped registry', () => {
       .map(({ key }) => key)
       .sort();
 
-    expect(declared).toEqual(['logging:partition-maintenance', 'phishing:refresh-blocklist']);
+    expect(declared).toEqual([
+      'achievements:purge',
+      'applications:purge',
+      'logging:partition-maintenance',
+      'moderation:purge-evidence',
+      'phishing:refresh-blocklist',
+      'tickets:purge-captured-messages',
+    ]);
+  });
+
+  test('the worker registers a handler under every declared key', async () => {
+    const source = await Bun.file(`${import.meta.dir}/../src/index.ts`).text();
+    const handlers = source.slice(source.indexOf('const moduleJobHandlers = {'));
+
+    for (const { key } of declaredJobs(createModuleRegistry())) {
+      expect(handlers).toContain(`'${key}':`);
+    }
   });
 
   test('every declared job carries a cron expression', () => {

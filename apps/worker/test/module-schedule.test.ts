@@ -26,6 +26,7 @@ import { ConfigUnavailableError } from '../src/config-provider.ts';
 import { createScheduledJobRunner } from '../src/module-jobs.ts';
 import { createModuleScheduler } from '../src/module-schedule.ts';
 import type { ModuleConfigSnapshot } from '../src/runtime.ts';
+import { queryError } from './query-error.ts';
 
 const GUILD = '900000000000000001';
 const OTHER_GUILD = '900000000000000002';
@@ -205,6 +206,7 @@ interface BuildOptions {
   snapshot?: ModuleConfigSnapshot;
   readConfig?: () => Promise<ModuleConfigSnapshot>;
   declare?: string[];
+  whileDisabled?: string[];
   maxAttempts?: number;
 }
 
@@ -234,6 +236,7 @@ function build(options: BuildOptions = {}) {
 
     schedules: declared,
     scheduledHandlers: Object.fromEntries(declared.map((id) => [id, handler])),
+    ...(options.whileDisabled ? { scheduledWhileDisabled: options.whileDisabled } : {}),
   };
 
   registry.register(manifest as ModuleManifest);
@@ -493,6 +496,48 @@ describe('the runner that turns a claimed row back into a module handler', () =>
     expect(fired).toHaveLength(0);
     expect(logger.matching('warn', 'Reminders is disabled')).toHaveLength(1);
     expect(store.rows).toHaveLength(0);
+  });
+
+  test.each([
+    ['its own config field', { enabled: true, config: { enabled: false, message: 'stand up' } }],
+    ['the module switch', { enabled: false, config: { enabled: true, message: 'stand up' } }],
+  ])(
+    'a job the module lets run while off still runs when it is off through %s',
+    async (_label, snapshot) => {
+      const { ctx, sweeper, fired, store, logger } = build({
+        snapshot,
+        declare: [JOB_ID, 'nudge'],
+        whileDisabled: [JOB_ID],
+      });
+
+      await ctx.schedule(JOB_ID, new Date(clock.getTime() + HOUR), NATURAL_KEY, { text: 'close' });
+      await ctx.schedule('nudge', new Date(clock.getTime() + HOUR), 'nudge-1');
+      clock = new Date(clock.getTime() + HOUR + 1000);
+
+      expect((await sweeper.sweep()).ran).toBe(2);
+      expect(fired).toEqual([{ data: { text: 'close' }, guildId: GUILD, message: 'stand up' }]);
+      expect(logger.matching('warn', "scheduled 'nudge' job did not run")).toHaveLength(1);
+      expect(logger.matching('warn', `scheduled '${JOB_ID}' job did not run`)).toHaveLength(0);
+      expect(store.rows).toHaveLength(0);
+    },
+  );
+
+  test('a failed query reaches the sweeper without the values it was bound with', async () => {
+    const { ctx, sweeper, logger } = build({
+      maxAttempts: 1,
+      handler: async () => {
+        throw queryError(['SECRET reporter comment']);
+      },
+    });
+
+    await ctx.schedule(JOB_ID, new Date(clock.getTime() + HOUR), NATURAL_KEY);
+    clock = new Date(clock.getTime() + HOUR + 1000);
+    await sweeper.sweep();
+
+    const logged = logger.lines.map((line) => line.message).join('\n');
+    expect(logged).toContain('database query failed (08006)');
+    expect(logged).not.toContain('SECRET');
+    expect(logged).not.toContain('insert into');
   });
 
   test('settings that no longer parse stop the job and name the offending field', async () => {

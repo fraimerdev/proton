@@ -3,16 +3,26 @@ import type {
   ActionExecutor,
   ActionRequest,
   ActionResult,
+  EventBus,
   Logger,
   ModuleContext,
   ModuleManifest,
+  ProtonEvent,
   ScheduledHandler,
 } from '@proton/core';
 import { ModuleRegistry, moduleScheduleKey, ScheduledActionSweeper } from '@proton/core';
 import { createDb, type DbHandle, DrizzleScheduledActionStore, runMigrations } from '@proton/db';
 import { guilds } from '@proton/db/schema';
+import {
+  createJoinRolesModule,
+  JOINROLES_SYNC_JOB,
+  type JoinRolesRunStore,
+  syncBatchKey,
+} from '@proton/module-joinroles';
+import { queuedRun } from '@proton/module-joinroles/sync-view';
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { z } from 'zod';
+import { listenerGroup, ModuleListenerRuntime, subscribedTypes } from '../src/listener-runtime.ts';
 import { createScheduledJobRunner } from '../src/module-jobs.ts';
 import { createModuleScheduler } from '../src/module-schedule.ts';
 import type { ModuleConfigSnapshot } from '../src/runtime.ts';
@@ -264,5 +274,86 @@ describe('durable module schedules', () => {
     ).rejects.toThrow(/end-giveaway/);
 
     expect(await pendingRows()).toHaveLength(0);
+  }, 120_000);
+});
+
+describe('a Join Roles sync request', () => {
+  test('reaches the Join Roles listener group and books one batch under its job key', async () => {
+    const queued = queuedRun({
+      runId: 'run-1',
+      guildId: GUILD,
+      kind: 'sync',
+      trigger: 'dashboard',
+      actorId: '100000000000000001',
+      now: START.getTime(),
+    });
+
+    const runs: JoinRolesRunStore = {
+      get: async () => queued,
+      claim: async () => false,
+      putIfCurrent: async () => false,
+      clear: async () => false,
+      finish: async () => false,
+      last: async () => null,
+      estimate: async () => null,
+      autosyncAt: async () => null,
+      setAutosyncAt: async () => {},
+    };
+
+    const logger = new CollectingLogger();
+    const store = new DrizzleScheduledActionStore(handle);
+    const registry = new ModuleRegistry();
+    const module = createJoinRolesModule({ runs });
+    registry.register(module as ModuleManifest);
+
+    const bus: EventBus = {
+      publish: async () => {},
+      subscribe: (group) => ({ group, close: async () => {} }),
+    };
+
+    const runtime = new ModuleListenerRuntime({
+      bus,
+      registry,
+      executor: new RefusingExecutor(),
+      logger,
+      config: {
+        get: async () => ({
+          enabled: true,
+          config: { enabled: true, memberRoleIds: ['700000000000000001'] },
+        }),
+      },
+      schedulerFor: createModuleScheduler({ store, registry, logger }),
+    });
+
+    const event: ProtonEvent = {
+      id: `joinroles.sync_requested:${GUILD}:run-1`,
+      type: 'joinroles.sync_requested',
+      guildId: GUILD,
+      occurredAt: START.getTime(),
+      payload: {
+        auditId: 'audit-1',
+        guildId: GUILD,
+        runId: 'run-1',
+        kind: 'sync',
+        actorId: '100000000000000001',
+      },
+    };
+
+    const joinroles = registry.get('joinroles');
+    if (!joinroles) throw new Error('join roles did not register');
+
+    expect(subscribedTypes(joinroles)).toContain('joinroles.sync_requested');
+    expect(runtime.start().map((subscription) => subscription.group)).toContain(
+      listenerGroup('listener', 'joinroles'),
+    );
+
+    await runtime.handleFor(joinroles, event);
+    await runtime.handleFor(joinroles, event);
+
+    const rows = await pendingRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.idempotency_key).toBe(
+      moduleScheduleKey('joinroles', JOINROLES_SYNC_JOB, GUILD, syncBatchKey('run-1')),
+    );
   }, 120_000);
 });

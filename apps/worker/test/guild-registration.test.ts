@@ -16,6 +16,7 @@ function recordingRegistrar() {
     },
     markLeft: async (guildId) => {
       left.push(guildId);
+      return true;
     },
   };
 
@@ -94,7 +95,7 @@ describe('guild registration on GUILD_CREATE', () => {
       ensure: async () => {
         throw new Error('api down');
       },
-      markLeft: async () => {},
+      markLeft: async () => true,
     };
     const { store, states } = memoryStore();
     const event = normalise(dispatch('guildCreate'))[0];
@@ -103,6 +104,59 @@ describe('guild registration on GUILD_CREATE', () => {
     await expect(consumer(failing, store).handle(event)).rejects.toThrow('api down');
 
     expect(states.size).toBe(0);
+  });
+});
+
+describe('command sync on GUILD_CREATE', () => {
+  function syncing(registrar: GuildRegistrar, calls: string[]) {
+    const { store } = memoryStore();
+    return new GuildStateConsumer({
+      bus: { publish: async () => {}, subscribe: () => ({ group: 'x', close: async () => {} }) },
+      store,
+      registrar,
+      botUserId: BOT,
+      logger: silent,
+      commands: {
+        available: async (guildId, joinedAt) => {
+          calls.push(`available:${guildId}:${joinedAt}`);
+        },
+      },
+    });
+  }
+
+  test('is asked for only after the guilds row is ensured, with the join time', async () => {
+    const calls: string[] = [];
+    const registrar: GuildRegistrar = {
+      ensure: async () => {
+        calls.push('ensure');
+      },
+      markLeft: async () => true,
+    };
+    const event = normalise(dispatch('guildCreate'))[0];
+    if (!event) throw new Error('fixture did not normalise');
+    (event.payload as Record<string, unknown>).joined_at = '2026-09-21T10:00:00.000000+00:00';
+
+    await syncing(registrar, calls).handle(event);
+
+    expect(calls).toEqual([
+      'ensure',
+      'available:900000000000000001:2026-09-21T10:00:00.000000+00:00',
+    ]);
+  });
+
+  test('is never asked for when the row could not be ensured', async () => {
+    const calls: string[] = [];
+    const failing: GuildRegistrar = {
+      ensure: async () => {
+        throw new Error('api down');
+      },
+      markLeft: async () => true,
+    };
+    const event = normalise(dispatch('guildCreate'))[0];
+    if (!event) throw new Error('fixture did not normalise');
+
+    await expect(syncing(failing, calls).handle(event)).rejects.toThrow('api down');
+    expect(calls).toEqual([]);
   });
 });
 

@@ -17,7 +17,7 @@ const silent = { info: () => {}, warn: () => {}, error: () => {} };
 
 const registrar: GuildRegistrar = {
   ensure: async () => {},
-  markLeft: async () => {},
+  markLeft: async () => true,
 };
 
 function memoryStore(seed: GuildState | null = emptyState()) {

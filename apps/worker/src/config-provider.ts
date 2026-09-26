@@ -113,16 +113,17 @@ export class CachingConfigProvider implements ConfigProvider {
     const pending = this.#inflight.get(key);
     if (pending) return pending;
 
-    const promise = this.#inner
+    const promise: Promise<ModuleConfigSnapshot> = this.#inner
       .get(guildId, moduleId)
       .then((value) => {
-        if (this.#ttlMs > 0) {
+        // Invalidated while in flight, this read may predate the change, so it is never cached.
+        if (this.#ttlMs > 0 && this.#inflight.get(key) === promise) {
           this.#entries.set(key, { value, expiresAt: this.#now() + this.#ttlMs });
         }
         return value;
       })
       .finally(() => {
-        this.#inflight.delete(key);
+        if (this.#inflight.get(key) === promise) this.#inflight.delete(key);
       });
 
     this.#inflight.set(key, promise);
@@ -132,8 +133,10 @@ export class CachingConfigProvider implements ConfigProvider {
   invalidate(guildId?: string, moduleId?: string): void {
     if (guildId === undefined || moduleId === undefined) {
       this.#entries.clear();
+      this.#inflight.clear();
       return;
     }
     this.#entries.delete(`${guildId}:${moduleId}`);
+    this.#inflight.delete(`${guildId}:${moduleId}`);
   }
 }

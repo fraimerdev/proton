@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import {
   type ActionExecutor,
+  type ActionFailure,
   type ActionRequest,
   type ActionResult,
+  isScopedActionExecutor,
   type ModuleManifest,
   ModuleRegistry,
+  type ScopedActionExecutor,
 } from '@proton/core';
 import { z } from 'zod';
 import { moduleExecutor, UndeclaredActionError } from '../src/module-actions.ts';
@@ -87,5 +90,77 @@ describe('the module executor', () => {
     expect(() =>
       moduleExecutor(new ModuleRegistry(), 'ghost', recording().executor).execute(request('send')),
     ).toThrow(UndeclaredActionError);
+  });
+});
+
+function prechecking(failure: ActionFailure | null): {
+  executor: ScopedActionExecutor;
+  prechecked: ActionRequest[];
+  scopedWith: unknown[];
+} {
+  const prechecked: ActionRequest[] = [];
+  const scopedWith: unknown[] = [];
+
+  const executor: ScopedActionExecutor = {
+    async execute(): Promise<ActionResult> {
+      return { status: 'executed' };
+    },
+    async precheck(request) {
+      prechecked.push(request);
+      return failure;
+    },
+    scoped(hints) {
+      scopedWith.push(hints);
+      return executor;
+    },
+  };
+
+  return { executor, prechecked, scopedWith };
+}
+
+describe('the module executor’s precheck', () => {
+  const REFUSED: ActionFailure = { code: 'missing_permission', humanReason: 'no' };
+
+  test('is forwarded for a declared kind, answer and all', async () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ actionKinds: ['ban'] }));
+    const { executor, prechecked } = prechecking(REFUSED);
+
+    const answer = await moduleExecutor(registry, 'starboard', executor).precheck?.(request('ban'));
+
+    expect(answer).toEqual(REFUSED);
+    expect(prechecked.map((r) => r.kind)).toEqual(['ban']);
+  });
+
+  test('refuses an undeclared kind exactly as execute does', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ actionKinds: ['send'] }));
+    const { executor, prechecked } = prechecking(null);
+
+    const guarded = moduleExecutor(registry, 'starboard', executor);
+
+    expect(() => guarded.precheck?.(request('ban'))).toThrow(UndeclaredActionError);
+    expect(prechecked).toEqual([]);
+  });
+
+  test('survives scoping, which is how a module hands over its target hints', async () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ actionKinds: ['ban'] }));
+    const { executor, prechecked, scopedWith } = prechecking(null);
+
+    const scoped = moduleExecutor(registry, 'starboard', executor);
+    if (!isScopedActionExecutor(scoped)) throw new Error('expected a scoped executor');
+    const hinted = scoped.scoped({ targetAbsent: true, targetRoleIds: [] });
+
+    expect(await hinted.precheck?.(request('ban'))).toBeNull();
+    expect(scopedWith).toEqual([{ targetAbsent: true, targetRoleIds: [] }]);
+    expect(prechecked).toHaveLength(1);
+  });
+
+  test('is absent when the executor it wraps has none, rather than passing everything', () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest({ actionKinds: ['ban'] }));
+
+    expect(moduleExecutor(registry, 'starboard', recording().executor).precheck).toBeUndefined();
   });
 });

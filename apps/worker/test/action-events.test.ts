@@ -122,6 +122,33 @@ describe('PublishingCaseRecorder', () => {
     expect(lines.join(' ')).toContain('could not be published');
   });
 
+  test('a reversal is marked as one, so a listener can tell a lifted ban from a new unban', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(
+      caseInput({ kind: 'unban', actorId: 'proton:auto-reversal', idempotencyKey: 'reversal:k1' }),
+    );
+
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload).reversal).toBe(true);
+  });
+
+  test('an ordinary action carries no reversal flag', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(caseInput({ idempotencyKey: 'moderation:report:Xk3P9aQ:accept:action' }));
+
+    expect(bus.published[0]?.payload).not.toHaveProperty('reversal');
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload).reversal).toBeUndefined();
+  });
+
+  test('a key merely mentioning a reversal is not one', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(caseInput({ idempotencyKey: 'moderation:reversal:k1' }));
+
+    expect(bus.published[0]?.payload).not.toHaveProperty('reversal');
+  });
+
   test('an expiry is carried as a timestamp the renderer can format', async () => {
     const { bus, recorder } = build();
     const expiresAt = new Date('2026-08-17T00:00:00.000Z');
@@ -130,6 +157,120 @@ describe('PublishingCaseRecorder', () => {
 
     const parsed = protonActionExecutedSchema.parse(bus.published[0]?.payload);
     expect(parsed.expiresAt).toBe(expiresAt.getTime());
+  });
+
+  test('a timeout carries when it ends, read from the payload Discord was sent', async () => {
+    const { bus, recorder } = build();
+    const until = new Date('2026-09-19T12:30:00.000Z');
+
+    await recorder.record(
+      caseInput({ kind: 'timeout', payload: { userId: '100000000000000007', until } }),
+    );
+
+    const parsed = protonActionExecutedSchema.parse(bus.published[0]?.payload);
+    expect(parsed.until).toBe(until.getTime());
+    expect(parsed.expiresAt).toBeNull();
+  });
+
+  test('a timeout Proton renews past 28 days carries the end it renews to', async () => {
+    const { bus, recorder } = build();
+    const until = new Date('2026-10-17T12:25:00.000Z');
+    const endsAt = new Date('2026-11-18T12:30:00.000Z');
+
+    await recorder.record(
+      caseInput({ kind: 'timeout', payload: { userId: '100000000000000007', until, endsAt } }),
+    );
+
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload).until).toBe(
+      endsAt.getTime(),
+    );
+  });
+
+  test('a timeout an earlier, longer one outlasts carries the end Discord holds', async () => {
+    const { bus, recorder } = build();
+    const until = new Date('2026-09-20T12:30:00.000Z');
+    const endsAt = new Date('2026-09-19T13:30:00.000Z');
+
+    await recorder.record(
+      caseInput({ kind: 'timeout', payload: { userId: '100000000000000007', until, endsAt } }),
+    );
+
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload).until).toBe(until.getTime());
+  });
+
+  test('a timeout whose payload has no readable end says so rather than guessing', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(
+      caseInput({ kind: 'timeout', payload: { userId: '100000000000000007' } }),
+    );
+
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload).until).toBeNull();
+  });
+
+  test('only a timeout carries an end', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(
+      caseInput({
+        kind: 'untimeout',
+        payload: { userId: '100000000000000007', until: new Date('2026-09-19T12:30:00.000Z') },
+      }),
+    );
+
+    expect(bus.published[0]?.payload).not.toHaveProperty('until');
+  });
+
+  const CHANNEL = '500000000000000001';
+  const ROLE = '900000000000000001';
+
+  test('a slowmode carries its channel and the new wait', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(
+      caseInput({
+        kind: 'slowmode',
+        targetId: undefined,
+        payload: { channelId: CHANNEL, seconds: 30 },
+      }),
+    );
+
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload)).toMatchObject({
+      channelId: CHANNEL,
+      seconds: 30,
+    });
+  });
+
+  test.each([
+    ['purge', { channelId: CHANNEL, messageIds: ['600000000000000001', '600000000000000002'] }],
+    ['lockdown', { channelId: CHANNEL, roleId: ROLE }],
+    ['unlock', { channelId: CHANNEL, roleId: ROLE }],
+  ] as const)('a %s carries the channel it touched', async (kind, payload) => {
+    const { bus, recorder } = build();
+
+    await recorder.record(caseInput({ kind, targetId: undefined, payload }));
+
+    const parsed = protonActionExecutedSchema.parse(bus.published[0]?.payload);
+    expect(parsed.channelId).toBe(CHANNEL);
+    expect(parsed.seconds).toBeUndefined();
+  });
+
+  test('a channel action whose payload has no readable channel says so', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(caseInput({ kind: 'lockdown', targetId: undefined, payload: {} }));
+
+    expect(protonActionExecutedSchema.parse(bus.published[0]?.payload).channelId).toBeNull();
+  });
+
+  test('a member action carries no channel', async () => {
+    const { bus, recorder } = build();
+
+    await recorder.record(
+      caseInput({ payload: { userId: '100000000000000007', channelId: CHANNEL } }),
+    );
+
+    expect(bus.published[0]?.payload).not.toHaveProperty('channelId');
   });
 });
 
