@@ -11,6 +11,7 @@ let service: CaseQueryService;
 
 const GUILD = '900000000000000001';
 const OTHER_GUILD = '900000000000000002';
+const MIXED_GUILD = '900000000000000003';
 const MOD_A = '100000000000000001';
 const MOD_B = '100000000000000002';
 const TARGET_A = '200000000000000001';
@@ -37,6 +38,25 @@ const SEEDS: Seed[] = [
   { n: 5, type: 'kick', actorId: MOD_A, targetId: TARGET_B, day: '2026-02-20' },
 ];
 
+interface MixedSeed {
+  type: string;
+  actorId: string;
+  moderatorId?: string;
+  moduleId: string;
+}
+
+const MIXED: MixedSeed[] = [
+  { type: 'ban', actorId: MOD_A, moduleId: 'moderation' },
+  { type: 'send', actorId: 'proton:welcome', moduleId: 'welcome' },
+  { type: 'add_role', actorId: 'proton:joinroles', moduleId: 'joinroles' },
+  { type: 'timeout', actorId: 'proton:automod', moduleId: 'automod' },
+  { type: 'kick', actorId: MOD_A, moderatorId: MOD_B, moduleId: 'moderation' },
+];
+
+function searchMixed(input: CaseQueryInput = {}) {
+  return service.search(MIXED_GUILD, caseQuerySchema.parse(input));
+}
+
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:17-alpine').start();
   handle = createDb(container.getConnectionUri());
@@ -47,7 +67,24 @@ beforeAll(async () => {
   await handle.db.insert(guilds).values([
     { id: GUILD, name: 'test guild' },
     { id: OTHER_GUILD, name: 'other guild' },
+    { id: MIXED_GUILD, name: 'mixed guild' },
   ]);
+
+  await handle.db.insert(cases).values(
+    MIXED.map((seed, index) => ({
+      id: newId(),
+      guildId: MIXED_GUILD,
+      caseNumber: index + 1,
+      type: seed.type,
+      actorId: seed.actorId,
+      moderatorId: seed.moderatorId ?? null,
+      targetId: TARGET_A,
+      moduleId: seed.moduleId,
+      dryRun: false,
+      idempotencyKey: `mixed-${index + 1}`,
+      createdAt: new Date(`2026-03-0${index + 1}T12:00:00.000Z`),
+    })),
+  );
 
   await handle.db.insert(cases).values(
     SEEDS.map((seed) => ({
@@ -167,6 +204,50 @@ describe('filtering', () => {
 
   test('a range that matches nothing returns zero rather than everything', async () => {
     expect((await search({ from: '2027-01-01' })).total).toBe(0);
+  });
+});
+
+describe('scope', () => {
+  test('all is the default and keeps every module’s actions', async () => {
+    expect((await searchMixed()).total).toBe(MIXED.length);
+    expect((await searchMixed({ scope: 'all' })).total).toBe(MIXED.length);
+  });
+
+  test('moderation keeps only moderation actions, whoever took them', async () => {
+    const result = await searchMixed({ scope: 'moderation', sort: 'caseNumber', direction: 'asc' });
+
+    expect(result.cases.map((c) => c.type)).toEqual(['ban', 'timeout', 'kick']);
+    expect(result.total).toBe(3);
+  });
+
+  test('a type outside moderation finds nothing in the moderation scope', async () => {
+    expect((await searchMixed({ scope: 'moderation', type: 'send' })).total).toBe(0);
+    expect((await searchMixed({ scope: 'all', type: 'send' })).total).toBe(1);
+  });
+
+  test('a moderation type narrows the moderation scope', async () => {
+    const result = await searchMixed({ scope: 'moderation', type: 'ban' });
+
+    expect(result.cases.map((c) => c.type)).toEqual(['ban']);
+  });
+});
+
+describe('the moderator', () => {
+  test('is the member who acted when no moderator was stored', async () => {
+    const result = await searchMixed({ type: 'ban' });
+
+    expect(result.cases[0]?.moderatorId).toBe(MOD_A);
+  });
+
+  test('is nobody for an automatic action', async () => {
+    const result = await searchMixed({ scope: 'all', sort: 'caseNumber', direction: 'asc' });
+
+    expect(result.cases.map((c) => c.moderatorId)).toEqual([MOD_A, null, null, null, MOD_B]);
+  });
+
+  test('a stored moderator wins over the actor, and either one finds the case', async () => {
+    expect((await searchMixed({ type: 'kick', moderatorId: MOD_B })).total).toBe(1);
+    expect((await searchMixed({ type: 'kick', moderatorId: MOD_A })).total).toBe(1);
   });
 });
 

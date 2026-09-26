@@ -9,6 +9,7 @@ const postable = registry.all().filter((manifest) => manifest.postables);
 describe('what a module says it keeps in a channel', () => {
   test('is declared by exactly the modules whose settings draw a post button', () => {
     expect(postable.map((manifest) => manifest.id).sort()).toEqual([
+      'applications',
       'rolemenu',
       'tickets',
       'verification',

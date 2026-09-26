@@ -8,6 +8,7 @@ import {
   appealsConfigSchema,
   appealView,
   checkAnswers,
+  NOT_TAKING_APPEALS,
 } from '@proton/module-appeals';
 
 import type { ModuleConfigService } from '../modules/service.ts';
@@ -58,7 +59,7 @@ export class AppealsService {
     const config = await this.#config(claims.guildId);
 
     if (!config) {
-      return { state: 'closed', humanReason: 'This server is not taking appeals at the moment.' };
+      return { state: 'closed', humanReason: NOT_TAKING_APPEALS };
     }
 
     const store = this.#options.store;
@@ -101,7 +102,7 @@ export class AppealsService {
     if (view.state !== 'open') {
       throw new AppealsError(
         'not_open',
-        'humanReason' in view ? view.humanReason : 'This appeal can no longer be sent.',
+        'humanReason' in view ? view.humanReason : 'This appeal can’t be sent any more.',
       );
     }
 
@@ -122,7 +123,7 @@ export class AppealsService {
     if (!bus)
       throw new AppealsError(
         'bus_unavailable',
-        'Proton cannot reach its event bus, so your appeal was saved but the moderators have not been shown it yet. Open this link again in a few minutes.',
+        'Your appeal was saved, but a problem on Proton’s side stopped it reaching the server’s staff.',
       );
 
     const payload = appealSubmittedSchema.parse({

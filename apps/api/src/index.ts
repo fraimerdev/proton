@@ -1,13 +1,28 @@
 import {
+  ACHIEVEMENT_RETRY_MAILBOX_PREFIX,
+  type AchievementRetryOutcome,
   ALL_PERMISSIONS,
+  achievementRetryOutcomeSchema,
+  HttpRestProxyClient,
+  REPORT_ACTION_MAILBOX_PREFIX,
+  RedisMailbox,
   RedisRateWindow,
   RedisSimulationResults,
   RedisStreamsEventBus,
+  type ReportActionOutcome,
+  reportActionOutcomeSchema,
 } from '@proton/core';
-import { createRedisClient } from '@proton/core/redis';
-import { createDb, DrizzleBrandingNameStyleStore, DrizzleGuildRuleStore } from '@proton/db';
-import { RedisMaintenanceStore } from '@proton/module-antinuke';
+import {
+  createDb,
+  DrizzleBrandingNameStyleStore,
+  DrizzleCommandRegistrationStore,
+  DrizzleCommandSettingsStore,
+  DrizzleGuildRuleStore,
+} from '@proton/db';
+import { DrizzleAchievementStore } from '@proton/module-achievements';
 import { DrizzleAppealStore } from '@proton/module-appeals';
+import { DrizzleApplicationStore } from '@proton/module-applications';
+import { dataUri } from '@proton/module-branding/image';
 import { DrizzleBrandingAssetStore } from '@proton/module-branding/store';
 import { DrizzleCaseHistoryStore } from '@proton/module-cases/store';
 import { DrizzleGiveawayStore } from '@proton/module-giveaways';
@@ -15,18 +30,28 @@ import { levelForXp } from '@proton/module-leveling';
 import { DrizzleActivityStore } from '@proton/module-leveling/activity-store';
 import { DrizzleXpEventStore } from '@proton/module-leveling/xp-event-store';
 import { createModuleRegistry } from '@proton/modules';
+import { AchievementsService } from './achievements/service.ts';
 import { createApiApp } from './app.ts';
 import { AppealsService } from './appeals/service.ts';
+import { ticketInterviews } from './applications/interviews.ts';
+import { RestMemberAccess } from './applications/member-access.ts';
+import { PortalService } from './applications/portal.ts';
+import { ApplicationsService } from './applications/service.ts';
+import { auditTrailLookup } from './applications/shared.ts';
 import { BrandingAssetService } from './branding/service.ts';
 import { CardPreviewService } from './cards/preview.ts';
 import { CaseQueryService } from './cases/service.ts';
-import { loadEnv } from './env.ts';
+import { CommandSettingsService } from './commands/service.ts';
+import { commandScopeOf, loadEnv } from './env.ts';
 import { BotGuildDirectory } from './guilds/directory.ts';
 import { GuildService } from './guilds/service.ts';
+import { JoinRolesSyncService } from './joinroles/sync.ts';
 import { LeaderboardService } from './leveling/service.ts';
 import { auditTrailWriter, XpEventService } from './leveling/xp-events.ts';
 import { BlockedMemberService } from './moderation/blocked-members.ts';
+import { ReportsService } from './moderation/reports.ts';
 import { ModuleConfigService } from './modules/service.ts';
+import { createApiRedis, disconnectApiRedis } from './redis.ts';
 import { SimulationService } from './simulations/service.ts';
 import { TagSearchService } from './tags/service.ts';
 import { TicketSearchService } from './tickets/service.ts';
@@ -44,9 +69,8 @@ const registry = createModuleRegistry({
   giveaways: { store: new DrizzleGiveawayStore(handle) },
 });
 
-const busRedis = env.REDIS_URL
-  ? createRedisClient(env.REDIS_URL, { db: env.REDIS_DB_BUS, label: 'api/bus' })
-  : null;
+const redis = createApiRedis(env);
+const busRedis = redis?.bus ?? null;
 const bus = busRedis ? new RedisStreamsEventBus(busRedis) : undefined;
 
 if (!bus) {
@@ -56,8 +80,11 @@ if (!bus) {
   );
 }
 
+const memberAccess = new RestMemberAccess(new HttpRestProxyClient(env.REST_PROXY_URL));
+
 const modules = new ModuleConfigService(handle, registry, {
   rules: new DrizzleGuildRuleStore(handle),
+  memberAccess,
   ...(bus ? { bus } : {}),
   logger: console,
   onRecompileFailed: (guildId, moduleId, detail) =>
@@ -65,6 +92,26 @@ const modules = new ModuleConfigService(handle, registry, {
       `${moduleId}'s config was saved for guild ${guildId} but its rules could not be ` +
         `recompiled, so the old ones are still in force: ${detail}`,
     ),
+});
+
+const commandScope = commandScopeOf(env);
+
+if (commandScope.legacy) {
+  console.warn(
+    'COMMAND_REGISTRATION_SCOPE=global is read as every-guild: Proton now registers its commands ' +
+      'in each server instead of globally. Set COMMAND_REGISTRATION_SCOPE=every-guild in .env to ' +
+      'stop this warning.',
+  );
+}
+
+const commands = new CommandSettingsService({
+  registry,
+  settings: new DrizzleCommandSettingsStore(handle),
+  registrations: new DrizzleCommandRegistrationStore(handle),
+  modules,
+  scope: { scope: commandScope.scope, testGuildId: commandScope.testGuildId },
+  ...(bus ? { bus } : {}),
+  logger: console,
 });
 
 // The mailbox and the rate window share the bus connection and its database, because the worker
@@ -83,25 +130,101 @@ const simulations = new SimulationService({
   logger: console,
 });
 
-// The same Redis the bus uses: the maintenance key is small, read once per anti-nuke page load,
-// and a second connection for one key is not worth the file descriptor.
-const maintenance = busRedis ? new RedisMaintenanceStore(busRedis) : undefined;
+const maintenance = redis?.maintenance;
+
+const joinrolesSync = new JoinRolesSyncService({
+  modules,
+  audit: auditTrailWriter(handle),
+  ...(redis ? { runs: redis.joinrolesRuns } : {}),
+  ...(bus ? { bus } : {}),
+  logger: console,
+});
+
+const reports = new ReportsService({
+  db: handle,
+  modules,
+  audit: auditTrailWriter(handle),
+  ...(busRedis
+    ? {
+        mailbox: new RedisMailbox<ReportActionOutcome>(busRedis, {
+          prefix: REPORT_ACTION_MAILBOX_PREFIX,
+          schema: reportActionOutcomeSchema,
+        }),
+      }
+    : {}),
+  ...(bus ? { bus } : {}),
+  logger: console,
+});
+
+const achievementStore = new DrizzleAchievementStore(handle);
+
+const achievements = new AchievementsService({
+  db: handle,
+  store: achievementStore,
+  modules,
+  audit: auditTrailWriter(handle),
+  ...(busRedis
+    ? {
+        mailbox: new RedisMailbox<AchievementRetryOutcome>(busRedis, {
+          prefix: ACHIEVEMENT_RETRY_MAILBOX_PREFIX,
+          schema: achievementRetryOutcomeSchema,
+        }),
+      }
+    : {}),
+  ...(bus ? { bus } : {}),
+  logger: console,
+});
+
+const applicationStore = new DrizzleApplicationStore(handle);
+const cases = new CaseQueryService(handle);
+
+const applications = new ApplicationsService({
+  store: applicationStore,
+  modules,
+  members: memberAccess,
+  providers: registry.providers(),
+  audit: auditTrailWriter(handle),
+  audits: auditTrailLookup(handle),
+  cases,
+  interviews: ticketInterviews(handle),
+  ...(bus ? { bus } : {}),
+  logger: console,
+});
+
+const applicationPortal = new PortalService({
+  store: applicationStore,
+  modules,
+  members: memberAccess,
+  providers: registry.providers(),
+  ...(bus ? { bus } : {}),
+  logger: console,
+});
 
 const app = createApiApp({
   guilds: new GuildService(handle, new BotGuildDirectory(env.REST_PROXY_URL)),
   modules,
+  commands,
   simulations,
   branding: new BrandingAssetService(new DrizzleBrandingAssetStore(handle), modules),
   brandingNameStyles: new DrizzleBrandingNameStyleStore(handle),
   verification: new VerificationService({ ...(bus ? { bus } : {}) }),
   blocked: new BlockedMemberService(handle),
+  reports,
   appeals: new AppealsService({
     modules,
     store: new DrizzleAppealStore(handle),
     ...(bus ? { bus } : {}),
   }),
-  cards: new CardPreviewService(),
-  cases: new CaseQueryService(handle),
+  achievements,
+  applications,
+  applicationPortal,
+  cards: new CardPreviewService({
+    badgeImage: async (guildId, assetId) => {
+      const asset = await achievementStore.badge(guildId, assetId);
+      return asset ? dataUri(asset.contentType, asset.base64) : null;
+    },
+  }),
+  cases,
   leaderboard: new LeaderboardService(handle),
   xpEvents: new XpEventService({
     store: new DrizzleXpEventStore(handle),
@@ -112,6 +235,7 @@ const app = createApiApp({
   tickets: new TicketSearchService(handle),
   registry,
   ...(maintenance ? { maintenance } : {}),
+  joinrolesSync,
   // Intents are reported truthfully; permissions are not. A module's Discord permissions are
   // per-guild and live in the worker's guild-state cache, which this process cannot reach, so
   // passing ALL_PERMISSIONS makes that half of the check a no-op rather than a claim we cannot
@@ -129,7 +253,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     void (async () => {
       await server.stop(true);
       await handle.close();
-      busRedis?.disconnect();
+      disconnectApiRedis(redis);
       process.exit(0);
     })();
   });

@@ -91,7 +91,7 @@ describe('POST /guilds/:guildId/verification/passed', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toMatchObject({
       error: 'bus_unavailable',
-      message: expect.stringContaining('REDIS_URL'),
+      message: expect.stringContaining('part of its service is down'),
     });
   });
 

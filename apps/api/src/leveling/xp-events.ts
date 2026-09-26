@@ -112,7 +112,7 @@ export class XpEventService {
     if (!parsed.success) {
       throw new XpEventError(
         'invalid_xp_event',
-        `That XP event was not started: ${describeIssues(parsed.error)}.`,
+        `Couldn't start that XP event: ${describeIssues(parsed.error)}.`,
       );
     }
 
@@ -138,7 +138,7 @@ export class XpEventService {
     if (result.status === 'full') {
       throw new XpEventError(
         'too_many_xp_events',
-        `This server already has ${result.pending} XP events active or scheduled, and ` +
+        `This server already has ${result.pending} XP events running or scheduled, and ` +
           `${XP_EVENT_MAX_PENDING} is the most it can have. End or cancel one, or wait for one ` +
           'to finish. Nothing was started.',
       );
@@ -180,8 +180,8 @@ export class XpEventService {
     if (result === 'not_found') {
       throw new XpEventError(
         'unknown_xp_event',
-        'That XP event has already ended or been cancelled, so there was nothing to end. Reload ' +
-          'the page to see where things stand.',
+        'That XP event already ended or was cancelled, so there was nothing to end. Reload the ' +
+          'page to see the current events.',
       );
     }
 

@@ -1,5 +1,36 @@
+export {
+  ACHIEVEMENT_RETRY_WAIT_MS,
+  type AchievementRetryMailbox,
+  AchievementsError,
+  type AchievementsErrorCode,
+  AchievementsService,
+  type AchievementsServiceOptions,
+  type AchievementsStore,
+  badgeAssetId,
+  type ServedBadge,
+  type UploadBadgeInput,
+} from './achievements/service.ts';
 export { type ApiDeps, createApiApp, moduleIndex } from './app.ts';
 export { type AppealFormView, AppealsError, AppealsService } from './appeals/service.ts';
+export {
+  ApplicationsError,
+  type ApplicationsErrorCode,
+  applicationsErrorStatus,
+} from './applications/errors.ts';
+export { type ExportFile, exportFile } from './applications/export.ts';
+export {
+  type ChannelRead,
+  type GuildRoster,
+  type MemberAccess,
+  type MemberAccessRead,
+  RestMemberAccess,
+} from './applications/member-access.ts';
+export { PortalService, type PortalServiceOptions } from './applications/portal.ts';
+export {
+  ApplicationsService,
+  type ApplicationsServiceOptions,
+} from './applications/service.ts';
+export { type AuditLookup, auditTrailLookup } from './applications/shared.ts';
 export {
   type CardPreviewDeps,
   type CardPreviewQuery,
@@ -8,7 +39,16 @@ export {
   previewDescriptor,
 } from './cards/preview.ts';
 export { CaseQueryService } from './cases/service.ts';
-export { loadEnv } from './env.ts';
+export {
+  type CommandAuditStamp,
+  type CommandScope,
+  CommandSettingsError,
+  type CommandSettingsErrorCode,
+  CommandSettingsService,
+  type CommandSettingsServiceOptions,
+  invalidCommandMessage,
+} from './commands/service.ts';
+export { commandScopeOf, loadEnv } from './env.ts';
 export { LeaderboardService } from './leveling/service.ts';
 export {
   auditTrailWriter,

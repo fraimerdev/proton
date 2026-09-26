@@ -4,6 +4,8 @@ import {
   type BrandingNameStyleStore,
   blockedMemberQuerySchema,
   caseQuerySchema,
+  commandEnabledBodySchema,
+  commandUpdateBodySchema,
   type EventBus,
   leaderboardQuerySchema,
   type ModuleIndex,
@@ -12,22 +14,64 @@ import {
   simulationRunSchema,
   snowflakeSchema,
 } from '@proton/core';
+import {
+  jobBodySchema,
+  resetBodySchema,
+  rewardListQuerySchema,
+  rewardRetryBodySchema,
+  unlockListQuerySchema,
+} from '@proton/module-achievements/view';
 import type { MaintenanceStore } from '@proton/module-antinuke';
+import {
+  deleteApplicantBodySchema,
+  draftSaveBodySchema,
+  eligibilityPreviewBodySchema,
+  exportQuerySchema,
+  portalRespondBodySchema,
+  portalSubmitBodySchema,
+  portalWithdrawBodySchema,
+  publishBodySchema,
+  queueQuerySchema,
+  staffActionSchema,
+} from '@proton/module-applications/view';
 import { brandingConfigSchema } from '@proton/module-branding/config';
 import { isAssetKind } from '@proton/module-branding/kinds';
 import { describeNameStyleStatus } from '@proton/module-branding/name-style-status';
+import { reportActionBodySchema } from '@proton/module-moderation/reports-view';
 import { tagQuerySchema } from '@proton/module-tags/query';
 import { ticketQuerySchema, ticketStatsQuerySchema } from '@proton/module-tickets/query';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { z } from 'zod';
+import { AchievementsError, type AchievementsService } from './achievements/service.ts';
 import { AppealsError, type AppealsService } from './appeals/service.ts';
+import { ApplicationsError, applicationsErrorStatus } from './applications/errors.ts';
+import type { PortalService } from './applications/portal.ts';
+import type { ApplicationsService } from './applications/service.ts';
 import { BrandingAssetError, type BrandingAssetService } from './branding/service.ts';
 import { type CardPreviewService, cardPreviewQuerySchema } from './cards/preview.ts';
 import type { CaseQueryService } from './cases/service.ts';
+import {
+  CommandSettingsError,
+  type CommandSettingsService,
+  invalidCommandMessage,
+} from './commands/service.ts';
 import type { GuildService } from './guilds/service.ts';
+import {
+  JoinRolesSyncError,
+  type JoinRolesSyncService,
+  joinrolesSyncStartBodySchema,
+  joinrolesSyncUnavailable,
+} from './joinroles/sync.ts';
 import type { LeaderboardService } from './leveling/service.ts';
 import { XpEventError, type XpEventService, xpEventStartBodySchema } from './leveling/xp-events.ts';
 import { BlockedMemberError, type BlockedMemberService } from './moderation/blocked-members.ts';
+import {
+  automationRunSearchSchema,
+  ReportsError,
+  type ReportsService,
+  reportSearchSchema,
+  viewerQuerySchema,
+} from './moderation/reports.ts';
 import { ModuleConfigError, type ModuleConfigService } from './modules/service.ts';
 import { SimulationError, type SimulationService } from './simulations/service.ts';
 import type { TagSearchService } from './tags/service.ts';
@@ -61,8 +105,35 @@ const presenceBodySchema = z.object({
 const ABSENT = {
   error: 'bot_absent',
   message:
-    'Discord says Proton is not in this server, so nothing was saved — a setting stored here ' +
+    'Discord says Proton is not in this server, so nothing was saved. A setting stored here ' +
     'would never reach Discord. Invite Proton back to the server and try again.',
+} as const;
+
+const STARTED_ABSENT = {
+  error: 'bot_absent',
+  message:
+    'Discord says Proton is not in this server, so nothing was started. Invite Proton back to ' +
+    'the server and try again.',
+} as const;
+
+const START_ROUTES: ReadonlySet<string> = new Set(['joinroles']);
+
+const ACTED_ABSENT = {
+  error: 'bot_absent',
+  message:
+    'Discord says Proton is not in this server, so nothing was done. Invite Proton back to the ' +
+    'server and try again.',
+} as const;
+
+const ACT_ROUTES: ReadonlySet<string> = new Set(['moderation', 'achievements', 'applications']);
+
+const LINK_ROUTES: ReadonlySet<string> = new Set(['appeals', 'verification', 'application-portal']);
+
+const LINK_REFUSED = {
+  error: 'guild_left',
+  message:
+    "Proton is no longer in this server, so this link can't be used. Nothing was sent to the " +
+    'server.',
 } as const;
 
 const ensureGuildBodySchema = z.object({
@@ -76,6 +147,8 @@ const passedBodySchema = z.object({
   jti: z.string().min(1).max(64),
 });
 
+const commandAckBodySchema = commandEnabledBodySchema.omit({ enabled: true });
+
 const appealFormBodySchema = z.object({ claims: appealLinkClaimsSchema });
 
 const appealSubmitBodySchema = z.object({
@@ -88,6 +161,25 @@ const liftBlockBodySchema = z.object({
   source: z.string().min(1).max(32),
   liftReason: z.string().trim().min(1).max(BLOCK_REASON_MAX),
   ipHash: z.string().min(1).max(128).optional(),
+});
+
+const applicationViewerSchema = z.object({ viewerId: snowflakeSchema });
+
+const applicantQuerySchema = z.object({ userId: snowflakeSchema });
+
+const reviewMembersQuerySchema = z.object({
+  viewerId: snowflakeSchema,
+  ids: z
+    .string()
+    .max(2_200)
+    .transform((value) => value.split(',').filter((id) => id !== '')),
+});
+
+const audienceQuerySchema = z.object({
+  formId: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.string().min(1).max(32).optional(),
+  ),
 });
 
 export function moduleIndex(
@@ -120,6 +212,7 @@ export function moduleIndex(
 
 export interface ApiDeps {
   modules: ModuleConfigService;
+  commands: CommandSettingsService;
   simulations: SimulationService;
   cards: CardPreviewService;
   cases: CaseQueryService;
@@ -130,15 +223,20 @@ export interface ApiDeps {
   guilds: GuildService;
   verification: VerificationService;
   blocked: BlockedMemberService;
+  reports: ReportsService;
   appeals: AppealsService;
   branding: BrandingAssetService;
   brandingNameStyles: BrandingNameStyleStore;
+  achievements: AchievementsService;
+  applications: ApplicationsService;
+  applicationPortal: PortalService;
   registry: ModuleRegistry;
 
   // Anti-nuke's maintenance window lives in Redis, written by the command that opens it. The
   // dashboard has to be able to say the breaker is suspended and to close the window early;
   // absent a Redis client the routes answer 503 rather than claiming protection is active.
   maintenance?: MaintenanceStore;
+  joinrolesSync?: JoinRolesSyncService;
   bus?: EventBus;
   // What the bot actually has, for `registry.evaluate`. A function because intents come from the
   // gateway's identify and permissions from the guild, neither of which is known at construction.
@@ -174,6 +272,19 @@ function invalidQuery(error: z.ZodError): { error: string; message: string } {
   };
 }
 
+async function answer<T>(c: Context, work: () => Promise<T>): Promise<Response> {
+  try {
+    return c.json(await work());
+  } catch (error) {
+    const { status, body } = toErrorResponse(error);
+    return c.json(body, status);
+  }
+}
+
+async function bodyOf(c: Context): Promise<unknown> {
+  return c.req.json().catch(() => null);
+}
+
 export function createApiApp(deps: ApiDeps): Hono {
   const app = new Hono();
   const logger = deps.logger ?? console;
@@ -189,6 +300,17 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
 
     return c.json({ permissions: deps.registry.invitePermissions().toString() });
+  });
+
+  app.get('/applicants/:userId/applications', async (c) => {
+    if (c.req.header('x-proton-secret') !== deps.sharedSecret) {
+      return c.json({ error: 'unauthorised' }, 401);
+    }
+
+    const userId = snowflakeSchema.safeParse(c.req.param('userId'));
+    if (!userId.success) return c.json(invalidQuery(userId.error), 400);
+
+    return answer(c, () => deps.applicationPortal.mine(userId.data));
   });
 
   app.put('/guilds/:guildId', async (c) => {
@@ -210,8 +332,20 @@ export function createApiApp(deps: ApiDeps): Hono {
       return c.json({ error: 'unauthorised' }, 401);
     }
 
-    await deps.guilds.markLeft(c.req.param('guildId'));
-    return c.json({ ok: true });
+    const departure = await deps.guilds.markLeft(c.req.param('guildId'));
+    if (departure === 'unknown') {
+      return c.json(
+        {
+          error: 'discord_unreachable',
+          message:
+            'Discord could not be asked whether Proton is still in this server, so the removal ' +
+            'was not recorded. Send it again once Discord answers.',
+        },
+        503,
+      );
+    }
+
+    return c.json({ left: departure === 'left' });
   });
 
   app.use('/guilds/*', async (c, next) => {
@@ -234,12 +368,18 @@ export function createApiApp(deps: ApiDeps): Hono {
     if (!guildId || !nested) return next();
 
     const { present, known } = await deps.guilds.presence([guildId]);
+    const link = LINK_ROUTES.has(nested);
 
     // Allowed, deliberately: `known:false` outlives the directory's ten-minute grace window, so it
     // is a sustained outage, and refusing would make every server's settings read-only for its
     // duration to stop a row that is inert until the bot is back. Only a checked absence refuses,
     // which is the call the guild route loader already makes.
     if (!known) {
+      // Links, unlike settings, fall back to the guilds row: a left or purged server takes none.
+      if (link && !(await deps.guilds.recordedPresent(guildId))) {
+        return c.json(LINK_REFUSED, 409);
+      }
+
       logger.warn(
         `Proton could not check whether it is still in ${guildId}, so a ${c.req.method} on ` +
           `${c.req.path} was allowed through unverified.`,
@@ -247,7 +387,18 @@ export function createApiApp(deps: ApiDeps): Hono {
       return next();
     }
 
-    if (!present.includes(guildId)) return c.json(ABSENT, 409);
+    if (!present.includes(guildId)) {
+      return c.json(
+        link
+          ? LINK_REFUSED
+          : START_ROUTES.has(nested)
+            ? STARTED_ABSENT
+            : ACT_ROUTES.has(nested)
+              ? ACTED_ABSENT
+              : ABSENT,
+        409,
+      );
+    }
 
     return next();
   });
@@ -287,8 +438,8 @@ export function createApiApp(deps: ApiDeps): Hono {
         {
           error: 'no_redis',
           message:
-            'Proton cannot reach Redis, where the maintenance window is kept, so it cannot say ' +
-            'whether anti-nuke is suspended. Set REDIS_URL for the api and restart it.',
+            "Proton can't tell whether Anti-Nuke is paused right now because part of its " +
+            'service is down. Try again later.',
         },
         503,
       );
@@ -301,7 +452,15 @@ export function createApiApp(deps: ApiDeps): Hono {
   // Closing the window early is a security decision, so it is recorded like a config write.
   app.delete('/guilds/:guildId/antinuke/maintenance', async (c) => {
     if (!deps.maintenance) {
-      return c.json({ error: 'no_redis', message: 'Proton cannot reach Redis.' }, 503);
+      return c.json(
+        {
+          error: 'no_redis',
+          message:
+            "Proton can't end maintenance right now because part of its service is down, so " +
+            'nothing was changed. Try again later.',
+        },
+        503,
+      );
     }
 
     const actorId = c.req.header('x-proton-actor');
@@ -314,6 +473,35 @@ export function createApiApp(deps: ApiDeps): Hono {
     await deps.modules.recordMaintenanceEnded(guildId, actorId, held);
 
     return c.json({ ok: true, window: null });
+  });
+
+  app.get('/guilds/:guildId/joinroles/sync', async (c) => {
+    try {
+      if (!deps.joinrolesSync) throw joinrolesSyncUnavailable();
+
+      return c.json(await deps.joinrolesSync.status(c.req.param('guildId')));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/joinroles/sync', async (c) => {
+    const parsed = joinrolesSyncStartBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      if (!deps.joinrolesSync) throw joinrolesSyncUnavailable();
+
+      return c.json(
+        await deps.joinrolesSync.start({ guildId: c.req.param('guildId'), ...parsed.data }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
   });
 
   app.get('/guilds/:guildId/cases', async (c) => {
@@ -445,7 +633,7 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
 
     try {
-      const png = await deps.cards.render(parsed.data);
+      const png = await deps.cards.render(c.req.param('guildId'), parsed.data);
       return new Response(png, {
         headers: {
           'content-type': 'image/png',
@@ -477,6 +665,84 @@ export function createApiApp(deps: ApiDeps): Hono {
         ...parsed.data,
       });
       return c.json(result);
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/commands', async (c) => {
+    try {
+      return c.json(await deps.commands.catalogue(c.req.param('guildId')));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/commands/worker-view', async (c) => {
+    try {
+      return c.json(await deps.commands.workerView(c.req.param('guildId')));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/commands/lost-permissions/ack', async (c) => {
+    const parsed = commandAckBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(await deps.commands.ackLostPermissions(c.req.param('guildId'), parsed.data));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.put('/guilds/:guildId/commands/:key', async (c) => {
+    const parsed = commandUpdateBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      const result = await deps.commands.update(
+        c.req.param('guildId'),
+        c.req.param('key'),
+        parsed.data,
+      );
+      if (!result.ok) {
+        return c.json(
+          {
+            error: 'invalid_command',
+            message: invalidCommandMessage(result.issues),
+            issues: result.issues,
+          },
+          400,
+        );
+      }
+
+      return c.json(result);
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/commands/:key/enabled', async (c) => {
+    const parsed = commandEnabledBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(
+        await deps.commands.setEnabled(c.req.param('guildId'), c.req.param('key'), parsed.data),
+      );
     } catch (error) {
       const { status, body } = toErrorResponse(error);
       return c.json(body, status);
@@ -599,6 +865,74 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
   });
 
+  app.get('/guilds/:guildId/moderation/reports', async (c) => {
+    const parsed = reportSearchSchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+    const viewer = viewerQuerySchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    return c.json(
+      await deps.reports.search(c.req.param('guildId'), parsed.data, viewer.data.viewerId),
+    );
+  });
+
+  // Registered before `/:reportId`, which would otherwise read these as report ids.
+  app.get('/guilds/:guildId/moderation/reports/summary', async (c) => {
+    const viewer = viewerQuerySchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    return c.json(await deps.reports.summary(c.req.param('guildId'), viewer.data.viewerId));
+  });
+
+  app.get('/guilds/:guildId/moderation/reports/automation/runs', async (c) => {
+    const parsed = automationRunSearchSchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+    const viewer = viewerQuerySchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    return c.json(
+      await deps.reports.automationRuns(c.req.param('guildId'), parsed.data, viewer.data.viewerId),
+    );
+  });
+
+  app.get('/guilds/:guildId/moderation/reports/:reportId', async (c) => {
+    const viewer = viewerQuerySchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    try {
+      return c.json(
+        await deps.reports.detail(
+          c.req.param('guildId'),
+          c.req.param('reportId'),
+          viewer.data.viewerId,
+        ),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/moderation/reports/:reportId/actions', async (c) => {
+    const parsed = reportActionBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(
+        await deps.reports.act(c.req.param('guildId'), c.req.param('reportId'), parsed.data),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/cases/:caseId/evidence', async (c) => {
+    return c.json(await deps.reports.caseEvidence(c.req.param('guildId'), c.req.param('caseId')));
+  });
+
   // The claims arrive already verified: only the dashboard holds VERIFY_LINK_SECRET, and it
   // reaches this route over the shared secret the same way a config write does.
   app.post('/guilds/:guildId/appeals/form', async (c) => {
@@ -707,13 +1041,389 @@ export function createApiApp(deps: ApiDeps): Hono {
     }
   });
 
+  app.get('/guilds/:guildId/achievements/overview', async (c) => {
+    try {
+      return c.json(await deps.achievements.overview(c.req.param('guildId')));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/achievements/unlocks', async (c) => {
+    const parsed = unlockListQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return c.json(await deps.achievements.unlocks(c.req.param('guildId'), parsed.data));
+  });
+
+  app.get('/guilds/:guildId/achievements/rewards', async (c) => {
+    const parsed = rewardListQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return c.json(await deps.achievements.rewards(c.req.param('guildId'), parsed.data));
+  });
+
+  app.post('/guilds/:guildId/achievements/rewards/retry', async (c) => {
+    const parsed = rewardRetryBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(await deps.achievements.retry(c.req.param('guildId'), parsed.data));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/achievements/resets', async (c) => {
+    const parsed = resetBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(await deps.achievements.reset(c.req.param('guildId'), parsed.data));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.post('/guilds/:guildId/achievements/jobs', async (c) => {
+    const parsed = jobBodySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    try {
+      return c.json(await deps.achievements.requestJob(c.req.param('guildId'), parsed.data));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.put('/guilds/:guildId/achievements/badges', async (c) => {
+    const actorId = c.req.header('x-proton-actor');
+    if (!actorId) return c.json({ error: 'invalid_body', message: 'no actor was named' }, 400);
+
+    try {
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      return c.json(
+        await deps.achievements.uploadBadge({ guildId: c.req.param('guildId'), bytes, actorId }),
+      );
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/achievements/badges/:assetId', async (c) => {
+    try {
+      const badge = await deps.achievements.badge(c.req.param('guildId'), c.req.param('assetId'));
+      return new Response(badge.bytes, {
+        headers: {
+          'content-type': badge.contentType,
+          'cache-control': 'no-store',
+          'content-length': String(badge.bytes.byteLength),
+        },
+      });
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/achievements/members/:userId', async (c) => {
+    try {
+      return c.json(await deps.achievements.member(c.req.param('guildId'), c.req.param('userId')));
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/applications/forms', (c) =>
+    answer(c, () => deps.applications.forms(c.req.param('guildId'))),
+  );
+
+  app.post('/guilds/:guildId/applications/forms/:formId/publish', async (c) => {
+    const parsed = publishBodySchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applications.publish(c.req.param('guildId'), c.req.param('formId'), parsed.data),
+    );
+  });
+
+  app.get('/guilds/:guildId/applications/forms/:formId/versions', (c) =>
+    answer(c, () => deps.applications.versions(c.req.param('guildId'), c.req.param('formId'))),
+  );
+
+  app.get('/guilds/:guildId/applications/forms/:formId/versions/:versionId', (c) =>
+    answer(c, () =>
+      deps.applications.version(
+        c.req.param('guildId'),
+        c.req.param('formId'),
+        c.req.param('versionId'),
+      ),
+    ),
+  );
+
+  app.get('/guilds/:guildId/applications/forms/:formId/eligibility', async (c) => {
+    const parsed = eligibilityPreviewBodySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return answer(c, () =>
+      deps.applications.eligibilityPreview(
+        c.req.param('guildId'),
+        c.req.param('formId'),
+        parsed.data.userId,
+      ),
+    );
+  });
+
+  app.get('/guilds/:guildId/applications/audience/:channelId', async (c) => {
+    const channelId = snowflakeSchema.safeParse(c.req.param('channelId'));
+    if (!channelId.success) return c.json(invalidQuery(channelId.error), 400);
+    const parsed = audienceQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return answer(c, () =>
+      deps.applications.audience(c.req.param('guildId'), channelId.data, parsed.data.formId),
+    );
+  });
+
+  app.get('/guilds/:guildId/applications/queue', async (c) => {
+    const parsed = queueQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+    const viewer = applicationViewerSchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    return answer(c, () =>
+      deps.applications.queue(c.req.param('guildId'), parsed.data, viewer.data.viewerId),
+    );
+  });
+
+  app.get('/guilds/:guildId/applications/summary', async (c) => {
+    const viewer = applicationViewerSchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    return answer(c, () => deps.applications.summary(c.req.param('guildId'), viewer.data.viewerId));
+  });
+
+  app.get('/guilds/:guildId/applications/export', async (c) => {
+    const parsed = exportQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+    const viewer = applicationViewerSchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    try {
+      const file = await deps.applications.export(
+        c.req.param('guildId'),
+        parsed.data,
+        viewer.data.viewerId,
+      );
+
+      return new Response(file.body, {
+        headers: {
+          'content-type': file.contentType,
+          'content-disposition': `attachment; filename="${file.filename}"`,
+          'cache-control': 'no-store',
+          'x-proton-export-rows': String(file.rows),
+          'x-proton-export-truncated': file.truncated ? '1' : '0',
+        },
+      });
+    } catch (error) {
+      const { status, body } = toErrorResponse(error);
+      return c.json(body, status);
+    }
+  });
+
+  app.get('/guilds/:guildId/applications/members', async (c) => {
+    const parsed = reviewMembersQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return answer(c, () =>
+      deps.applications.members(c.req.param('guildId'), parsed.data.ids, parsed.data.viewerId),
+    );
+  });
+
+  app.post('/guilds/:guildId/applications/applicants/:applicantId/delete', async (c) => {
+    const applicantId = snowflakeSchema.safeParse(c.req.param('applicantId'));
+    if (!applicantId.success) {
+      return c.json({ error: 'invalid_body', issues: applicantId.error.issues }, 400);
+    }
+    const parsed = deleteApplicantBodySchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applications.deleteApplicant(c.req.param('guildId'), applicantId.data, parsed.data),
+    );
+  });
+
+  app.get('/guilds/:guildId/applications/:applicationId', async (c) => {
+    const viewer = applicationViewerSchema.safeParse(c.req.query());
+    if (!viewer.success) return c.json(invalidQuery(viewer.error), 400);
+
+    return answer(c, () =>
+      deps.applications.detail(
+        c.req.param('guildId'),
+        c.req.param('applicationId'),
+        viewer.data.viewerId,
+      ),
+    );
+  });
+
+  app.post('/guilds/:guildId/applications/:applicationId/actions', async (c) => {
+    const parsed = staffActionSchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applications.act(c.req.param('guildId'), c.req.param('applicationId'), parsed.data),
+    );
+  });
+
+  app.get('/guilds/:guildId/application-portal/forms', async (c) => {
+    const parsed = applicantQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return answer(c, () =>
+      deps.applicationPortal.guildForms(c.req.param('guildId'), parsed.data.userId),
+    );
+  });
+
+  app.get('/guilds/:guildId/application-portal/forms/:formId', async (c) => {
+    const parsed = applicantQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return answer(c, () =>
+      deps.applicationPortal.form(
+        c.req.param('guildId'),
+        c.req.param('formId'),
+        parsed.data.userId,
+      ),
+    );
+  });
+
+  app.post('/guilds/:guildId/application-portal/forms/:formId/draft', async (c) => {
+    const parsed = draftSaveBodySchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applicationPortal.saveDraft(c.req.param('guildId'), c.req.param('formId'), parsed.data),
+    );
+  });
+
+  app.post('/guilds/:guildId/application-portal/forms/:formId/submit', async (c) => {
+    const parsed = portalSubmitBodySchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applicationPortal.submit(c.req.param('guildId'), c.req.param('formId'), parsed.data),
+    );
+  });
+
+  app.post('/guilds/:guildId/application-portal/forms/:formId/discard', async (c) => {
+    const parsed = portalWithdrawBodySchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applicationPortal.discard(c.req.param('guildId'), c.req.param('formId'), parsed.data),
+    );
+  });
+
+  app.get('/guilds/:guildId/application-portal/applications/:applicationId', async (c) => {
+    const parsed = applicantQuerySchema.safeParse(c.req.query());
+    if (!parsed.success) return c.json(invalidQuery(parsed.error), 400);
+
+    return answer(c, () =>
+      deps.applicationPortal.application(
+        c.req.param('guildId'),
+        c.req.param('applicationId'),
+        parsed.data.userId,
+      ),
+    );
+  });
+
+  app.post(
+    '/guilds/:guildId/application-portal/applications/:applicationId/withdraw',
+    async (c) => {
+      const parsed = portalWithdrawBodySchema.safeParse(await bodyOf(c));
+      if (!parsed.success) {
+        return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+      }
+
+      return answer(c, () =>
+        deps.applicationPortal.withdraw(
+          c.req.param('guildId'),
+          c.req.param('applicationId'),
+          parsed.data,
+        ),
+      );
+    },
+  );
+
+  app.post('/guilds/:guildId/application-portal/applications/:applicationId/respond', async (c) => {
+    const parsed = portalRespondBodySchema.safeParse(await bodyOf(c));
+    if (!parsed.success) {
+      return c.json({ error: 'invalid_body', issues: parsed.error.issues }, 400);
+    }
+
+    return answer(c, () =>
+      deps.applicationPortal.respond(
+        c.req.param('guildId'),
+        c.req.param('applicationId'),
+        parsed.data,
+      ),
+    );
+  });
+
   return app;
 }
 
 function toErrorResponse(error: unknown): {
   status: 400 | 404 | 409 | 500 | 503;
-  body: { error: string; message?: string };
+  body: { error: string; message?: string; nextCountAt?: number };
 } {
+  if (error instanceof CommandSettingsError) {
+    return {
+      status: error.code === 'unknown_command' ? 404 : 409,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  if (error instanceof JoinRolesSyncError) {
+    return {
+      status:
+        error.code === 'nothing_to_sync'
+          ? 400
+          : error.code === 'no_redis' || error.code === 'no_bus' || error.code === 'not_started'
+            ? 503
+            : 409,
+      body: {
+        error: error.code,
+        message: error.message,
+        ...(error.nextCountAt === null ? {} : { nextCountAt: error.nextCountAt }),
+      },
+    };
+  }
+
   if (error instanceof XpEventError) {
     return {
       status:
@@ -764,9 +1474,47 @@ function toErrorResponse(error: unknown): {
     };
   }
 
+  if (error instanceof ReportsError) {
+    return {
+      status:
+        error.code === 'not_found'
+          ? 404
+          : error.code === 'no_bus' || error.code === 'no_redis'
+            ? 503
+            : error.code === 'invalid_request'
+              ? 400
+              : 409,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
   if (error instanceof VerificationError) {
     return {
       status: error.code === 'bus_unavailable' ? 503 : 400,
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  if (error instanceof ApplicationsError) {
+    return {
+      status: applicationsErrorStatus(error.code),
+      body: { error: error.code, message: error.message },
+    };
+  }
+
+  if (error instanceof AchievementsError) {
+    return {
+      status:
+        error.code === 'not_found'
+          ? 404
+          : error.code === 'no_bus'
+            ? 503
+            : error.code === 'module_disabled' ||
+                error.code === 'worker_timeout' ||
+                error.code === 'job_running' ||
+                error.code === 'too_many_badges'
+              ? 409
+              : 400,
       body: { error: error.code, message: error.message },
     };
   }

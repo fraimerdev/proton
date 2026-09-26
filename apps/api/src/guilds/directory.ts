@@ -8,6 +8,7 @@ export interface BotGuild {
 
 export interface BotGuildSource {
   guilds(): Promise<ReadonlyMap<string, string> | null>;
+  fresh(): Promise<ReadonlyMap<string, string> | null>;
 }
 
 export interface BotGuildDirectoryOptions {
@@ -62,6 +63,12 @@ export class BotGuildDirectory implements BotGuildSource {
     if (cached && this.#now() - cached.at < this.#graceMs) return cached.guilds;
 
     return null;
+  }
+
+  async fresh(): Promise<ReadonlyMap<string, string> | null> {
+    // A read already in flight may have started before the change the caller is asking about.
+    await this.#refreshing;
+    return (await this.#refresh())?.guilds ?? null;
   }
 
   #refresh(): Promise<Snapshot | null> {

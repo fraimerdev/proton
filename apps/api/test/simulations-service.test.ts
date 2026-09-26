@@ -255,7 +255,7 @@ describe('running a simulation', () => {
     const off = view({ enabled: false });
 
     await expect(harness({ view: off }).service.run(run({ mode: 'send' }))).rejects.toThrow(
-      /disabled/,
+      /is off in this server/,
     );
 
     await expect(harness({ view: off }).service.run(run())).resolves.toBeDefined();
@@ -308,7 +308,7 @@ describe('running a simulation', () => {
       bus: { publish: async () => undefined } as unknown as EventBus,
     });
 
-    await expect(service.run(run())).rejects.toThrow(/did not answer in time/);
+    await expect(service.run(run())).rejects.toThrow(/didn't hear back in time/);
   });
 
   test('says so rather than silently doing nothing when there is no event bus', async () => {
@@ -321,7 +321,7 @@ describe('running a simulation', () => {
       db: { db: { insert: () => ({ values: async () => undefined }) } } as unknown as DbHandle,
     });
 
-    await expect(service.run(run())).rejects.toThrow(/event bus/);
+    await expect(service.run(run())).rejects.toThrow(/part of its service is down/);
   });
 
   test('names a simulation this module does not have', async () => {

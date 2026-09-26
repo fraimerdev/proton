@@ -49,10 +49,7 @@ export class BrandingAssetService {
   async upload(input: UploadAssetInput): Promise<{ hash: string }> {
     const checked = acceptImage(input.bytes, input.kind);
     if ('refused' in checked) {
-      throw new BrandingAssetError(
-        'rejected_image',
-        `That image was not saved: ${checked.refused}`,
-      );
+      throw new BrandingAssetError('rejected_image', `That image wasn’t saved: ${checked.refused}`);
     }
 
     await this.#assets.put(input.guildId, { kind: input.kind, ...checked.accepted }, input.actorId);

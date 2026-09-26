@@ -21,8 +21,8 @@ export interface WebPass {
 }
 
 const NO_BUS =
-  'Proton cannot reach its event bus, and the worker is the only process allowed to talk to ' +
-  'Discord, so nothing was done. Set REDIS_URL for the api and restart it.';
+  'Proton can’t finish verifying you right now because part of its service is down, so nothing ' +
+  'was changed. Try again later.';
 
 export class VerificationService {
   readonly #options: VerificationServiceOptions;

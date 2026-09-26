@@ -68,7 +68,7 @@ describe('reading module config', () => {
       schemaVersion: 1,
     });
 
-    await expect(service.get(GUILD, 'ping')).rejects.toThrow(/could not read this server/);
+    await expect(service.get(GUILD, 'ping')).rejects.toThrow(/couldn't read this server/);
   });
 
   test('fills in defaults for fields added since the row was written', async () => {
@@ -469,7 +469,7 @@ describe('asking Proton to post a panel', () => {
       .set({ enabled: false })
       .where(and(eq(guildModules.guildId, GUILD), eq(guildModules.moduleId, PANELS)));
 
-    await expect(ask()).rejects.toThrow(/disabled/);
+    await expect(ask()).rejects.toThrow(/is off in this server/);
     expect(published).toHaveLength(0);
   });
 
@@ -502,7 +502,7 @@ describe('asking Proton to post a panel', () => {
         actorId: ACTOR,
         source: 'dashboard',
       }),
-    ).rejects.toThrow(/cannot reach its event bus/);
+    ).rejects.toThrow(/part of its service is down/);
 
     const rows = await handle.client`select count(*)::int as n from audit_trail`;
     expect((rows as unknown as Array<{ n: number }>)[0]?.n).toBe(0);

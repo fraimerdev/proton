@@ -37,9 +37,9 @@ function harness(options: { present?: readonly string[]; known?: boolean } = {})
         wrote.push('ensureGuild');
         return Promise.resolve();
       },
-      markLeft: () => {
+      markLeft: (id: string) => {
         wrote.push('markLeft');
-        return Promise.resolve();
+        return Promise.resolve(!known ? 'unknown' : present.includes(id) ? 'present' : 'left');
       },
     },
     modules: {
@@ -179,7 +179,22 @@ describe('what the gate deliberately lets past', () => {
     const left = await send(h, 'DELETE', `/guilds/${LEFT}`);
 
     expect([joined.status, left.status]).toEqual([200, 200]);
+    expect(await left.json()).toEqual({ left: true });
     expect(h.wrote).toEqual(['ensureGuild', 'markLeft']);
+  });
+
+  test('a removal Discord contradicts is answered as not left', async () => {
+    const response = await send(harness({ present: [JOINED] }), 'DELETE', `/guilds/${JOINED}`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ left: false });
+  });
+
+  test('a removal Discord cannot confirm is refused so the worker sends it again', async () => {
+    const response = await send(harness({ known: false }), 'DELETE', `/guilds/${LEFT}`);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: 'discord_unreachable' });
   });
 });
 

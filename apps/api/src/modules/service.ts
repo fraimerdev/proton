@@ -1,5 +1,6 @@
 import type { ModuleManifest, SimulationDescriptor } from '@proton/core';
 import {
+  actorRoleRefusal,
   type ConfigLimit,
   checkListLimit,
   diffKeys,
@@ -13,7 +14,8 @@ import {
 } from '@proton/core';
 import type { DbHandle, GuildRuleStore } from '@proton/db';
 import { auditTrail, guildModules, guilds } from '@proton/db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import type { MemberAccess } from '../applications/member-access.ts';
 import { assertWriteRefinements } from './refine-write.ts';
 import { assertTemplatesValid } from './templates.ts';
 
@@ -34,6 +36,11 @@ export interface ModuleConfigView {
   postables: Postable[];
 
   simulations: SimulationDescriptor[];
+}
+
+export interface ModuleState {
+  on: boolean;
+  config: unknown;
 }
 
 export interface RequestPanelInput {
@@ -162,6 +169,76 @@ function simulationsOf(manifest: Pick<ModuleManifest, 'simulations'>): Simulatio
   return (manifest.simulations ?? []).map(({ descriptor }) => descriptor);
 }
 
+export interface RoleGrant {
+  path: string;
+  roleId: string;
+  scope?: string;
+}
+
+export function addedGrants(
+  manifest: Pick<ModuleManifest, 'grantedRoles'>,
+  before: unknown,
+  next: unknown,
+): RoleGrant[] {
+  const grants = (config: unknown): RoleGrant[] => {
+    try {
+      return manifest.grantedRoles?.(config as never) ?? [];
+    } catch {
+      return [];
+    }
+  };
+  const slot = (grant: RoleGrant): string => `${grant.scope ?? grant.path}\u0000${grant.roleId}`;
+
+  const held = new Set(grants(before).map(slot));
+  const seen = new Set<string>();
+
+  return grants(next).filter((grant) => {
+    if (held.has(slot(grant)) || seen.has(grant.roleId)) return false;
+    seen.add(grant.roleId);
+    return true;
+  });
+}
+
+export const GRANT_UNCONFIRMED =
+  'Proton couldn’t confirm you can give these roles. Try again in a moment.';
+
+export async function grantRefusal(
+  access: Pick<MemberAccess, 'read' | 'roles'> | undefined,
+  guildId: string,
+  actorId: string,
+  grants: readonly RoleGrant[],
+): Promise<{ code: 'invalid_config' | 'role_check_unavailable'; detail: string } | null> {
+  const first = grants[0];
+  if (first === undefined) return null;
+
+  const unconfirmed = {
+    code: 'role_check_unavailable' as const,
+    detail: `${first.path} ${GRANT_UNCONFIRMED}`,
+  };
+  if (!access) return unconfirmed;
+
+  const [member, roster] = await Promise.all([
+    access.read(guildId, actorId),
+    access.roles(guildId),
+  ]);
+  if (member.state !== 'member' || roster === null) return unconfirmed;
+
+  const refused = grants.flatMap((grant) => {
+    const refusal = actorRoleRefusal({
+      roles: roster.roles,
+      everyoneRoleId: roster.everyoneRoleId,
+      ownerId: roster.ownerId,
+      actorId,
+      actorRoleIds: member.roleIds,
+      actorPermissions: member.actor.permissions,
+      roleId: grant.roleId,
+    });
+    return refusal === null ? [] : [`${grant.path} ${refusal.reason}`];
+  });
+
+  return refused.length === 0 ? null : { code: 'invalid_config', detail: refused.join('; ') };
+}
+
 export class ModuleConfigError extends Error {
   readonly code: string;
   constructor(code: string, message: string) {
@@ -175,6 +252,7 @@ export interface ModuleConfigServiceOptions {
   rules?: GuildRuleStore;
   onRecompileFailed?(guildId: string, moduleId: string, detail: string): void;
 
+  memberAccess?: Pick<MemberAccess, 'read' | 'roles'>;
   bus?: EventBus;
   logger?: Logger;
   now?(): number;
@@ -219,6 +297,42 @@ export class ModuleConfigService {
     return Object.fromEntries(rows.map((row) => [row.moduleId, row.enabled]));
   }
 
+  async moduleStates(guildId: string): Promise<Record<string, ModuleState>> {
+    const rows = await this.#db.db
+      .select({
+        moduleId: guildModules.moduleId,
+        enabled: guildModules.enabled,
+        config: guildModules.config,
+      })
+      .from(guildModules)
+      .where(eq(guildModules.guildId, guildId));
+
+    const stored = new Map(rows.map((row) => [row.moduleId, row]));
+
+    return Object.fromEntries(
+      this.#registry.all().map((manifest): [string, ModuleState] => {
+        const row = stored.get(manifest.id);
+        if (!row) return [manifest.id, { on: false, config: manifest.defaultConfig }];
+
+        let config: unknown;
+        try {
+          const parsed = manifest.configSchema.safeParse(lift(manifest, row.config));
+          config = parsed.success ? parsed.data : undefined;
+        } catch {
+          config = undefined;
+        }
+
+        // An unreadable config does not switch the module off, as the worker's disabledReason reads it.
+        if (config === undefined) {
+          return [manifest.id, { on: row.enabled, config: manifest.defaultConfig }];
+        }
+
+        const off = (config as { enabled?: unknown } | null)?.enabled === false;
+        return [manifest.id, { on: row.enabled && !off, config }];
+      }),
+    );
+  }
+
   async get(guildId: string, moduleId: string): Promise<ModuleConfigView> {
     const manifest = this.#manifest(moduleId);
 
@@ -250,7 +364,7 @@ export class ModuleConfigService {
     if (!parsed.success) {
       throw new ModuleConfigError(
         'invalid_stored_config',
-        `Proton could not read this server's ${manifest.name} settings: ${parsed.error.issues
+        `Proton couldn't read this server's ${manifest.name} settings: ${parsed.error.issues
           .map((i) => `${i.path.map(String).join('.')} ${i.message}`)
           .join('; ')}`,
       );
@@ -293,8 +407,8 @@ export class ModuleConfigService {
     if (!current.enabled) {
       throw new ModuleConfigError(
         'module_disabled',
-        `${manifest.name} is disabled in this server, so posting this would put a message ` +
-          'nobody can use in a channel. Switch it on first.',
+        `${manifest.name} is off in this server, so nobody could use this message yet. Turn ` +
+          `${manifest.name} on first.`,
       );
     }
 
@@ -306,7 +420,7 @@ export class ModuleConfigService {
       throw new ModuleConfigError(
         'unknown_panel',
         `${manifest.name} has nothing called '${input.panelId}' to post. It may have been renamed ` +
-          'or removed since this page was opened — reload and try again.',
+          'or removed since this page was opened. Reload and try again.',
       );
     }
 
@@ -321,8 +435,8 @@ export class ModuleConfigService {
     if (!bus) {
       throw new ModuleConfigError(
         'no_bus',
-        'Proton cannot reach its event bus, and the worker is the only process allowed to talk ' +
-          'to Discord, so nothing was sent. Set REDIS_URL for the api and restart it.',
+        "Proton can't post this right now because part of its service is down, so nothing was " +
+          'sent. Try again later.',
       );
     }
 
@@ -398,6 +512,21 @@ export class ModuleConfigService {
 
     const nextConfig = checkedConfig(manifest, nextConfigRaw, before, 'were not saved');
 
+    if (manifest.grantedRoles && input.source === 'dashboard') {
+      const refusal = await grantRefusal(
+        this.#options.memberAccess,
+        input.guildId,
+        input.actorId,
+        addedGrants(manifest, before.config, nextConfig),
+      );
+      if (refusal) {
+        throw new ModuleConfigError(
+          refusal.code,
+          `Those ${manifest.name} settings were not saved: ${refusal.detail}`,
+        );
+      }
+    }
+
     const nextEnabled = input.enabled ?? before.enabled;
 
     const after: ModuleConfigView = {
@@ -425,7 +554,8 @@ export class ModuleConfigService {
           config: nextConfig,
           schemaVersion: manifest.schemaVersion,
           updatedBy: input.actorId,
-          updatedAt: new Date(),
+          // The DB clock, not this host's: the worker compares it with checked_at, stamped by the DB.
+          updatedAt: sql`clock_timestamp()`,
         })
         .onConflictDoUpdate({
           target: [guildModules.guildId, guildModules.moduleId],
@@ -434,7 +564,7 @@ export class ModuleConfigService {
             config: nextConfig,
             schemaVersion: manifest.schemaVersion,
             updatedBy: input.actorId,
-            updatedAt: new Date(),
+            updatedAt: sql`clock_timestamp()`,
           },
         });
 

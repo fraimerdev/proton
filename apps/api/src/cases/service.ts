@@ -1,7 +1,17 @@
-import type { CaseQuery, CaseRecord, CaseSearchResult } from '@proton/core';
+import {
+  type CaseQuery,
+  type CaseRecord,
+  type CaseSearchResult,
+  isReversalIdempotencyKey,
+  MODERATION_ACTION_KINDS,
+  reversalIdempotencyKey,
+  snowflakeSchema,
+} from '@proton/core';
 import type { DbHandle } from '@proton/db';
 import { cases } from '@proton/db/schema';
-import { and, asc, count, desc, eq, gte, lte, or, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte, notLike, or, type SQL } from 'drizzle-orm';
+
+const REVERSAL_KEY_PREFIX = reversalIdempotencyKey('');
 
 export class CaseQueryService {
   readonly #db: DbHandle;
@@ -28,7 +38,7 @@ export class CaseQueryService {
     const totals = await this.#db.db.select({ total: count() }).from(cases).where(where);
 
     return {
-      cases: rows.map(toRecord),
+      cases: rows.map(toCaseRecord),
       total: totals[0]?.total ?? 0,
       page: query.page,
       pageSize: query.pageSize,
@@ -40,12 +50,19 @@ export class CaseQueryService {
 
     if (query.caseId !== undefined) filters.push(eq(cases.id, query.caseId));
 
+    if (query.scope === 'moderation') {
+      filters.push(inArray(cases.type, [...MODERATION_ACTION_KINDS]));
+    }
+
     if (query.type !== undefined) filters.push(eq(cases.type, query.type));
 
     if (query.moderatorId !== undefined) {
       const either = or(
-        eq(cases.actorId, query.moderatorId),
         eq(cases.moderatorId, query.moderatorId),
+        and(
+          eq(cases.actorId, query.moderatorId),
+          notLike(cases.idempotencyKey, `${REVERSAL_KEY_PREFIX}%`),
+        ),
       );
       if (either) filters.push(either);
     }
@@ -63,14 +80,23 @@ export class CaseQueryService {
   }
 }
 
-function toRecord(row: typeof cases.$inferSelect): CaseRecord {
+function caseModerator(row: typeof cases.$inferSelect): string | null {
+  if (row.moderatorId !== null) return row.moderatorId;
+  if (isReversalIdempotencyKey(row.idempotencyKey)) return null;
+
+  return row.actorId !== null && snowflakeSchema.safeParse(row.actorId).success
+    ? row.actorId
+    : null;
+}
+
+export function toCaseRecord(row: typeof cases.$inferSelect): CaseRecord {
   return {
     id: row.id,
     caseNumber: row.caseNumber,
     type: row.type,
     actorId: row.actorId,
     targetId: row.targetId,
-    moderatorId: row.moderatorId,
+    moderatorId: caseModerator(row),
     reason: row.reason,
     moduleId: row.moduleId,
     expiresAt: row.expiresAt?.toISOString() ?? null,

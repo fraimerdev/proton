@@ -58,12 +58,13 @@ export interface SimulationServiceOptions {
 }
 
 const NO_BUS =
-  'Proton cannot reach its event bus, and the worker is the only process that renders a ' +
-  'simulation against this server, so nothing was tested. Set REDIS_URL for the api and restart it.';
+  "Proton can't run tests right now because part of its service is down, so nothing was " +
+  'tested. Try again later.';
 
 const TIMED_OUT =
-  'the worker did not answer in time, so Proton cannot say whether anything was sent. Check the ' +
-  'channel before trying again — if a message did arrive, sending again would post a second one.';
+  "Proton didn't hear back in time, so it can't tell whether anything was sent. Check the " +
+  'channel before trying again, because sending again would post a second message if the first ' +
+  'one arrived.';
 
 export class SimulationService {
   readonly #options: SimulationServiceOptions;
@@ -92,7 +93,7 @@ export class SimulationService {
       throw new SimulationError(
         'unknown_simulation',
         `${manifest.name} has nothing called '${input.simulationId}' to test. It may have been ` +
-          'renamed since this page was opened — reload and try again.',
+          'renamed since this page was opened. Reload and try again.',
       );
     }
 
@@ -112,8 +113,8 @@ export class SimulationService {
     if (input.mode === 'send' && !current.enabled) {
       throw new SimulationError(
         'module_disabled',
-        `${manifest.name} is disabled in this server, so Proton will not post one of its ` +
-          'messages into a channel. Switch it on first, or use Preview instead.',
+        `${manifest.name} is off in this server, so Proton won't post its messages. Turn it on ` +
+          'first, or preview the message instead.',
       );
     }
 
@@ -135,7 +136,7 @@ export class SimulationService {
     if (!inputs.success) {
       throw new SimulationError(
         'invalid_inputs',
-        `That example event does not add up: ${inputs.error.issues
+        `That example event isn't valid: ${inputs.error.issues
           .map((issue) => `${issue.path.map(String).join('.') || 'input'} ${issue.message}`)
           .join('; ')}`,
       );
@@ -194,8 +195,8 @@ export class SimulationService {
       if (input.mode === 'send') {
         throw new SimulationError(
           'not_sendable',
-          `${descriptor.label} is not a message Proton posts — it is a name Proton gives a ` +
-            'channel, so there is nothing to send. Preview it instead.',
+          `${descriptor.label} is a name Proton gives a channel, not a message it posts, so ` +
+            "there's nothing to send. Preview it instead.",
         );
       }
       return null;
@@ -242,9 +243,9 @@ export class SimulationService {
     throw new SimulationError(
       'rate_limited',
       send
-        ? `That is ${limit} test messages in a minute, which is as many as Proton will post. Wait ` +
-            'a moment and try again.'
-        : 'Proton is being asked to render too many previews at once. Wait a moment and try again.',
+        ? `That's ${limit} test messages in a minute, the most Proton will post. Wait a moment ` +
+            'and try again.'
+        : 'Too many previews were requested at once. Wait a moment and try again.',
     );
   }
 

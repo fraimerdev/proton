@@ -159,3 +159,35 @@ describe('BotGuildDirectory', () => {
     expect(await new BotGuildDirectory(PROXY, { fetch, logger: quiet }).guilds()).toBeNull();
   });
 });
+
+describe('BotGuildDirectory.fresh', () => {
+  test('asks Discord even inside the ttl, and what it hears replaces the cache', async () => {
+    const { calls, fetch } = recorder([ok([guild('1'), guild('2')]), ok([guild('1')])]);
+    const directory = new BotGuildDirectory(PROXY, { fetch, logger: quiet, now: () => 0 });
+
+    await directory.guilds();
+    expect([...((await directory.fresh()) ?? new Map()).keys()]).toEqual(['1']);
+    expect([...((await directory.guilds()) ?? new Map()).keys()]).toEqual(['1']);
+    expect(calls).toHaveLength(2);
+  });
+
+  test('does not answer with a read that was already in flight when it was called', async () => {
+    const { calls, fetch } = recorder([ok([guild('1'), guild('2')]), ok([guild('1')])]);
+    const directory = new BotGuildDirectory(PROXY, { fetch, logger: quiet });
+
+    const [before, fresh] = await Promise.all([directory.guilds(), directory.fresh()]);
+
+    expect(before?.has('2')).toBe(true);
+    expect(fresh?.has('2')).toBe(false);
+    expect(calls).toHaveLength(2);
+  });
+
+  test('is unknown when Discord cannot be asked, even with a good read cached', async () => {
+    const { fetch } = recorder([ok([guild('1')]), status(502)]);
+    const directory = new BotGuildDirectory(PROXY, { fetch, logger: quiet, now: () => 0 });
+
+    await directory.guilds();
+
+    expect(await directory.fresh()).toBeNull();
+  });
+});

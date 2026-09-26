@@ -23,6 +23,8 @@ export interface GuildPresence {
   known: boolean;
 }
 
+export type GuildDeparture = 'left' | 'present' | 'unknown';
+
 export class GuildService {
   readonly #db: DbHandle;
   readonly #directory: BotGuildSource;
@@ -99,7 +101,28 @@ export class GuildService {
       });
   }
 
-  async markLeft(guildId: string): Promise<void> {
-    await this.#db.db.update(guilds).set({ leftAt: new Date() }).where(eq(guilds.id, guildId));
+  async recordedPresent(guildId: string): Promise<boolean> {
+    const rows = await this.#db.db
+      .select({ leftAt: guilds.leftAt })
+      .from(guilds)
+      .where(eq(guilds.id, guildId))
+      .limit(1);
+
+    const row = rows[0];
+    return row !== undefined && row.leftAt === null;
+  }
+
+  // Not the event's word for it: a stale GUILD_DELETE can be handled after a rejoin's GUILD_CREATE.
+  async markLeft(guildId: string): Promise<GuildDeparture> {
+    const joined = await this.#directory.fresh();
+    if (!joined) return 'unknown';
+    if (joined.has(guildId)) return 'present';
+
+    await this.#db.db
+      .update(guilds)
+      .set({ leftAt: sql`coalesce(${guilds.leftAt}, now())` })
+      .where(eq(guilds.id, guildId));
+
+    return 'left';
   }
 }

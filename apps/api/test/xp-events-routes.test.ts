@@ -371,7 +371,7 @@ describe('POST /guilds/:guildId/leveling/xp-events', () => {
 
     const body = (await response.json()) as Refusal;
     expect(body.error).toBe('invalid_xp_event');
-    expect(body.message).toStartWith('That XP event was not started: the start is in the past');
+    expect(body.message).toStartWith("Couldn't start that XP event: the start is in the past");
     expect(store.rows.size).toBe(0);
     expect(audits).toHaveLength(0);
   });
@@ -384,7 +384,9 @@ describe('POST /guilds/:guildId/leveling/xp-events', () => {
     });
 
     expect(response.status).toBe(400);
-    expect(((await response.json()) as Refusal).message).toContain('more than 30 days away');
+    expect(((await response.json()) as Refusal).message).toContain(
+      'the start must be within 30 days from now',
+    );
   });
 
   test('refuses an event shorter than 10 minutes or longer than 14 days', async () => {
@@ -417,7 +419,7 @@ describe('POST /guilds/:guildId/leveling/xp-events', () => {
 
       const body = (await response.json()) as Refusal;
       expect(body.error).toBe('invalid_xp_event');
-      expect(body.message).toStartWith('That XP event was not started: the multiplier');
+      expect(body.message).toStartWith("Couldn't start that XP event: the multiplier");
     }
 
     expect(store.rows.size).toBe(0);
@@ -445,7 +447,7 @@ describe('POST /guilds/:guildId/leveling/xp-events', () => {
 
     const body = (await response.json()) as Refusal;
     expect(body.error).toBe('too_many_xp_events');
-    expect(body.message).toContain('already has 5 XP events active or scheduled');
+    expect(body.message).toContain('already has 5 XP events running or scheduled');
     expect(body.message).toContain('Nothing was started');
     expect(store.rows.size).toBe(5);
     expect(audits).toHaveLength(0);

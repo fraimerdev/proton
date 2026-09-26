@@ -23,6 +23,10 @@ class FakeDirectory implements BotGuildSource {
   guilds(): Promise<ReadonlyMap<string, string> | null> {
     return Promise.resolve(this.#answer);
   }
+
+  fresh(): Promise<ReadonlyMap<string, string> | null> {
+    return Promise.resolve(this.#answer);
+  }
 }
 
 function serviceSeeing(ids: readonly string[] | null): GuildService {
@@ -31,7 +35,7 @@ function serviceSeeing(ids: readonly string[] | null): GuildService {
 
 async function rowFor(id: string) {
   const rows = await handle.client`select id, name, left_at from guilds where id = ${id}`;
-  return rows[0] as { id: string; name: string; left_at: Date | null } | undefined;
+  return rows[0] as { id: string; name: string; left_at: string | null } | undefined;
 }
 
 beforeAll(async () => {
@@ -134,5 +138,50 @@ describe('the row repair presence does on the way past', () => {
     await serviceSeeing(null).presence([UNREGISTERED]);
 
     expect(await rowFor(UNREGISTERED)).toBeUndefined();
+  });
+});
+
+describe('GuildService.recordedPresent', () => {
+  test('only a row with no left_at counts as present', async () => {
+    const service = serviceSeeing(null);
+
+    expect(await service.recordedPresent(JOINED)).toBe(true);
+    expect(await service.recordedPresent(LEFT)).toBe(false);
+    expect(await service.recordedPresent(NEVER)).toBe(false);
+  });
+
+  test('a left server that Proton rejoined is present again', async () => {
+    const service = serviceSeeing(null);
+    await service.ensureGuild({ guildId: LEFT, name: 'Back' });
+
+    expect(await service.recordedPresent(LEFT)).toBe(true);
+  });
+});
+
+describe('GuildService.markLeft', () => {
+  test('records the removal once Discord no longer lists the server', async () => {
+    expect(await serviceSeeing([]).markLeft(JOINED)).toBe('left');
+
+    expect((await rowFor(JOINED))?.left_at).not.toBeNull();
+  });
+
+  test('a removal Discord contradicts leaves the row present', async () => {
+    expect(await serviceSeeing([JOINED]).markLeft(JOINED)).toBe('present');
+
+    expect((await rowFor(JOINED))?.left_at).toBeNull();
+  });
+
+  test('records nothing when Discord could not be asked', async () => {
+    expect(await serviceSeeing(null).markLeft(JOINED)).toBe('unknown');
+
+    expect((await rowFor(JOINED))?.left_at).toBeNull();
+  });
+
+  test('a redelivered removal keeps the first time it was recorded', async () => {
+    expect(await serviceSeeing([]).markLeft(LEFT)).toBe('left');
+
+    expect(new Date((await rowFor(LEFT))?.left_at ?? 0).toISOString()).toBe(
+      '2026-05-01T00:00:00.000Z',
+    );
   });
 });

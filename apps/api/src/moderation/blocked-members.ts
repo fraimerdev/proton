@@ -77,7 +77,7 @@ export class BlockedMemberService {
     if (!lifted) {
       throw new BlockedMemberError(
         'not_blocked',
-        `${input.userId} is not on this server's blocked list, so there was nothing to lift.`,
+        `${input.userId} isn't on this server's blocked list, so there was nothing to lift.`,
       );
     }
 
